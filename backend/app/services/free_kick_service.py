@@ -25,6 +25,7 @@ from app.schemas.game import (
     FreeKickStartOut,
 )
 from app.services import free_kick_3d_engine as engine
+from app.services import my_player_service
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 from app.services.club_pass_service import extra_rewarded_attempts
@@ -289,6 +290,18 @@ def score_3d_shot(config, result: engine.ShotResult) -> tuple[int, list[str]]:
     return 0, []
 
 
+def streak_bonus(config, streak: int) -> int:
+    """«Серия без промахов»: coins for reaching `streak` goals in a row — on
+    the 3rd, 5th and 10th, then every 10th."""
+    if streak == 3:
+        return config.free_kick_streak_3_bonus
+    if streak == 5:
+        return config.free_kick_streak_5_bonus
+    if streak >= 10 and streak % 10 == 0:
+        return config.free_kick_streak_10_bonus
+    return 0
+
+
 async def start_3d(db: AsyncSession, user: User, user_card_id: int) -> FreeKick3DStartOut:
     config = await get_config(db)
     locked_user = await lock_user_for_update(db, user.id)
@@ -316,7 +329,8 @@ async def start_3d(db: AsyncSession, user: User, user_card_id: int) -> FreeKick3
     await db.refresh(session)
     return FreeKick3DStartOut(
         session_id=session.id, rating=card.player.rating, total_kicks=total,
-        kick=FreeKick3DKickOut(kick_index=0, seed=first["seed"]),
+        kick=FreeKick3DKickOut(kick_index=0, seed=first["seed"]), streak=locked_user.free_kick_goal_streak,
+        **await my_player_service.game_gear(db, locked_user.id),
     )
 
 
@@ -345,6 +359,13 @@ async def shoot_3d(db: AsyncSession, user: User, session_id: int, swipe: FreeKic
         engine.Swipe(swipe.dx, swipe.dy, swipe.curve, swipe.duration_ms),
     )
     coins, bonuses = score_3d_shot(config, result)
+    # The streak lives on the user row (it runs across series).
+    locked_user = await lock_user_for_update(db, user.id)
+    locked_user.free_kick_goal_streak = locked_user.free_kick_goal_streak + 1 if result.outcome == "goal" else 0
+    bonus = streak_bonus(config, locked_user.free_kick_goal_streak) if result.outcome == "goal" else 0
+    coins += bonus
+    db.add(locked_user)
+    kick.update(streak=locked_user.free_kick_goal_streak, streak_bonus=bonus)
     kick.update(
         outcome=result.outcome, coins=coins, bonuses=bonuses,
         swipe={"dx": swipe.dx, "dy": swipe.dy, "curve": swipe.curve, "duration_ms": swipe.duration_ms},
@@ -371,7 +392,7 @@ async def shoot_3d(db: AsyncSession, user: User, session_id: int, swipe: FreeKic
     await db.commit()
     return FreeKick3DShotOut(
         outcome=result.outcome, bonuses=bonuses, coins_this_kick=coins, total_coins=state["total_coins"],
-        is_finished=is_finished, next_kick=next_out,
+        is_finished=is_finished, next_kick=next_out, streak=locked_user.free_kick_goal_streak, streak_bonus=bonus,
     )
 
 

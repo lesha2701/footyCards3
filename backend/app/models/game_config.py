@@ -272,6 +272,11 @@ class GameConfig(TimestampMixin, Base):
     free_kick_refill_daily_limit: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     free_kick_refill_coins: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
     free_kick_refill_stars: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    # «Серия без промахов»: bonus coins on the 3rd, 5th and 10th goal in a
+    # row (then on every 10th: 20, 30, …); a kick that isn't a goal resets it.
+    free_kick_streak_3_bonus: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    free_kick_streak_5_bonus: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
+    free_kick_streak_10_bonus: Mapped[int] = mapped_column(Integer, default=120, nullable=False)
 
     hourly_game_limit: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
 
@@ -520,6 +525,9 @@ class GameConfig(TimestampMixin, Base):
             "hair_neymar": 120, "hair_cr7": 100, "hair_pogba": 90, "aviators": 60, "diamond_chain": 90,
             "bg_goal": 75, "bg_national": 75,
             "cel_siu": 100, "cel_plane": 75, "cel_heart": 50, "cel_dance": 150, "cel_silly": 50,
+            "ball_gold": 60, "ball_neon": 40, "ball_retro": 40,
+            "boots_red": 30, "boots_neon": 40, "boots_gold": 60,
+            "gloves_lime": 30, "gloves_pink": 30, "gloves_gold": 60,
         },
     )
     # «Карьера игрока»: every completed club objective pays objective_coins

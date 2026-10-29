@@ -135,8 +135,11 @@ class Penalty3DStartOut(BaseModel):
     session_id: int
     rating: int
     kick: Penalty3DKickOut
-    # The player's «Мой игрок» goal celebration (cosmetic code), if worn.
+    # «Мой игрок» gear worn in the 3D scene (cosmetic codes; None = default).
     celebration: str | None = None
+    ball: str | None = None
+    boots: str | None = None
+    gloves: str | None = None
 
 
 class Penalty3DDive(BaseModel):
@@ -212,6 +215,13 @@ class FreeKick3DStartOut(BaseModel):
     rating: int
     total_kicks: int
     kick: FreeKick3DKickOut
+    # Goals in a row so far («Серия без промахов»), carried across series.
+    streak: int = 0
+    # «Мой игрок» gear worn in the 3D scene (cosmetic codes; None = default).
+    celebration: Optional[str] = None
+    ball: Optional[str] = None
+    boots: Optional[str] = None
+    gloves: Optional[str] = None
 
 
 class FreeKick3DShotRequest(BaseModel):
@@ -230,6 +240,9 @@ class FreeKick3DShotOut(BaseModel):
     total_coins: int
     is_finished: bool
     next_kick: Optional[FreeKick3DKickOut] = None
+    # Goals in a row after this kick, and the bonus it paid (in coins_this_kick).
+    streak: int = 0
+    streak_bonus: int = 0
 
 
 class FreeKick3DRefillOut(BaseModel):

@@ -426,6 +426,11 @@ function ShootoutKick({
           cheerGoals={!keeping}
           kickerKit={keeping ? "away" : "home"}
           kickerCelebration={!keeping && series.celebration === "cel_silly" ? "silly_dance" : "celebrate"}
+          gear={{
+            ball: series.ball,
+            kickerBoots: keeping ? null : series.boots,
+            keeperGloves: keeping ? series.gloves : null,
+          }}
           shotClockRef={shotClock}
         />
       </ErrorBoundary>

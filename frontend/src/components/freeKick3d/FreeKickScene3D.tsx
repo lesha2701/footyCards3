@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { aftermathAt, simulateAftermath } from "@/lib/freeKick3d/aftermath";
 import { NET_DEPTH, NET_TOP_DEPTH, keeperGoesFor, netBulge, netImpact, reactionTime, replayTimeScale } from "@/lib/freeKick3d/fx";
 import { playFreeKickSfx } from "@/lib/freeKick3d/sfx";
+import { BOOTS, ballSkin, glovesColor } from "@/lib/gameGear";
 import {
   BALL_RADIUS,
   GOAL_HALF_WIDTH,
@@ -29,6 +30,9 @@ import { KeeperModel, KickerModel, WallPlayerModel, type Celebration, type Playe
 import { Stadium, type Hype, type Quality } from "./Stadium";
 import { NET_TILE, ballGeometry, netTexture } from "./textures";
 
+export type SceneGear = { ball?: string | null; kickerBoots?: string | null; keeperGloves?: string | null };
+const NO_GEAR: SceneGear = {};
+
 export type LiveShot = { id: number; kick: KickParams; trajectory: ShotTrajectory };
 
 type Props = {
@@ -48,6 +52,9 @@ type Props = {
   kickerKit?: "home" | "away";
   /** How the kicker celebrates a goal. */
   kickerCelebration?: Celebration;
+  /** The player's «Мой игрок» gear (lib/gameGear.ts codes): the ball, the
+   * kicker's boots, the keeper's gloves — null/absent for the defaults. */
+  gear?: SceneGear;
   /** Current shot time, written every frame (−1 while waiting): the page
    * times the player's dive against the strike with it. */
   shotClockRef?: MutableRefObject<number>;
@@ -79,6 +86,7 @@ export default function FreeKickScene3D({
   cheerGoals = true,
   kickerKit = "home",
   kickerCelebration = "celebrate",
+  gear = NO_GEAR,
   shotClockRef,
 }: Props) {
   // Start pretty; the first sustained frame drop switches to the light
@@ -115,6 +123,7 @@ export default function FreeKickScene3D({
         cheerGoals={cheerGoals}
         kickerKit={kickerKit}
         kickerCelebration={kickerCelebration}
+        gear={gear}
         shotClockRef={shotClockRef}
       />
       <FpsMeter fpsRef={fpsRef} />
@@ -171,6 +180,7 @@ function ShotWorld({
   cheerGoals = true,
   kickerKit = "home",
   kickerCelebration = "celebrate",
+  gear = NO_GEAR,
   shotClockRef,
 }: Omit<Props, "fpsRef"> & { quality: Quality; hype: Hype }) {
   const stage = useRef<Stage>({
@@ -254,7 +264,7 @@ function ShotWorld({
       <GoalFrame stage={stage} />
       <Wall setup={setup} shot={shot} stage={stage} quality={quality} />
       <Suspense fallback={<Keeper setup={setup} shot={shot} stage={stage} />}>
-        <AnimatedKeeper setup={setup} shot={shot} stage={stage} quality={quality} />
+        <AnimatedKeeper setup={setup} shot={shot} stage={stage} quality={quality} gloves={glovesColor(gear.keeperGloves)} />
       </Suspense>
       <Suspense fallback={null}>
         <KickerModel
@@ -264,10 +274,11 @@ function ShotWorld({
           celebrateAt={shot?.trajectory.outcome === "goal" ? shot.trajectory.end.t + 0.6 : null}
           kit={kickerKit}
           celebration={kickerCelebration}
+          boots={(gear.kickerBoots && BOOTS[gear.kickerBoots]) || null}
           castShadow={quality === "high"}
         />
       </Suspense>
-      <Ball setup={setup} shot={shot} stage={stage} quality={quality} />
+      <Ball setup={setup} shot={shot} stage={stage} quality={quality} skin={gear.ball} />
       <CameraRig setup={setup} shot={shot} stage={stage} />
       <Confetti burstId={confetti} />
     </>
@@ -292,10 +303,11 @@ function shotTime(stage: Stage, shot: LiveShot | null) {
 // inside its WASM step on phones, and it was only ever cosmetic here.
 // ---------------------------------------------------------------------------
 
-function Ball({ setup, shot, stage, quality }: StageProps & { quality: Quality }) {
+function Ball({ setup, shot, stage, quality, skin: skinCode }: StageProps & { quality: Quality; skin?: string | null }) {
   const mesh = useRef<THREE.Mesh>(null);
   const shadow = useRef<THREE.Mesh>(null);
-  const geometry = useMemo(ballGeometry, []);
+  const skin = ballSkin(skinCode);
+  const geometry = useMemo(() => ballGeometry(skin.light, skin.dark), [skin]);
   const aftermath = useMemo(() => (shot ? simulateAftermath(setup, shot.trajectory) : null), [setup, shot]);
   const [decided, setDecided] = useState<number | null>(null);
 
@@ -330,7 +342,7 @@ function Ball({ setup, shot, stage, quality }: StageProps & { quality: Quality }
   return (
     <>
       <mesh ref={mesh} geometry={geometry} castShadow>
-        <meshStandardMaterial vertexColors roughness={0.42} metalness={0} envMapIntensity={0.8} />
+        <meshStandardMaterial vertexColors roughness={skin.roughness} metalness={skin.metalness} envMapIntensity={0.8} />
       </mesh>
       {flying && (
         <Trail key={shot.id} target={mesh as MutableRefObject<THREE.Object3D>} width={0.9} length={5} color="#c6e63a" attenuation={(w) => w * w} decay={1.2} />
@@ -450,7 +462,7 @@ function Keeper({ setup, shot, stage }: StageProps) {
 
 /** The keeper, animated: where his hands end up comes from the trajectory
  * (he stays put for a shot the wall stops or one flying well wide/over). */
-function AnimatedKeeper({ setup, shot, stage, quality }: StageProps & { quality: Quality }) {
+function AnimatedKeeper({ setup, shot, stage, quality, gloves }: StageProps & { quality: Quality; gloves: string }) {
   const traj = shot?.trajectory;
   const last = traj?.samples[traj.samples.length - 1];
   const targetX = traj && last && keeperGoesFor(traj) ? last.keeperHand.x : null;
@@ -463,6 +475,7 @@ function AnimatedKeeper({ setup, shot, stage, quality }: StageProps & { quality:
       saved={traj?.outcome === "save"}
       clock={playerClock(stage, shot)}
       castShadow={quality === "high"}
+      gloves={gloves}
     />
   );
 }

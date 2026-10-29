@@ -314,6 +314,9 @@ export interface GameConfig {
   free_kick_refill_daily_limit: number;
   free_kick_refill_coins: number;
   free_kick_refill_stars: number;
+  free_kick_streak_3_bonus: number;
+  free_kick_streak_5_bonus: number;
+  free_kick_streak_10_bonus: number;
   hourly_game_limit: number;
   matchmaking_enabled: boolean;
   wheel_enabled: boolean;

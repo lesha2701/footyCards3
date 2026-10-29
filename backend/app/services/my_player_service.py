@@ -122,8 +122,18 @@ COSMETICS = {
     "cel_dance": ("celebration", "Празднование «Танец у флажка»"),
     # Also danced by the kicker after a goal in the 3D shootout.
     "cel_silly": ("celebration", "Празднование «Смешной танец»"),
+    # Gear for the 3D free kick / penalty (frontend lib/gameGear.ts draws them).
+    "ball_gold": ("ball", "Мяч «Золотой»"),
+    "ball_neon": ("ball", "Мяч «Неон»"),
+    "ball_retro": ("ball", "Мяч «Ретро»"),
+    "boots_red": ("boots", "Бутсы «Огонь»"),
+    "boots_neon": ("boots", "Бутсы «Неон»"),
+    "boots_gold": ("boots", "Бутсы «Золото»"),
+    "gloves_lime": ("gloves", "Перчатки «Лайм»"),
+    "gloves_pink": ("gloves", "Перчатки «Розовые»"),
+    "gloves_gold": ("gloves", "Перчатки «Золото»"),
 }
-COSMETIC_KINDS = ("accessory", "background", "effect", "hair", "celebration")
+COSMETIC_KINDS = ("accessory", "background", "effect", "hair", "celebration", "ball", "boots", "gloves")
 # Premium hairstyles: wearing one sets appearance["hair"] to this index
 # (PlayerAvatar draws 14+ as these styles); the free choices stay 0..13.
 PREMIUM_HAIR = {"hair_neymar": 14, "hair_cr7": 15, "hair_pogba": 16}
@@ -727,7 +737,7 @@ def _training_view(mp: Optional[MyPlayer], config) -> dict:
 def _cosmetics_view(mp: Optional[MyPlayer], config) -> dict:
     state = cosmetics_of(mp) if mp else {
         "owned": [], "accessory": None, "background": None, "effect": None, "hair": None, "base_hair": 0,
-        "celebration": None,
+        "celebration": None, "ball": None, "boots": None, "gloves": None,
     }
     coins = config.my_player_cosmetic_prices or {}
     stars = config.my_player_cosmetic_stars_prices or {}
@@ -743,6 +753,14 @@ def _cosmetics_view(mp: Optional[MyPlayer], config) -> dict:
             if code in state["owned"] or int(coins.get(code) or 0) > 0 or int(stars.get(code) or 0) > 0
         ],
     }
+
+
+async def game_gear(db: AsyncSession, user_id: int) -> dict:
+    """What the player wears in the 3D free kick / penalty: the goal
+    celebration, ball, boots and keeper's gloves (codes, None = default)."""
+    mp = await get_my_player(db, user_id)
+    state = cosmetics_of(mp) if mp else {}
+    return {kind: state.get(kind) for kind in ("celebration", "ball", "boots", "gloves")}
 
 
 async def public_view(db: AsyncSession, user_id: int) -> dict:

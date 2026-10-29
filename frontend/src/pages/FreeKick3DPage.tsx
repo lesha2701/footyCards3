@@ -189,6 +189,7 @@ export default function FreeKick3DPage() {
       series={series}
       kick={kick}
       total={total}
+      streak={results.length ? results[results.length - 1].streak : series.streak}
       onBack={async () => {
         if (await showConfirm("Серия не закончена — оставшиеся удары сгорят. Выйти?")) navigate("/play");
       }}
@@ -283,11 +284,20 @@ function NextSeries({ onPlay, starting = false }: { onPlay: () => void; starting
   );
 }
 
+/** The next goal-in-a-row count that pays the «Серия без промахов» bonus:
+ * 3, 5, 10, then every 10th (as the server's free_kick_service.streak_bonus). */
+function nextStreakMilestone(streak: number): number {
+  if (streak < 3) return 3;
+  if (streak < 5) return 5;
+  return (Math.floor(streak / 10) + 1) * 10;
+}
+
 /** One kick of the series: the 3D scene, the swipe, the server's verdict. */
 function SeriesKick({
   series,
   kick,
   total,
+  streak,
   onBack,
   onResult,
   onNext,
@@ -295,6 +305,8 @@ function SeriesKick({
   series: Series;
   kick: FreeKick3DKick;
   total: number;
+  /** Goals in a row before this kick. */
+  streak: number;
   onBack: () => void;
   onResult: (r: FreeKick3DShotResult) => void;
   onNext: (r: FreeKick3DShotResult) => void;
@@ -390,7 +402,15 @@ function SeriesKick({
     <div className="fixed inset-0 z-50 select-none overflow-hidden bg-bg-base text-ink-chalk">
       {/* A 3D failure (WebGL) restarts the scene, not the app. */}
       <ErrorBoundary fallback={(error, retry) => <SceneCrash error={error} retry={retry} log={crashLog.current} />}>
-        <FreeKickScene3D setup={setup} shot={shot} onDecided={onDecided} onReady={onReady} fpsRef={fpsRef} />
+        <FreeKickScene3D
+          setup={setup}
+          shot={shot}
+          onDecided={onDecided}
+          onReady={onReady}
+          fpsRef={fpsRef}
+          kickerCelebration={series.celebration === "cel_silly" ? "silly_dance" : "celebrate"}
+          gear={{ ball: series.ball, kickerBoots: series.boots }}
+        />
       </ErrorBoundary>
 
       {/* Swipe surface over the canvas. */}
@@ -438,6 +458,11 @@ function SeriesKick({
               <IconCoin size={11} />
             </span>
           </div>
+          {streak > 0 && (
+            <div className="mt-1 inline-flex rounded-full bg-orange-500/20 px-2 py-0.5 text-caption font-semibold text-orange-300">
+              🔥 {streak} подряд · бонус через {nextStreakMilestone(streak) - streak}
+            </div>
+          )}
           <span ref={fpsRef} className="hidden" />
         </div>
       </div>
@@ -459,6 +484,11 @@ function SeriesKick({
           <div className="text-caption text-ink-chalk/80">
             {speedKmh} км/ч{verdict.bonuses.length > 0 && ` · ${verdict.bonuses.map((b) => BONUS[b]).join(", ")}`}
           </div>
+          {verdict.streak_bonus > 0 && (
+            <div className="rounded-full bg-orange-500/20 px-3 py-1 text-sm font-semibold text-orange-300">
+              🔥 {verdict.streak} голов подряд! +{verdict.streak_bonus}
+            </div>
+          )}
           {verdict.coins_this_kick > 0 && (
             <div className="flex items-center gap-1 font-mono text-lg font-bold text-accent-lime">
               +{verdict.coins_this_kick}

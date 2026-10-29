@@ -32,6 +32,15 @@ const MY_PLAYER_COSMETICS: [string, string][] = [
   ["cel_heart", "Празднование «Сердечко»"],
   ["cel_dance", "Празднование «Танец у флажка»"],
   ["cel_silly", "Празднование «Смешной танец»"],
+  ["ball_gold", "Мяч «Золотой»"],
+  ["ball_neon", "Мяч «Неон»"],
+  ["ball_retro", "Мяч «Ретро»"],
+  ["boots_red", "Бутсы «Огонь»"],
+  ["boots_neon", "Бутсы «Неон»"],
+  ["boots_gold", "Бутсы «Золото»"],
+  ["gloves_lime", "Перчатки «Лайм»"],
+  ["gloves_pink", "Перчатки «Розовые»"],
+  ["gloves_gold", "Перчатки «Золото»"],
 ];
 
 const WEEKLY_TOP_METRICS: [string, string][] = [
@@ -1255,6 +1264,9 @@ export default function AdminGamesPage() {
           {field("free_kick_refill_daily_limit", "Платных обновлений серии в день")}
           {field("free_kick_refill_coins", "Первое обновление за день, монет")}
           {field("free_kick_refill_stars", "Следующие обновления, звёзд")}
+          {field("free_kick_streak_3_bonus", "Серия: 3 гола подряд, монет")}
+          {field("free_kick_streak_5_bonus", "Серия: 5 голов подряд, монет")}
+          {field("free_kick_streak_10_bonus", "Серия: 10 голов (и каждые 10), монет")}
         </div>
         <p className="mb-2 mt-4 text-xs text-slate-500">Классическая версия (шкала) — сохранена, в меню не показывается</p>
         <div className="grid grid-cols-2 gap-3">

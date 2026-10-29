@@ -286,6 +286,9 @@ class MyPlayerCosmeticsOut(BaseModel):
     effect: Optional[str] = None
     hair: Optional[str] = None
     celebration: Optional[str] = None
+    ball: Optional[str] = None
+    boots: Optional[str] = None
+    gloves: Optional[str] = None
     catalog: list[MyPlayerCosmeticItemOut]
 
 

@@ -65,8 +65,9 @@ function keeperClip(dx: number, handY: number): KeeperClip {
 }
 
 /** Where a skinned mesh's bind-pose vertex sits, as a fraction of the
- * body's height: the row of its matrix (relative to the model root) that
- * gives the height, and the height range. The vertices can be stored lying
+ * body's height (and, the arms out in the T-pose, of its span — the hands
+ * are at the ends): the rows of its matrix (relative to the model root)
+ * that give the height and the sideways position, and their ranges. The vertices can be stored lying
  * down — the bones stand them up — so the matrix goes through the skin's
  * rest transform (the same for every bone in the bind pose). */
 function heightFrame(scene: THREE.Object3D, mesh: THREE.SkinnedMesh) {
@@ -79,32 +80,47 @@ function heightFrame(scene: THREE.Object3D, mesh: THREE.SkinnedMesh) {
         .multiply(mesh.bindMatrix)
     : new THREE.Matrix4();
   const m = new THREE.Matrix4().copy(scene.matrixWorld).invert().multiply(mesh.matrixWorld).multiply(rest).elements;
-  const row = new THREE.Vector4(m[1], m[5], m[9], m[13]);
   const pos = mesh.geometry.getAttribute("position");
-  let lo = Infinity;
-  let hi = -Infinity;
-  for (let i = 0; i < pos.count; i++) {
-    const y = row.x * pos.getX(i) + row.y * pos.getY(i) + row.z * pos.getZ(i) + row.w;
-    lo = Math.min(lo, y);
-    hi = Math.max(hi, y);
-  }
-  return { row, range: new THREE.Vector2(lo, hi) };
+  const span = (row: THREE.Vector4) => {
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let i = 0; i < pos.count; i++) {
+      const v = row.x * pos.getX(i) + row.y * pos.getY(i) + row.z * pos.getZ(i) + row.w;
+      lo = Math.min(lo, v);
+      hi = Math.max(hi, v);
+    }
+    return new THREE.Vector2(lo, hi);
+  };
+  const row = new THREE.Vector4(m[1], m[5], m[9], m[13]);
+  const rowX = new THREE.Vector4(m[0], m[4], m[8], m[12]);
+  return { row, range: span(row), rowX, rangeX: span(rowX) };
 }
+
+/** Boots and gloves («Мой игрок» gear, lib/gameGear.ts): colours, or null
+ * for the model's own black boots / bare hands. */
+export type Gear = { boots?: string | null; gloves?: string | null };
 
 /** The model's white kit takes the team's colours — shirt, shorts and
  * socks by bind-pose height, keeping the fabric's shading — and the skin
- * and hair are multiplied by the look's colours. */
+ * and hair are multiplied by the look's colours. Boots recolour the dark
+ * of the feet; gloves, the skin of the hands (the ends of the T-pose). */
 function tintMaterial(
   base: THREE.MeshStandardMaterial,
   frame: ReturnType<typeof heightFrame>,
   character: Character,
   kit: Kit,
   look: Look,
+  gear: Gear,
 ) {
   const mat = base.clone();
   const uniforms = {
     uKitRow: { value: frame.row },
     uKitRange: { value: frame.range },
+    uKitRowX: { value: frame.rowX },
+    uKitRangeX: { value: frame.rangeX },
+    uBoots: { value: new THREE.Color(gear.boots ?? "#000000") },
+    uGloves: { value: new THREE.Color(gear.gloves ?? "#000000") },
+    uGear: { value: new THREE.Vector2(gear.boots ? 1 : 0, gear.gloves ? 1 : 0) },
     uBands: { value: new THREE.Vector3(character.socksTop, character.shirtHem, character.hairline) },
     uShirt: { value: new THREE.Color(kit.shirt) },
     uShorts: { value: new THREE.Color(kit.shorts) },
@@ -116,15 +132,20 @@ function tintMaterial(
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nuniform vec4 uKitRow;\nuniform vec2 uKitRange;\nvarying float vKitH;")
+      .replace(
+        "#include <common>",
+        "#include <common>\nuniform vec4 uKitRow, uKitRowX;\nuniform vec2 uKitRange, uKitRangeX;\nvarying float vKitH, vKitX;",
+      )
       .replace(
         "#include <begin_vertex>",
-        "#include <begin_vertex>\nvKitH = (dot(uKitRow.xyz, position) + uKitRow.w - uKitRange.x) / (uKitRange.y - uKitRange.x);",
+        `#include <begin_vertex>
+        vKitH = (dot(uKitRow.xyz, position) + uKitRow.w - uKitRange.x) / (uKitRange.y - uKitRange.x);
+        vKitX = (dot(uKitRowX.xyz, position) + uKitRowX.w - uKitRangeX.x) / (uKitRangeX.y - uKitRangeX.x) * 2.0 - 1.0;`,
       );
     shader.fragmentShader = shader.fragmentShader
       .replace(
         "#include <common>",
-        "#include <common>\nuniform vec3 uBands, uShirt, uShorts, uSocks, uSkin, uHair;\nvarying float vKitH;",
+        "#include <common>\nuniform vec3 uBands, uShirt, uShorts, uSocks, uSkin, uHair, uBoots, uGloves;\nuniform vec2 uGear;\nvarying float vKitH, vKitX;",
       )
       .replace(
         "#include <map_fragment>",
@@ -137,6 +158,10 @@ function tintMaterial(
           vec3 kit = vKitH < uBands.x ? uSocks : vKitH < uBands.y ? uShorts : uShirt;
           vec3 body = c * (vKitH > uBands.z ? uHair : uSkin);
           diffuseColor.rgb = mix(body, kit * min(1.0, hi / 0.65), white);
+          float boot = uGear.x * step(vKitH, 0.075) * (1.0 - smoothstep(0.08, 0.22, hi));
+          diffuseColor.rgb = mix(diffuseColor.rgb, uBoots * (0.4 + 3.0 * hi), boot);
+          float glove = uGear.y * smoothstep(0.78, 0.82, abs(vKitX)) * (1.0 - white);
+          diffuseColor.rgb = mix(diffuseColor.rgb, uGloves * min(1.0, 0.55 + hi * 0.6), glove);
         }`,
       );
   };
@@ -145,7 +170,7 @@ function tintMaterial(
 
 /** One animated copy of a footballer in a kit: its own skeleton, mixer
  * and tinted material. */
-function useFootballer(kit: Kit, look: Look, castShadow: boolean) {
+function useFootballer(kit: Kit, look: Look, castShadow: boolean, gear: Gear = {}) {
   const character = CHARACTERS[look.character];
   const gltf = useGLTF(character.url);
   const frame = useMemo(() => {
@@ -163,10 +188,12 @@ function useFootballer(kit: Kit, look: Look, castShadow: boolean) {
       if (!mesh.isMesh) return;
       mesh.frustumCulled = false;
       mesh.castShadow = castShadow;
-      mesh.material = tintMaterial(mesh.material as THREE.MeshStandardMaterial, frame, character, kit, look);
+      mesh.material = tintMaterial(mesh.material as THREE.MeshStandardMaterial, frame, character, kit, look, gear);
     });
     return root;
-  }, [gltf.scene, frame, character, kit, look, castShadow]);
+    // The gear's colours, not the object (a fresh literal every render).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gltf.scene, frame, character, kit, look, castShadow, gear.boots, gear.gloves]);
   const mixer = useMemo(() => new THREE.AnimationMixer(model), [model]);
   const actions = useMemo(() => {
     const out = {} as Record<Clip, THREE.AnimationAction>;
@@ -239,6 +266,7 @@ export function KeeperModel({
   saved,
   clock,
   castShadow,
+  gloves,
 }: {
   setup: ShotSetup;
   /** Where the hands end up (from the trajectory), null while waiting. */
@@ -251,8 +279,10 @@ export function KeeperModel({
   saved: boolean;
   clock: PlayerClock;
   castShadow: boolean;
+  /** Glove colour (every keeper wears gloves). */
+  gloves: string;
 }) {
-  const { model, mixer, actions, clips } = useFootballer(KITS.keeper, KEEPER_LOOK, castShadow);
+  const { model, mixer, actions, clips } = useFootballer(KITS.keeper, KEEPER_LOOK, castShadow, { gloves });
   const group = useRef<THREE.Group>(null);
   const state = useRef<{ clip: Clip | null }>({ clip: null });
   // Per clip: when the hips start moving sideways (the dives open with
@@ -341,6 +371,7 @@ export function KickerModel({
   celebration = "celebrate",
   kit = "home",
   castShadow,
+  boots = null,
 }: {
   setup: ShotSetup;
   clock: PlayerClock;
@@ -350,9 +381,11 @@ export function KickerModel({
   celebration?: Celebration;
   kit?: "home" | "away";
   castShadow: boolean;
+  /** Boots colour, or null for the model's black ones. */
+  boots?: string | null;
 }) {
   const look = kit === "away" ? LOOKS[3] : KICKER_LOOK;
-  const { model, mixer, actions, clips } = useFootballer(kit === "away" ? KITS.away : KITS.home, look, castShadow);
+  const { model, mixer, actions, clips } = useFootballer(kit === "away" ? KITS.away : KITS.home, look, castShadow, { boots });
   const group = useRef<THREE.Group>(null);
   // The kick ends a couple of metres on from where the celebration clip
   // starts: the hips' gap (in the hips' parent space), made up by moving

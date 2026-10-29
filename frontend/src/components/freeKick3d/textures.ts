@@ -172,7 +172,9 @@ export function ledTexture(text: string, accent: string) {
 
 /** A football: a subdivided sphere whose faces near the 12 icosahedron
  * vertices are black — they read as the classic pentagon panels. */
-export function ballGeometry() {
+export function ballGeometry(light = "#f2f2f7", dark = "#101014") {
+  const lightC = new THREE.Color(light);
+  const darkC = new THREE.Color(dark);
   const geo = new THREE.IcosahedronGeometry(BALL_RADIUS, 4);
   const phi = (1 + Math.sqrt(5)) / 2;
   const centres = [
@@ -189,9 +191,8 @@ export function ballGeometry() {
     centroid.set(0, 0, 0);
     for (let k = 0; k < 3; k++) centroid.add(a.fromBufferAttribute(pos, f + k));
     centroid.normalize();
-    const dark = centres.some((cv) => cv.dot(centroid) > threshold);
-    const shade = dark ? 0.06 : 0.95;
-    for (let k = 0; k < 3; k++) colors.set([shade, shade, dark ? 0.08 : 0.97], (f + k) * 3);
+    const c = centres.some((cv) => cv.dot(centroid) > threshold) ? darkC : lightC;
+    for (let k = 0; k < 3; k++) colors.set([c.r, c.g, c.b], (f + k) * 3);
   }
   geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   // Smooth normals on a sphere: the direction from the centre.

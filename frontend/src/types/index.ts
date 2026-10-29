@@ -1669,6 +1669,13 @@ export interface FreeKick3DStartResult {
   rating: number;
   total_kicks: number;
   kick: FreeKick3DKick;
+  /** Goals in a row so far («Серия без промахов»), across series. */
+  streak: number;
+  /** «Мой игрок» gear worn in the scene (cosmetic codes; null = default). */
+  celebration?: string | null;
+  ball?: string | null;
+  boots?: string | null;
+  gloves?: string | null;
 }
 
 export interface FreeKick3DShotResult {
@@ -1678,6 +1685,9 @@ export interface FreeKick3DShotResult {
   total_coins: number;
   is_finished: boolean;
   next_kick: FreeKick3DKick | null;
+  /** Goals in a row after this kick, and the bonus it paid (in coins_this_kick). */
+  streak: number;
+  streak_bonus: number;
 }
 
 /** Buying another series without waiting for the hour: the day's first
@@ -1708,8 +1718,11 @@ export interface Penalty3DStartResult {
   session_id: number;
   rating: number;
   kick: Penalty3DKick;
-  /** The player's «Мой игрок» goal celebration (cosmetic code), if worn. */
+  /** «Мой игрок» gear worn in the scene (cosmetic codes; null = default). */
   celebration?: string | null;
+  ball?: string | null;
+  boots?: string | null;
+  gloves?: string | null;
 }
 
 export interface Penalty3DResult {

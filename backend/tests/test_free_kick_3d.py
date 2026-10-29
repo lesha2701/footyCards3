@@ -8,7 +8,7 @@ import app.core.rate_limit as rate_limit_module
 
 from app.models.game import GameSession
 from app.services import free_kick_3d_engine as engine
-from app.services.free_kick_service import score_3d_shot
+from app.services.free_kick_service import score_3d_shot, streak_bonus
 from app.services.game_config_service import get_config
 from tests.factories import get_user_by_telegram_id
 from tests.test_free_kick import _grant_card, _register
@@ -115,6 +115,7 @@ async def test_full_series_is_replayed_on_the_server_and_paid_once(client, db_se
     session_id = start["session_id"]
 
     expected_total = 0
+    streak = 0
     for i in range(6):
         kick = await _age_current_kick(db_session, session_id)
         resp = await client.post(f"/api/v1/games/free-kick-3d/{session_id}/shot", headers=headers, json=SWIPE)
@@ -125,6 +126,8 @@ async def test_full_series_is_replayed_on_the_server_and_paid_once(client, db_se
             engine.create_setup(kick["seed"], 80), engine.Swipe(SWIPE["dx"], SWIPE["dy"], SWIPE["curve"], SWIPE["duration_ms"]),
         )
         coins, bonuses = score_3d_shot(config, replay)
+        streak = streak + 1 if replay.outcome == "goal" else 0
+        coins += streak_bonus(config, streak) if replay.outcome == "goal" else 0
         assert body["outcome"] == replay.outcome
         assert body["coins_this_kick"] == coins
         assert body["bonuses"] == bonuses
@@ -285,3 +288,44 @@ async def test_stars_refill_pre_checkout_refuses_past_the_cap(client, db_session
         json={"payload_token": invoice["payload_token"], "total_amount": invoice["stars_amount"]}, headers=INTERNAL_HEADERS,
     )
     assert pre.json()["ok"] is False
+
+
+def test_streak_bonus_on_the_3rd_5th_10th_and_every_10th():
+    cfg = SimpleNamespace(free_kick_streak_3_bonus=15, free_kick_streak_5_bonus=40, free_kick_streak_10_bonus=120)
+    assert [streak_bonus(cfg, n) for n in range(1, 12)] == [0, 0, 15, 0, 40, 0, 0, 0, 0, 120, 0]
+    assert streak_bonus(cfg, 20) == 120 and streak_bonus(cfg, 25) == 0
+
+
+def _swipe_for(seed: int, rating: int, outcome: str) -> dict:
+    setup = engine.create_setup(seed, rating)
+    for dy in range(-200, -620, -20):
+        for dx in range(-200, 201, 10):
+            for curve in (0, 60, -60):
+                if engine.simulate_shot(setup, engine.Swipe(dx, dy, curve, 160)).outcome == outcome:
+                    return {"dx": dx, "dy": dy, "curve": curve, "duration_ms": 160}
+    raise AssertionError(f"no {outcome} for seed {seed}")
+
+
+async def test_goals_in_a_row_pay_the_streak_bonus_and_a_miss_resets_it(client, db_session, bot_token):
+    user = await _register(client, db_session, 850020, bot_token)
+    card = await _grant_card(db_session, user.id, rating=80)
+    headers = telegram_headers(850020, bot_token)
+    user.free_kick_goal_streak = 2
+    db_session.add(user)
+    await db_session.commit()
+    config = await get_config(db_session)
+
+    start = (await client.post("/api/v1/games/free-kick-3d/start", headers=headers, json={"user_card_id": card.id})).json()
+    assert start["streak"] == 2
+    sid = start["session_id"]
+    kick = await _age_current_kick(db_session, sid)
+    goal = (await client.post(f"/api/v1/games/free-kick-3d/{sid}/shot", headers=headers, json=_swipe_for(kick["seed"], 80, "goal"))).json()
+    assert goal["outcome"] == "goal"
+    assert (goal["streak"], goal["streak_bonus"]) == (3, config.free_kick_streak_3_bonus)
+    assert goal["coins_this_kick"] >= config.free_kick_3d_goal_coins + config.free_kick_streak_3_bonus
+
+    kick = await _age_current_kick(db_session, sid)
+    miss = (await client.post(f"/api/v1/games/free-kick-3d/{sid}/shot", headers=headers, json=_swipe_for(kick["seed"], 80, "miss"))).json()
+    assert (miss["streak"], miss["streak_bonus"]) == (0, 0)
+    await db_session.refresh(user)
+    assert user.free_kick_goal_streak == 0

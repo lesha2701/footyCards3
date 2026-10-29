@@ -341,9 +341,8 @@ async def start_3d(db: AsyncSession, user: User, user_card_id: int) -> Penalty3D
     db.add(session)
     await db.commit()
     await db.refresh(session)
-    mp = await my_player_service.get_my_player(db, locked_user.id)
-    celebration = my_player_service.cosmetics_of(mp)["celebration"] if mp else None
-    return Penalty3DStartOut(session_id=session.id, rating=card.player.rating, kick=_kick_out(0, first), celebration=celebration)
+    gear = await my_player_service.game_gear(db, locked_user.id)
+    return Penalty3DStartOut(session_id=session.id, rating=card.player.rating, kick=_kick_out(0, first), **gear)
 
 
 async def _lock_3d_kick(db: AsyncSession, user: User, session_id: int, kicker: str) -> tuple[GameSession, dict, dict]:
