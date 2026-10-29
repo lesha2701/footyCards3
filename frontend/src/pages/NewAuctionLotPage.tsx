@@ -6,6 +6,7 @@ import ConfirmDialog from "@/components/common/ConfirmDialog";
 import NumberInput from "@/components/common/NumberInput";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import PlayerCard from "@/components/cards/PlayerCard";
+import { AgentIcon } from "@/components/market/AgentBadge";
 import { createAuctionLot, fetchAuctionInfo, fetchAuctionPriceFloor } from "@/api/auction";
 import { fetchCollection } from "@/api/collection";
 import { ApiRequestError } from "@/lib/api";
@@ -80,8 +81,9 @@ export default function NewAuctionLotPage() {
     },
   });
 
+  const blocked = floor?.block_reason ?? null;
   const valid =
-    !!card && !!duration && startPrice >= minPrice && (!withBuyNow || buyNow > startPrice);
+    !!card && !!duration && !blocked && startPrice >= minPrice && (!withBuyNow || buyNow > startPrice);
   const fee = info ? Math.floor(((withBuyNow ? buyNow : startPrice) * info.fee_pct) / 100) : 0;
 
   if (info && (!info.enabled || info.restriction)) {
@@ -89,6 +91,27 @@ export default function NewAuctionLotPage() {
       <div className="flex flex-col gap-4">
         <h1 className="font-display text-xl font-bold text-ink-chalk">Выставить на рынок</h1>
         <p className="rounded-xl bg-amber-500/10 px-3 py-2 text-sm text-amber-300">{info.restriction ?? "Рынок сейчас закрыт"}</p>
+      </div>
+    );
+  }
+
+  if (info && !info.license.active) {
+    return (
+      <div className="flex flex-col gap-4">
+        <h1 className="font-display text-xl font-bold text-ink-chalk">Выставить на рынок</h1>
+        <div className="flex flex-col items-center gap-3 rounded-2xl bg-bg-surface p-5 text-center">
+          <AgentIcon size={56} />
+          <p className="text-sm text-ink-mist">
+            Выставлять на рынок могут только агенты — купи «Агентскую лицензию» за {info.license.stars} ⭐ на{" "}
+            {info.license.days} дн. Ставить и покупать можно и без неё.
+          </p>
+          <button
+            onClick={() => navigate("/market/license")}
+            className="w-full rounded-2xl bg-floodlight py-3 font-display text-sm font-bold text-bg-base active:scale-95"
+          >
+            Об агентской лицензии
+          </button>
+        </div>
       </div>
     );
   }
@@ -147,6 +170,7 @@ export default function NewAuctionLotPage() {
             </div>
           </div>
 
+          {blocked && <p className="rounded-xl bg-amber-500/10 px-3 py-2 text-sm text-amber-300">{blocked}</p>}
           {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
 
           <div>
@@ -158,8 +182,8 @@ export default function NewAuctionLotPage() {
               className="w-full rounded-xl bg-bg-surface px-4 py-2.5 text-sm text-ink-chalk outline-none"
             />
             <p className="mt-1 text-caption text-ink-mist-dim">
-              Не ниже {minPrice.toLocaleString("ru-RU")}
-              {floor?.premium && info ? ` — для алмазов, «Академии» и игроков ${info.premium_rating}+ минимум ${info.premium_min_price.toLocaleString("ru-RU")}` : " (цена быстрой продажи)"}
+              Не ниже {minPrice.toLocaleString("ru-RU")} — это ценность карточки
+              {floor?.valuable ? " (легендарки, «Академия» и лимитки стоят дороже)" : ""}
             </p>
           </div>
 

@@ -141,6 +141,7 @@ const TradeDetailPage = lazy(() => import("@/pages/TradeDetailPage"));
 const MarketPage = lazy(() => import("@/pages/MarketPage"));
 const NewAuctionLotPage = lazy(() => import("@/pages/NewAuctionLotPage"));
 const AuctionLotPage = lazy(() => import("@/pages/AuctionLotPage"));
+const AgentLicensePage = lazy(() => import("@/pages/AgentLicensePage"));
 const TasksPage = lazy(() => import("@/pages/TasksPage"));
 const UpgradePage = lazy(() => import("@/pages/UpgradePage"));
 const BingoPage = lazy(() => import("@/pages/BingoPage"));
@@ -342,6 +343,7 @@ export default function App() {
         <Route path="/trades/:id" element={<TradeDetailPage />} />
         <Route path="/market" element={<MarketPage />} />
         <Route path="/market/new" element={<NewAuctionLotPage />} />
+        <Route path="/market/license" element={<AgentLicensePage />} />
         <Route path="/market/:id" element={<AuctionLotPage />} />
         <Route path="/clubs" element={<ClubsPage />} />
         <Route path="/clubs/create" element={<ClubCreatePage />} />

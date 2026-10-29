@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import func, select
 
 from app.core.exceptions import AppError, ConflictError, ForbiddenError
-from app.models.auction import AuctionBid, AuctionLot
+from app.models.auction import AgentLicense, AuctionBid, AuctionLot
 from app.models.card import UserCard
 from app.models.enums import CardSource, NotificationType, Position, Rarity, TransactionType
 from app.models.game_config import GameConfig
@@ -20,12 +20,13 @@ from app.schemas.auction import AuctionBidIn, AuctionBuyNowIn, AuctionLotCreateI
 from app.schemas.trade import TradeCreateRequest
 from app.services import auction_service, collection_service, trade_service
 
-OLD = datetime.now(timezone.utc) - timedelta(days=30)
+OLD = datetime.now(timezone.utc) - timedelta(days=60)
 
 
 @pytest.fixture
 async def config(db_session):
-    cfg = GameConfig(id=1, auction_enabled=True)
+    # Verified = old enough only (no Stars spent) unless a test says otherwise.
+    cfg = GameConfig(id=1, auction_enabled=True, trade_verified_min_stars=0)
     db_session.add(cfg)
     await db_session.commit()
     return cfg
@@ -59,7 +60,19 @@ def _key() -> str:
     return uuid.uuid4().hex
 
 
-async def _list(db, seller, card, start=100, buy_now=None, hours=6, **kw):
+async def _license(db, user, days=30):
+    lic = await db.get(AgentLicense, user.id)
+    expires = datetime.now(timezone.utc) + timedelta(days=days)
+    if lic is None:
+        db.add(AgentLicense(user_id=user.id, expires_at=expires, purchases=1, stars_total=99))
+    else:
+        lic.expires_at, lic.revoked_at = expires, None
+    await db.commit()
+
+
+async def _list(db, seller, card, start=100, buy_now=None, hours=6, license=True, **kw):
+    if license and await db.get(AgentLicense, seller.id) is None:
+        await _license(db, seller)
     return await auction_service.create_lot(
         db, seller, AuctionLotCreateIn(user_card_id=card.id, start_price=start, buy_now_price=buy_now, duration_hours=hours, **kw),
     )
@@ -81,22 +94,23 @@ async def _balance(db, user_id) -> int:
 
 async def test_create_lot_locks_card_and_validates(db_session, config):
     seller = await _user(db_session)
-    card = await _card(db_session, seller, quick_sell=50)
+    card = await _card(db_session, seller, quick_sell=50)  # card_value = 50 x 2 = 100
 
-    with pytest.raises(ConflictError):  # below the quick-sell floor
-        await _list(db_session, seller, card, start=49)
+    with pytest.raises(ConflictError):  # below the card's value
+        await _list(db_session, seller, card, start=99)
     with pytest.raises(ConflictError):  # not an allowed duration
-        await _list(db_session, seller, card, start=60, hours=2)
+        await _list(db_session, seller, card, start=100, hours=2)
     with pytest.raises(ConflictError):  # buy-now must exceed start
-        await _list(db_session, seller, card, start=60, buy_now=60)
+        await _list(db_session, seller, card, start=100, buy_now=100)
 
-    lot = await _list(db_session, seller, card, start=60, buy_now=200)
-    assert lot.status == "active" and lot.min_next_bid == 60 and lot.fee_pct == 10
+    lot = await _list(db_session, seller, card, start=100, buy_now=300)
+    assert lot.status == "active" and lot.min_next_bid == 100 and lot.fee_pct == 10
+    assert lot.seller_is_agent
     await db_session.refresh(card)
     assert card.is_locked_in_trade
 
     # A replayed create returns the same lot instead of a second one.
-    again = await _list(db_session, seller, card, start=60, buy_now=200)
+    again = await _list(db_session, seller, card, start=100, buy_now=300)
     assert again.id == lot.id
     count = (await db_session.execute(select(func.count(AuctionLot.id)))).scalar_one()
     assert count == 1
@@ -115,21 +129,114 @@ async def test_last_copy_needs_confirmation_and_diamond_is_refused(db_session, c
         await _list(db_session, seller, diamond)
 
 
-async def test_premium_cards_start_at_premium_floor(db_session, config):
+async def test_start_price_floor_is_card_value(db_session, config):
     seller = await _user(db_session)
-    top = await _card(db_session, seller, rating=95)
+    legend = await _card(db_session, seller, rarity=Rarity.legendary, rating=85)  # value 6 000
     with pytest.raises(ConflictError) as exc:
-        await _list(db_session, seller, top, start=49_999)
-    assert exc.value.details["min_price"] == 50_000
-    await _list(db_session, seller, top, start=50_000, buy_now=60_000)
+        await _list(db_session, seller, legend, start=5_999)
+    assert exc.value.details["min_price"] == 6_000
+    await _list(db_session, seller, legend, start=6_000, buy_now=9_000)
 
-    # 94 + one earned star = 95 → premium too; a plain 94 is not.
-    boosted = await _card(db_session, seller, rating=94, stars=1, star_rating_bonus=1)
+    top = await _card(db_session, seller, rarity=Rarity.legendary, rating=93)  # legendary_top 12 000
+    floor = await auction_service.price_floor_for(db_session, seller, top.id)
+    assert (floor.min_price, floor.valuable, floor.block_reason) == (12_000, True, None)
+
+
+async def test_valuable_free_source_copy_cannot_be_listed(db_session, config):
+    seller = await _user(db_session)
+    free = await _card(db_session, seller, rarity=Rarity.legendary, from_free_source=True)
+    with pytest.raises(ConflictError) as exc:
+        await _list(db_session, seller, free, start=10_000)
+    assert "бесплатно" in exc.value.message
+    assert (await auction_service.price_floor_for(db_session, seller, free.id)).block_reason
+    # A plain (not valuable) free copy is fine.
+    await _list(db_session, seller, await _card(db_session, seller, from_free_source=True))
+
+
+async def test_valuable_card_needs_verified_seller(db_session, config):
+    config.trade_verified_min_stars = 49
+    await db_session.commit()
+    seller = await _user(db_session)
+    legend = await _card(db_session, seller, rarity=Rarity.legendary)
+    with pytest.raises(ConflictError) as exc:
+        await _list(db_session, seller, legend, start=10_000)
+    assert "Проверенный аккаунт" in exc.value.message
+
+
+async def test_listing_needs_active_agent_license_but_bidding_does_not(db_session, config):
+    seller, buyer = await _user(db_session), await _user(db_session)
+    card = await _card(db_session, seller)
+    with pytest.raises(ForbiddenError) as exc:
+        await _list(db_session, seller, card, license=False)
+    assert exc.value.details["rule"] == "agent_license_required"
+
+    await _license(db_session, seller, days=-1)  # expired
+    with pytest.raises(ForbiddenError):
+        await _list(db_session, seller, card)
+    await _license(db_session, seller)
+    lot = await _list(db_session, seller, card)
+    assert (await _bid(db_session, buyer, lot.id, 100)).lot.i_am_leading  # buyer has no license
+
+    lic = await db_session.get(AgentLicense, seller.id)
+    lic.revoked_at = datetime.now(timezone.utc)
+    await db_session.commit()
+    with pytest.raises(ForbiddenError):
+        await _list(db_session, seller, await _card(db_session, seller))
+    assert not (await auction_service.get_lot(db_session, buyer, lot.id)).seller_is_agent
+
+
+async def test_license_purchase_rules_and_delivery_extends(db_session, config):
+    from app.models.pack import StarsInvoice
+    from app.services import agent_license_service, shop_product_service
+
+    young = await _user(db_session, created_at=datetime.now(timezone.utc) - timedelta(days=5))
+    status = await agent_license_service.status(db_session, young)
+    assert not status.active and "30" in status.buy_block_reason
     with pytest.raises(ConflictError):
-        await _list(db_session, seller, boosted, start=1000)
-    plain = await _card(db_session, seller, rating=94)
-    await _list(db_session, seller, plain, start=1000)
-    assert (await auction_service.price_floor_for(db_session, seller, top.id)).min_price == 50_000
+        await agent_license_service.stars_order(db_session, young)
+
+    banned = await _user(db_session)
+    banned.is_trade_banned = True
+    await db_session.commit()
+    assert (await agent_license_service.status(db_session, banned)).buy_block_reason
+
+    config.trade_verified_min_stars = 49
+    await db_session.commit()
+    unverified = await _user(db_session)
+    assert "Проверенный" in (await agent_license_service.status(db_session, unverified)).buy_block_reason
+    config.trade_verified_min_stars = 0
+    await db_session.commit()
+
+    agent = await _user(db_session)
+    product, stars, _, _ = await agent_license_service.stars_order(db_session, agent)
+    assert (product, stars) == ("agent_license", 99)
+    invoice = StarsInvoice(user_id=agent.id, payload_token=_key(), stars_amount=99, shop_product="agent_license")
+    db_session.add(invoice)
+    await db_session.commit()
+    assert await shop_product_service.validate(db_session, invoice) == (True, "")
+    wrong = StarsInvoice(user_id=agent.id, payload_token=_key(), stars_amount=10, shop_product="agent_license")
+    assert (await shop_product_service.validate(db_session, wrong))[0] is False
+
+    await shop_product_service.deliver(db_session, agent, invoice, "charge-1")
+    await db_session.commit()
+    first = (await agent_license_service.status(db_session, agent)).expires_at
+    await shop_product_service.deliver(db_session, agent, invoice, "charge-2")  # a second purchase stacks
+    await db_session.commit()
+    status = await agent_license_service.status(db_session, agent)
+    assert status.active and (status.expires_at - first).days == 30
+    lic = await db_session.get(AgentLicense, agent.id)
+    assert (lic.purchases, lic.stars_total) == (2, 198)
+
+
+async def test_admin_revokes_license(db_session, config):
+    from app.services import agent_license_service
+
+    admin, agent = await _user(db_session), await _user(db_session)
+    await _license(db_session, agent)
+    out = await agent_license_service.admin_revoke(db_session, admin, agent.id, "возврат звёзд")
+    assert not out.active and out.revoke_reason == "возврат звёзд"
+    assert not await agent_license_service.has_active(db_session, agent.id)
+    assert [a.user_id for a in await agent_license_service.admin_list(db_session)] == [agent.id]
 
 
 async def test_listed_card_is_blocked_everywhere_else(db_session, config):
@@ -324,6 +431,8 @@ async def test_disabled_market_blocks_new_activity_but_not_cancel(db_session, co
 
 
 async def test_new_accounts_and_trade_bans_cannot_trade(db_session, config):
+    config.auction_min_account_age_days = 3  # 0 by default = anyone not banned may bid
+    await db_session.commit()
     seller = await _user(db_session)
     fresh = await _user(db_session, created_at=datetime.now(timezone.utc))
     lot = await _list(db_session, seller, await _card(db_session, seller))

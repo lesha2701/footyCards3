@@ -1,5 +1,6 @@
-"""«Трансферный рынок»: auction lots + bids, GameConfig settings, auction
-transaction and notification types.
+"""«Трансферный рынок»: auction lots + bids, «Агентская лицензия» (only
+agents list lots), GameConfig settings, auction transaction and
+notification types.
 
 Revision ID: 0215
 Revises: 0214
@@ -23,14 +24,19 @@ CONFIG_INT_COLUMNS = (
     ("auction_min_increment_pct", "5"),
     ("auction_min_increment_coins", "10"),
     ("auction_min_price", "10"),
-    ("auction_min_price_quick_sell_pct", "100"),
     ("auction_max_active_lots", "5"),
     ("auction_snipe_window_seconds", "120"),
     ("auction_snipe_extend_seconds", "120"),
-    ("auction_min_account_age_days", "3"),
+    ("auction_min_account_age_days", "0"),
     ("auction_max_wins_per_seller_daily", "3"),
-    ("auction_premium_min_price", "50000"),
-    ("auction_premium_rating", "95"),
+    ("agent_license_stars", "99"),
+    ("agent_license_days", "30"),
+    ("agent_license_min_account_age_days", "30"),
+)
+CONFIG_BOOL_COLUMNS = (
+    ("auction_enabled", sa.false()),
+    ("agent_license_enabled", sa.true()),
+    ("agent_license_requires_verified", sa.true()),
 )
 
 
@@ -88,7 +94,8 @@ def upgrade() -> None:
     op.create_index("ix_auction_bids_lot_id", "auction_bids", ["lot_id"])
     op.create_index("ix_auction_bids_bidder_id", "auction_bids", ["bidder_id"])
 
-    op.add_column("game_config", sa.Column("auction_enabled", sa.Boolean(), nullable=False, server_default=sa.false()))
+    for name, default in CONFIG_BOOL_COLUMNS:
+        op.add_column("game_config", sa.Column(name, sa.Boolean(), nullable=False, server_default=default))
     op.add_column(
         "game_config",
         sa.Column("auction_durations_hours", sa.JSON(), nullable=False, server_default=sa.text("'[1, 6, 24]'::json")),
@@ -96,12 +103,28 @@ def upgrade() -> None:
     for name, default in CONFIG_INT_COLUMNS:
         op.add_column("game_config", sa.Column(name, sa.Integer(), nullable=False, server_default=default))
 
+    op.create_table(
+        "agent_licenses",
+        sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("first_bought_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column("last_bought_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column("purchases", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("stars_total", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("revoke_reason", sa.String(255), nullable=True),
+    )
+    op.create_index("ix_agent_licenses_expires_at", "agent_licenses", ["expires_at"])
+
 
 def downgrade() -> None:
+    op.drop_index("ix_agent_licenses_expires_at", table_name="agent_licenses")
+    op.drop_table("agent_licenses")
     for name, _ in reversed(CONFIG_INT_COLUMNS):
         op.drop_column("game_config", name)
     op.drop_column("game_config", "auction_durations_hours")
-    op.drop_column("game_config", "auction_enabled")
+    for name, _ in reversed(CONFIG_BOOL_COLUMNS):
+        op.drop_column("game_config", name)
     op.drop_index("ix_auction_bids_bidder_id", table_name="auction_bids")
     op.drop_index("ix_auction_bids_lot_id", table_name="auction_bids")
     op.drop_table("auction_bids")

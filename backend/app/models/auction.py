@@ -83,3 +83,23 @@ class AuctionBid(Base):
         UniqueConstraint("bidder_id", "idempotency_key", name="uq_auction_bids_idempotency"),
         CheckConstraint("amount > 0", name="ck_auction_bids_amount"),
     )
+
+
+class AgentLicense(Base):
+    """«Агентская лицензия»: only its holders may put lots on the market
+    (bidding and buying are open to everyone). Bought for Stars
+    (shop product "agent_license", agent_license_service); every purchase
+    extends expires_at by GameConfig.agent_license_days from max(now,
+    expires_at). One row per user. revoked_at set by an admin (e.g. after a
+    manual Stars refund) ends it at once; a later purchase starts it again."""
+
+    __tablename__ = "agent_licenses"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    first_bought_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    last_bought_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    purchases: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    stars_total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoke_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

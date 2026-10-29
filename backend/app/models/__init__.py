@@ -1,5 +1,5 @@
 from app.models.admin_action import AdminAction
-from app.models.auction import AuctionBid, AuctionLot
+from app.models.auction import AgentLicense, AuctionBid, AuctionLot
 from app.models.badge import Badge, UserBadge
 from app.models.blackjack import BlackjackMatch
 from app.models.card import CardStarLedger, UserCard
@@ -295,4 +295,5 @@ __all__ = [
     "PlayerCareerWeeklyClaim",
     "AuctionLot",
     "AuctionBid",
+    "AgentLicense",
 ]

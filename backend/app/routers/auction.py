@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models.enums import Position, Rarity
 from app.models.user import User
 from app.schemas.auction import (
+    AgentLicenseOut,
     AuctionActionOut,
     AuctionBidIn,
     AuctionBuyNowIn,
@@ -19,7 +20,8 @@ from app.schemas.auction import (
     AuctionPriceFloorOut,
     AuctionSort,
 )
-from app.services import auction_service
+from app.schemas.stars import StarsInvoiceCreateOut
+from app.services import agent_license_service, auction_service, shop_product_service
 
 router = APIRouter(prefix="/auction", tags=["auction"])
 
@@ -95,3 +97,16 @@ async def buy_now(
 @router.post("/lots/{lot_id}/cancel", response_model=AuctionLotOut)
 async def cancel_lot(lot_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await auction_service.cancel_lot(db, user, lot_id)
+
+
+@router.get("/license", response_model=AgentLicenseOut)
+async def license_status(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await agent_license_service.status(db, user)
+
+
+@router.post("/license/stars-invoice", response_model=StarsInvoiceCreateOut)
+async def license_invoice(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Buy or extend the «Агентская лицензия»; paid status via the shared
+    GET /shop/stars-invoices/{token}."""
+    await check_rate_limit(f"agent_license_invoice:{user.id}", max_calls=10, window_seconds=60)
+    return await shop_product_service.create_invoice(db, user, *await agent_license_service.stars_order(db, user))

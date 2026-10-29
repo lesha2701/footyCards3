@@ -7,6 +7,7 @@ import NumberInput from "@/components/common/NumberInput";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import PlayerCard from "@/components/cards/PlayerCard";
+import AgentBadge from "@/components/market/AgentBadge";
 import { IconClock, IconCoin } from "@/components/icons";
 import {
   buyAuctionLotNow,
@@ -125,7 +126,10 @@ export default function AuctionLotPage() {
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <h1 className="font-display text-lg font-bold leading-tight text-ink-chalk">{card.player.display_name}</h1>
-          <p className="text-caption text-ink-mist">Копия #{card.serial_number} · продавец {lot.seller_name}</p>
+          <p className="flex flex-wrap items-center gap-1 text-caption text-ink-mist">
+            Копия #{card.serial_number} · продавец {lot.seller_name}
+            {lot.seller_is_agent && <AgentBadge />}
+          </p>
           <span className="mt-1 w-fit rounded-full bg-white/5 px-2 py-0.5 text-caption text-ink-mist">{LOT_STATUS_LABELS[lot.status]}</span>
           {active && (
             <p className={`mt-1 flex items-center gap-1 font-mono text-base font-bold ${left < 120_000 ? "text-red-300" : "text-ink-chalk"}`}>

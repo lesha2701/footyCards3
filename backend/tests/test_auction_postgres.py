@@ -15,7 +15,7 @@ import pytest
 from sqlalchemy import func, select
 
 from app.core.exceptions import AppError
-from app.models.auction import AuctionBid, AuctionLot
+from app.models.auction import AgentLicense, AuctionBid, AuctionLot
 from app.models.card import UserCard
 from app.models.enums import CardSource, Position, Rarity
 from app.models.game_config import GameConfig
@@ -25,7 +25,7 @@ from app.schemas.auction import AuctionBidIn, AuctionBuyNowIn, AuctionLotCreateI
 from app.services import auction_service
 
 START = 10_000
-OLD = datetime.now(timezone.utc) - timedelta(days=30)
+OLD = datetime.now(timezone.utc) - timedelta(days=60)
 
 
 @pytest.fixture(autouse=True)
@@ -49,6 +49,11 @@ async def pg(real_pg):
         config.auction_max_active_lots = 5
         config.auction_snipe_window_seconds = 120
         config.auction_snipe_extend_seconds = 120
+        config.agent_license_enabled = True
+        config.agent_license_stars = 99
+        config.agent_license_days = 30
+        config.agent_license_min_account_age_days = 30
+        config.trade_verified_min_stars = 0
         await s.commit()
     yield real_pg
 
@@ -61,7 +66,17 @@ async def _user(pg) -> int:
         return user.id
 
 
+async def _make_agent(pg, user_id: int) -> None:
+    async with pg() as s:
+        if await s.get(AgentLicense, user_id) is None:
+            s.add(AgentLicense(
+                user_id=user_id, expires_at=datetime.now(timezone.utc) + timedelta(days=30), purchases=1, stars_total=99,
+            ))
+            await s.commit()
+
+
 async def _lot(pg, seller_id: int, buy_now=None) -> tuple[int, int]:
+    await _make_agent(pg, seller_id)
     async with pg() as s:
         tag = uuid.uuid4().hex[:6]
         player = Player(
@@ -222,6 +237,7 @@ async def test_buy_now_racing_bids_sells_once(pg):
 
 async def test_concurrent_listing_of_one_card_creates_one_lot(pg):
     seller = await _user(pg)
+    await _make_agent(pg, seller)
     async with pg() as s:
         tag = uuid.uuid4().hex[:6]
         player = Player(
@@ -245,3 +261,34 @@ async def test_concurrent_listing_of_one_card_creates_one_lot(pg):
             select(func.count(AuctionLot.id)).where(AuctionLot.user_card_id == card_id, AuctionLot.status == "active")
         )).scalar_one()
         assert count == 1
+
+
+async def test_concurrent_license_deliveries_both_count(pg):
+    """Two paid invoices of one player delivered at the same moment (bot +
+    retry loop): the user row lock serializes them, so the row is created
+    once and both purchases add their days."""
+    from app.models.pack import StarsInvoice
+    from app.services import shop_product_service
+
+    uid = await _user(pg)
+    tokens = []
+    async with pg() as s:
+        for _ in range(2):
+            token = uuid.uuid4().hex
+            s.add(StarsInvoice(user_id=uid, payload_token=token, stars_amount=99, shop_product="agent_license"))
+            tokens.append(token)
+        await s.commit()
+
+    async def deliver(token):
+        async with pg() as s:
+            user = await s.get(User, uid)
+            invoice = (await s.execute(select(StarsInvoice).where(StarsInvoice.payload_token == token))).scalar_one()
+            await shop_product_service.deliver(s, user, invoice, f"charge-{token}")
+            await s.commit()
+
+    started = datetime.now(timezone.utc)
+    await asyncio.gather(*[deliver(t) for t in tokens])
+    async with pg() as s:
+        lic = await s.get(AgentLicense, uid)
+        assert (lic.purchases, lic.stars_total) == (2, 198)
+        assert lic.expires_at - started >= timedelta(days=59, hours=23)

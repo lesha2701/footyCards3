@@ -7,6 +7,7 @@ import { ListSkeleton } from "@/components/common/Skeleton";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import { IconClock, IconCoin, IconPlus, IconSearch, IconTag } from "@/components/icons";
 import CardsSectionTabs from "@/components/layout/CardsSectionTabs";
+import AgentBadge, { AgentIcon } from "@/components/market/AgentBadge";
 import {
   fetchAuctionInfo,
   fetchAuctionLots,
@@ -50,7 +51,7 @@ export default function MarketPage() {
         <h1 className="font-display text-xl font-bold text-ink-chalk">Трансферный рынок</h1>
         {info?.enabled && (
           <button
-            onClick={() => navigate("/market/new")}
+            onClick={() => navigate(info.license.active ? "/market/new" : "/market/license")}
             className="flex items-center gap-1 rounded-full bg-floodlight px-4 py-2 text-xs font-bold text-bg-base active:scale-95"
           >
             <IconPlus size={13} />
@@ -65,6 +66,23 @@ export default function MarketPage() {
         <p className="rounded-xl bg-white/5 px-3 py-2 text-sm text-ink-mist">
           Рынок сейчас закрыт: новые лоты и ставки недоступны. Свои лоты без ставок можно снять.
         </p>
+      )}
+      {info?.enabled && !info.license.active && (
+        <button
+          onClick={() => navigate("/market/license")}
+          className="flex items-center gap-3 rounded-2xl bg-amber-400/10 p-3 text-left active:scale-[0.99]"
+        >
+          <AgentIcon size={32} />
+          <span className="flex-1 text-caption text-ink-mist">
+            <b className="text-amber-300">Выставлять на рынок могут только агенты.</b> Купи «Агентскую лицензию» за{" "}
+            {info.license.stars} ⭐ на {info.license.days} дн. Ставить и покупать можно и без неё.
+          </span>
+        </button>
+      )}
+      {info?.enabled && info.license.active && info.license.expires_at && (
+        <button onClick={() => navigate("/market/license")} className="flex items-center gap-2 text-caption text-ink-mist-dim">
+          <AgentBadge /> лицензия до {new Date(info.license.expires_at).toLocaleDateString("ru-RU")}
+        </button>
       )}
       {info?.enabled && info.restriction && (
         <p className="rounded-xl bg-amber-500/10 px-3 py-2 text-sm text-amber-300">{info.restriction}</p>

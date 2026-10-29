@@ -1,5 +1,18 @@
 import { api } from "@/lib/api";
-import type { UserCard } from "@/types";
+import type { StarsInvoiceCreate, UserCard } from "@/types";
+
+/** «Агентская лицензия»: listing lots needs an active one; bidding doesn't. */
+export interface AgentLicense {
+  enabled: boolean;
+  active: boolean;
+  expires_at: string | null;
+  revoked: boolean;
+  stars: number;
+  days: number;
+  min_account_age_days: number;
+  requires_verified: boolean;
+  buy_block_reason: string | null;
+}
 
 /** «Трансферный рынок» rules — every number comes from GameConfig. */
 export interface AuctionInfo {
@@ -9,15 +22,13 @@ export interface AuctionInfo {
   min_increment_pct: number;
   min_increment_coins: number;
   min_price: number;
-  min_price_quick_sell_pct: number;
   max_active_lots: number;
   snipe_window_seconds: number;
   snipe_extend_seconds: number;
   min_account_age_days: number;
-  premium_min_price: number;
-  premium_rating: number;
   my_active_lots: number;
   restriction: string | null;
+  license: AgentLicense;
   server_now: string;
 }
 
@@ -38,6 +49,7 @@ export interface AuctionLot {
   card: UserCard;
   seller_id: number;
   seller_name: string;
+  seller_is_agent: boolean;
   status: AuctionLotStatus;
   start_price: number;
   buy_now_price: number | null;
@@ -104,9 +116,28 @@ export async function fetchAuctionLot(id: number): Promise<AuctionLot> {
   return data;
 }
 
-export async function fetchAuctionPriceFloor(userCardId: number): Promise<{ user_card_id: number; min_price: number; premium: boolean }> {
-  const { data } = await api.get(`/auction/price-floor/${userCardId}`);
-  return data as { user_card_id: number; min_price: number; premium: boolean };
+export interface AuctionPriceFloor {
+  user_card_id: number;
+  /** The copy's card value — the lowest allowed start price. */
+  min_price: number;
+  valuable: boolean;
+  /** Why this copy can't be listed (free-source valuable card, …); null = it can. */
+  block_reason: string | null;
+}
+
+export async function fetchAuctionPriceFloor(userCardId: number): Promise<AuctionPriceFloor> {
+  const { data } = await api.get<AuctionPriceFloor>(`/auction/price-floor/${userCardId}`);
+  return data;
+}
+
+export async function fetchAgentLicense(): Promise<AgentLicense> {
+  const { data } = await api.get<AgentLicense>("/auction/license");
+  return data;
+}
+
+export async function createAgentLicenseInvoice(): Promise<StarsInvoiceCreate> {
+  const { data } = await api.post<StarsInvoiceCreate>("/auction/license/stars-invoice");
+  return data;
 }
 
 export async function createAuctionLot(payload: {

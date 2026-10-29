@@ -1465,6 +1465,8 @@ export async function uploadAdminMuseImage(kind: AdminMuseKind, id: number, file
 }
 export async function grantAdminMuse(museId: number, userId: number): Promise<{ user_muse_id: number; copies: number }> {
   const { data } = await api.post(`/admin/muses/muses/${museId}/grant`, { user_id: userId });
+  return data;
+}
 
 // --- «Трансферный рынок» (backend: routers/admin_auction.py; settings live on GameConfig) ---
 export async function fetchAdminAuctionLots(status?: string, username?: string): Promise<AuctionLot[]> {
@@ -1474,5 +1476,30 @@ export async function fetchAdminAuctionLots(status?: string, username?: string):
 
 export async function removeAdminAuctionLot(id: number, reason: string): Promise<AuctionLot> {
   const { data } = await api.post<AuctionLot>(`/admin/auction/lots/${id}/remove`, { reason });
+  return data;
+}
+
+export interface AdminAgent {
+  user_id: number;
+  username: string | null;
+  name: string;
+  active: boolean;
+  expires_at: string;
+  first_bought_at: string;
+  purchases: number;
+  stars_total: number;
+  revoked_at: string | null;
+  revoke_reason: string | null;
+  is_banned: boolean;
+  is_trade_banned: boolean;
+}
+
+export async function fetchAdminAgents(onlyActive = false): Promise<AdminAgent[]> {
+  const { data } = await api.get<AdminAgent[]>("/admin/auction/agents", { params: { only_active: onlyActive } });
+  return data;
+}
+
+export async function revokeAdminAgent(userId: number, reason: string): Promise<AdminAgent> {
+  const { data } = await api.post<AdminAgent>(`/admin/auction/agents/${userId}/revoke`, { reason });
   return data;
 }

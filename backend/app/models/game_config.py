@@ -1380,24 +1380,28 @@ class GameConfig(TimestampMixin, Base):
     )
     # «Трансферный рынок» (services/auction_service.py): off until an admin
     # launches it. Allowed lot durations, the market fee burnt from every sale
-    # (frozen on the lot), the minimum raise (max of % and coins), the start
-    # price floor (absolute and % of the copy's quick-sell price — no selling a
+    # (frozen on the lot), the minimum raise (max of % and coins), the absolute
+    # start price floor (the real floor is the copy's card_value — no selling a
     # pricey card to an alt for pennies), active-lot cap, anti-sniping (a bid in
     # the last window pushes the end to now + extend) and anti-laundering
-    # limits (account age, lots one buyer may win from one seller per day).
+    # limits (account age to bid — 0 = anyone, lots one buyer may win from one
+    # seller per day).
     auction_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     auction_durations_hours: Mapped[list] = mapped_column(JSON, default=lambda: [1, 6, 24], nullable=False)
     auction_fee_pct: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     auction_min_increment_pct: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     auction_min_increment_coins: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     auction_min_price: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
-    auction_min_price_quick_sell_pct: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
     auction_max_active_lots: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     auction_snipe_window_seconds: Mapped[int] = mapped_column(Integer, default=120, nullable=False)
     auction_snipe_extend_seconds: Mapped[int] = mapped_column(Integer, default=120, nullable=False)
-    auction_min_account_age_days: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    auction_min_account_age_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     auction_max_wins_per_seller_daily: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
-    # Premium floor: diamond cards («Академия» included) and copies rated at
-    # least auction_premium_rating never start below auction_premium_min_price.
-    auction_premium_min_price: Mapped[int] = mapped_column(Integer, default=50000, nullable=False)
-    auction_premium_rating: Mapped[int] = mapped_column(Integer, default=95, nullable=False)
+    # «Агентская лицензия» (services/agent_license_service.py): only agents
+    # list lots. Price in Stars, days per purchase (stacks), and who may buy:
+    # an account at least this old that is also a «Проверенный аккаунт».
+    agent_license_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    agent_license_stars: Mapped[int] = mapped_column(Integer, default=99, nullable=False)
+    agent_license_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    agent_license_min_account_age_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    agent_license_requires_verified: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

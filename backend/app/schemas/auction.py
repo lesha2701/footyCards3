@@ -6,6 +6,40 @@ from pydantic import BaseModel, Field
 from app.schemas.card import UserCardOut
 
 
+class AgentLicenseOut(BaseModel):
+    """The viewer's «Агентская лицензия» and the terms to buy/extend it."""
+
+    enabled: bool
+    active: bool
+    expires_at: Optional[datetime] = None
+    revoked: bool = False
+    stars: int
+    days: int
+    min_account_age_days: int
+    requires_verified: bool
+    # null = may buy/extend now.
+    buy_block_reason: Optional[str] = None
+
+
+class AdminAgentOut(BaseModel):
+    user_id: int
+    username: Optional[str]
+    name: str
+    active: bool
+    expires_at: datetime
+    first_bought_at: datetime
+    purchases: int
+    stars_total: int
+    revoked_at: Optional[datetime] = None
+    revoke_reason: Optional[str] = None
+    is_banned: bool
+    is_trade_banned: bool
+
+
+class AdminAgentRevokeIn(BaseModel):
+    reason: str = Field(min_length=3, max_length=200)
+
+
 class AuctionInfoOut(BaseModel):
     """Market rules for the Mini App (all from GameConfig) plus the viewer's
     own counters, so the UI never hardcodes an economy number."""
@@ -16,16 +50,15 @@ class AuctionInfoOut(BaseModel):
     min_increment_pct: int
     min_increment_coins: int
     min_price: int
-    min_price_quick_sell_pct: int
     max_active_lots: int
     snipe_window_seconds: int
     snipe_extend_seconds: int
     min_account_age_days: int
-    premium_min_price: int
-    premium_rating: int
     my_active_lots: int
-    # null = may trade now; otherwise why not (new account / trade ban).
+    # null = may bid/buy now; otherwise why not (ban / trade ban / new account).
     restriction: Optional[str] = None
+    # «Агентская лицензия»: listing lots needs an active one.
+    license: "AgentLicenseOut"
     server_now: datetime
 
 
@@ -44,6 +77,8 @@ class AuctionLotOut(BaseModel):
     card: UserCardOut
     seller_id: int
     seller_name: str
+    # Seller holds an active «Агентская лицензия» right now (badge «Агент»).
+    seller_is_agent: bool = False
     status: str
     start_price: int
     buy_now_price: Optional[int]
@@ -83,9 +118,13 @@ class AuctionLotCreateIn(BaseModel):
 
 
 class AuctionPriceFloorOut(BaseModel):
+    """Listing form: the copy's lowest start price (its card_value) and
+    whether it may be listed at all (null reason = yes)."""
+
     user_card_id: int
     min_price: int
-    premium: bool
+    valuable: bool
+    block_reason: Optional[str] = None
 
 
 class AuctionBidIn(BaseModel):

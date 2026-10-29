@@ -9,6 +9,12 @@ Money flow (all through wallet_service, every step a CoinTransaction):
     inflation sink. «Купить сейчас» debits the buyer the buy-now price
     (`auction_buy_now`) and settles at once.
 
+Only holders of an active «Агентская лицензия» (agent_license_service) may
+list lots; anyone not banned may bid and buy. The start price is never below
+the copy's card_value (card_value_service), and the card rules are those of
+trades: no plain diamonds, valuable copies never from a free source and only
+from a «Проверенный аккаунт».
+
 While a lot is active its card is held with `is_locked_in_trade`, the flag
 every lineup / squad / trade / quick-sell / upgrade check already honours,
 so the copy can't be used, traded or consumed. The card row itself moves to
@@ -34,7 +40,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.core.timeutil import ensure_aware
-from app.models.auction import AuctionBid, AuctionLot
+from app.models.auction import AgentLicense, AuctionBid, AuctionLot
 from app.models.card import UserCard
 from app.models.enums import NotificationType, Rarity, TransactionType
 from app.models.game_config import GameConfig
@@ -56,8 +62,8 @@ from app.services.admin_log_service import log_action
 from app.services.collection_service import grant_collection_rewards_for_new_cards
 from app.services.game_config_service import get_config
 from app.services.notification_service import notify
-from app.services.path_prestige_service import sell_price
-from app.services.player_stats_service import card_rating_bonus, effective_card_stats
+from app.services import agent_license_service
+from app.services import card_value_service as cv
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
 ACTIVE = "active"
@@ -93,27 +99,32 @@ def min_next_bid(lot: AuctionLot, config: GameConfig) -> int:
     return lot.current_bid + max(1, config.auction_min_increment_coins, pct_step)
 
 
-def is_premium(card: UserCard, config: GameConfig) -> bool:
-    """Diamond cards («Академия» are diamonds too) and copies whose real
-    rating (template + this copy's diamond/star/path bonus, capped at 99)
-    reaches auction_premium_rating."""
-    if card.player.rarity == Rarity.diamond:
-        return True
-    rating, _, _ = effective_card_stats(card.player, card_rating_bonus(card))
-    return rating >= config.auction_premium_rating
-
-
 def price_floor(card: UserCard, config: GameConfig) -> int:
-    """Lowest allowed start price: the absolute floor or the copy's
-    quick-sell price × pct, whichever is higher — so a valuable card can't be
-    handed to a second account for pennies. Premium copies (is_premium) never
-    start below auction_premium_min_price; «Купить сейчас» must be above the
-    start price, so it is covered too."""
-    by_quick_sell = -(-sell_price(card, config) * max(0, config.auction_min_price_quick_sell_pct) // 100)
-    floor = max(1, config.auction_min_price, by_quick_sell)
-    if is_premium(card, config):
-        floor = max(floor, config.auction_premium_min_price)
-    return floor
+    """Lowest allowed start price: the copy's card_value (what getting it
+    from us costs — card_value_service), never below auction_min_price — so
+    a valuable card can't be handed to a second account for pennies.
+    «Купить сейчас» must be above the start price, so it is covered too."""
+    return max(1, config.auction_min_price, cv.card_value(card, config))
+
+
+async def listing_block_reason(db: AsyncSession, seller: User, card: UserCard, config: GameConfig) -> Optional[str]:
+    """Card rules for listing, the same as for giving a card in a trade
+    (trade_guard_service): no plain diamonds; a valuable copy (legendary,
+    «Академия», limited) never from a free source and only from a
+    «Проверенный аккаунт». The caller has `card.player` loaded."""
+    if card.player.rarity == Rarity.diamond and card.player.path_talent_code is None:
+        return "Алмазные карточки нельзя продавать на рынке"
+    if not cv.is_valuable(card, config):
+        return None
+    if card.from_free_source:
+        return (
+            f"«{card.player.display_name}» получена бесплатно (награда, бесплатный пак, колесо…) "
+            "и привязана к аккаунту — её нельзя продать на рынке."
+        )
+    reason = await cv.verified_block_reason(db, seller, config)
+    if reason:
+        return f"Продавать легендарки, «Академию» и лимитки может только «Проверенный аккаунт». {reason}"
+    return None
 
 
 def fee_for(price: int, fee_pct: int) -> int:
@@ -316,6 +327,13 @@ async def _hydrate(
             user_ids.add(bid.bidder_id)
     users = {u.id: u for u in (await db.execute(select(User).where(User.id.in_(user_ids)))).scalars().all()}
     now = _now()
+    seller_ids = {lot.seller_id for lot in lots}
+    agents = {
+        lic.user_id for lic in (
+            await db.execute(select(AgentLicense).where(AgentLicense.user_id.in_(seller_ids)))
+        ).scalars().all()
+        if agent_license_service.is_active(lic, now)
+    }
 
     out = []
     for lot in lots:
@@ -336,6 +354,7 @@ async def _hydrate(
             card=UserCardOut.model_validate(card),
             seller_id=lot.seller_id,
             seller_name=_name(users.get(lot.seller_id)),
+            seller_is_agent=lot.seller_id in agents,
             status=lot.status,
             start_price=lot.start_price,
             buy_now_price=lot.buy_now_price,
@@ -447,15 +466,13 @@ async def get_info(db: AsyncSession, user: User) -> AuctionInfoOut:
         min_increment_pct=config.auction_min_increment_pct,
         min_increment_coins=config.auction_min_increment_coins,
         min_price=config.auction_min_price,
-        min_price_quick_sell_pct=config.auction_min_price_quick_sell_pct,
         max_active_lots=config.auction_max_active_lots,
         snipe_window_seconds=config.auction_snipe_window_seconds,
         snipe_extend_seconds=config.auction_snipe_extend_seconds,
         min_account_age_days=config.auction_min_account_age_days,
-        premium_min_price=config.auction_premium_min_price,
-        premium_rating=config.auction_premium_rating,
         my_active_lots=active,
         restriction=restriction(user, config),
+        license=await agent_license_service.status(db, user, config),
         server_now=_now(),
     )
 
@@ -467,7 +484,8 @@ async def price_floor_for(db: AsyncSession, user: User, user_card_id: int) -> Au
         raise NotFoundError("Карточка не найдена")
     config = await get_config(db)
     return AuctionPriceFloorOut(
-        user_card_id=card.id, min_price=price_floor(card, config), premium=is_premium(card, config),
+        user_card_id=card.id, min_price=price_floor(card, config), valuable=cv.is_valuable(card, config),
+        block_reason=await listing_block_reason(db, user, card, config),
     )
 
 
@@ -572,6 +590,12 @@ async def create_lot(db: AsyncSession, user: User, payload: AuctionLotCreateIn) 
     _require_enabled(config)
     seller = await lock_user_for_update(db, user.id)
     _require_can_trade(seller, config)
+    if not await agent_license_service.has_active(db, seller.id):
+        raise ForbiddenError(
+            "Выставлять на рынок могут только агенты — купи «Агентскую лицензию» в разделе «Рынок». "
+            "Ставить и покупать можно и без неё.",
+            details={"rule": "agent_license_required"},
+        )
     durations = [int(h) for h in (config.auction_durations_hours or [])]
     if payload.duration_hours not in durations:
         raise ConflictError("Недопустимый срок лота", details={"allowed": durations})
@@ -593,8 +617,9 @@ async def create_lot(db: AsyncSession, user: User, payload: AuctionLotCreateIn) 
             return await _one(db, existing, seller.id, config)
         raise ConflictError("Карточка уже выставлена на рынок")
 
-    if card.player.rarity == Rarity.diamond and card.player.path_talent_code is None:
-        raise ConflictError("Алмазные карточки нельзя продавать на рынке")
+    reason = await listing_block_reason(db, seller, card, config)
+    if reason:
+        raise ConflictError(reason, details={"rule": "auction_card_not_listable"})
     if card.is_locked_by_admin:
         raise ConflictError("Карточка заблокирована администратором")
     if card.is_locked_in_trade:
