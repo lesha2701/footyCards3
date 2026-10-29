@@ -128,3 +128,26 @@ async def test_cannot_shoot_with_someone_elses_card(client, db_session, bot_toke
         "/api/v1/games/penalty-3d/start", headers=telegram_headers(860005, bot_token), json={"user_card_id": card.id},
     )
     assert resp.status_code == 403
+
+
+
+async def test_start_carries_the_worn_goal_celebration(client, db_session, bot_token):
+    from app.models.my_player import MyPlayer
+    from app.services import my_player_service
+
+    _, start = await _start(client, db_session, bot_token, 860010)
+    assert start["celebration"] is None
+
+    user = await _register(client, db_session, 860011, bot_token)
+    card = await _grant_card(db_session, user.id, rating=80)
+    db_session.add(MyPlayer(
+        user_id=user.id, name="Тест", number=9, position=my_player_service.Position.ST, appearance={},
+        attributes={"atk": 60, "def": 40}, points_spent=0,
+        cosmetics={"owned": ["cel_silly"], "celebration": "cel_silly"},
+    ))
+    await db_session.commit()
+    resp = await client.post(
+        "/api/v1/games/penalty-3d/start", headers=telegram_headers(860011, bot_token), json={"user_card_id": card.id},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["celebration"] == "cel_silly"

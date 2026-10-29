@@ -9,9 +9,11 @@ import ErrorBoundary from "@/components/common/ErrorBoundary";
 import GameHero from "@/components/common/GameHero";
 import { IconCoin } from "@/components/icons";
 import FreeKickScene3D, { type LiveShot } from "@/components/freeKick3d/FreeKickScene3D";
+import PenaltyHowTo, { type HowToRole } from "@/components/freeKick3d/PenaltyHowTo";
 import SceneCrash from "@/components/freeKick3d/SceneCrash";
 import { formatGameError } from "@/lib/errors";
 import { useCrashLog } from "@/lib/freeKick3d/crashLog";
+import { isSeen, markSeen } from "@/lib/seenSections";
 import { crowdChant, crowdHush, crowdTension, playFreeKickSfx, startCrowd } from "@/lib/freeKick3d/sfx";
 import { swipeFromPoints, type SwipePoint } from "@/lib/freeKick3d/swipe";
 import {
@@ -93,7 +95,8 @@ export default function Penalty3DPage() {
         <GameHero game="penalty" title="Пенальти" />
         <p className="text-sm text-ink-mist">
           Серия пенальти с ботом: по пять ударов, потом до первого промаха. Бьёшь свайпом от мяча к воротам, а на
-          воротах свайпаешь в угол ровно в момент удара — раньше нельзя, бьющий увидит.
+          воротах свайпаешь, куда прыгать, в момент удара — раньше нельзя, бьющий увидит. Не трогаешь — вратарь стоит в
+          центре.
         </p>
         {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
         <CardPickerModal
@@ -259,6 +262,19 @@ function ShootoutKick({
   const shotClock = useRef(-1);
   const crashLog = useCrashLog();
   const shotId = kick.kick_index + 1;
+  const role: HowToRole = keeping ? "keep" : "shoot";
+  // The first time in each role the how-to opens by itself; «?» reopens it.
+  const [howTo, setHowTo] = useState<HowToRole | null>(null);
+  useEffect(() => {
+    if (ready && !isSeen(`penalty3d-howto-${role}`)) setHowTo(role);
+  }, [ready, role]);
+  const closeHowTo = () => {
+    markSeen(`penalty3d-howto-${role}`);
+    setHowTo(null);
+  };
+  const paused = howTo !== null;
+  // «Прыгай!» from the strike until the player dives (or it's over).
+  const [struck, setStruck] = useState(false);
 
   const answer = useMutation({
     mutationFn: (payload: { q: QuantizedSwipe } | { dive: QuantizedDive | null }) =>
@@ -276,7 +292,7 @@ function ShootoutKick({
     setDive(null);
     setErrorMsg(null);
     answer.reset();
-    if (!keeping || !ready) return;
+    if (!keeping || !ready || paused) return;
     const timer = window.setTimeout(() => {
       const s0 = playerKeeperSetup(kick.seed, null);
       const bot = penaltyBotShot(kick.seed, null);
@@ -288,7 +304,7 @@ function ShootoutKick({
     return () => window.clearTimeout(timer);
     // `answer` is a fresh object every render; only a new kick resets.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kick.seed, keeping, ready]);
+  }, [kick.seed, keeping, ready, paused]);
 
   // The crowd: humming all series long, a chant before each of the player's kicks.
   useEffect(() => startCrowd(), []);
@@ -315,8 +331,20 @@ function ShootoutKick({
     playFreeKickSfx(good ? "roar" : "groan");
   }, [replayed, shotKicker]);
 
-  const aiming = ready && !keeping && shot === null;
+  const aiming = ready && !paused && !keeping && shot === null;
   const diving = keeping && shot !== null && !shown && dive === null;
+
+  useEffect(() => {
+    if (!diving) {
+      setStruck(false);
+      return;
+    }
+    let frame = requestAnimationFrame(function tick() {
+      setStruck(shotClock.current >= 0);
+      frame = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [diving]);
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
     if (!aiming && !diving) return;
@@ -389,6 +417,7 @@ function ShootoutKick({
           fpsRef={fpsRef}
           cheerGoals={!keeping}
           kickerKit={keeping ? "away" : "home"}
+          kickerCelebration={!keeping && series.celebration === "cel_silly" ? "silly_dance" : "celebrate"}
           shotClockRef={shotClock}
         />
       </ErrorBoundary>
@@ -420,13 +449,25 @@ function ShootoutKick({
       </div>
 
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-4">
-        <button
-          type="button"
-          onClick={onBack}
-          className="pointer-events-auto rounded-full bg-bg-surface/80 px-3 py-1.5 text-sm font-semibold"
-        >
-          ← Выйти
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onBack}
+            className="pointer-events-auto rounded-full bg-bg-surface/80 px-3 py-1.5 text-sm font-semibold"
+          >
+            ← Выйти
+          </button>
+          {(aiming || (keeping && !shot)) && (
+            <button
+              type="button"
+              onClick={() => setHowTo(role)}
+              aria-label={keeping ? "Как отбивать" : "Как бить"}
+              className="pointer-events-auto h-8 w-8 rounded-full bg-bg-surface/80 text-sm font-bold"
+            >
+              ?
+            </button>
+          )}
+        </div>
         <div className="flex flex-col items-end gap-1">
           <div className="font-display text-sm">
             {kick.kick_index >= 10 ? "Внезапная смерть" : `Раунд ${round} / 5`} · {score?.player_score ?? 0} :{" "}
@@ -437,14 +478,20 @@ function ShootoutKick({
         </div>
       </div>
 
-      {ready && !outcome && (aiming || (keeping && !shot) || diving) && (
+      {ready && !paused && !outcome && (aiming || (keeping && !shot) || diving) && (
         <div className="pointer-events-none absolute inset-x-0 top-28 px-6 text-center text-sm text-ink-chalk/90 drop-shadow">
           {keeping
-            ? "Ты на воротах. Свайпни в угол ровно в момент удара — раньше нельзя!"
+            ? "Ты на воротах. В момент удара свайпни, куда прыгать. Не трогаешь — вратарь стоит в центре."
             : `Твой удар (${series.card.player.display_name}). Свайпни от мяча к воротам: в угол — надёжнее, длиннее — выше.`}
           {errorMsg && <div className="mt-2 text-red-300">{errorMsg}</div>}
         </div>
       )}
+      {struck && (
+        <div className="pointer-events-none absolute inset-x-0 top-1/3 text-center font-display text-4xl text-accent-lime drop-shadow">
+          Прыгай!
+        </div>
+      )}
+      {howTo && <PenaltyHowTo role={howTo} onClose={closeHowTo} />}
       {!ready && (
         <div className="pointer-events-none absolute inset-x-0 top-28 text-center text-sm text-ink-chalk/90">Загружаем…</div>
       )}

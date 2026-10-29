@@ -26,7 +26,7 @@ from app.schemas.game import (
 )
 from app.schemas.ranking import RankingMetric
 from app.services import free_kick_3d_engine as engine
-from app.services import league_service, ranking_service, task_service
+from app.services import league_service, my_player_service, ranking_service, task_service
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, lock_user_for_update
 from app.services.club_pass_service import extra_rewarded_attempts
@@ -341,7 +341,9 @@ async def start_3d(db: AsyncSession, user: User, user_card_id: int) -> Penalty3D
     db.add(session)
     await db.commit()
     await db.refresh(session)
-    return Penalty3DStartOut(session_id=session.id, rating=card.player.rating, kick=_kick_out(0, first))
+    mp = await my_player_service.get_my_player(db, locked_user.id)
+    celebration = my_player_service.cosmetics_of(mp)["celebration"] if mp else None
+    return Penalty3DStartOut(session_id=session.id, rating=card.player.rating, kick=_kick_out(0, first), celebration=celebration)
 
 
 async def _lock_3d_kick(db: AsyncSession, user: User, session_id: int, kicker: str) -> tuple[GameSession, dict, dict]:

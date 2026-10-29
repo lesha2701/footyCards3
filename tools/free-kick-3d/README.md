@@ -1,8 +1,24 @@
-# Free kick 3D — footballer model
+# Free kick 3D — footballer models
 
-`frontend/public/free-kick-3d/footballer.glb` is built from the Mixamo
-"Soccer" pack (character `Ch38_nonPBR.fbx` + animation FBXs, 30 fps,
-"Without Skin"). Not in the repo — keep the pack locally.
+The game's footballers are `frontend/public/free-kick-3d/blond.glb` and
+`brown.glb` (see `frontend/src/components/freeKick3d/characters.ts`):
+generated characters in a plain white kit, auto-rigged in Mixamo
+(downloaded as "T-Pose", FBX Binary, With Skin), with the Mixamo "Soccer"
+pack's clips retargeted onto them, plus two Mixamo clips put next to the
+pack's files as `x victory.fbx` and `x silly dancing.fbx`. Neither the pack
+nor the characters are in the repo — keep them locally.
+
+```bash
+python build_character.py <T-Pose.fbx> <name>   # -> out/<name>.glb
+```
+
+It keeps the base colour (1024 px), retargets the clips, and prints the
+kit's height bands (the game tints shirt / shorts / socks by them — copy
+them into `characters.ts`) and the kick's contact frame and toe. Then
+compress it as in step 2 below.
+
+The old single model, `build_footballer.py` (character `Ch38_nonPBR.fbx`
+from the pack, separate kit meshes), is kept for reference:
 
 1. Blender as a Python module (official `bpy` wheel), in Docker:
 
@@ -15,7 +31,7 @@
    It drops the eyelashes, decimates to ~16k polygons, keeps base colour
    and the normal map (body 1024 px — the pack's own size —, hair 512 px), renames the clips (`idle`,
    `wall_jump`, `kick`, `gk_idle`, `gk_dive_left`, `gk_dive_right`,
-   `gk_catch`, `gk_fallen`), prints the kick's contact frame and writes
+   `gk_catch`, `gk_jump`, `gk_block_left`, `gk_block_right`, `gk_fallen`), prints the kick's contact frame and writes
    `out/footballer.glb`.
 
 2. Compress (meshopt geometry/animation, webp textures, meshes kept apart

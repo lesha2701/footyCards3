@@ -3,7 +3,9 @@ import {
   createSetup,
   magnusAccel,
   mulberry32,
+  penaltyBotShot,
   playShot,
+  playerKeeperSetup,
   quantizeSwipe,
   sampleAt,
   simulateShot,
@@ -157,5 +159,19 @@ describe("free kick 3D trajectory", () => {
     expect(mid.ball.z).toBeCloseTo((a.ball.z + b.ball.z) / 2, 9);
     expect(sampleAt(traj, -1).ball).toEqual(a.ball);
     expect(sampleAt(traj, 99).ball).toEqual(traj.samples[traj.samples.length - 1].ball);
+  });
+});
+
+describe("the player's own keeper", () => {
+  it("with no swipe stays in the middle: saves a strike down the middle, not a corner", () => {
+    const seen = new Set<string>();
+    for (let seed = 1; seed < 400; seed++) {
+      const { kind, swipe: q } = penaltyBotShot(seed, null);
+      if (kind !== "power" && kind !== "low_corner") continue;
+      const setup = playerKeeperSetup(seed, null);
+      expect(simulateShot(setup, swipeToKick(setup, q)).outcome).toBe(kind === "power" ? "save" : "goal");
+      seen.add(kind);
+    }
+    expect(seen).toEqual(new Set(["power", "low_corner"]));
   });
 });

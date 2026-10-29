@@ -25,7 +25,7 @@ import {
 import Confetti from "./Confetti";
 import { KICK } from "./kickStyles";
 import { LOOKS } from "./looks";
-import { KeeperModel, KickerModel, WallPlayerModel, type PlayerClock } from "./Players";
+import { KeeperModel, KickerModel, WallPlayerModel, type Celebration, type PlayerClock } from "./Players";
 import { Stadium, type Hype, type Quality } from "./Stadium";
 import { NET_TILE, ballGeometry, netTexture } from "./textures";
 
@@ -46,6 +46,8 @@ type Props = {
   cheerGoals?: boolean;
   /** Whose shirt the kicker wears. */
   kickerKit?: "home" | "away";
+  /** How the kicker celebrates a goal. */
+  kickerCelebration?: Celebration;
   /** Current shot time, written every frame (−1 while waiting): the page
    * times the player's dive against the strike with it. */
   shotClockRef?: MutableRefObject<number>;
@@ -76,6 +78,7 @@ export default function FreeKickScene3D({
   fpsRef,
   cheerGoals = true,
   kickerKit = "home",
+  kickerCelebration = "celebrate",
   shotClockRef,
 }: Props) {
   // Start pretty; the first sustained frame drop switches to the light
@@ -111,6 +114,7 @@ export default function FreeKickScene3D({
         hype={hype}
         cheerGoals={cheerGoals}
         kickerKit={kickerKit}
+        kickerCelebration={kickerCelebration}
         shotClockRef={shotClockRef}
       />
       <FpsMeter fpsRef={fpsRef} />
@@ -166,6 +170,7 @@ function ShotWorld({
   hype,
   cheerGoals = true,
   kickerKit = "home",
+  kickerCelebration = "celebrate",
   shotClockRef,
 }: Omit<Props, "fpsRef"> & { quality: Quality; hype: Hype }) {
   const stage = useRef<Stage>({
@@ -256,7 +261,9 @@ function ShotWorld({
           setup={setup}
           clock={playerClock(stage, shot)}
           kicking={shot !== null}
+          celebrateAt={shot?.trajectory.outcome === "goal" ? shot.trajectory.end.t + 0.6 : null}
           kit={kickerKit}
+          celebration={kickerCelebration}
           castShadow={quality === "high"}
         />
       </Suspense>
@@ -451,6 +458,7 @@ function AnimatedKeeper({ setup, shot, stage, quality }: StageProps & { quality:
     <KeeperModel
       setup={setup}
       targetX={targetX}
+      targetY={last?.keeperHand.y ?? KEEPER_STAND_HAND_Y}
       arrival={traj?.end.t ?? 1}
       saved={traj?.outcome === "save"}
       clock={playerClock(stage, shot)}

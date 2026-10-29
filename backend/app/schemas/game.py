@@ -135,6 +135,8 @@ class Penalty3DStartOut(BaseModel):
     session_id: int
     rating: int
     kick: Penalty3DKickOut
+    # The player's «Мой игрок» goal celebration (cosmetic code), if worn.
+    celebration: str | None = None
 
 
 class Penalty3DDive(BaseModel):

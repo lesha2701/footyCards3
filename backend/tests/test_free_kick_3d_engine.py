@@ -80,3 +80,17 @@ def test_a_dive_before_the_strike_is_punished():
         _, early = penalty_bot_shot(seed, Dive(side * 2000, 800, -100))
         _, on_time = penalty_bot_shot(seed, Dive(side * 2000, 800, 150))
         assert early.dx == -swipe.dx and on_time.dx == swipe.dx
+
+
+def test_a_keeper_who_stays_saves_down_the_middle_but_not_the_corners():
+    # No swipe: he stays in the middle and still goes for a ball near him.
+    seen = set()
+    for seed in range(1, 400):
+        kind, swipe = penalty_bot_shot(seed)
+        if kind not in ("power", "low_corner"):
+            continue
+        setup = player_keeper_setup(seed, None)
+        outcome = simulate_shot(setup, swipe).outcome
+        assert outcome == ("save" if kind == "power" else "goal"), (seed, kind, outcome)
+        seen.add(kind)
+    assert seen == {"power", "low_corner"}

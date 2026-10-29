@@ -519,7 +519,7 @@ class GameConfig(TimestampMixin, Base):
             "fx_sparkle": 50, "fx_fire": 75, "fx_lightning": 100,
             "hair_neymar": 120, "hair_cr7": 100, "hair_pogba": 90, "aviators": 60, "diamond_chain": 90,
             "bg_goal": 75, "bg_national": 75,
-            "cel_siu": 100, "cel_plane": 75, "cel_heart": 50, "cel_dance": 150,
+            "cel_siu": 100, "cel_plane": 75, "cel_heart": 50, "cel_dance": 150, "cel_silly": 50,
         },
     )
     # «Карьера игрока»: every completed club objective pays objective_coins

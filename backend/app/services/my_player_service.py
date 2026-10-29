@@ -120,6 +120,8 @@ COSMETICS = {
     "cel_plane": ("celebration", "Празднование «Самолётик»"),
     "cel_heart": ("celebration", "Празднование «Сердечко»"),
     "cel_dance": ("celebration", "Празднование «Танец у флажка»"),
+    # Also danced by the kicker after a goal in the 3D shootout.
+    "cel_silly": ("celebration", "Празднование «Смешной танец»"),
 }
 COSMETIC_KINDS = ("accessory", "background", "effect", "hair", "celebration")
 # Premium hairstyles: wearing one sets appearance["hair"] to this index

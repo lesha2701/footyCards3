@@ -61,6 +61,8 @@ PENALTY_LIFT_SCALE = 1.4
 PENALTY_AIM_SCALE = 1.5
 PENALTY_MIN_REACTION = 0.18
 PLAYER_KEEPER_SPEED = 7.2
+PLAYER_KEEPER_STAND_REACTION = 0.25
+PLAYER_KEEPER_STAND_REACH = 1.0
 
 _U32 = 0xFFFFFFFF
 
@@ -125,6 +127,7 @@ class Setup:
     chip_loft: float = 0
     keeper_guess: tuple[float, float] | None = None
     keeper_reads_drop: bool = False
+    keeper_reach: float = KEEPER_MAX_REACH
 
 
 def create_setup(seed: int, rating: int = 75) -> Setup:
@@ -195,7 +198,8 @@ class Dive:
 def player_keeper_setup(seed: int, dive: "Dive | None") -> Setup:
     base = create_penalty_setup(seed)
     if dive is None:
-        reaction, guess = 99, None
+        # No swipe: he stays in the middle, still going for a ball near him.
+        reaction, guess = PLAYER_KEEPER_STAND_REACTION, None
     else:
         reaction = 0 if dive.reaction_ms < 0 else max(PENALTY_MIN_REACTION, dive.reaction_ms / 1000)
         guess = (_clamp(dive.x / 1000, -GOAL_HALF_WIDTH, GOAL_HALF_WIDTH), _clamp(dive.y / 1000, 0.25, KEEPER_MAX_HAND_Y))
@@ -203,6 +207,7 @@ def player_keeper_setup(seed: int, dive: "Dive | None") -> Setup:
         base.seed, 0, base.ball, [], base.wall_jump_at, 0, reaction, PLAYER_KEEPER_SPEED,
         min_speed=base.min_speed, lift_scale=base.lift_scale, aim_scale=base.aim_scale, chip_loft=base.chip_loft,
         keeper_guess=guess, keeper_reads_drop=True,
+        keeper_reach=KEEPER_MAX_REACH if dive else PLAYER_KEEPER_STAND_REACH,
     )
 
 
@@ -405,8 +410,8 @@ def simulate_shot(setup: Setup, q: Swipe) -> ShotResult:
                 target_x, target_y = setup.keeper_x, KEEPER_STAND_HAND_Y
             else:
                 tt = (KEEPER_LINE_Z - pz) / vz
-                min_x = setup.keeper_x - KEEPER_MAX_REACH
-                max_x = setup.keeper_x + KEEPER_MAX_REACH
+                min_x = setup.keeper_x - setup.keeper_reach
+                max_x = setup.keeper_x + setup.keeper_reach
                 target_x = _clamp(px + vx * tt, max(min_x, -GOAL_HALF_WIDTH - 0.3), min(max_x, GOAL_HALF_WIDTH + 0.3))
                 drop = 0.5 * GRAVITY * tt * tt if setup.keeper_reads_drop else 0
                 target_y = _clamp(py + vy * tt - drop, 0.25, KEEPER_MAX_HAND_Y)
