@@ -394,7 +394,8 @@ def _card_rating(card: UserCard, config) -> int:
 
 def _filler(club_name: str, slot, rating: int, n: int) -> dict:
     kid = pcc._academy(f"mgr:{club_name}", slot, rating, n)
-    return {"slot": slot.code, "kind": "kid", "ref": None, "name": kid["name"], "position": kid["position"], "rating": kid["rating"]}
+    return {"slot": slot.code, "key": f"kid:{slot.code}", "kind": "kid", "ref": None, "name": kid["name"],
+            "position": kid["position"], "rating": kid["rating"]}
 
 
 async def build_pool(db: AsyncSession, club: ManagerClub, config) -> tuple[list[dict], dict]:
@@ -458,7 +459,8 @@ def pick_xi(entries: list[dict], club_name: str, filler_rating: int, formation: 
     taken: dict[str, dict] = {}
     bench = []
     priority = {"own": 0, "academy": 1}
-    for e in sorted(entries, key=lambda x: (priority.get(x["kind"], 2), -x["rating"], x["key"])):
+    # .get: academy kids frozen into season state before they carried a key.
+    for e in sorted(entries, key=lambda x: (priority.get(x["kind"], 2), -x["rating"], x.get("key", ""))):
         position = Position(e["position"])
         free = [s for s in slots if s.category == _category(position) and s.code not in taken]
         ideal = [s for s in free if on_ideal_position(position, s.ideal_position)]
@@ -1292,7 +1294,9 @@ async def _play_round(db: AsyncSession, league: ManagerLeague, round_index: int,
             # The frozen roster, today's form of the «Мои игроки», the club's
             # formation and style of this moment (tactics may change mid-season).
             club = clubs[t["club_id"]]
-            roster = [dict(e) for e in (t.get("roster") or t["xi"])]
+            # An empty roster is a real «nobody but academy kids» squad — only
+            # states frozen before rosters existed fall back to the XI.
+            roster = [dict(e) for e in (t["roster"] if "roster" in t else t["xi"])]
             live = await _live_cards(db, roster, config)
             for e in roster:
                 if e.get("key") in live:
