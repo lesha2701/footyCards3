@@ -22,15 +22,13 @@ const ASSETS = {
  * rows of live fans that celebrate (the hybrid: the panorama gives the
  * density, the sprites the reaction), LED boards. Images load lazily; until they do,
  * a plain pitch and the sky stand in. */
-export function Stadium({ quality, hype, farStands = false }: { quality: Quality; hype: Hype; farStands?: boolean }) {
+export function Stadium({ quality, hype }: { quality: Quality; hype: Hype }) {
   return (
     <>
       <Sky />
       <Suspense fallback={<PlainPitch quality={quality} />}>
         <Pitch quality={quality} />
         <Backdrop />
-        {/* Seen from behind the goal (a penalty in goal), the other end fills too. */}
-        {farStands && <Backdrop radius={44} centerZ={12} facing="pitch" />}
         <FanSection quality={quality} hype={hype} />
         <LedBoards hype={hype} />
       </Suspense>
@@ -97,16 +95,7 @@ const BACKDROP_ARC = (150 / 180) * Math.PI;
 const BACKDROP_CENTER_Z = 18;
 const BACKDROP_TILES = 3;
 
-function Backdrop({
-  radius = BACKDROP_RADIUS,
-  centerZ = BACKDROP_CENTER_Z,
-  facing = "goal",
-}: {
-  radius?: number;
-  centerZ?: number;
-  /** «goal»: the stands behind the goal; «pitch»: the far end. */
-  facing?: "goal" | "pitch";
-}) {
+function Backdrop() {
   const tex = useTexture(ASSETS.stands, (t) => {
     const tex = t as THREE.Texture;
     // Seen from inside the cylinder the u axis runs right → left: mirror it.
@@ -116,12 +105,12 @@ function Backdrop({
     tex.colorSpace = THREE.SRGBColorSpace;
   });
   const image = tex.image as { width: number; height: number };
-  // The same picture size per metre of arc whatever the radius.
   const height = (BACKDROP_RADIUS * BACKDROP_ARC * image.height) / (image.width * BACKDROP_TILES);
-  const start = (facing === "goal" ? Math.PI : 0) - BACKDROP_ARC / 2;
   return (
-    <mesh position={[0, height / 2 - 1.5, centerZ]}>
-      <cylinderGeometry args={[radius, radius, height, 48, 1, true, start, BACKDROP_ARC]} />
+    <mesh position={[0, height / 2 - 1.5, BACKDROP_CENTER_Z]}>
+      <cylinderGeometry
+        args={[BACKDROP_RADIUS, BACKDROP_RADIUS, height, 48, 1, true, Math.PI - BACKDROP_ARC / 2, BACKDROP_ARC]}
+      />
       <meshBasicMaterial map={tex} side={THREE.BackSide} fog={false} toneMapped={false} depthWrite={false} />
     </mesh>
   );

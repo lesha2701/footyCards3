@@ -41,9 +41,9 @@ type Props = {
   onReady: () => void;
   /** The FPS readout element (written from the render loop, no re-renders). */
   fpsRef: MutableRefObject<HTMLSpanElement | null>;
-  /** «kicker»: over the kicker's shoulder (the player shoots); «keeper»:
-   * from behind the goal (the player keeps it — a penalty by the bot). */
-  view?: CameraView;
+  /** A goal sets the stands off (confetti, «ГОЛ!» boards) — not when it's
+   * the bot scoring past the player in goal. */
+  cheerGoals?: boolean;
   /** Whose shirt the kicker wears. */
   kickerKit?: "home" | "away";
   /** Current shot time, written every frame (−1 while waiting): the page
@@ -51,7 +51,6 @@ type Props = {
   shotClockRef?: MutableRefObject<number>;
 };
 
-export type CameraView = "kicker" | "keeper";
 
 /** Shot time runs on its own clock so the replay can slow down near the
  * goal (−1 = waiting for a kick). */
@@ -75,7 +74,7 @@ export default function FreeKickScene3D({
   onDecided,
   onReady,
   fpsRef,
-  view = "kicker",
+  cheerGoals = true,
   kickerKit = "home",
   shotClockRef,
 }: Props) {
@@ -102,7 +101,7 @@ export default function FreeKickScene3D({
         <Lightformer intensity={2} position={[25, 10, 10]} rotation-y={-Math.PI / 2} scale={[30, 4, 1]} />
         <Lightformer intensity={0.6} color="#2c8a47" position={[0, -5, 0]} rotation-x={Math.PI / 2} scale={[60, 60, 1]} />
       </Environment>
-      <Stadium quality={quality} hype={hype} farStands={view === "keeper"} />
+      <Stadium quality={quality} hype={hype} />
       <ShotWorld
         setup={setup}
         shot={shot}
@@ -110,7 +109,7 @@ export default function FreeKickScene3D({
         onReady={onReady}
         quality={quality}
         hype={hype}
-        view={view}
+        cheerGoals={cheerGoals}
         kickerKit={kickerKit}
         shotClockRef={shotClockRef}
       />
@@ -162,7 +161,7 @@ function ShotWorld({
   onReady,
   quality,
   hype,
-  view = "kicker",
+  cheerGoals = true,
   kickerKit = "home",
   shotClockRef,
 }: Omit<Props, "fpsRef"> & { quality: Quality; hype: Hype }) {
@@ -229,7 +228,7 @@ function ShotWorld({
         s.ripple = { ...hit, at: now + travel };
         // The stands go wild only for the player's own goal — not when the
         // bot scores past them in goal.
-        if (view !== "keeper") {
+        if (cheerGoals) {
           hype.current = 1;
           setConfetti((n) => n + 1);
         }
@@ -244,7 +243,7 @@ function ShotWorld({
 
   return (
     <>
-      <GoalFrame stage={stage} seeThrough={view === "keeper"} />
+      <GoalFrame stage={stage} />
       <Wall setup={setup} shot={shot} stage={stage} quality={quality} />
       <Suspense fallback={<Keeper setup={setup} shot={shot} stage={stage} />}>
         <AnimatedKeeper setup={setup} shot={shot} stage={stage} quality={quality} />
@@ -259,7 +258,7 @@ function ShotWorld({
         />
       </Suspense>
       <Ball setup={setup} shot={shot} stage={stage} quality={quality} />
-      <CameraRig setup={setup} shot={shot} stage={stage} view={view} />
+      <CameraRig setup={setup} shot={shot} stage={stage} />
       <Confetti burstId={confetti} />
     </>
   );
@@ -450,6 +449,7 @@ function AnimatedKeeper({ setup, shot, stage, quality }: StageProps & { quality:
       setup={setup}
       targetX={targetX}
       arrival={traj?.end.t ?? 1}
+      saved={traj?.outcome === "save"}
       clock={playerClock(stage, shot)}
       castShadow={quality === "high"}
     />
@@ -528,9 +528,7 @@ function Footballer({
 const NET_SEG_X = 36;
 const NET_SEG_Y = 12;
 
-/** `seeThrough`: the camera is behind the goal (the player in goal), so the
- * back net and the roof would sit right in front of it — they're left out. */
-function GoalFrame({ stage, seeThrough = false }: { stage: MutableRefObject<Stage>; seeThrough?: boolean }) {
+function GoalFrame({ stage }: { stage: MutableRefObject<Stage> }) {
   const net = useMemo(netTexture, []);
   const back = useRef<THREE.Mesh>(null);
   const resting = useRef<Float32Array | null>(null);
@@ -578,11 +576,11 @@ function GoalFrame({ stage, seeThrough = false }: { stage: MutableRefObject<Stag
         <cylinderGeometry args={[POST_RADIUS, POST_RADIUS, w + POST_RADIUS * 2, 12]} />
         <meshStandardMaterial color="#f8fafc" roughness={0.25} metalness={0.1} />
       </mesh>
-      <mesh ref={back} position={[0, GOAL_HEIGHT / 2, -NET_DEPTH]} visible={!seeThrough}>
+      <mesh ref={back} position={[0, GOAL_HEIGHT / 2, -NET_DEPTH]}>
         <planeGeometry args={[w, GOAL_HEIGHT, NET_SEG_X, NET_SEG_Y]} />
         {netMaterial}
       </mesh>
-      <mesh position={[0, GOAL_HEIGHT, -NET_DEPTH / 2]} rotation-x={Math.PI / 2} visible={!seeThrough}>
+      <mesh position={[0, GOAL_HEIGHT, -NET_DEPTH / 2]} rotation-x={Math.PI / 2}>
         <planeGeometry args={[w, NET_DEPTH]} />
         {netMaterial}
       </mesh>
@@ -602,11 +600,7 @@ function GoalFrame({ stage, seeThrough = false }: { stage: MutableRefObject<Stag
 // wider vertical field of view so the whole goal still fits across.
 // ---------------------------------------------------------------------------
 
-/** Behind the goal (its back net and roof hidden) and high enough to see
- * over the keeper into both bottom corners: the player in goal. */
-const KEEPER_EYE = new THREE.Vector3(0, 2.7, -5.6);
-
-function CameraRig({ setup, shot, stage, view }: StageProps & { view: CameraView }) {
+function CameraRig({ setup, shot, stage }: StageProps) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const aspect = useThree((s) => s.size.width / s.size.height);
   const tmp = useMemo(
@@ -630,15 +624,6 @@ function CameraRig({ setup, shot, stage, view }: StageProps & { view: CameraView
   useFrame(() => {
     const s = stage.current;
     const t = shotTime(s, shot);
-    if (view === "keeper") {
-      // Steady behind the keeper, eyes on the kicker; just a glance at the ball.
-      camera.position.lerp(KEEPER_EYE, 0.12);
-      tmp.look.set(setup.ball.x, 0.6, setup.ball.z * 0.55).lerp(s.ball, t < 0 ? 0 : 0.2);
-      tmp.lookNow.lerp(tmp.look, 0.2);
-      if (s.shake > 0) camera.position.x += (Math.random() - 0.5) * s.shake * 0.06;
-      camera.lookAt(tmp.lookNow);
-      return;
-    }
     const follow = t < 0 ? 0 : Math.min(1, t / 0.9) * 0.55;
     // Chase point: a few metres behind and above the ball, kept out of the box.
     tmp.want.copy(s.ball).addScaledVector(frame.f, -4).setY(Math.max(1.4, s.ball.y + 0.9));

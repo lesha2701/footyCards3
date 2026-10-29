@@ -133,6 +133,7 @@ export function KeeperModel({
   setup,
   targetX,
   arrival,
+  saved,
   clock,
   castShadow,
 }: {
@@ -141,6 +142,9 @@ export function KeeperModel({
   targetX: number | null;
   /** Shot time when the ball reaches the keeper's line. */
   arrival: number;
+  /** He gets to it: the dive holds at full stretch (instead of carrying
+   * him on past the ball), then he goes down where he is. */
+  saved: boolean;
   clock: PlayerClock;
   castShadow: boolean;
 }) {
@@ -191,6 +195,15 @@ export function KeeperModel({
       const window = Math.max(0.15, arrival - setup.keeper.reaction);
       const speed = THREE.MathUtils.clamp((reach - start) / window, 0.7, 4.5);
       const action = play(state.current, actions, clip, { once: true, speed, fade: 0.06, at: start });
+      if (saved && clip !== "gk_catch") {
+        // The ball's in his hands: hold the stretch, then down on the spot.
+        if (action.time >= reach) action.timeScale = 0;
+        if (t >= arrival + 0.7) {
+          play(state.current, actions, "gk_fallen", { fade: 0.35 });
+          mixer.update(clock.dt());
+          return;
+        }
+      }
       // Nudge the body so the hands meet the computed point at the reach.
       const progress = THREE.MathUtils.clamp((action.time - start) / (reach - start || 1), 0, 1);
       // Bounded: a bigger correction would read as sliding, not diving.

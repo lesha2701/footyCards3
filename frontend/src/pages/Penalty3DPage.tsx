@@ -212,11 +212,12 @@ function Scoreboard({ results }: { results: Penalty3DResult[] }) {
   );
 }
 
-/** Screen direction of a dive swipe → the point on the goal plane (mm). Seen
- * from behind the goal, the screen's right is the world's −x. */
+/** Screen direction of a dive swipe → the point on the goal plane (mm). The
+ * camera is behind the kicker (as in FIFA, for both sides' kicks), so the
+ * screen's right is the world's +x. */
 function diveTarget(dx: number, dy: number): { x: number; y: number } {
   const len = Math.hypot(dx, dy) || 1;
-  const x = Math.max(-GOAL_HALF_WIDTH, Math.min(GOAL_HALF_WIDTH, (-dx / len) * 3.1));
+  const x = Math.max(-GOAL_HALF_WIDTH, Math.min(GOAL_HALF_WIDTH, (dx / len) * 3.1));
   const y = Math.max(0.25, Math.min(KEEPER_MAX_HAND_Y, 1.0 + (-dy / len) * 1.35));
   return { x: Math.round(x * 1000), y: Math.round(y * 1000) };
 }
@@ -386,7 +387,7 @@ function ShootoutKick({
           onDecided={onDecided}
           onReady={onReady}
           fpsRef={fpsRef}
-          view={keeping ? "keeper" : "kicker"}
+          cheerGoals={!keeping}
           kickerKit={keeping ? "away" : "home"}
           shotClockRef={shotClock}
         />
