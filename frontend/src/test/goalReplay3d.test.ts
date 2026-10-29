@@ -15,13 +15,16 @@ import {
   cameraPose,
   episodeDuration,
   episodeRate,
+  FPS_JUDGE,
   finishKind,
   goalEpisodes,
   isCross,
+  judgeFps,
   toWorld,
   type GoalEpisode,
 } from "@/lib/goalReplay3d";
 import {
+  DRIBBLE_ROLL,
   FOOT,
   PITCH_L,
   PITCH_W,
@@ -110,9 +113,10 @@ describe("goal episodes: the ball in 3D", () => {
   });
 
   it("a loose ball on the grass is exactly where the 2D key frames have it", () => {
+    const inPass = (f: number) => replay.passes.some(([p0, p1]) => p0 - 1 <= f && f <= p1);
     for (const ep of episodes) {
       for (let f = ep.f0; f <= ep.goal; f++) {
-        if (holderAt(tl, f) !== null) continue;
+        if (holderAt(tl, f) !== null || inPass(f)) continue;
         if (ep.flights.some((fl) => fl.f0 < f && f < fl.f1)) continue;
         const b = ballState(tl, ep, f);
         const raw = { x: (tl.bytes[f * tl.size] / 255) * PITCH_W, y: (tl.bytes[f * tl.size + 1] / 255) * PITCH_L };
@@ -122,7 +126,7 @@ describe("goal episodes: the ball in 3D", () => {
     }
   });
 
-  it("a held ball stays at the holder's feet between key frames; a pass arrives at the receiver's foot", () => {
+  it("a dribbled ball is ahead of the player, pushed on with touches; a pass arrives at the receiver's foot", () => {
     let held = 0;
     let received = 0;
     for (const ep of episodes) {
@@ -131,12 +135,20 @@ describe("goal episodes: the ball in 3D", () => {
         if (h === null) continue;
         const next = holderAt(tl, f + 1);
         for (const frac of next === h ? [0, 0.25, 0.5, 0.75] : [0]) {
+          const t = f + frac;
           const p = interpolatePlayer(tl, f, frac, h);
-          const b = groundBall(tl, f + frac);
-          expect(Math.hypot(b.x - p.x, b.y - p.y)).toBeLessThanOrEqual(FOOT + 1e-6);
+          const t2 = Math.min(tl.count - 1, t + 0.4);
+          const q = interpolatePlayer(tl, Math.floor(t2), t2 - Math.floor(t2), h);
+          const b = groundBall(tl, t);
+          const gap = Math.hypot(b.x - p.x, b.y - p.y);
+          expect(gap).toBeGreaterThanOrEqual(FOOT - 0.05);
+          expect(gap).toBeLessThanOrEqual(FOOT + DRIBBLE_ROLL + 1e-6);
+          // In front of him: along the way he runs, never between or behind his feet.
+          if (Math.hypot(q.x - p.x, q.y - p.y) > 0.2) {
+            expect((b.x - p.x) * (q.x - p.x) + (b.y - p.y) * (q.y - p.y)).toBeGreaterThan(0);
+          }
           held += 1;
         }
-        // The first frame a player has the ball: it is at his foot, not 0.9 m off.
         const prev = holderAt(tl, f - 1);
         if (prev !== h) {
           const before = groundBall(tl, f - 0.001);
@@ -148,6 +160,24 @@ describe("goal episodes: the ball in 3D", () => {
     }
     expect(held).toBeGreaterThan(50);
     expect(received).toBeGreaterThan(5);
+  });
+
+  it("a pass is fast off the boot and slows as it rolls", () => {
+    let checked = 0;
+    for (const [p0, p1] of replay.passes) {
+      const s = p0 - 1;
+      const e = p1 - 1;
+      if (s < 0 || e - s < 2) continue;
+      const a = groundBall(tl, s);
+      const m = groundBall(tl, (s + e) / 2);
+      const z = groundBall(tl, e);
+      const first = Math.hypot(m.x - a.x, m.y - a.y);
+      const second = Math.hypot(z.x - m.x, z.y - m.y);
+      if (first + second < 6) continue;
+      expect(first).toBeGreaterThan(second);
+      checked += 1;
+    }
+    expect(checked).toBeGreaterThan(5);
   });
 
   it("moves continuously — no teleports at flight boundaries", () => {
@@ -241,5 +271,30 @@ describe("goal episodes: playback and camera", () => {
     expect(cameraPose("goal", -40, 0, -52.5, false).pos[0]).toBeLessThan(-52.5);
     const top = cameraPose("top", 0, 0, 52.5, true);
     expect(top.pos[1]).toBeGreaterThan(40);
+  });
+});
+
+describe("fps judge", () => {
+  const on = { dpr: 1.5, ready: true, visible: true };
+  const run = (fpsList: number[], opts = on) => {
+    let s = FPS_JUDGE;
+    const actions: string[] = [];
+    for (const fps of fpsList) {
+      const v = judgeFps(s, fps, opts);
+      s = v.state;
+      actions.push(v.action);
+    }
+    return actions;
+  };
+
+  it("ignores loading, hidden pages and the first two windows", () => {
+    expect(run([10, 10, 10], { ...on, ready: false })).toEqual(["none", "none", "none"]);
+    expect(run([10, 10, 10], { ...on, visible: false })).toEqual(["none", "none", "none"]);
+    expect(run([10, 10])).toEqual(["none", "none"]);
+  });
+
+  it("first the pixel ratio, then the models after two slow windows running; a fast phone keeps both", () => {
+    expect(run([10, 10, 45, 35, 45, 35, 35])).toEqual(["none", "none", "dpr", "none", "none", "none", "simple"]);
+    expect(run([120, 120, 120, 120, 120])).toEqual(["none", "none", "none", "none", "none"]);
   });
 });

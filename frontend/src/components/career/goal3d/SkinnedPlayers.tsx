@@ -28,13 +28,14 @@ function wrapAngle(a: number): number {
   return a;
 }
 
-export function SkinnedPlayers({ tl, replay, ep, flip, looks, clock }: {
+export function SkinnedPlayers({ tl, replay, ep, flip, looks, clock, onReady }: {
   tl: Timeline;
   replay: CareerReplay;
   ep: GoalEpisode;
   flip: boolean;
   looks: SlotLook[];
   clock: MutableRefObject<ReplayClock>;
+  onReady?: () => void;
 }) {
   const gltf = useLoader(GLTFLoader, FOOTBALLER_URL, (loader) => {
     loader.setMeshoptDecoder(MeshoptDecoder);
@@ -49,6 +50,9 @@ export function SkinnedPlayers({ tl, replay, ep, flip, looks, clock }: {
     hair: HAIR[(i * 7) % HAIR.length],
   }, materials)), [asset, looks, materials]);
   useEffect(() => () => players.forEach((p) => p.mixer.stopAllAction()), [players]);
+  useEffect(() => {
+    onReady?.();
+  }, [onReady, players]);
   useEffect(() => () => materials.dispose(), [materials]);
 
   const numbers = useMemo(

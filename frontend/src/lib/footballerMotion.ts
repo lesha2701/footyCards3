@@ -41,6 +41,8 @@ export const DEFAULT_TIMING: ClipTiming = {
 export const DIVE_REACH = { gk_dive_left: 2.56, gk_dive_right: 2.98 };
 /** Closer to him than this, the keeper doesn't dive: he takes it standing. */
 export const CATCH_WITHIN = 1.0;
+/** Further than this he can't get there: no hopeless dive, he just watches it in. */
+export const DIVE_MAX = 3.8;
 
 /** `time` is the clip time to show for a one-off move, null for a loop
  * (the mixer plays it); `speed` is the loop's time scale. */
@@ -103,11 +105,6 @@ export function keeperMove(tl: Timeline, ep: GoalEpisode, flip: boolean): Keeper
   return { clip, lateral, left, heading: Math.atan2(fx, fz) };
 }
 
-/** Which way the keeper dives (or "gk_catch"). */
-export function diveSide(tl: Timeline, ep: GoalEpisode, flip: boolean): KeeperMove["clip"] {
-  return keeperMove(tl, ep, flip).clip;
-}
-
 export function playerAction(
   tl: Timeline, replay: CareerReplay, ep: GoalEpisode, slot: number, t: number, flip: boolean,
   timing: ClipTiming = DEFAULT_TIMING, kicks = strikes(replay, ep),
@@ -120,8 +117,9 @@ export function playerAction(
 
   // The keeper who is beaten: dives as the ball comes, then stays down
   // (the dive's last frame).
-  if (slot === keeperSlot(ep) && t >= ep.goal - 1.2) {
-    const clip = diveSide(tl, ep, flip);
+  const move = slot === keeperSlot(ep) ? keeperMove(tl, ep, flip) : null;
+  if (move && Math.abs(move.lateral) <= DIVE_MAX && t >= ep.goal - 1.2) {
+    const clip = move.clip;
     if (clip === "gk_catch") {
       // Hands up to it as it arrives (the clip's middle at the goal frame).
       const time = timing.catchDuration * 0.5 + (t - ep.goal) * STEP_S;

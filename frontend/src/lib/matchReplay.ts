@@ -31,6 +31,8 @@ export interface Timeline {
   /** Cumulative frames with the ball held by side a / b (possession). */
   heldA: Uint32Array;
   heldB: Uint32Array;
+  /** The replay's passes: [from frame, to frame, passer slot, receiver slot]. */
+  passes: [number, number, number, number][];
 }
 
 export function decodeBase64(b64: string): Uint8Array {
@@ -62,7 +64,7 @@ export function buildTimeline(replay: CareerReplay): Timeline {
     heldA[f + 1] = heldA[f] + (holder !== NO_HOLDER && holder < 11 ? 1 : 0);
     heldB[f + 1] = heldB[f] + (holder !== NO_HOLDER && holder >= 11 ? 1 : 0);
   }
-  return { count, starts, clocks, total: count > 0 ? starts[count - 1] : 0, bytes, size, heldA, heldB };
+  return { count, starts, clocks, total: count > 0 ? starts[count - 1] : 0, bytes, size, heldA, heldB, passes: replay.passes ?? [] };
 }
 
 /** The frame shown at playback time `ms` and how far (0-1) it is towards
@@ -133,32 +135,61 @@ export function interpolateBall(tl: Timeline, frame: number, frac: number): Poin
   return { x: lerp(a.x, b.x, frac), y: lerp(a.y, b.y, frac) };
 }
 
-/** How far in front of a player the ball he has sits (metres): at his feet. */
-export const FOOT = 0.4;
+/** Where a player's ball is when he stands or touches it: in front of
+ * his leading foot (metres from his centre). */
+export const FOOT = 0.45;
+/** How far a dribble rolls ahead of him between touches at full speed. */
+export const DRIBBLE_ROLL = 0.85;
+/** Frames between two touches of a dribble (0.6 s of game time). */
+export const TOUCH_FRAMES = 1.2;
 
 function playerPos(tl: Timeline, slot: number, t: number): Point {
   const f = Math.floor(t);
   return interpolatePlayer(tl, f, t - f, slot);
 }
 
-/** The ball at a player's feet: a step ahead of him the way he runs (towards
- * the goal his side attacks when he stands). Follows the player's own
- * smooth path, so a dribbled ball never lags behind the foot. */
+/** The ball a player has, the way he runs (towards the goal his side
+ * attacks when he stands): in front of his leading foot, and on the run
+ * pushed ahead with a touch and rolling out up to DRIBBLE_ROLL further
+ * before the next one — the faster he goes, the further. Follows his own
+ * smooth path, so it never lags behind him or sits between his feet. */
 export function footBall(tl: Timeline, slot: number, t: number): Point {
   const p = playerPos(tl, slot, t);
   const q = playerPos(tl, slot, Math.min(tl.count - 1, t + 0.4));
   let dx = q.x - p.x;
   let dy = q.y - p.y;
   let d = Math.hypot(dx, dy);
+  // m/s of game time (0.4 of a 0.5 s frame).
+  const speed = d / 0.2;
   if (d < 0.2) {
     dx = 0;
     dy = slot < 11 ? 1 : -1;
     d = 1;
   }
+  const phase = (((t / TOUCH_FRAMES) + slot * 0.37) % 1 + 1) % 1;
+  const ahead = FOOT + DRIBBLE_ROLL * Math.min(1, speed / 7) * Math.sin(Math.PI * phase);
   return {
-    x: Math.max(0, Math.min(PITCH_W, p.x + (dx / d) * FOOT)),
-    y: Math.max(0, Math.min(PITCH_L, p.y + (dy / d) * FOOT)),
+    x: Math.max(0, Math.min(PITCH_W, p.x + (dx / d) * ahead)),
+    y: Math.max(0, Math.min(PITCH_L, p.y + (dy / d) * ahead)),
   };
+}
+
+/** A pass in flight at `t`: it leaves the passer's foot on the frame before
+ * the key frames have it loose and reaches the receiver's foot on its last
+ * frame, fast off the boot and slowing as it rolls (not at a constant
+ * speed); the receiver keeps running onto it. */
+function passBall(tl: Timeline, t: number): Point | null {
+  for (const [p0, p1, from, to] of tl.passes) {
+    const s = p0 - 1;
+    const e = p1 - 1;
+    if (s < 0 || e <= s || t < s || t > p1) continue;
+    const start = holderAt(tl, s) === from ? footBall(tl, from, s) : ballAt(tl, s);
+    const target = footBall(tl, to, t);
+    const u = Math.min(1, (t - s) / (e - s));
+    const k = 1 - (1 - u) ** 1.8;
+    return { x: lerp(start.x, target.x, k), y: lerp(start.y, target.y, k) };
+  }
+  return null;
 }
 
 /** The ball on the grass at time `t` (fractional frame), for the 2D and
@@ -168,6 +199,8 @@ export function footBall(tl: Timeline, slot: number, t: number): Point {
  * receiver's foot is at that moment, arriving exactly there. Loose balls
  * (shots, clearances, the ball in the net) are the key frames' own. */
 export function groundBall(tl: Timeline, t: number): Point {
+  const pass = passBall(tl, t);
+  if (pass) return pass;
   const f = Math.max(0, Math.min(tl.count - 1, Math.floor(t)));
   const frac = Math.max(0, Math.min(1, t - f));
   const h0 = holderAt(tl, f);

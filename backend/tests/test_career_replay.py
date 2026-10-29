@@ -283,3 +283,33 @@ def test_goals_go_past_the_keeper_not_at_him():
             assert abs(bx - kx) >= 1.5 - replay.WIDTH / 255 - 0.6, (seed, idx, bx, kx)
             seen += 1
     assert seen > 5
+
+
+def test_no_one_is_offside_when_a_pass_is_played():
+    """The receiver of every pass in open play is level with or behind the
+    second-last defender (or the ball) when it is played."""
+    checked = 0
+    for seed in range(8):
+        match, lineups = _played(900 + seed)
+        rep = replay.build_replay(seed, match.event_log, lineups)
+        frames = replay.decode_frames(rep)
+        kinds = {}
+        for kind, f0, n, *_ in rep["segments"]:
+            for f in range(f0, f0 + n):
+                kinds[f] = kind
+        for f0, _f1, passer, receiver in rep["passes"]:
+            if kinds.get(f0) not in ("goal", "moment") or f0 < 1:
+                continue
+            fr = frames[f0 - 1]
+            side = "a" if receiver < 11 else "b"
+            if (passer < 11) != (receiver < 11):
+                continue
+            own = (lambda y: y) if side == "a" else (lambda y: replay.LENGTH - y)
+            defenders = sorted((own(fr["players"][i][1]) for i in (range(11, 22) if side == "a" else range(11))), reverse=True)
+            line = max(defenders[1], own(fr["ball"][1]))
+            # Corners: everyone may stand in front of the ball on the goal line.
+            if own(fr["ball"][1]) > replay.LENGTH - 2:
+                continue
+            assert own(fr["players"][receiver][1]) <= line + 1.0, (seed, f0, own(fr["players"][receiver][1]), line)
+            checked += 1
+    assert checked > 100

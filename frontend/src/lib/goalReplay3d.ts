@@ -256,3 +256,25 @@ export function cameraPose(mode: CameraMode, fx: number, fz: number, goalX: numb
   const back = portrait ? 66 : 46;
   return { pos: [cx, portrait ? 27 : 17, back], look: [cx, 0, fz * 0.5] };
 }
+
+export interface FpsJudge { windows: number; slowStreak: number; lowered: boolean; simple: boolean }
+
+export const FPS_JUDGE: FpsJudge = { windows: 0, slowStreak: 0, lowered: false, simple: false };
+
+/** One ~1 s window of measured fps → what to give up, once each and for
+ * good: first the pixel ratio (below 50 fps), then the animated models
+ * (below 40 fps two windows running). Windows don't count while the page is
+ * hidden or the models are still loading, nor the first two after (shader
+ * compilation) — a loading hitch is not a slow phone. */
+export function judgeFps(
+  s: FpsJudge, fps: number, opts: { dpr: number; ready: boolean; visible: boolean },
+): { state: FpsJudge; action: "none" | "dpr" | "simple" } {
+  if (!opts.visible || !opts.ready) return { state: { ...s, windows: 0, slowStreak: 0 }, action: "none" };
+  const windows = s.windows + 1;
+  if (windows <= 2) return { state: { ...s, windows }, action: "none" };
+  if (!s.lowered && fps < 50 && opts.dpr > 1) return { state: { ...s, windows, lowered: true, slowStreak: 0 }, action: "dpr" };
+  if (s.simple) return { state: { ...s, windows }, action: "none" };
+  const slowStreak = fps < 40 ? s.slowStreak + 1 : 0;
+  if (slowStreak >= 2) return { state: { ...s, windows, slowStreak, simple: true }, action: "simple" };
+  return { state: { ...s, windows, slowStreak }, action: "none" };
+}

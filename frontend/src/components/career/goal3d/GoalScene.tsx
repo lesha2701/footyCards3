@@ -10,11 +10,13 @@ import * as THREE from "three";
 import {
   BALL_R,
   CROSSBAR,
+  FPS_JUDGE,
   GOAL_HALF,
   NET_DEPTH,
   advance,
   ballState,
   cameraPose,
+  judgeFps,
   toWorld,
   type CameraMode,
   type GoalEpisode,
@@ -75,6 +77,8 @@ class FigureBoundary extends Component<{ fallback: ReactNode; children: ReactNod
 export function GoalScene(props: SceneProps) {
   const { tl, replay, ep, flip, looks, mode, clock, onProgress, onEnded, fpsRef } = props;
   const [figures, setFigures] = useState<Figures>(props.figures ?? "skinned");
+  // The animated models are on screen (fps is judged from then on).
+  const ready = useRef(figures === "simple");
   const simple = <Players tl={tl} ep={ep} flip={flip} looks={looks} clock={clock} />;
   const goalX = toWorld({ x: PITCH_W / 2, y: ep.side === "a" ? PITCH_L : 0 }, flip).x;
   return (
@@ -90,13 +94,13 @@ export function GoalScene(props: SceneProps) {
       {figures === "skinned" ? (
         <FigureBoundary fallback={simple}>
           <Suspense fallback={simple}>
-            <SkinnedPlayers tl={tl} replay={replay} ep={ep} flip={flip} looks={looks} clock={clock} />
+            <SkinnedPlayers tl={tl} replay={replay} ep={ep} flip={flip} looks={looks} clock={clock} onReady={() => { ready.current = true; }} />
           </Suspense>
         </FigureBoundary>
       ) : simple}
       <Ball tl={tl} ep={ep} flip={flip} clock={clock} />
       <CameraRig tl={tl} ep={ep} flip={flip} mode={mode} clock={clock} goalX={goalX} />
-      <AdaptiveDpr fpsRef={fpsRef} onSlow={() => setFigures("simple")} />
+      <AdaptiveDpr fpsRef={fpsRef} onSlow={() => setFigures("simple")} ready={ready} />
     </>
   );
 }
@@ -120,27 +124,29 @@ function ClockDriver({ ep, clock, onProgress, onEnded }: Pick<SceneProps, "ep" |
 /** On a phone that can't hold ~50 fps: first the pixel ratio goes down to
  * 1, then (below ~40 fps still) the animated models give way to the simple
  * figures — for good, no flip-flopping. */
-function AdaptiveDpr({ fpsRef, onSlow }: { fpsRef?: MutableRefObject<HTMLSpanElement | null>; onSlow: () => void }) {
+function AdaptiveDpr({ fpsRef, onSlow, ready }: {
+  fpsRef?: MutableRefObject<HTMLSpanElement | null>; onSlow: () => void; ready: MutableRefObject<boolean>;
+}) {
   const setDpr = useThree((s) => s.setDpr);
-  const acc = useRef({ n: 0, sum: 0, lowered: false, slow: false, checks: 0 });
+  const acc = useRef({ n: 0, sum: 0, judge: FPS_JUDGE });
   useFrame((state, dt) => {
     const a = acc.current;
     a.n += 1;
     a.sum += dt;
     if (a.n < 60) return;
     const fps = a.n / a.sum;
-    if (fpsRef?.current) fpsRef.current.textContent = `${Math.round(fps)} fps`;
-    a.checks += 1;
-    if (!a.lowered && fps < 50 && state.viewport.dpr > 1) {
-      a.lowered = true;
-      setDpr(1);
-    } else if (!a.slow && a.checks > 2 && fps < 40) {
-      a.slow = true;
-      onSlow();
-    }
-    if (fpsRef?.current) fpsRef.current.dataset.fps = String(Math.round(fps));
     a.n = 0;
     a.sum = 0;
+    if (fpsRef?.current) {
+      fpsRef.current.textContent = `${Math.round(fps)} fps`;
+      fpsRef.current.dataset.fps = String(Math.round(fps));
+    }
+    const verdict = judgeFps(a.judge, fps, {
+      dpr: state.viewport.dpr, ready: ready.current, visible: document.visibilityState === "visible",
+    });
+    a.judge = verdict.state;
+    if (verdict.action === "dpr") setDpr(1);
+    if (verdict.action === "simple") onSlow();
   });
   return null;
 }

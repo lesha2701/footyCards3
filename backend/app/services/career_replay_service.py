@@ -180,6 +180,7 @@ class Director:
     segments: list = field(default_factory=list)
     wobble: list = field(default_factory=list)
     start_roster: list = field(default_factory=list)
+    receiver: Optional[int] = None  # the man a pass in flight goes to (free of the offside line)
 
     def __post_init__(self):
         self.slots = self.sides["a"].slots + self.sides["b"].slots
@@ -267,6 +268,12 @@ class Director:
             line = _clamp(bv * 0.5 + 6 + mentality, 16, 42)
             span, width, pull = 30.0, 0.95, 0.2
         if s.category == "GK":
+            if defending and bv < 45:
+                # Narrows the angle: on the line from the goal centre to the
+                # ball, 2.5 m out — where a shot is his to stop.
+                du, dv = bu - WIDTH / 2, max(bv, 1.0)
+                k = 2.5 / max(2.5, math.hypot(du, dv))
+                return self.at(s.side, WIDTH / 2 + du * k, max(0.8, dv * k))
             v = 3.0 + _clamp((line - 12) * 0.35, 0, 14)  # sweeps behind a high line, on the line when deep
             return self.at(s.side, WIDTH / 2 + (bu - WIDTH / 2) * 0.22, v)
         v = line + span * s.row
@@ -288,12 +295,27 @@ class Director:
             out += bytes((_q(x, WIDTH), _q(y, LENGTH)))
         self.count += 1
 
+    def offside_line(self, att: str) -> float:
+        """How far up the pitch (side `att`'s own v) its players without
+        the ball may go: level with the second-last opponent (the keeper
+        counts) or the ball, whichever is further."""
+        vs = sorted((to_own(att, *self.pos[s.index])[1] for s in self.sides[_other(att)].slots), reverse=True)
+        second_last = vs[1] if len(vs) > 1 else LENGTH
+        return max(second_last, to_own(att, *self.ball)[1])
+
     def _move(self) -> None:
         presser = None
         if self.holder is not None and self.phase is not None:
             presser = self.nearest(_other(self.phase), *self.ball, exclude=tuple(self.ov))
-        for s in self.slots:
+        # The side without the ball moves first: the attackers then time
+        # their runs to where the defensive line has got to this frame.
+        order = sorted(self.slots, key=lambda sl: sl.side == self.phase)
+        lines: dict[str, float] = {}
+        for s in order:
             i = s.index
+            if s.side not in lines:
+                lines[s.side] = self.offside_line(s.side)
+            line = lines[s.side]
             speed = 6.0
             if i in self.ov:
                 tx, ty, speed = self.ov[i]
@@ -305,6 +327,11 @@ class Director:
                 tx, ty = self.shape_target(s)
             if self.limit is not None:
                 tx, ty = self.limit(s, tx, ty)
+            if i != self.holder and i != self.receiver and s.category != "GK":
+                # Runs are timed: nobody waits beyond the last defender for a pass.
+                tu, tv = to_own(s.side, tx, ty)
+                if tv > line - 0.4:
+                    tx, ty = self.at(s.side, tu, line - 0.4)
             dx, dy = tx - self.pos[i][0], ty - self.pos[i][1]
             dist = math.hypot(dx, dy)
             reach = speed * self.dt
@@ -312,6 +339,17 @@ class Director:
                 dx, dy = dx / dist * reach, dy / dist * reach
             self.pos[i][0] = _clamp(self.pos[i][0] + dx, 0.0, WIDTH)
             self.pos[i][1] = _clamp(self.pos[i][1] + dy, 0.0, LENGTH)
+        # Where the lines ended up this frame: a man without the ball is
+        # never caught beyond it (the defence stepping up included).
+        for side in ("a", "b"):
+            line = self.offside_line(side)
+            for s in self.sides[side].slots:
+                i = s.index
+                if i == self.holder or i == self.receiver or s.category == "GK":
+                    continue
+                u, v = to_own(side, *self.pos[i])
+                if v > line:
+                    self.pos[i][0], self.pos[i][1] = self.at(side, u, line)
 
     def tick(self, ball_at=None) -> None:
         """One frame. `ball_at` (a point, or a function called after the
@@ -374,12 +412,14 @@ class Director:
                     break
         self.passes.append([self.frame, self.frame + frames, frm, to])
         self.holder = None
+        self.receiver = to
         for k in range(frames):
             f = (k + 1) / frames
             # Aimed at the receiver after he has moved this frame: the last
             # frame of the pass has the ball exactly at him.
             self.tick(lambda f=f: (start[0] + (self.pos[to][0] - start[0]) * f,
                                    start[1] + (self.pos[to][1] - start[1]) * f))
+        self.receiver = None
         self.holder = to
         self.phase = self.slots[to].side
 
