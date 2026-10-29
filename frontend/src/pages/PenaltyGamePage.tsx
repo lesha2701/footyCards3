@@ -51,10 +51,13 @@ export default function PenaltyGamePage() {
 
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [phase, setPhase] = useState<Phase>("pick_card");
-  // From a «Путь дебютанта» task: straight into the bot game — no waiting
-  // for a live opponent who may never come (and only the bot game counts).
+  // From a «Путь дебютанта» task: straight into the bot game (the 3D
+  // shootout) — no waiting for a live opponent who may never come.
   const fromNewbie = !!(useLocation().state as { fromNewbie?: boolean } | null)?.fromNewbie;
-  const [choosingBot, setChoosingBot] = useState(fromNewbie);
+  useEffect(() => {
+    if (fromNewbie) navigate("/play/penalty/3d", { replace: true });
+  }, [fromNewbie, navigate]);
+  const [choosingBot, setChoosingBot] = useState(false);
   const [pickingForSearch, setPickingForSearch] = useState(false);
   const [lastKick, setLastKick] = useState<PenaltyKickResult | null>(null);
   const [claimResult, setClaimResult] = useState<{ reward_coins: number } | null>(null);
@@ -169,32 +172,33 @@ export default function PenaltyGamePage() {
     return (
       <div className="flex flex-col gap-5">
         <GameHero game="penalty" title="Пенальти" />
-        <p className="text-sm text-ink-mist">Выбери, с кем играть.</p>
+        <p className="text-sm text-ink-mist">Серия пенальти с ботом — или сыграй с другом.</p>
         {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
-        {flags?.matchmaking_enabled !== false && (
-          <button
-            onClick={() => setPickingForSearch(true)}
-            className="flex items-center justify-center gap-2 rounded-2xl bg-accent py-5 text-base font-bold text-bg-base ring-2 ring-accent/40 active:scale-95"
-          >
-            <IconPlay size={20} />
-            Играть
-          </button>
-        )}
+        {/* «Играть» is the 3D shootout against the bot. */}
+        <button
+          onClick={() => navigate("/play/penalty/3d")}
+          className="flex items-center justify-center gap-2 rounded-2xl bg-accent py-5 text-base font-bold text-bg-base ring-2 ring-accent/40 active:scale-95"
+        >
+          <IconPlay size={20} />
+          Играть
+        </button>
         <div className="flex gap-2">
-          <button
-            onClick={() => navigate("/play/penalty/3d")}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-3 text-xs font-semibold text-ink-mist active:scale-95"
-          >
-            <IconPlay size={14} />
-            С ботом
-          </button>
           <button
             onClick={() => navigate("/play/penalty/matches")}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-3 text-xs font-semibold text-ink-mist active:scale-95"
           >
             <IconUsers size={14} />
-            Вызвать друга
+            С другом
           </button>
+          {flags?.matchmaking_enabled !== false && (
+            <button
+              onClick={() => setPickingForSearch(true)}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-3 text-xs font-semibold text-ink-mist active:scale-95"
+            >
+              <IconPlay size={14} />
+              Случайный соперник
+            </button>
+          )}
         </div>
         {pickingForSearch && (
           <CardPickerModal
