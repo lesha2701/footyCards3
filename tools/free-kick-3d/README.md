@@ -12,8 +12,8 @@
             && pip install -q bpy && cd /work && python build_footballer.py"
    ```
 
-   It drops the eyelashes, decimates to ~10k triangles, keeps only base
-   colour (body 1024 px, hair 256 px), renames the clips (`idle`,
+   It drops the eyelashes, decimates to ~16k polygons, keeps base colour
+   and the normal map (body 1024 px — the pack's own size —, hair 512 px), renames the clips (`idle`,
    `wall_jump`, `kick`, `gk_idle`, `gk_dive_left`, `gk_dive_right`,
    `gk_catch`, `gk_fallen`), prints the kick's contact frame and writes
    `out/footballer.glb`.

@@ -150,6 +150,9 @@ function Lights({ quality }: { quality: Quality }) {
         shadow-normalBias={0.02}
       />
       <directionalLight position={[22, 18, -20]} intensity={0.8} color="#cfe0ff" />
+      {/* Rim: the floodlights behind the goal outline the players (the kicker
+          is seen from behind) against the dark stands. */}
+      <directionalLight position={[-6, 14, -40]} intensity={1.1} color="#dfe8ff" />
     </>
   );
 }

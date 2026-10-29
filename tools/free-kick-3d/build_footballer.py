@@ -8,7 +8,9 @@ arm.name='Footballer'
 if arm.animation_data and arm.animation_data.action:
     arm.animation_data.action=None
 
-RATIOS={'Ch38_Body':0.25,'Ch38_Hair':0.12,'Ch38_Shirt':0.35,'Ch38_Shorts':0.35,'Ch38_Shoes':0.3,'Ch38_Socks':0.6}
+# Decimation per mesh (~22k triangles in all): the face, hands and the
+# shirt's folds hold up; the hair and shoes go further.
+RATIOS={'Ch38_Body':0.5,'Ch38_Hair':0.25,'Ch38_Shirt':0.6,'Ch38_Shorts':0.55,'Ch38_Shoes':0.45,'Ch38_Socks':0.7}
 for o in list(bpy.data.objects):
     if o.type!='MESH': continue
     if o.name=='Ch38_Eyelashes':
@@ -21,29 +23,44 @@ for o in list(bpy.data.objects):
     bpy.ops.object.modifier_apply(modifier='dec')
     print('MESH',o.name,len(o.data.polygons))
 
-# Materials: base colour only, textures down to 1024.
+# Materials: base colour + normal map (folds, seams, the face's detail),
+# nothing else. Body 2048 px (the face is close to the camera), the rest
+# 1024, hair 512.
+def tex_size(mat):
+    if mat.name.endswith('_hair') or 'Hair' in mat.name: return 512
+    if 'Body' in mat.name: return 2048
+    return 1024
 for mat in bpy.data.materials:
     if not mat.use_nodes: continue
     nt=mat.node_tree
     bsdf=[n for n in nt.nodes if n.type=='BSDF_PRINCIPLED']
-    keep=None
+    print('MAT',mat.name,[(n.type,n.name,[ (l.to_node.type,l.to_socket.name) for o in n.outputs for l in o.links]) for n in nt.nodes])
+    base=None; normal=None
     for n in list(nt.nodes):
-        if n.type=='TEX_IMAGE':
-            if any(l.to_socket.name=='Base Color' for l in n.outputs[0].links) and keep is None:
-                keep=n
-            else:
-                nt.nodes.remove(n)
-        elif n.type in ('NORMAL_MAP','BUMP'):
-            nt.nodes.remove(n)
+        if n.type!='TEX_IMAGE': continue
+        dests=[(l.to_node.type,l.to_socket.name) for l in n.outputs[0].links]
+        if any(s=='Base Color' for _,s in dests) and base is None: base=n
+        elif any(t in ('NORMAL_MAP','BUMP') for t,_ in dests) and normal is None: normal=n
+        else: nt.nodes.remove(n)
+    if normal is not None and bsdf:
+        nm=[l.to_node for l in normal.outputs[0].links][0]
+        if nm.type=='BUMP':
+            # glTF has no bump: a height map can't go out as a normal map.
+            nt.nodes.remove(nm); nt.nodes.remove(normal); normal=None
+        else:
+            normal.image.colorspace_settings.name='Non-Color'
+            nm.inputs['Strength'].default_value=1.0
+            nt.links.new(nm.outputs['Normal'], bsdf[0].inputs['Normal'])
     if bsdf:
-        bsdf[0].inputs['Roughness'].default_value=0.8
+        bsdf[0].inputs['Roughness'].default_value=0.75
         bsdf[0].inputs['Metallic'].default_value=0.0
-    if keep and keep.image:
-        im=keep.image
-        size=256 if mat.name.endswith('_hair') else 1024
+    for kind,node in (('base',base),('normal',normal)):
+        if node is None or node.image is None: continue
+        im=node.image
+        size=tex_size(mat)
         if im.size[0]>size: im.scale(size,size)
-        im.filepath_raw=f'{out}/{mat.name}.png'; im.file_format='PNG'; im.save()
-        print('TEX',mat.name,im.name,im.size[:])
+        im.filepath_raw=f'{out}/{mat.name}_{kind}.png'; im.file_format='PNG'; im.save()
+        print('TEX',mat.name,kind,im.name,im.size[:])
 for im in list(bpy.data.images):
     if im.users==0: bpy.data.images.remove(im)
 
