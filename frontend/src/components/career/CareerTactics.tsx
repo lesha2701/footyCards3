@@ -17,9 +17,8 @@ import {
   type Tactic,
   type TacticsCatalog,
 } from "@/api/career";
-import TacticPitch from "@/components/career/TacticPitch";
+import { TacticBoard } from "@/components/career/TacticBoard";
 import {
-  AXIS_PHASES,
   HINT_TEXT,
   axisValueLabel,
   presetOf,
@@ -233,82 +232,56 @@ export function TacticsBoard({ season, catalog, onView, onError }: {
         {report && <HintBadge hint={report.hint} />}
       </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] items-start gap-3">
-        <TacticPitch formation={formation} tactic={tactic} />
-        <div className="flex flex-col gap-2">
-          <label className="flex flex-col gap-1">
-            <span className="text-micro uppercase tracking-wider text-ink-mist">Схема</span>
-            <select
-              aria-label="Схема"
-              value={formation}
-              onChange={(e) => setFormation(e.target.value)}
-              className="rounded-xl bg-bg-raised px-2 py-2 text-xs text-ink-chalk outline-none"
-            >
-              {FORMATIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-micro uppercase tracking-wider text-ink-mist">Тактика</span>
-            <select
-              aria-label="Тактика"
-              value={activePreset?.code ?? CUSTOM_PRESET}
-              onChange={(e) => {
-                const preset = catalog.presets.find((p) => p.code === e.target.value);
-                if (preset) { setTactic({ ...preset.tactic }); haptic("light"); }
-              }}
-              className="rounded-xl bg-bg-raised px-2 py-2 text-xs text-ink-chalk outline-none"
-            >
-              {/* «Своя» = the axes below as set by hand; picking it keeps them. */}
-              <option value={CUSTOM_PRESET}>Своя тактика</option>
-              {catalog.presets.map((p) => <option key={p.code} value={p.code}>{p.label}</option>)}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-micro uppercase tracking-wider text-ink-mist">Настрой</span>
-            <select
-              aria-label="Настрой"
-              value={mentality}
-              onChange={(e) => setMentality(e.target.value)}
-              className="rounded-xl bg-bg-raised px-2 py-2 text-xs text-ink-chalk outline-none"
-            >
-              {MENTALITIES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </label>
-          {fam && (
-            <div className="rounded-xl bg-bg-raised p-2">
-              <div className="flex items-center justify-between text-micro">
-                <span className="uppercase tracking-wider text-ink-mist">Сыгранность</span>
-                <span className="font-mono font-bold text-ink-chalk">+{famPreview.toFixed(1)}%</span>
-              </div>
-              <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-white/10">
-                <span className="block h-full bg-floodlight" style={{ width: `${Math.min(100, (famPreview / (fam.max_pct || 1)) * 100)}%` }} />
-              </span>
-              <p className="mt-1 text-micro leading-tight text-ink-mist-dim">
-                до {fam.max_pct}% · +{fam.step_pct}% за матч без изменений
-              </p>
-            </div>
-          )}
-        </div>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="flex min-w-0 flex-col gap-1">
+          <span className="text-micro uppercase tracking-wider text-ink-mist">Схема</span>
+          <select
+            aria-label="Схема"
+            value={formation}
+            onChange={(e) => setFormation(e.target.value)}
+            className="rounded-xl bg-bg-raised px-2 py-2 text-xs text-ink-chalk outline-none"
+          >
+            {FORMATIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </label>
+        <label className="flex min-w-0 flex-col gap-1">
+          <span className="text-micro uppercase tracking-wider text-ink-mist">Готовая тактика</span>
+          <select
+            aria-label="Тактика"
+            value={activePreset?.code ?? CUSTOM_PRESET}
+            onChange={(e) => {
+              const preset = catalog.presets.find((p) => p.code === e.target.value);
+              if (preset) { setTactic({ ...preset.tactic }); haptic("light"); }
+            }}
+            className="rounded-xl bg-bg-raised px-2 py-2 text-xs text-ink-chalk outline-none"
+          >
+            {/* «Своя» = the axes as set by hand on the board; picking it keeps them. */}
+            <option value={CUSTOM_PRESET}>Своя тактика</option>
+            {catalog.presets.map((p) => <option key={p.code} value={p.code}>{p.label}</option>)}
+          </select>
+        </label>
       </div>
 
-      {AXIS_PHASES.map((phase) => (
-        <div key={phase.title} className="flex flex-col gap-2">
-          <p className="text-micro font-bold uppercase tracking-[0.12em] text-accent-cyan">{phase.title}</p>
-          {phase.axes.map((axis) => {
-            const def = catalog.axes.find((a) => a.key === axis);
-            if (!def) return null;
-            const current = def.values.find((v) => v.value === tactic[axis]);
-            return (
-              <div key={axis} className="flex flex-col gap-1">
-                <span className="text-caption font-semibold text-ink-chalk">{def.label}</span>
-                <Segmented label={def.label} value={tactic[axis] ?? ""} options={def.values}
-                  onChange={(v) => setTactic({ ...tactic, [axis]: v })} />
-                {current && <p className="text-micro leading-snug text-ink-mist">{current.hint}</p>}
-              </div>
-            );
-          })}
+      <TacticBoard
+        season={season} catalog={catalog} formation={formation}
+        tactic={tactic} setTactic={setTactic} mentality={mentality} setMentality={setMentality}
+        onView={onView} onError={onError}
+      />
+
+      {fam && (
+        <div className="rounded-xl bg-bg-raised p-2">
+          <div className="flex items-center justify-between text-micro">
+            <span className="uppercase tracking-wider text-ink-mist">Сыгранность</span>
+            <span className="font-mono font-bold text-ink-chalk">+{famPreview.toFixed(1)}%</span>
+          </div>
+          <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-white/10">
+            <span className="block h-full bg-floodlight" style={{ width: `${Math.min(100, (famPreview / (fam.max_pct || 1)) * 100)}%` }} />
+          </span>
+          <p className="mt-1 text-micro leading-tight text-ink-mist-dim">
+            до {fam.max_pct}% · +{fam.step_pct}% за матч без изменений
+          </p>
         </div>
-      ))}
+      )}
 
       {report && season.scouting && (
         <div className="rounded-2xl bg-bg-raised p-3">
