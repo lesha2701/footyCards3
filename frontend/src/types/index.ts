@@ -2789,6 +2789,8 @@ export interface StrategoCard {
   skill_level?: number | null;
   skill_kind?: "atk" | "def" | null;
   skill_bonus?: number;
+  /** The footballer (backend person_key): one per squad. */
+  person?: string | null;
 }
 
 export type StrategoNoteTag = "cup" | "wall" | "star" | "strong" | "weak" | "speedster";

@@ -211,3 +211,18 @@ async def test_experience_talisman_adds_to_path_experience(client, db_session, b
     results = await path_service.award_match(db_session, user_id=user.id, source_type="arena", source_id="1", entries=entries)
     by_card = {r.user_card_id: r.xp for r in results}
     assert by_card[talisman.id] == by_card[plain.id] + by_card[plain.id] * 10 // 100
+
+
+def test_a_set_with_gloves_is_collectable_by_a_field_player():
+    # «Зимний матч»: gloves + kit + accessory, set of 3 — a forward can't wear
+    # gloves, so his two wearable things complete it; a keeper still needs all 3.
+    winter = NS(id=9, is_active=True, set_size=3, set_bonus_rating=2, set_team_country=None, set_team_chemistry=0)
+    slots = {9: {"gloves", "kit", "accessory"}}
+    forward = NS(position=Position.ST, club="C", country="Аргентина")
+    keeper = NS(position=Position.GK, club="C", country="Италия")
+    two = [_it("kit", "pass_pp", 1, winter), _it("accessory", "xp_pct", 5, winter)]
+    assert equipment_service.compute_effects(forward, two, CONFIG, slots)[0] == 2
+    assert equipment_service.compute_effects(keeper, two, CONFIG, slots)[0] == 0
+    assert equipment_service.compute_effects(keeper, two + [_it("gloves", "save_pp", 2, winter)], CONFIG, slots)[0] == 2
+    # Without the collection's slots known nothing changes (the old rule).
+    assert equipment_service.compute_effects(forward, two, CONFIG)[0] == 0

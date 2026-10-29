@@ -516,3 +516,13 @@ async def test_round_plays_for_a_club_with_an_empty_roster(client, db_session, b
     await db_session.commit()
 
     assert await manager_service.resolve_league(db_session, league.id, now=start + timedelta(days=7)) == manager_service.rounds_of(config)
+
+
+async def test_catalog_refuses_a_second_version_of_one_footballer(client, db_session, bot_token):
+    base = await create_player(db_session, rating=60, position=Position.CB, display_name="Алессандро Неста")
+    other = await create_player(db_session, rating=61, position=Position.CB, display_name="Алессандро  Неста")
+    _, headers = await _player(client, db_session, bot_token, 894099)
+    await _club(client, headers, "Неставцы")
+    assert (await client.post(f"{API}/manager/npc", headers=headers, json={"player_id": base.id, "kind": "loan"})).status_code == 200
+    resp = await client.post(f"{API}/manager/npc", headers=headers, json={"player_id": other.id, "kind": "loan"})
+    assert resp.status_code == 409 and "только раз" in resp.json()["error"]["message"]

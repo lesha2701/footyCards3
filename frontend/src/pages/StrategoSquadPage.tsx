@@ -12,6 +12,7 @@ import { ROLE_META, autoLayout, roleOfSlot, slotLabel } from "@/components/strat
 import { formatGameError } from "@/lib/errors";
 import { RARITY_LABELS, RARITY_ORDER } from "@/lib/rarity";
 import type { StrategoCard, StrategoSquad } from "@/types";
+import { personKey } from "@/lib/person";
 
 type Layout = Record<string, [number, number]>;
 
@@ -245,6 +246,8 @@ export default function StrategoSquadPage() {
           squad={squad}
           slot={pickerSlot}
           currentId={cards[pickerSlot]}
+          usedPersons={new Set(Object.entries(cards).filter(([s]) => s !== pickerSlot)
+            .map(([, id]) => cardById.get(id)).filter(Boolean).map((c) => strategoPerson(c!)))}
           onClose={() => setPickerSlot(null)}
           onPick={(card) => assign(pickerSlot, card)}
         />
@@ -253,12 +256,19 @@ export default function StrategoSquadPage() {
   );
 }
 
+/** The footballer behind a Stratego card: one per squad (backend person_key). */
+function strategoPerson(c: StrategoCard): string {
+  return personKey({ display_name: c.display_name, person_key: c.person });
+}
+
 function CardPicker({
-  squad, slot, currentId, onClose, onPick,
+  squad, slot, currentId, usedPersons, onClose, onPick,
 }: {
   squad: StrategoSquad;
   slot: string;
   currentId?: number;
+  /** Footballers already in other slots — their other copies are blocked. */
+  usedPersons: Set<string>;
   onClose: () => void;
   onPick: (card: StrategoCard) => void;
 }) {
@@ -266,8 +276,21 @@ function CardPicker({
   const eligible = def.eligible_positions;
   const fits = (c: StrategoCard) => !eligible || eligible.includes(c.position);
   const cap = squad.role_max_rarity?.[def.role];
-  const allowed = (c: StrategoCard) => !cap || RARITY_ORDER[c.rarity] <= RARITY_ORDER[cap];
-  const sorted = [...squad.options].sort(
+  const allowed = (c: StrategoCard) =>
+    (!cap || RARITY_ORDER[c.rarity] <= RARITY_ORDER[cap]) && !usedPersons.has(strategoPerson(c));
+  // Identical copies are one row (×N); the current pick stands for its group.
+  const groups = new Map<string, { card: StrategoCard; count: number }>();
+  for (const c of squad.options) {
+    const key = [c.player_id, c.rating, c.skill_name ?? "", c.skill_level ?? "", c.is_my_player ? 1 : 0].join("|");
+    const g = groups.get(key);
+    if (!g) groups.set(key, { card: c, count: 1 });
+    else {
+      g.count += 1;
+      if (c.user_card_id === currentId) g.card = c;
+    }
+  }
+  const counts = new Map([...groups.values()].map((g) => [g.card.user_card_id, g.count]));
+  const sorted = [...groups.values()].map((g) => g.card).sort(
     (a, b) => Number(allowed(b)) - Number(allowed(a)) || Number(fits(b)) - Number(fits(a)) || b.rating - a.rating,
   );
   return (
@@ -293,6 +316,8 @@ function CardPicker({
               <span className="truncate">
                 {c.is_my_player && <span className="mr-1 rounded bg-accent-lime px-1 text-micro font-bold text-bg-base">Мой игрок</span>}
                 {c.display_name} · {c.position}
+                {(counts.get(c.user_card_id) ?? 1) > 1 && <span className="ml-1 text-micro text-ink-mist">×{counts.get(c.user_card_id)}</span>}
+                {usedPersons.has(strategoPerson(c)) && <span className="ml-1 text-micro text-ink-mist">· уже в составе</span>}
               </span>
               <span className="font-mono font-bold">{c.rating}</span>
             </button>

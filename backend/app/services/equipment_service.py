@@ -106,8 +106,24 @@ def item_applies(item: EquipmentItem, player) -> bool:
     return True
 
 
-def compute_effects(player, items: list[EquipmentItem], config: GameConfig) -> tuple[int, int, Optional[dict]]:
-    """(rating, chemistry, boosts) of everything one card wears, capped."""
+def set_needed(collection: EquipmentCollection, player, slots_by_collection: Optional[dict[int, set[str]]]) -> int:
+    """Things of `collection` this card needs for the set bonus: its
+    set_size, but never more than the collection's slots this player can
+    wear at all — a set with gloves stays collectable for a field player."""
+    needed = max(1, collection.set_size)
+    slots = (slots_by_collection or {}).get(collection.id) or set()
+    if player.position != Position.GK and slots & GK_ONLY_SLOTS:
+        # Only a set with keeper things is eased (a collection still being
+        # filled with fewer things than set_size stays incomplete).
+        needed = min(needed, max(1, len(slots - GK_ONLY_SLOTS)))
+    return needed
+
+
+def compute_effects(
+    player, items: list[EquipmentItem], config: GameConfig, slots_by_collection: Optional[dict[int, set[str]]] = None,
+) -> tuple[int, int, Optional[dict]]:
+    """(rating, chemistry, boosts) of everything one card wears, capped.
+    `slots_by_collection`: every slot each worn collection has (set_needed)."""
     if not config.equipment_enabled:
         return 0, 0, None
     totals = {effect: 0 for effect in EFFECTS}
@@ -124,7 +140,7 @@ def compute_effects(player, items: list[EquipmentItem], config: GameConfig) -> t
     team: Optional[tuple[str, int]] = None
     for collection_id, count in per_collection.items():
         collection = collections[collection_id]
-        if count >= max(1, collection.set_size):
+        if count >= set_needed(collection, player, slots_by_collection):
             totals["rating"] += max(0, collection.set_bonus_rating)
             team_country = getattr(collection, "set_team_country", None)
             team_points = int(getattr(collection, "set_team_chemistry", 0) or 0)
@@ -150,6 +166,21 @@ async def _worn_rows(db: AsyncSession, card: UserCard) -> list[UserEquipment]:
     return list(result.unique().scalars().all())
 
 
+async def _collection_slots(db: AsyncSession, collection_ids: set[int]) -> dict[int, set[str]]:
+    """Every slot the active things of these collections go into."""
+    if not collection_ids:
+        return {}
+    rows = (await db.execute(
+        select(EquipmentItem.collection_id, EquipmentItem.slot).where(
+            EquipmentItem.collection_id.in_(collection_ids), EquipmentItem.is_active.is_(True),
+        )
+    )).all()
+    out: dict[int, set[str]] = {}
+    for collection_id, slot in rows:
+        out.setdefault(collection_id, set()).add(slot)
+    return out
+
+
 async def recompute(db: AsyncSession, card: UserCard, config: Optional[GameConfig] = None) -> None:
     """Writes what the card wears onto its row (caller commits)."""
     config = config or await get_config(db)
@@ -158,7 +189,10 @@ async def recompute(db: AsyncSession, card: UserCard, config: Optional[GameConfi
     if "player" in sa_inspect(card).unloaded or card.player is None:
         await db.refresh(card, attribute_names=["player"])
     items = [row.item for row in await _worn_rows(db, card)]
-    card.equipment_rating_bonus, card.equipment_chemistry, card.equipment_boosts = compute_effects(card.player, items, config)
+    slots = await _collection_slots(db, {i.collection_id for i in items if i.collection_id is not None})
+    card.equipment_rating_bonus, card.equipment_chemistry, card.equipment_boosts = compute_effects(
+        card.player, items, config, slots,
+    )
     db.add(card)
 
 
@@ -345,9 +379,22 @@ async def card_equipment(db: AsyncSession, user: User, card_id: int) -> dict:
     rows = await _owned(db, user.id)
     worn = {r.slot: r for r in rows if r.user_card_id == card.id}
     free = [r for r in rows if r.user_card_id is None]
+    # Sets this card wears things of: progress toward each set bonus.
+    worn_items = [r.item for r in worn.values()]
+    slots_by_collection = await _collection_slots(db, {i.collection_id for i in worn_items if i.collection_id is not None})
+    sets = []
+    for collection in {i.collection_id: i.collection for i in worn_items if i.collection is not None and i.collection.is_active}.values():
+        have = sum(1 for i in worn_items if i.collection_id == collection.id and item_applies(i, card.player))
+        needed = set_needed(collection, card.player, slots_by_collection)
+        sets.append({
+            "name": collection.name, "have": min(have, needed), "needed": needed, "complete": have >= needed,
+            "bonus_rating": collection.set_bonus_rating, "team_country": collection.set_team_country,
+            "team_chemistry": collection.set_team_chemistry,
+        })
     return {
         "enabled": bool(config.equipment_enabled),
         "card_id": card.id,
+        "sets": sorted(sets, key=lambda x: (not x["complete"], x["name"])),
         "rating_bonus": card.equipment_rating_bonus,
         "chemistry": card.equipment_chemistry,
         "boosts": card.equipment_boosts or {},

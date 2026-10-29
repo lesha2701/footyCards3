@@ -5,6 +5,7 @@ import EmptyState from "@/components/common/EmptyState";
 import { IconCollection } from "@/components/icons";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import PlayerCard from "@/components/cards/PlayerCard";
+import { collapseCopies } from "@/lib/person";
 import type { UserCard } from "@/types";
 
 interface Props {
@@ -64,7 +65,8 @@ export default function CardPickerModal({
               <EmptyState icon={IconCollection} title="Нет подходящих карточек" description="Открой паки, чтобы получить игроков этой позиции" />
             ) : (
               <div className="grid grid-cols-3 gap-3">
-                {cards.map((card) => {
+                {/* Identical copies are one tile (×N): picking any of them is the same. */}
+                {collapseCopies(cards).map(({ card, count }) => {
                   const playerCard = (
                     <PlayerCard
                       key={card.id}
@@ -78,10 +80,15 @@ export default function CardPickerModal({
                     />
                   );
                   const note = cardNote?.(card);
-                  if (note == null) return playerCard;
+                  if (note == null && count < 2) return playerCard;
                   return (
-                    <div key={card.id} className="flex flex-col items-center gap-1">
+                    <div key={card.id} className="relative flex flex-col items-center gap-1">
                       {playerCard}
+                      {count > 1 && (
+                        <span className="absolute right-1 top-1 z-10 rounded-full bg-black/80 px-1.5 font-mono text-micro font-bold text-ink-chalk ring-1 ring-white/20">
+                          ×{count}
+                        </span>
+                      )}
                       {note}
                     </div>
                   );

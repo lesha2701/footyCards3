@@ -27,6 +27,8 @@ class StrategoCardOut(BaseModel):
     skill_level: Optional[int] = None
     skill_kind: Optional[Literal["atk", "def"]] = None
     skill_bonus: int = 0
+    # The footballer (player_identity.person_key): one per squad.
+    person: Optional[str] = None
 
 
 class StrategoSquadSlotOut(BaseModel):

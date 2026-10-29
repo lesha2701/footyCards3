@@ -29,6 +29,7 @@ import PitchBackground from "@/components/squad/PitchBackground";
 import { formatGameError } from "@/lib/errors";
 import { haptic } from "@/lib/telegram";
 import type { PersonalSquadSlot, UserCard } from "@/types";
+import { personKey } from "@/lib/person";
 
 export default function PlayerTournamentSquadPage() {
   const navigate = useNavigate();
@@ -131,10 +132,11 @@ export default function PlayerTournamentSquadPage() {
 
   if (isLoading) return <ListSkeleton />;
 
-  const usedPlayerIds = (pickerSlot
+  // One footballer once: other copies / versions of a player already in the XI are blocked.
+  const usedPersons = (pickerSlot
     ? squad?.slots.filter((s) => s.player && s.slot_code !== pickerSlot.slot_code)
     : squad?.slots.filter((s) => s.player)
-  )?.map((s) => s.player!.id) ?? [];
+  )?.map((s) => personKey(s.player!)) ?? [];
 
   const cardsForSlot = (slot: PersonalSquadSlot): UserCard[] => {
     const positions = CATEGORY_POSITIONS[slot.category as FormationSlot["category"]];
@@ -444,7 +446,7 @@ export default function PlayerTournamentSquadPage() {
           open
           title={`Место ${pickerSlot.ideal_position} · ${CATEGORY_LABELS[pickerSlot.category as FormationSlot["category"]]}`}
           cards={cardsForSlot(pickerSlot)}
-          disabledCardIds={cardsForSlot(pickerSlot).filter((c) => usedPlayerIds.includes(c.player.id)).map((c) => c.id)}
+          disabledCardIds={cardsForSlot(pickerSlot).filter((c) => usedPersons.includes(personKey(c.player))).map((c) => c.id)}
           onSelect={(card) => assignSlot(pickerSlot, card)}
           onClose={() => { setPickerSlot(null); setPickerSearch(""); }}
           searchValue={pickerSearch}
