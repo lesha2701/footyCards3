@@ -179,6 +179,17 @@ describe("ReplayPlayer", () => {
     expect(screen.getByText(/Матч окончен/)).toBeInTheDocument();
   });
 
+  it("the latest moment shows on the pitch, scorers under the score; speed cycles with a tap", () => {
+    render(<ReplayPlayer data={data} />);
+    // Frame 5 has the goal (mark at frame 5): scrub just after it.
+    fireEvent.change(screen.getByLabelText("Перемотка"), { target: { value: String(buildTimeline(replay).starts[6]) } });
+    expect(screen.getByLabelText("Голы")).toHaveTextContent("11' P2");
+    // The ticker has the latest one: the save right after the goal.
+    expect(screen.getByText("Сейв", { selector: "p span" })).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Скорость x1"));
+    expect(screen.getByLabelText("Скорость x2")).toBeInTheDocument();
+  });
+
   it("tabs under the pitch: feed, stats, line-ups and the live break's own tabs", () => {
     render(<ReplayPlayer data={{ ...data, live: true }} extraTabs={[
       { key: "subs", label: "Замены", badge: "2", content: <p>Панель замен</p> },

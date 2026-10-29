@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Suspense, lazy, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { fetchCareerReplay, type CareerReplayResponse } from "@/api/career";
-import { Segmented } from "@/components/career/CareerTactics";
 import { goalEpisodes } from "@/lib/goalReplay3d";
 import {
   PITCH_L,
@@ -176,9 +175,35 @@ export function ReplayPlayer({ data, extraTabs, footer }: {
   const homeKit = kitOf("a");
   const awayKit = kitOf("b");
   const allTabs = [...BASE_TABS, ...(extraTabs ?? [])];
+  const markFrame = useMemo(() => new Map(replay.marks.map(([f, idx]) => [idx, f])), [replay]);
+  const scorers = useMemo(() => {
+    const out: { idx: number; minute: number; name: string }[][] = [[], []];
+    for (const idx of shown) {
+      const e = events[idx];
+      if (e?.event_type !== "goal" || (e.team !== "a" && e.team !== "b")) continue;
+      const p = (e.payload ?? {}) as Record<string, unknown>;
+      out[e.team === "a" ? 0 : 1].push({ idx, minute: e.minute, name: String(p.shooter ?? (e.team === "a" ? data.home_name : data.away_name)) });
+    }
+    return out;
+  }, [shown, events, data.home_name, data.away_name]);
+  // The latest moment, on the pitch for ~5 s of the show at x1 (10 frames).
+  const ticker = useMemo(() => {
+    const idx = shown[shown.length - 1];
+    const e = idx !== undefined ? events[idx] : undefined;
+    const at = idx !== undefined ? markFrame.get(idx) : undefined;
+    if (!e || at === undefined || frame - at > 10) return null;
+    const text = e.description || "";
+    // Most descriptions open with their own emoji: no second icon then.
+    const icon = /^\p{Extended_Pictographic}/u.test(text) ? "" : eventIcon(e);
+    return { idx, minute: e.minute, icon, text, goal: e.event_type === "goal" };
+  }, [shown, events, markFrame, frame]);
 
   return (
-    <section className="flex flex-col gap-2 rounded-3xl bg-bg-surface p-3" aria-label="Матч в 2D">
+    <section
+      className="flex flex-col gap-2 rounded-3xl bg-bg-surface p-3"
+      aria-label="Матч в 2D"
+    >
+      <div className="flex min-w-0 flex-col gap-2">
       {/* Scoreboard */}
       <div className="flex items-center gap-2">
         <p className="flex min-w-0 flex-1 items-center justify-end gap-1.5 text-right text-sm font-semibold text-ink-chalk">
@@ -203,6 +228,15 @@ export function ReplayPlayer({ data, extraTabs, footer }: {
           <span className="truncate">{data.away_name}</span>
         </p>
       </div>
+      {scorers.some((list) => list.length > 0) && (
+        <div className="grid grid-cols-2 gap-6 text-micro text-ink-mist" aria-label="Голы">
+          {scorers.map((list, side) => (
+            <p key={side} className={`flex min-w-0 flex-col ${side === 0 ? "items-end text-right" : "items-start"}`}>
+              {list.map((g) => <span key={g.idx} className="max-w-full truncate">⚽ {g.minute}' {g.name}</span>)}
+            </p>
+          ))}
+        </div>
+      )}
       <div className="flex items-center gap-2 text-micro text-ink-mist">
         <span className="w-8 text-right font-mono text-ink-chalk">{stats.possession[0]}%</span>
         <div className="flex h-1.5 flex-1 overflow-hidden rounded-full bg-white/10" aria-label={`Владение ${stats.possession[0]}% на ${stats.possession[1]}%`}>
@@ -210,17 +244,15 @@ export function ReplayPlayer({ data, extraTabs, footer }: {
           <span className="h-full flex-1" style={{ background: awayKit.fill }} />
         </div>
         <span className="w-8 font-mono text-ink-chalk">{stats.possession[1]}%</span>
+        <span className="shrink-0">удары <span className="font-mono text-ink-chalk">{stats.shots[0]}–{stats.shots[1]}</span></span>
       </div>
-      <p className="text-center text-micro text-ink-mist">
-        удары <span className="font-mono text-ink-chalk">{stats.shots[0]}–{stats.shots[1]}</span>
-      </p>
 
       {/* Pitch */}
       <div className="relative">
         <svg
           viewBox={`-3 -3 ${PITCH_W + 6} ${PITCH_L + 6}`}
           className="mx-auto block h-auto w-full touch-none select-none"
-          style={{ maxHeight: "56vh" }}
+          style={{ maxHeight: "min(44vh, 520px)" }}
           role="img"
           aria-label="Поле"
         >
@@ -246,13 +278,36 @@ export function ReplayPlayer({ data, extraTabs, footer }: {
             <circle r="1.05" fill="#ffffff" stroke="#0b1a12" strokeWidth="0.25" />
           </g>
         </svg>
-        <p className="pointer-events-none absolute inset-x-0 bottom-1 truncate px-3 text-center text-caption font-semibold text-white drop-shadow">
-          {holderPlayer?.name ? `${holderPlayer.n}. ${holderPlayer.name}` : " "}
-        </p>
+        {holderPlayer?.name && (
+          <p className="pointer-events-none absolute left-1/2 top-1 max-w-[80%] -translate-x-1/2 truncate rounded-full bg-black/45 px-2 py-0.5 text-micro font-semibold text-white">
+            {holderPlayer.n}. {holderPlayer.name}
+          </p>
+        )}
+        {ticker && (
+          <p
+            key={ticker.idx}
+            className={`pointer-events-none absolute inset-x-2 bottom-2 flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-caption font-semibold shadow-lg ${
+              ticker.goal ? "bg-accent-lime text-[#0b1a12]" : "bg-black/70 text-white"}`}
+            aria-live="polite"
+          >
+            {ticker.icon && <span className="shrink-0">{ticker.icon}</span>}
+            <span className="shrink-0 font-mono">{ticker.minute}'</span>
+            <span className="min-w-0 flex-1 truncate">{ticker.text}</span>
+          </p>
+        )}
       </div>
 
-      {/* Timeline with moments */}
-      <div className="relative px-1 pt-3">
+      {/* Play, the timeline with its moments, speed — one line. */}
+      <div className="flex items-end gap-2">
+        <button
+          type="button"
+          onClick={toggle}
+          className="flex h-8 w-9 shrink-0 items-center justify-center rounded-xl bg-bg-raised text-sm text-ink-chalk active:bg-white/5"
+          aria-label={playing ? "Пауза" : "Смотреть"}
+        >
+          {playing ? "❚❚" : "▶"}
+        </button>
+      <div className="relative min-w-0 flex-1 px-1 pt-3">
         <div className="pointer-events-none absolute inset-x-1 top-0 h-3">
           {marks.filter((m) => m.kind !== "chance").map((m) => (
             <button
@@ -289,21 +344,18 @@ export function ReplayPlayer({ data, extraTabs, footer }: {
           aria-label="Перемотка"
         />
       </div>
-
-      {/* Controls */}
-      <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={toggle}
-          className="flex h-9 w-11 shrink-0 items-center justify-center rounded-xl bg-bg-raised text-base text-ink-chalk active:bg-white/5"
-          aria-label={playing ? "Пауза" : "Смотреть"}
+          onClick={() => setSpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length])}
+          className="flex h-8 w-10 shrink-0 items-center justify-center rounded-xl bg-bg-raised font-mono text-caption font-bold text-ink-chalk active:bg-white/5"
+          aria-label={`Скорость x${speed}`}
         >
-          {playing ? "❚❚" : "▶"}
+          x{speed}
         </button>
-        <div className="flex-1">
-          <Segmented label="Скорость" value={speed} options={SPEEDS.map((s) => ({ value: s, label: `x${s}` }))} onChange={setSpeed} />
-        </div>
       </div>
+      </div>
+
+      <div className="flex min-w-0 flex-col gap-2">
       {/* Tabs instead of a long page: the feed, stats, line-ups (and the
           live break's orders) under the pitch. */}
       <div className="flex gap-1 overflow-x-auto rounded-2xl bg-bg-base/40 p-1" role="tablist" aria-label="Разделы матча">
@@ -322,7 +374,8 @@ export function ReplayPlayer({ data, extraTabs, footer }: {
           </button>
         ))}
       </div>
-      <div role="tabpanel" aria-label={allTabs.find((t) => t.key === tab)?.label}>
+      <div role="tabpanel" aria-label={allTabs.find((t) => t.key === tab)?.label}
+        className="max-h-[36vh] overflow-y-auto overscroll-contain rounded-2xl">
         {tab === "feed" && (
           <Commentary events={events} shown={shown} home={data.home_name} away={data.away_name} replayable={has3d} onReplay={open3d} />
         )}
@@ -334,6 +387,7 @@ export function ReplayPlayer({ data, extraTabs, footer }: {
         {extraTabs?.find((t) => t.key === tab)?.content}
       </div>
       {footer}
+      </div>
       {replay3d !== null && (
         <Suspense fallback={
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#0b1424] text-caption text-white/80" role="status">
@@ -348,6 +402,21 @@ export function ReplayPlayer({ data, extraTabs, footer }: {
 }
 
 type ReplayEvent = CareerReplayResponse["events"][number];
+
+function eventIcon(e: ReplayEvent): string {
+  const p = (e.payload ?? {}) as Record<string, unknown>;
+  if (e.event_type === "goal") return "⚽";
+  if (p.card === "red") return "🟥";
+  if (p.card === "yellow") return "🟨";
+  if (e.event_type === "substitution") return "🔁";
+  if (p.set_piece === "corner") return "🚩";
+  if (e.event_type === "save") return "🧤";
+  if (e.event_type === "blocked") return "🛡";
+  if (e.event_type === "shot") return "↗";
+  if (e.event_type === "tackle_won") return "⚡";
+  if (e.event_type === "foul_stopped") return "✋";
+  return "•";
+}
 
 /** Team stats of what has been shown so far. */
 function MatchStats({ events, shown, possession, home, away, homeKit, awayKit }: {
@@ -445,7 +514,7 @@ const Commentary = memo(function Commentary({ events, shown, home, away, replaya
 }) {
   const items = shown.slice(-40).reverse();
   return (
-    <ol className="flex max-h-44 flex-col gap-1 overflow-y-auto rounded-2xl bg-bg-base/40 p-2" aria-label="Комментарии" aria-live="polite">
+    <ol className="flex flex-col gap-1 rounded-2xl bg-bg-base/40 p-2" aria-label="Комментарии" aria-live="polite">
       {items.length === 0 && <li className="text-caption text-ink-mist-dim">Матч начался</li>}
       {items.map((idx) => {
         const e = events[idx];
