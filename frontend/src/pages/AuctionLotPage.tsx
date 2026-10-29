@@ -130,8 +130,13 @@ export default function AuctionLotPage() {
             Копия #{card.serial_number} · продавец {lot.seller_name}
             {lot.seller_is_agent && <AgentBadge />}
           </p>
-          <span className="mt-1 w-fit rounded-full bg-white/5 px-2 py-0.5 text-caption text-ink-mist">{LOT_STATUS_LABELS[lot.status]}</span>
-          {active && (
+          <span className="mt-1 w-fit rounded-full bg-white/5 px-2 py-0.5 text-caption text-ink-mist">
+            {lot.kind === "fixed" && active ? "Купить сразу" : LOT_STATUS_LABELS[lot.status]}
+          </span>
+          {active && lot.kind === "fixed" && (
+            <p className="mt-1 text-caption text-ink-mist-dim">Снимется через {formatTimeLeft(left)}</p>
+          )}
+          {active && lot.kind !== "fixed" && (
             <p className={`mt-1 flex items-center gap-1 font-mono text-base font-bold ${left < 120_000 ? "text-red-300" : "text-ink-chalk"}`}>
               <IconClock size={14} />
               {formatTimeLeft(left)}
@@ -141,10 +146,14 @@ export default function AuctionLotPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <Stat label={lot.current_bid ? "Текущая ставка" : "Стартовая цена"} value={lot.final_price ?? lot.current_bid ?? lot.start_price} />
-        <Stat label="Купить сейчас" value={lot.buy_now_price} />
-      </div>
+      {lot.kind === "fixed" ? (
+        <Stat label={lot.status === "sold" ? "Продано за" : "Цена"} value={lot.final_price ?? lot.buy_now_price} />
+      ) : (
+        <div className="grid grid-cols-2 gap-2">
+          <Stat label={lot.current_bid ? "Текущая ставка" : "Стартовая цена"} value={lot.final_price ?? lot.current_bid ?? lot.start_price} />
+          <Stat label="Купить сейчас" value={lot.buy_now_price} />
+        </div>
+      )}
       {lot.leader_name && active && (
         <p className="text-sm text-ink-mist">
           Лидирует: <b className="text-ink-chalk">{lot.i_am_leading ? "ты" : lot.leader_name}</b>
@@ -163,7 +172,24 @@ export default function AuctionLotPage() {
 
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
 
-      {active && !lot.is_mine && (
+      {active && !lot.is_mine && lot.kind === "fixed" && (
+        <div className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4">
+          {!canTrade && <p className="text-sm text-amber-300">{info?.restriction ?? "Рынок сейчас закрыт"}</p>}
+          <button
+            disabled={!canTrade || busy || (lot.buy_now_price ?? 0) > balance}
+            onClick={() => setPending({ kind: "buy", amount: lot.buy_now_price! })}
+            className="flex items-center justify-center gap-1 rounded-xl bg-accent-green py-3 text-base font-bold text-bg-base active:scale-95 disabled:opacity-40"
+          >
+            Купить за {(lot.buy_now_price ?? 0).toLocaleString("ru-RU")}
+            <IconCoin size={13} />
+          </button>
+          {(lot.buy_now_price ?? 0) > balance && (
+            <p className="text-caption text-red-300">Не хватает монет (баланс {balance.toLocaleString("ru-RU")})</p>
+          )}
+        </div>
+      )}
+
+      {active && !lot.is_mine && lot.kind !== "fixed" && (
         <div className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4">
           {!canTrade && (
             <p className="text-sm text-amber-300">{info?.restriction ?? "Рынок сейчас закрыт"}</p>
@@ -221,7 +247,7 @@ export default function AuctionLotPage() {
         </div>
       )}
 
-      <section>
+      <section hidden={lot.kind === "fixed"}>
         <p className="mb-2 text-sm font-semibold text-ink-mist">История ставок</p>
         {!lot.bids?.length && <p className="text-xs text-ink-mist-dim">Ставок пока нет</p>}
         <div className="flex flex-col gap-1">

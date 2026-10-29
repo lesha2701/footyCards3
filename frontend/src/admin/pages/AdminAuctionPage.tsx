@@ -87,6 +87,7 @@ function Settings() {
             className={input}
           />
         </label>
+        {num("auction_fixed_duration_hours", "«Купить сразу»: лот висит, часов")}
         {num("auction_fee_pct", "Комиссия (сжигается), %")}
         {num("auction_min_increment_pct", "Мин. шаг ставки, %")}
         {num("auction_min_increment_coins", "Мин. шаг ставки, монет")}

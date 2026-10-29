@@ -184,6 +184,7 @@ export interface GameConfig {
   club_raid_reward_budget: number;
   auction_enabled: boolean;
   auction_durations_hours: number[];
+  auction_fixed_duration_hours: number;
   auction_fee_pct: number;
   auction_min_increment_pct: number;
   auction_min_increment_coins: number;

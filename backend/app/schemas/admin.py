@@ -952,6 +952,7 @@ class TaskChestConfigIn(BaseModel):
     pack_id: Optional[int] = None
     auction_enabled: bool = False
     auction_durations_hours: list[int] = [1, 6, 24]
+    auction_fixed_duration_hours: int = 72
     auction_fee_pct: int = 10
     auction_min_increment_pct: int = 5
     auction_min_increment_coins: int = 10
@@ -1700,6 +1701,7 @@ class GameConfigUpdate(BaseModel):
         default=None, min_length=1, max_length=6,
     )
     auction_fee_pct: Optional[int] = Field(default=None, ge=0, le=50)
+    auction_fixed_duration_hours: Optional[int] = Field(default=None, ge=1, le=720)
     auction_min_increment_pct: Optional[int] = Field(default=None, ge=0, le=100)
     auction_min_increment_coins: Optional[int] = Field(default=None, ge=1)
     auction_min_price: Optional[int] = Field(default=None, ge=1)

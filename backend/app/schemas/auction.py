@@ -46,6 +46,7 @@ class AuctionInfoOut(BaseModel):
 
     enabled: bool
     durations_hours: list[int]
+    fixed_duration_hours: int
     fee_pct: int
     min_increment_pct: int
     min_increment_coins: int
@@ -77,6 +78,7 @@ class AuctionLotOut(BaseModel):
     card: UserCardOut
     seller_id: int
     seller_name: str
+    kind: str = "auction"
     # Seller holds an active «Агентская лицензия» right now (badge «Агент»).
     seller_is_agent: bool = False
     status: str
@@ -111,9 +113,12 @@ class AuctionLotListOut(BaseModel):
 
 class AuctionLotCreateIn(BaseModel):
     user_card_id: int
+    # auction: start_price (+ optional buy_now_price) and duration_hours;
+    # fixed («Купить сразу»): start_price is the price, the rest is ignored.
+    kind: Literal["auction", "fixed"] = "auction"
     start_price: int = Field(gt=0, le=100_000_000)
     buy_now_price: Optional[int] = Field(default=None, gt=0, le=100_000_000)
-    duration_hours: int = Field(gt=0)
+    duration_hours: int = Field(default=0, ge=0)
     confirm_last_copy: bool = False
 
 

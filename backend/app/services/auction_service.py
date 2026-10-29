@@ -354,6 +354,7 @@ async def _hydrate(
             card=UserCardOut.model_validate(card),
             seller_id=lot.seller_id,
             seller_name=_name(users.get(lot.seller_id)),
+            kind=lot.kind,
             seller_is_agent=lot.seller_id in agents,
             status=lot.status,
             start_price=lot.start_price,
@@ -462,6 +463,7 @@ async def get_info(db: AsyncSession, user: User) -> AuctionInfoOut:
     return AuctionInfoOut(
         enabled=config.auction_enabled,
         durations_hours=[int(h) for h in (config.auction_durations_hours or [])],
+        fixed_duration_hours=config.auction_fixed_duration_hours,
         fee_pct=config.auction_fee_pct,
         min_increment_pct=config.auction_min_increment_pct,
         min_increment_coins=config.auction_min_increment_coins,
@@ -500,6 +502,7 @@ async def list_lots(
     min_stars: Optional[int] = None,
     min_price: Optional[int] = None,
     max_price: Optional[int] = None,
+    kind: Optional[str] = None,
     sort: str = "ending",
     limit: int = 30,
     offset: int = 0,
@@ -518,6 +521,8 @@ async def list_lots(
         query = query.where(or_(
             Player.display_name.ilike(pattern), Player.last_name.ilike(pattern), Player.first_name.ilike(pattern),
         ))
+    if kind:
+        query = query.where(AuctionLot.kind == kind)
     if rarity is not None:
         query = query.where(Player.rarity == rarity)
     if position:
@@ -596,9 +601,11 @@ async def create_lot(db: AsyncSession, user: User, payload: AuctionLotCreateIn) 
             "Ставить и покупать можно и без неё.",
             details={"rule": "agent_license_required"},
         )
+    fixed = payload.kind == "fixed"
     durations = [int(h) for h in (config.auction_durations_hours or [])]
-    if payload.duration_hours not in durations:
+    if not fixed and payload.duration_hours not in durations:
         raise ConflictError("Недопустимый срок лота", details={"allowed": durations})
+    duration_hours = max(1, config.auction_fixed_duration_hours) if fixed else payload.duration_hours
 
     card = await _lock_card(db, payload.user_card_id)
     if card is None:
@@ -638,7 +645,7 @@ async def create_lot(db: AsyncSession, user: User, payload: AuctionLotCreateIn) 
     floor = price_floor(card, config)
     if payload.start_price < floor:
         raise ConflictError(f"Стартовая цена не может быть ниже {floor}", details={"min_price": floor})
-    if payload.buy_now_price is not None and payload.buy_now_price <= payload.start_price:
+    if not fixed and payload.buy_now_price is not None and payload.buy_now_price <= payload.start_price:
         raise ConflictError("Цена «Купить сейчас» должна быть выше стартовой")
 
     copies = (
@@ -657,12 +664,13 @@ async def create_lot(db: AsyncSession, user: User, payload: AuctionLotCreateIn) 
         user_card_id=card.id,
         player_id=card.player_id,
         status=ACTIVE,
+        kind=payload.kind,
         start_price=payload.start_price,
-        buy_now_price=payload.buy_now_price,
+        buy_now_price=payload.start_price if fixed else payload.buy_now_price,
         bid_count=0,
         fee_pct=config.auction_fee_pct,
-        duration_hours=payload.duration_hours,
-        ends_at=_now() + timedelta(hours=payload.duration_hours),
+        duration_hours=duration_hours,
+        ends_at=_now() + timedelta(hours=duration_hours),
     )
     card.is_locked_in_trade = True
     db.add(lot)
@@ -704,6 +712,8 @@ async def place_bid(db: AsyncSession, user: User, lot_id: int, payload: AuctionB
         raise ConflictError("Торги по этому лоту закончились")
     if lot.seller_id == user.id:
         raise ForbiddenError("Нельзя делать ставку на свой лот")
+    if lot.kind == "fixed":
+        raise ConflictError("Это продажа по фиксированной цене — ставок нет, можно только купить")
     if lot.current_bidder_id == user.id:
         raise ConflictError("Твоя ставка и так лидирует")
     need = min_next_bid(lot, config)

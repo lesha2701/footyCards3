@@ -8,6 +8,7 @@ import CardSkillBadge from "@/components/cards/CardSkillBadge";
 import { IconClock, IconCoin, IconPlus, IconSearch, IconTag } from "@/components/icons";
 import CardsSectionTabs from "@/components/layout/CardsSectionTabs";
 import AgentBadge, { AgentIcon } from "@/components/market/AgentBadge";
+import LotTile from "@/components/market/LotTile";
 import {
   fetchAuctionInfo,
   fetchAuctionLots,
@@ -32,6 +33,12 @@ const SORTS: { value: NonNullable<AuctionLotFilters["sort"]>; label: string }[] 
   { value: "newest", label: "Новые" },
   { value: "price_asc", label: "Дешевле" },
   { value: "price_desc", label: "Дороже" },
+];
+
+const KINDS: { value: "" | "fixed" | "auction"; label: string }[] = [
+  { value: "", label: "Все" },
+  { value: "fixed", label: "Купить сразу" },
+  { value: "auction", label: "Аукционы" },
 ];
 
 const PAGE = 30;
@@ -100,8 +107,9 @@ export default function MarketPage() {
 
       {info && (
         <p className="text-caption text-ink-mist-dim">
-          Комиссия рынка {info.fee_pct}% сгорает с каждой продажи. Ставка сразу списывается с баланса и возвращается, если её
-          перебьют. Ставка в последние {Math.round(info.snipe_window_seconds / 60)} мин продлевает торги.
+          «Купить сразу» — карточка по фиксированной цене, покупка мгновенная. Аукцион — ставка сразу списывается с баланса и
+          возвращается, если её перебьют; ставка в последние {Math.round(info.snipe_window_seconds / 60)} мин продлевает торги.
+          Комиссия рынка {info.fee_pct}% сгорает с каждой продажи.
         </p>
       )}
     </div>
@@ -119,6 +127,7 @@ function MarketList() {
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [sort, setSort] = useState<NonNullable<AuctionLotFilters["sort"]>>("ending");
+  const [kind, setKind] = useState<"" | "fixed" | "auction">("");
   const [showFilters, setShowFilters] = useState(false);
   const [limit, setLimit] = useState(PAGE);
   const skills = useSkillCatalog().data?.skills;
@@ -136,6 +145,7 @@ function MarketList() {
     min_stars: minStars || undefined,
     min_price: minPrice ? Number(minPrice) : undefined,
     max_price: maxPrice ? Number(maxPrice) : undefined,
+    kind: kind || undefined,
     sort,
     limit,
   };
@@ -222,6 +232,18 @@ function MarketList() {
         </div>
       )}
 
+      <div className="grid grid-cols-3 gap-1 rounded-xl bg-white/5 p-1">
+        {KINDS.map((k) => (
+          <button
+            key={k.value}
+            onClick={() => setKind(k.value)}
+            className={`rounded-lg py-1.5 text-caption font-semibold ${kind === k.value ? "bg-white/15 text-ink-chalk" : "text-ink-mist-dim"}`}
+          >
+            {k.label}
+          </button>
+        ))}
+      </div>
+
       <div className="flex gap-1 overflow-x-auto">
         {SORTS.map((s) => (
           <button
@@ -238,9 +260,9 @@ function MarketList() {
       {data && !data.items.length && (
         <EmptyState icon={IconTag} title="Лотов нет" description="Попробуй изменить фильтры или выставь свою карточку" />
       )}
-      <div className="flex flex-col gap-2">
+      <div className="grid grid-cols-3 gap-2">
         {data?.items.map((lot) => (
-          <LotRow key={lot.id} lot={lot} now={now} onOpen={() => navigate(`/market/${lot.id}`)} />
+          <LotTile key={lot.id} lot={lot} now={now} onOpen={() => navigate(`/market/${lot.id}`)} />
         ))}
       </div>
       {data && data.total > data.items.length && (
@@ -308,7 +330,7 @@ export function LotRow({ lot, now, onOpen, showStatus = false }: { lot: AuctionL
         </p>
         <p className="mt-0.5 flex items-center gap-1 text-caption text-ink-mist-dim">
           <IconClock size={10} />
-          {active ? formatTimeLeft(left) : LOT_STATUS_LABELS[lot.status]}
+          {active ? (lot.kind === "fixed" ? "Купить сразу" : formatTimeLeft(left)) : LOT_STATUS_LABELS[lot.status]}
           {lot.bid_count > 0 && ` · ставок: ${lot.bid_count}`}
         </p>
       </div>

@@ -29,6 +29,8 @@ export default function NewAuctionLotPage() {
   const [search, setSearch] = useState("");
   const [card, setCard] = useState<UserCard | null>(null);
   const [startPrice, setStartPrice] = useState(0);
+  const [mode, setMode] = useState<"fixed" | "auction">("fixed");
+  const fixed = mode === "fixed";
   const [withBuyNow, setWithBuyNow] = useState(false);
   const [buyNow, setBuyNow] = useState(0);
   const [hours, setHours] = useState<number | null>(null);
@@ -61,9 +63,10 @@ export default function NewAuctionLotPage() {
     mutationFn: (confirmLastCopy: boolean) =>
       createAuctionLot({
         user_card_id: card!.id,
+        kind: mode,
         start_price: startPrice,
-        buy_now_price: withBuyNow ? buyNow : null,
-        duration_hours: duration!,
+        buy_now_price: !fixed && withBuyNow ? buyNow : null,
+        duration_hours: fixed ? 0 : duration!,
         confirm_last_copy: confirmLastCopy,
       }),
     onSuccess: (lot) => {
@@ -83,8 +86,8 @@ export default function NewAuctionLotPage() {
 
   const blocked = floor?.block_reason ?? null;
   const valid =
-    !!card && !!duration && !blocked && startPrice >= minPrice && (!withBuyNow || buyNow > startPrice);
-  const fee = info ? Math.floor(((withBuyNow ? buyNow : startPrice) * info.fee_pct) / 100) : 0;
+    !!card && (fixed || !!duration) && !blocked && startPrice >= minPrice && (fixed || !withBuyNow || buyNow > startPrice);
+  const fee = info ? Math.floor(((!fixed && withBuyNow ? buyNow : startPrice) * info.fee_pct) / 100) : 0;
 
   if (info && (!info.enabled || info.restriction)) {
     return (
@@ -173,8 +176,25 @@ export default function NewAuctionLotPage() {
           {blocked && <p className="rounded-xl bg-amber-500/10 px-3 py-2 text-sm text-amber-300">{blocked}</p>}
           {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
 
+          <div className="grid grid-cols-2 gap-1 rounded-xl bg-white/5 p-1">
+            {(["fixed", "auction"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                className={`rounded-lg py-2 text-xs font-semibold ${mode === m ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}
+              >
+                {m === "fixed" ? "Купить сразу" : "Аукцион"}
+              </button>
+            ))}
+          </div>
+          <p className="-mt-2 text-caption text-ink-mist-dim">
+            {fixed
+              ? `Фиксированная цена: первый, кто нажмёт «Купить», забирает карточку. Лот висит ${info?.fixed_duration_hours ?? 72} ч.`
+              : "Торги: игроки делают ставки, карточка уходит лучшей ставке по окончании срока."}
+          </p>
+
           <div>
-            <label className="mb-1 block text-sm font-semibold text-ink-mist">Стартовая цена</label>
+            <label className="mb-1 block text-sm font-semibold text-ink-mist">{fixed ? "Цена" : "Стартовая цена"}</label>
             <NumberInput
               min={minPrice}
               value={startPrice}
@@ -187,7 +207,7 @@ export default function NewAuctionLotPage() {
             </p>
           </div>
 
-          <div>
+          {!fixed && <div>
             <label className="flex items-center gap-2 text-sm font-semibold text-ink-mist">
               <input type="checkbox" checked={withBuyNow} onChange={(e) => setWithBuyNow(e.target.checked)} />
               Цена «Купить сейчас»
@@ -203,9 +223,9 @@ export default function NewAuctionLotPage() {
                 {buyNow <= startPrice && <p className="mt-1 text-caption text-red-300">Должна быть выше стартовой цены</p>}
               </>
             )}
-          </div>
+          </div>}
 
-          <div>
+          {!fixed && <div>
             <p className="mb-1 text-sm font-semibold text-ink-mist">Срок</p>
             <div className="flex gap-2">
               {info?.durations_hours.map((h) => (
@@ -218,7 +238,7 @@ export default function NewAuctionLotPage() {
                 </button>
               ))}
             </div>
-          </div>
+          </div>}
 
           {info && (
             <p className="rounded-xl bg-white/5 px-3 py-2 text-caption text-ink-mist">
@@ -243,7 +263,9 @@ export default function NewAuctionLotPage() {
         description={
           lastCopy
             ? "Если лот продадут, этого игрока в коллекции не останется. Всё равно выставить?"
-            : `${card?.player.display_name ?? ""}: старт ${startPrice.toLocaleString("ru-RU")}${withBuyNow ? `, купить сейчас ${buyNow.toLocaleString("ru-RU")}` : ""}, ${duration ?? ""} ч. При продаже комиссия около ${fee.toLocaleString("ru-RU")} сгорит.`
+            : fixed
+              ? `${card?.player.display_name ?? ""}: купить сразу за ${startPrice.toLocaleString("ru-RU")}, ${info?.fixed_duration_hours ?? 72} ч. При продаже комиссия ${fee.toLocaleString("ru-RU")} сгорит.`
+              : `${card?.player.display_name ?? ""}: старт ${startPrice.toLocaleString("ru-RU")}${withBuyNow ? `, купить сейчас ${buyNow.toLocaleString("ru-RU")}` : ""}, ${duration ?? ""} ч. При продаже комиссия около ${fee.toLocaleString("ru-RU")} сгорит.`
         }
         confirmLabel="Выставить"
         onConfirm={() => { setConfirmOpen(false); createMutation.mutate(lastCopy); }}

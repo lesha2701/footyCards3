@@ -500,3 +500,34 @@ async def test_http_flow(client, db_session, config):
     assert flags.json()["auction_enabled"] is True
     lots = await client.get("/api/v1/auction/lots", headers=headers)
     assert lots.status_code == 200 and lots.json()["total"] == 0
+
+
+async def test_fixed_price_lot_buy_only(db_session, config):
+    seller, buyer = await _user(db_session, balance=0), await _user(db_session, balance=1000)
+    card = await _card(db_session, seller, quick_sell=50)  # value 100
+    with pytest.raises(ConflictError):  # the price still can't go below the card's value
+        await _list(db_session, seller, card, start=99, kind="fixed")
+    lot = await _list(db_session, seller, card, start=400, kind="fixed", hours=0)
+    assert (lot.kind, lot.buy_now_price, lot.duration_hours) == ("fixed", 400, 72)
+
+    with pytest.raises(ConflictError):  # no bidding on a fixed sale
+        await _bid(db_session, buyer, lot.id, 400)
+    fixed_only = await auction_service.list_lots(db_session, buyer, kind="fixed")
+    auctions_only = await auction_service.list_lots(db_session, buyer, kind="auction")
+    assert [l.id for l in fixed_only.items] == [lot.id] and auctions_only.total == 0
+
+    res = await auction_service.buy_now(db_session, buyer, lot.id, AuctionBuyNowIn(expected_price=400))
+    assert res.lot.status == "sold" and res.new_balance == 600
+    assert await _balance(db_session, seller.id) == 360  # 10 % burnt
+    await db_session.refresh(card)
+    assert card.owner_id == buyer.id
+
+
+async def test_fixed_price_lot_expires_back_to_seller(db_session, config):
+    seller = await _user(db_session)
+    card = await _card(db_session, seller)
+    lot = await _list(db_session, seller, card, start=500, kind="fixed")
+    await _expire(db_session, lot.id)
+    assert await auction_service.sweep_due(db_session) == 1
+    await db_session.refresh(card)
+    assert card.owner_id == seller.id and not card.is_locked_in_trade

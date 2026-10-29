@@ -18,6 +18,8 @@ export interface AgentLicense {
 export interface AuctionInfo {
   enabled: boolean;
   durations_hours: number[];
+  /** «Купить сразу» lots stay this long. */
+  fixed_duration_hours: number;
   fee_pct: number;
   min_increment_pct: number;
   min_increment_coins: number;
@@ -50,6 +52,8 @@ export interface AuctionLot {
   seller_id: number;
   seller_name: string;
   seller_is_agent: boolean;
+  /** auction = bidding; fixed = «Купить сразу» (price only, no bids). */
+  kind: "auction" | "fixed";
   status: AuctionLotStatus;
   start_price: number;
   buy_now_price: number | null;
@@ -81,6 +85,7 @@ export interface AuctionLotFilters {
   min_stars?: number;
   min_price?: number;
   max_price?: number;
+  kind?: "auction" | "fixed";
   sort?: "ending" | "newest" | "price_asc" | "price_desc";
   limit?: number;
   offset?: number;
@@ -142,6 +147,7 @@ export async function createAgentLicenseInvoice(): Promise<StarsInvoiceCreate> {
 
 export async function createAuctionLot(payload: {
   user_card_id: number;
+  kind: "auction" | "fixed";
   start_price: number;
   buy_now_price?: number | null;
   duration_hours: number;

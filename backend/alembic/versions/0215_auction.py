@@ -21,6 +21,7 @@ TRANSACTION_TYPES = ("auction_bid", "auction_refund", "auction_buy_now", "auctio
 NOTIFICATION_TYPES = ("auction_outbid", "auction_won", "auction_sold", "auction_expired", "auction_removed")
 CONFIG_INT_COLUMNS = (
     ("auction_fee_pct", "10"),
+    ("auction_fixed_duration_hours", "72"),
     ("auction_min_increment_pct", "5"),
     ("auction_min_increment_coins", "10"),
     ("auction_min_price", "10"),
@@ -53,6 +54,7 @@ def upgrade() -> None:
         sa.Column("user_card_id", sa.Integer(), sa.ForeignKey("user_cards.id", ondelete="CASCADE"), nullable=False),
         sa.Column("player_id", sa.Integer(), sa.ForeignKey("players.id", ondelete="RESTRICT"), nullable=False),
         sa.Column("status", sa.String(16), nullable=False, server_default="active"),
+        sa.Column("kind", sa.String(16), nullable=False, server_default="auction"),
         sa.Column("start_price", sa.Integer(), nullable=False),
         sa.Column("buy_now_price", sa.Integer(), nullable=True),
         sa.Column("current_bid", sa.Integer(), nullable=True),
@@ -68,9 +70,13 @@ def upgrade() -> None:
         sa.Column("fee_amount", sa.Integer(), nullable=True),
         sa.Column("close_reason", sa.String(255), nullable=True),
         sa.CheckConstraint("start_price > 0", name="ck_auction_lots_start_price"),
-        sa.CheckConstraint("buy_now_price IS NULL OR buy_now_price > start_price", name="ck_auction_lots_buy_now_price"),
+        sa.CheckConstraint(
+            "buy_now_price IS NULL OR buy_now_price > start_price OR (kind = 'fixed' AND buy_now_price = start_price)",
+            name="ck_auction_lots_buy_now_price",
+        ),
+        sa.CheckConstraint("kind IN ('auction', 'fixed')", name="ck_auction_lots_kind"),
     )
-    for column in ("seller_id", "user_card_id", "player_id", "status", "current_bidder_id", "ends_at", "created_at", "winner_id"):
+    for column in ("seller_id", "user_card_id", "player_id", "status", "kind", "current_bidder_id", "ends_at", "created_at", "winner_id"):
         op.create_index(f"ix_auction_lots_{column}", "auction_lots", [column])
     op.create_index(
         "uq_auction_lots_active_card", "auction_lots", ["user_card_id"], unique=True,
@@ -129,7 +135,7 @@ def downgrade() -> None:
     op.drop_index("ix_auction_bids_lot_id", table_name="auction_bids")
     op.drop_table("auction_bids")
     op.drop_index("uq_auction_lots_active_card", table_name="auction_lots")
-    for column in ("seller_id", "user_card_id", "player_id", "status", "current_bidder_id", "ends_at", "created_at", "winner_id"):
+    for column in ("seller_id", "user_card_id", "player_id", "status", "kind", "current_bidder_id", "ends_at", "created_at", "winner_id"):
         op.drop_index(f"ix_auction_lots_{column}", table_name="auction_lots")
     op.drop_table("auction_lots")
     # Postgres cannot drop an enum value — the auction_* values stay (same as

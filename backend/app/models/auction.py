@@ -29,6 +29,9 @@ class AuctionLot(Base):
     # Denormalized from the card for search (the card can't change while listed).
     player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="RESTRICT"), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(16), default="active", nullable=False, index=True)
+    # auction = bidding (+ optional «Купить сейчас»); fixed = «Купить сразу»
+    # only: start_price == buy_now_price, no bids.
+    kind: Mapped[str] = mapped_column(String(16), default="auction", nullable=False, index=True)
     start_price: Mapped[int] = mapped_column(Integer, nullable=False)
     buy_now_price: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     current_bid: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -53,8 +56,11 @@ class AuctionLot(Base):
         ),
         CheckConstraint("start_price > 0", name="ck_auction_lots_start_price"),
         CheckConstraint(
-            "buy_now_price IS NULL OR buy_now_price > start_price", name="ck_auction_lots_buy_now_price",
+            "buy_now_price IS NULL OR buy_now_price > start_price "
+            "OR (kind = 'fixed' AND buy_now_price = start_price)",
+            name="ck_auction_lots_buy_now_price",
         ),
+        CheckConstraint("kind IN ('auction', 'fixed')", name="ck_auction_lots_kind"),
     )
 
 
