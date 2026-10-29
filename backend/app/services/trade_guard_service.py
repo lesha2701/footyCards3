@@ -157,6 +157,11 @@ async def rules_for(db: AsyncSession, user: User, config: GameConfig) -> dict:
     }
 
 
+def _coins(value: int) -> str:
+    """12000 -> «12 000» (narrow no-break space, as ru-RU formats it)."""
+    return f"{value:,}".replace(",", " ")
+
+
 async def ensure_value_rules(
     db: AsyncSession, config: GameConfig, sender: User, receiver: User,
     offered_cards: list, requested_cards: list, sender_coins: int, receiver_coins: int, *, actor_is_sender: bool,
@@ -201,7 +206,7 @@ async def ensure_value_rules(
         return
     mine, theirs = (sent, got) if actor_is_sender else (got, sent)
     raise ConflictError(
-        f"Неравноценный обмен: ты отдаёшь карточки на {mine} монет, а получаешь на {theirs}. "
+        f"Неравноценный обмен: ты отдаёшь карточки на {_coins(mine)} монет, а получаешь на {_coins(theirs)}. "
         f"Ценность одной стороны должна быть не меньше {ratio}% другой.",
         details={"rule": "trade_unequal_value", "give": mine, "get": theirs, "min_ratio_pct": ratio},
     )
