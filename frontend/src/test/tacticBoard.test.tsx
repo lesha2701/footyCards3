@@ -79,20 +79,24 @@ describe("tactics board", () => {
     return { setTactic, setMentality };
   };
 
-  it("a tactic chip opens its choice with hints; the mentality is a thermometer", () => {
+  it("a setting on the pitch opens its options with the hint; the mentality is a thermometer", () => {
     const { setTactic, setMentality } = board();
     fireEvent.click(screen.getByRole("button", { name: "Направление атаки: Фланги" }));
     const options = screen.getByRole("radiogroup", { name: "Направление атаки" });
-    expect(within(options).getByRole("radio", { name: /Фланги/ })).toHaveAttribute("aria-checked", "true");
-    expect(options).toHaveTextContent("через центр");
-    fireEvent.click(within(options).getByRole("radio", { name: /Центр/ }));
+    expect(within(options).getByRole("radio", { name: "Фланги" })).toHaveAttribute("aria-checked", "true");
+    expect(options).toHaveTextContent("атака флангами");
+    fireEvent.click(within(options).getByRole("radio", { name: "Центр" }));
+    // Picking closes the options.
+    expect(screen.queryByRole("radiogroup", { name: "Направление атаки" })).toBeNull();
     expect(setTactic).toHaveBeenCalledWith({ direction: "center", block: "high" });
     fireEvent.click(screen.getByRole("radio", { name: "Атакующий" }));
     expect(setMentality).toHaveBeenCalledWith("ATTACKING");
   });
 
-  it("a player card: energy, the line's role, marking the star and set pieces, saved at once", async () => {
+  it("the roles view: the line-up on the pitch; a player card with energy, role, marking and set pieces", async () => {
     board();
+    expect(screen.queryByRole("button", { name: "Крайнев, LW" })).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Роли игроков" }));
     fireEvent.click(screen.getByRole("button", { name: "Крайнев, LW" }));
     expect(screen.getByLabelText("Энергия 20% — сильно устал")).toBeInTheDocument();
     fireEvent.click(within(screen.getByRole("radiogroup", { name: "Роль: Крайние полузащитники" })).getByRole("radio", { name: /Срезка в центр/ }));
@@ -106,6 +110,7 @@ describe("tactics board", () => {
 
   it("the keeper's card has no marking or set pieces", () => {
     board();
+    fireEvent.click(screen.getByRole("tab", { name: "Роли игроков" }));
     fireEvent.click(screen.getByRole("button", { name: "Вратарёв, GK" }));
     expect(screen.queryByRole("button", { name: /Опекать звезду/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Угловые/ })).toBeNull();

@@ -15,13 +15,13 @@ export const LINE_Y: Record<string, { DEF: number; MID: number; FWD: number }> =
 };
 
 /** The board's chips: which axis, its group and a glyph. */
-export const BOARD_AXES: { key: string; group: "attack" | "defence"; icon: string }[] = [
-  { key: "direction", group: "attack", icon: "↗" },
-  { key: "buildup", group: "attack", icon: "⇢" },
-  { key: "on_win", group: "attack", icon: "⚡" },
-  { key: "block", group: "defence", icon: "▬" },
-  { key: "on_loss", group: "defence", icon: "⟲" },
-  { key: "tackling", group: "defence", icon: "🦶" },
+export const BOARD_AXES: { key: string; group: "attack" | "defence"; icon: string; short: string }[] = [
+  { key: "direction", group: "attack", icon: "↗", short: "Атака" },
+  { key: "buildup", group: "attack", icon: "⇢", short: "Пас" },
+  { key: "on_win", group: "attack", icon: "⚡", short: "После отбора" },
+  { key: "block", group: "defence", icon: "▬", short: "Линия обороны" },
+  { key: "on_loss", group: "defence", icon: "⟲", short: "После потери" },
+  { key: "tackling", group: "defence", icon: "🦶", short: "Отбор" },
 ];
 
 function spread(count: number): number[] {

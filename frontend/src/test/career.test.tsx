@@ -164,10 +164,9 @@ describe("CareerPage", () => {
     expect(screen.getByText("+4.0%")).toBeInTheDocument();
 
     // Change one axis: the preview comes from the server, familiarity keeps 80%.
-    // On the board: the chip opens the choice for that axis.
+    // On the board: the setting on the pitch opens its options right there.
     fireEvent.click(screen.getByRole("button", { name: /^Построение атаки:/ }));
-    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Построение атаки" })).getByRole("radio", { name: /Прямой пас/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Закрыть" }));
+    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Построение атаки" })).getByRole("radio", { name: "Прямой пас" }));
     expect(screen.getByLabelText("Тактика")).toHaveValue("CUSTOM");
     expect(await screen.findByText("Прямой пас за спину высокой линии")).toBeInTheDocument();
     expect(previewCareerTactic).toHaveBeenCalledWith({ ...POSSESSION, buildup: "direct" });
