@@ -24,6 +24,7 @@ import {
   revealedEvents,
   rosterAt,
   secondHalfFrame,
+  segmentKindAt,
   type Moment,
   type Point,
 } from "@/lib/matchReplay";
@@ -182,6 +183,9 @@ export function ReplayPlayer({ data, onTactics, onSubs, footer }: {
             {data.live && !ended && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" />}
             <span ref={clockRef}>1'</span>
             <span className="text-ink-mist-dim">· {halfLabel}</span>
+            {!ended && segmentKindAt(replay, frame) === "bridge" && (
+              <span className="rounded bg-white/10 px-1 text-ink-chalk" title="Между моментами время ускорено">⏩ перемотка</span>
+            )}
           </p>
         </div>
         <p className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-sm font-semibold text-ink-chalk">

@@ -19,6 +19,7 @@ import {
   moments,
   rosterAt,
   secondHalfFrame,
+  segmentKindAt,
 } from "@/lib/matchReplay";
 
 // The 3D viewer is a lazy three.js chunk; jsdom has no WebGL.
@@ -135,6 +136,13 @@ describe("matchReplay timeline", () => {
     expect(after.score).toEqual([1, 0]);
     expect(after.shots).toEqual([1, 1]);
     expect(after.possession).toEqual([71, 29]); // 5 of 7 frames held by home
+  });
+
+  it("knows the accelerated stretches between moments", () => {
+    expect(segmentKindAt(replay, 0)).toBe("kickoff");
+    expect(segmentKindAt(replay, 3)).toBe("bridge");
+    expect(segmentKindAt(replay, 5)).toBe("goal");
+    expect(segmentKindAt(replay, 99)).toBeNull();
   });
 
   it("substitutions, passes and moments", () => {

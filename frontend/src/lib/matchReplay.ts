@@ -314,3 +314,10 @@ export function secondHalfFrame(replay: CareerReplay): number | null {
   const kickoffs = replay.segments.filter((s) => s[0] === "kickoff");
   return kickoffs.length > 1 ? kickoffs[1][1] : null;
 }
+
+/** Kind of the segment `frame` belongs to ("bridge" = the accelerated play
+ * between two moments). */
+export function segmentKindAt(replay: CareerReplay, frame: number): string | null {
+  for (const [kind, f0, n] of replay.segments) if (f0 <= frame && frame < f0 + n) return kind;
+  return null;
+}

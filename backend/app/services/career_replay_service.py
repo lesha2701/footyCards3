@@ -38,6 +38,7 @@ NO_HOLDER = 255
 HALF_TIME = 45
 EPISODE_MS = 500                # playback at x1: an episode runs in real time
 BRIDGE_MS = 300                 # bridges are accelerated
+BRIDGE_MOVE_S = 1.5             # most game seconds of running per bridge frame: a fast-forward, not teleports
 HALF_BUDGET_S = (90, 150)       # real seconds per half at x1 (3-5 minutes a match)
 VERSION = 2
 DRIBBLE = 0.6                   # a held ball: metres in front of the holder, the way he runs
@@ -334,7 +335,7 @@ class Director:
                     tx, ty = self.at(s.side, tu, line - 0.4)
             dx, dy = tx - self.pos[i][0], ty - self.pos[i][1]
             dist = math.hypot(dx, dy)
-            reach = speed * self.dt
+            reach = speed * min(self.dt, BRIDGE_MOVE_S)
             if dist > reach:
                 dx, dy = dx / dist * reach, dy / dist * reach
             self.pos[i][0] = _clamp(self.pos[i][0] + dx, 0.0, WIDTH)
@@ -439,7 +440,7 @@ class Director:
         for _ in range(n):
             self.tick(self.ball)
 
-    def gather(self, slots: list, least: int, most: int = 16) -> None:
+    def gather(self, slots: list, least: int, most: int = 10) -> None:
         """A dead ball until the given players reach their override targets
         (a set piece waits for its taker), at least `least` frames."""
         self.holder = None
@@ -633,7 +634,10 @@ def _finish_shot(d: Director, side: str, shooter: int, e: dict, idx: int) -> Non
         d.kick(target, 2)
         d.mark(idx)
         d.ov.pop(keeper, None)
-        d.hold(keeper, 3)
+        if e.get("_parry"):
+            _out_for_corner(d, side)
+        else:
+            d.hold(keeper, 3)
     elif etype == "blocked":
         gx, gy = _goal_mouth(d, side)
         mx, my = (d.ball[0] + gx) / 2, (d.ball[1] + gy) / 2
@@ -643,8 +647,11 @@ def _finish_shot(d: Director, side: str, shooter: int, e: dict, idx: int) -> Non
         d.kick(d.pos[blocker], 1)
         d.mark(idx)
         d.ov.pop(blocker, None)
-        bu, bv = to_own(side, *d.ball)
-        d.kick(d.at(side, bu + d.rng.uniform(-10, 10), bv - d.rng.uniform(6, 12)), 2, keep_phase=False)
+        if e.get("_parry"):
+            _out_for_corner(d, side)
+        else:
+            bu, bv = to_own(side, *d.ball)
+            d.kick(d.at(side, bu + d.rng.uniform(-10, 10), bv - d.rng.uniform(6, 12)), 2, keep_phase=False)
     else:  # shot: off target
         d.kick(_goal_mouth(d, side, wide=True), 2)
         d.mark(idx)
@@ -791,7 +798,10 @@ def _finish_set_piece_shot(d: Director, side: str, shooter: int, e: dict, idx: i
         d.mark(idx)
         d.ov.clear()
         d.limit = None
-        d.hold(keeper, 3)
+        if e.get("_parry"):
+            _out_for_corner(d, side)
+        else:
+            d.hold(keeper, 3)
     else:
         d.kick(_goal_mouth(d, side, wide=True), 2)
         d.mark(idx)
@@ -826,11 +836,25 @@ def _substitution(d: Director, e: dict, idx: int, players: list) -> None:
     d.mark(idx)
 
 
+def _out_for_corner(d: Director, side: str) -> None:
+    """The keeper (or the blocker) turns the ball behind his goal line,
+    wide of the post: the corner that the log has next."""
+    u = WIDTH / 2 + d.rng.choice((-1, 1)) * d.rng.uniform(5.0, 12.0)
+    d.kick(to_pitch(side, u, LENGTH), 2, keep_phase=False)
+    d.dead(1)
+
+
 def _episode(d: Director, group: list, detail: int) -> None:
     """One moment: the first chance event gets a build-up; the events that
-    follow it in the same minute (defence, set pieces) chain from there."""
+    follow it in the same minute (defence, set pieces) chain from there. A
+    save or block right before a corner of the same side is turned behind
+    for it — the keeper doesn't catch it and then kick it out himself."""
     first = True
-    for idx, e in group:
+    for k, (idx, e) in enumerate(group):
+        nxt = group[k + 1][1] if k + 1 < len(group) else None
+        if (e.get("event_type") in ("save", "blocked") and nxt is not None
+                and _payload(nxt).get("set_piece") == "corner" and nxt.get("team") == e.get("team")):
+            e = {**e, "_parry": True}
         etype = e.get("event_type")
         p = _payload(e)
         side = e.get("team")

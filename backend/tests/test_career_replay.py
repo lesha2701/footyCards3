@@ -313,3 +313,35 @@ def test_no_one_is_offside_when_a_pass_is_played():
             assert own(fr["players"][receiver][1]) <= line + 1.0, (seed, f0, own(fr["players"][receiver][1]), line)
             checked += 1
     assert checked > 100
+
+
+def test_a_save_before_a_corner_is_turned_behind_not_held():
+    """Save (or block) then a corner of the same side in that minute: the
+    ball goes behind the goal line, the keeper never holds it before."""
+    events = [
+        {"minute": 13, "event_type": "save", "team": "b", "payload": {"shot_type": "long_range", "action": "shoot", "shooter": "x"}},
+        {"minute": 13, "event_type": "shot", "team": "b", "payload": {"action": "header", "set_piece": "corner", "shooter": "y"}},
+    ]
+    match, lineups = _played(1)
+    rep = replay.build_replay(7, events, lineups)
+    frames = replay.decode_frames(rep)
+    save = next(f for f, i in rep["marks"] if i == 0)
+    corner = next(f for f, i in rep["marks"] if i == 1)
+    keeper = 0  # b attacks the home goal (y = 0)
+    assert all(frames[f]["holder"] != keeper for f in range(save, corner))
+    assert any(frames[f]["ball"][1] <= 0.5 for f in range(save, corner))
+
+
+def test_bridges_fast_forward_without_teleports():
+    """Accelerated play between moments: nobody covers more than a sprint
+    of BRIDGE_MOVE_S seconds in one frame."""
+    match, lineups = _played(1001)
+    rep = replay.build_replay(3, match.event_log, lineups)
+    frames = replay.decode_frames(rep)
+    limit = 9.0 * replay.BRIDGE_MOVE_S + 1.0
+    for kind, f0, n, *_ in rep["segments"]:
+        if kind != "bridge":
+            continue
+        for f in range(max(1, f0), f0 + n):
+            for (x0, y0), (x1, y1) in zip(frames[f - 1]["players"], frames[f]["players"]):
+                assert ((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5 <= limit
