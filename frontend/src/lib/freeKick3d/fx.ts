@@ -3,7 +3,17 @@
  * into it, so the outcome stays the pure function's alone. */
 import { BALL_RADIUS, GOAL_HALF_WIDTH, GOAL_HEIGHT, type ShotTrajectory } from "./trajectory";
 
+/** The goal's net: a short flat roof from the crossbar back to
+ * NET_TOP_DEPTH, then the back net slopes down to the grass NET_DEPTH
+ * behind the line (a stadium goal, not a box). */
 export const NET_DEPTH = 2;
+export const NET_TOP_DEPTH = 0.8;
+
+/** How far back the back net is at height `y` (z of the net, negative). */
+export function netBackZ(y: number): number {
+  const k = Math.min(1, Math.max(0, y / GOAL_HEIGHT));
+  return -NET_DEPTH + k * (NET_DEPTH - NET_TOP_DEPTH);
+}
 
 /** Slow motion window before a goal or a save (s of shot time). */
 const SLOWMO_WINDOW = 0.28;

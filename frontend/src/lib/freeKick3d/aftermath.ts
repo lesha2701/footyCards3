@@ -2,7 +2,7 @@
  * bouncing off the wall or the keeper, rolling out wide. Purely cosmetic
  * (the outcome is already set), but a pure function too: no physics engine
  * at runtime, nothing that can crash or drift between devices. */
-import { NET_DEPTH } from "./fx";
+import { netBackZ } from "./fx";
 import {
   BALL_RADIUS,
   GOAL_HALF_WIDTH,
@@ -85,10 +85,13 @@ export function aftermathAt(a: Aftermath, t: number): Vec3 {
 /** Inside the goal: back, sides and roof of the net catch the ball. */
 function net(p: Vec3, v: Vec3) {
   const r = BALL_RADIUS;
-  const back = -NET_DEPTH + r;
+  // The back net slopes: lower down it's further back.
+  const back = netBackZ(p.y) + r;
   if (p.z < back) {
     p.z = back;
-    if (v.z < 0) v.z = -v.z * NET_KEEP;
+    // Dead: the slope would otherwise throw the ball forward, out of the
+    // goal, as it drops — it sags into the net instead.
+    if (v.z < 0) v.z = -0.15;
     v.x *= NET_FRICTION;
     v.y = Math.min(v.y, 0);
   }

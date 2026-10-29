@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, type MutableRefObject }
 import * as THREE from "three";
 
 import { aftermathAt, simulateAftermath } from "@/lib/freeKick3d/aftermath";
-import { NET_DEPTH, keeperGoesFor, netBulge, netImpact, reactionTime, replayTimeScale } from "@/lib/freeKick3d/fx";
+import { NET_DEPTH, NET_TOP_DEPTH, keeperGoesFor, netBulge, netImpact, reactionTime, replayTimeScale } from "@/lib/freeKick3d/fx";
 import { playFreeKickSfx } from "@/lib/freeKick3d/sfx";
 import {
   BALL_RADIUS,
@@ -27,7 +27,7 @@ import { KICK } from "./kickStyles";
 import { LOOKS } from "./looks";
 import { KeeperModel, KickerModel, WallPlayerModel, type PlayerClock } from "./Players";
 import { Stadium, type Hype, type Quality } from "./Stadium";
-import { ballGeometry, netTexture } from "./textures";
+import { NET_TILE, ballGeometry, netTexture } from "./textures";
 
 export type LiveShot = { id: number; kick: KickParams; trajectory: ShotTrajectory };
 
@@ -528,12 +528,62 @@ function Footballer({
 const NET_SEG_X = 36;
 const NET_SEG_Y = 12;
 
+/** The back net's slope: from the roof's rear edge down to the grass. */
+const NET_SLOPE_RISE = NET_DEPTH - NET_TOP_DEPTH;
+const NET_SLOPE_LEN = Math.hypot(GOAL_HEIGHT, NET_SLOPE_RISE);
+const NET_SLOPE_ANGLE = Math.atan2(NET_SLOPE_RISE, GOAL_HEIGHT);
+
+/** A net texture repeated so its cells come out the same size on a surface
+ * `uSpan` × `vSpan` metres (UVs 0..1), or with UVs in metres (spans 1). */
+function useNet(uSpan: number, vSpan: number) {
+  return useMemo(() => {
+    const tex = netTexture();
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(uSpan / NET_TILE.w, vSpan / NET_TILE.h);
+    return tex;
+  }, [uSpan, vSpan]);
+}
+
+/** A thin tube from `a` to `b` (the goal's rear supports). */
+function Tube({ a, b, r = 0.028 }: { a: [number, number, number]; b: [number, number, number]; r?: number }) {
+  const { position, quaternion, length } = useMemo(() => {
+    const va = new THREE.Vector3(...a);
+    const vb = new THREE.Vector3(...b);
+    const dir = vb.clone().sub(va);
+    return {
+      position: va.clone().add(vb).multiplyScalar(0.5),
+      quaternion: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize()),
+      length: dir.length(),
+    };
+    // The points are literals per call site; their values are the identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [a.join(), b.join()]);
+  return (
+    <mesh position={position} quaternion={quaternion} castShadow>
+      <cylinderGeometry args={[r, r, length, 8]} />
+      <meshStandardMaterial color="#dfe3ea" roughness={0.4} metalness={0.2} />
+    </mesh>
+  );
+}
+
 function GoalFrame({ stage }: { stage: MutableRefObject<Stage> }) {
-  const net = useMemo(netTexture, []);
+  const w = GOAL_HALF_WIDTH * 2;
+  const backNet = useNet(w, NET_SLOPE_LEN);
+  const roofNet = useNet(w, NET_TOP_DEPTH);
+  const sideNet = useNet(1, 1); // the side shapes carry UVs in metres
   const back = useRef<THREE.Mesh>(null);
   const resting = useRef<Float32Array | null>(null);
   const postH = GOAL_HEIGHT + POST_RADIUS;
-  const w = GOAL_HALF_WIDTH * 2;
+  // A side net: the goal's profile — post, roof, slope, grass.
+  const side = useMemo(() => {
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0);
+    shape.lineTo(0, GOAL_HEIGHT);
+    shape.lineTo(NET_TOP_DEPTH, GOAL_HEIGHT);
+    shape.lineTo(NET_DEPTH, 0);
+    shape.closePath();
+    return new THREE.ShapeGeometry(shape);
+  }, []);
 
   useFrame((state) => {
     const mesh = back.current;
@@ -550,17 +600,18 @@ function GoalFrame({ stage }: { stage: MutableRefObject<Stage> }) {
       }
       return;
     }
-    // Plane local (x, y) ↔ goal (x, y − h/2); bulge pushes the net back (−z).
+    // Plane local (x, along the slope) ↔ goal (x, height); the bulge pushes
+    // the net outwards (local −z).
     for (let i = 0; i < pos.count; i++) {
       const x = rest[i * 3];
-      const y = rest[i * 3 + 1] + GOAL_HEIGHT / 2;
+      const y = ((rest[i * 3 + 1] + NET_SLOPE_LEN / 2) / NET_SLOPE_LEN) * GOAL_HEIGHT;
       pos.setZ(i, -Math.max(0, netBulge(x - ripple.x, y - ripple.y, age)));
     }
     pos.needsUpdate = true;
   });
 
-  const netMaterial = (
-    <meshBasicMaterial map={net} transparent alphaTest={0.3} side={THREE.DoubleSide} color="#e5e7eb" />
+  const netMaterial = (tex: THREE.Texture) => (
+    <meshBasicMaterial map={tex} transparent alphaTest={0.25} side={THREE.DoubleSide} color="#eef1f5" />
   );
 
   return (
@@ -576,20 +627,33 @@ function GoalFrame({ stage }: { stage: MutableRefObject<Stage> }) {
         <cylinderGeometry args={[POST_RADIUS, POST_RADIUS, w + POST_RADIUS * 2, 12]} />
         <meshStandardMaterial color="#f8fafc" roughness={0.25} metalness={0.1} />
       </mesh>
-      <mesh ref={back} position={[0, GOAL_HEIGHT / 2, -NET_DEPTH]}>
-        <planeGeometry args={[w, GOAL_HEIGHT, NET_SEG_X, NET_SEG_Y]} />
-        {netMaterial}
+      {/* Back net: sloping from the roof's rear edge down to the grass. */}
+      <mesh
+        ref={back}
+        position={[0, GOAL_HEIGHT / 2, -(NET_DEPTH + NET_TOP_DEPTH) / 2]}
+        rotation-x={NET_SLOPE_ANGLE}
+      >
+        <planeGeometry args={[w, NET_SLOPE_LEN, NET_SEG_X, NET_SEG_Y]} />
+        {netMaterial(backNet)}
       </mesh>
-      <mesh position={[0, GOAL_HEIGHT, -NET_DEPTH / 2]} rotation-x={Math.PI / 2}>
-        <planeGeometry args={[w, NET_DEPTH]} />
-        {netMaterial}
+      <mesh position={[0, GOAL_HEIGHT, -NET_TOP_DEPTH / 2]} rotation-x={Math.PI / 2}>
+        <planeGeometry args={[w, NET_TOP_DEPTH]} />
+        {netMaterial(roofNet)}
       </mesh>
       {[-GOAL_HALF_WIDTH, GOAL_HALF_WIDTH].map((x) => (
-        <mesh key={x} position={[x, GOAL_HEIGHT / 2, -NET_DEPTH / 2]} rotation-y={Math.PI / 2}>
-          <planeGeometry args={[NET_DEPTH, GOAL_HEIGHT]} />
-          {netMaterial}
+        <mesh key={x} geometry={side} position={[x, 0, 0]} rotation-y={Math.PI / 2}>
+          {netMaterial(sideNet)}
         </mesh>
       ))}
+      {/* The rear frame the net hangs on. */}
+      {[-GOAL_HALF_WIDTH, GOAL_HALF_WIDTH].map((x) => (
+        <group key={x}>
+          <Tube a={[x, GOAL_HEIGHT, 0]} b={[x, GOAL_HEIGHT, -NET_TOP_DEPTH]} />
+          <Tube a={[x, GOAL_HEIGHT, -NET_TOP_DEPTH]} b={[x, 0.03, -NET_DEPTH]} />
+        </group>
+      ))}
+      <Tube a={[-GOAL_HALF_WIDTH, GOAL_HEIGHT, -NET_TOP_DEPTH]} b={[GOAL_HALF_WIDTH, GOAL_HEIGHT, -NET_TOP_DEPTH]} r={0.022} />
+      <Tube a={[-GOAL_HALF_WIDTH, 0.03, -NET_DEPTH]} b={[GOAL_HALF_WIDTH, 0.03, -NET_DEPTH]} r={0.03} />
     </>
   );
 }

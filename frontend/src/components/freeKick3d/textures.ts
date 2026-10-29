@@ -67,10 +67,14 @@ export function pitchOverlayTexture() {
   return tex;
 }
 
+/** Metres of net one copy of `netTexture` covers (so every net surface can
+ * repeat it to the same cell size). */
+export const NET_TILE = { w: 3.2, h: 1.6 };
+
 export function netTexture() {
   const [c, ctx] = canvas(256, 128);
-  ctx.strokeStyle = "rgba(255,255,255,0.9)";
-  ctx.lineWidth = 1.6;
+  ctx.strokeStyle = "rgba(255,255,255,0.85)";
+  ctx.lineWidth = 1.3;
   const cell = 9;
   ctx.beginPath();
   // Diamond mesh, like a real goal net.
