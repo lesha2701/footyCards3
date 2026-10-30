@@ -36,7 +36,14 @@ def _resets_at(user: User, limit: int, free_kick_limit: int) -> dict[str, dateti
 def get_remaining_plays(user: User, config: GameConfig) -> GameLimitsOut:
     limit = config.hourly_game_limit
     free_kick_limit = config.free_kick_hourly_limit
+    rest_until = None
+    if config.anti_bot_enabled and user.rest_required_until is not None:
+        until = ensure_aware(user.rest_required_until)
+        if until > datetime.now(timezone.utc):
+            rest_until = until
     return GameLimitsOut(
+        rest_until=rest_until,
+        rest_hours=config.anti_bot_rest_hours,
         hourly_limit=limit,
         free_kick_hourly_limit=free_kick_limit,
         resets_at=_resets_at(user, limit, free_kick_limit),

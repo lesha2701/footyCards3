@@ -55,7 +55,7 @@ function playerTournamentStatusLabel(status?: string, queuePosition?: number | n
   }
 }
 
-type LimitKey = Exclude<keyof GameLimits, "hourly_limit" | "free_kick_hourly_limit" | "resets_at">;
+type LimitKey = Exclude<keyof GameLimits, "hourly_limit" | "free_kick_hourly_limit" | "resets_at" | "rest_until" | "rest_hours">;
 type Group = "quick" | "tactics" | "long";
 type Filter = "all" | Group | "friend" | "favs";
 
@@ -335,6 +335,14 @@ export default function PlayPage() {
           <span>Рейтинг</span>
         </button>
       </div>
+
+      {limits?.rest_until && (
+        <p className="rounded-2xl border border-amber-400/30 bg-amber-400/10 px-3 py-2.5 text-xs text-amber-200" role="status">
+          😴 Ты играешь очень долго без перерыва — нужен отдых. До{" "}
+          {new Date(limits.rest_until).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })} игры не
+          приносят монеты и рейтинг. Сделай паузу на {limits.rest_hours} ч — и всё снова заработает.
+        </p>
+      )}
 
       {now.length > 0 && (
         <section>

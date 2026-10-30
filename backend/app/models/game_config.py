@@ -1246,6 +1246,14 @@ class GameConfig(TimestampMixin, Base):
     stake_max_coins: Mapped[int] = mapped_column(Integer, default=500, nullable=False)
     stake_pair_daily_limit: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     stake_daily_profit_cap: Mapped[int] = mapped_column(Integer, default=2000, nullable=False)
+    # Anti-bot (services/anti_bot_service.py): after max_streak_hours of play
+    # without a rest_hours break, games stop paying and rating until the
+    # player rests rest_hours. ranked_daily_limit: Card Arena / Тактико
+    # matches a day that move points / rating (0 = no limit).
+    anti_bot_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    anti_bot_max_streak_hours: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    anti_bot_rest_hours: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    ranked_daily_limit: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
     # Valuable cards (legendary, diamond, «Академия», limited —
     # card_value_service) may be given in a trade only by a «проверенный
     # аккаунт»: this old, active on this many days, and with at least this

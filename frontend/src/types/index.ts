@@ -1004,6 +1004,9 @@ export interface GameLimits {
   fergie_time?: number;
   /** Exhausted games only: when the hourly cap frees up again. */
   resets_at?: Partial<Record<string, string>>;
+  /** Anti-bot «усталость»: games don't pay coins / rating until then. */
+  rest_until?: string | null;
+  rest_hours?: number;
 }
 
 export interface ArenaLeaderboardEntry {

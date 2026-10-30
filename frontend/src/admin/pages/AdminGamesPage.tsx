@@ -206,6 +206,7 @@ export default function AdminGamesPage() {
       | "trades_enabled"
       | "arena_cup_enabled"
       | "trade_coins_enabled"
+      | "anti_bot_enabled"
       | "trade_cards_both_sides"
       | "club_war_enabled"
       | "blackjack_enabled"
@@ -1063,6 +1064,23 @@ export default function AdminGamesPage() {
           {field("stake_max_coins", "Макс. ставка с каждой стороны")}
           {field("stake_pair_daily_limit", "Матчей на ставку с одним игроком в день")}
           {field("stake_daily_profit_cap", "Лимит выигрыша на ставках в день")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-3 font-display text-base font-bold">Защита от ботов</p>
+        <p className="mb-3 text-xs text-slate-500">
+          «Усталость»: если игрок играет дольше N часов без перерыва (перерыв — пауза не меньше «отдыха»), игры
+          перестают приносить монеты и рейтинг, пока он не отдохнёт. Человек, который спит, этого не замечает; скрипт,
+          играющий круглосуточно, — теряет всё. Рейтинговых матчей в день — сколько матчей Card Arena и Тактико в сутки
+          двигают очки и рейтинг (дальше матчи играются и награждаются, но не в рейтинг; 0 — без лимита).
+          Подозреваемых смотри в «Антифрод» → «Похоже на ботов».
+        </p>
+        <div className="mb-3">{toggle("anti_bot_enabled", "Включить «усталость»")}</div>
+        <div className="grid grid-cols-2 gap-3">
+          {field("anti_bot_max_streak_hours", "Часов игры без перерыва до «усталости»")}
+          {field("anti_bot_rest_hours", "Нужный отдых, часов")}
+          {field("ranked_daily_limit", "Рейтинговых матчей в день (Арена, Тактико)")}
         </div>
       </section>
 

@@ -375,6 +375,9 @@ class GameLimitsOut(BaseModel):
     # When a game's hourly cap is used up: the moment it frees up again
     # (key = the field name above). Games with plays left are absent.
     resets_at: dict[str, datetime] = {}
+    # Anti-bot «усталость»: games don't pay / rate until then (None = they do).
+    rest_until: Optional[datetime] = None
+    rest_hours: int = 0
 
 
 # --- «Атака 1 на 1» ---

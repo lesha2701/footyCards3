@@ -264,11 +264,11 @@ async def reset_limits(user_id: int, request: Request, db: AsyncSession = Depend
 @router.post("/{user_id}/toggle-reward-block", response_model=AdminUserOut)
 async def toggle_reward_block(user_id: int, request: Request, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)):
     user = await _get_user_or_404(db, user_id)
-    user.game_rewards_blocked = not user.game_rewards_blocked
+    user.game_rewards_blocked_flag = not user.game_rewards_blocked_flag
     db.add(user)
     await log_action(
         db, admin.id, "toggle_reward_block", "user", user_id,
-        new_value={"game_rewards_blocked": user.game_rewards_blocked},
+        new_value={"game_rewards_blocked": user.game_rewards_blocked_flag},
         ip_address=request.client.host if request.client else None,
     )
     await db.commit()

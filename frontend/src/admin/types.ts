@@ -860,6 +860,10 @@ export interface GameConfig {
   first_coin_purchase_bonus_pct: number;
   stake_pair_daily_limit: number;
   stake_daily_profit_cap: number;
+  anti_bot_enabled: boolean;
+  anti_bot_max_streak_hours: number;
+  anti_bot_rest_hours: number;
+  ranked_daily_limit: number;
   trade_verified_min_age_days: number;
   trade_verified_min_active_days: number;
   trade_verified_min_stars: number;
