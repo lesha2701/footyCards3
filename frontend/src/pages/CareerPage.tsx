@@ -24,6 +24,7 @@ import { SetPiecesCard, SquadWarnings } from "@/components/career/SetPiecesCard"
 import { CoachProfileCard, ObjectiveCard, TrainingCard } from "@/components/career/CareerManagement";
 import CupCard from "@/components/career/CupCard";
 import { LiveMatchCenter } from "@/components/career/CareerLive";
+import { PostMatchCard, PreMatchCard } from "@/components/career/MatchScreens";
 import { CoachExtras } from "@/components/career/CoachExtras";
 import { MarkingCard, PlanHints, RolesCard } from "@/components/career/RolesMarking";
 import { OffseasonPanel, SeasonSummaryView } from "@/components/career/Offseason";
@@ -357,6 +358,8 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
         )}
       </section>
 
+      {!season.live && <PostMatchCard key={`${season.id}:${season.rounds_played}`} season={season} />}
+
       <div className="grid grid-cols-3 gap-1 rounded-2xl bg-bg-surface p-1" role="tablist" aria-label="Разделы карьеры">
         {([
           ["prep", "Подготовка", IconTactics], ["calendar", "Календарь", IconCalendar], ["profile", "Профиль", IconProfile],
@@ -376,6 +379,10 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
       {tab === "prep" && (
         <>
           {season.scouting && !season.live && <OffseasonPanel season={season} catalog={catalog} onView={onView} onError={onError} />}
+          {season.scouting && !season.live && (
+            <PreMatchCard season={season} when={formatWhen(nextRound?.at ?? null)}
+              onSquad={() => setPrep("squad")} onTactic={() => setPrep("tactic")} />
+          )}
           <div className="grid grid-cols-3 gap-1 rounded-2xl bg-bg-base/40 p-1" role="tablist" aria-label="Подготовка">
             {([
               ["tactic", "Тактика", IconTarget], ["squad", "Состав", IconShirt], ["training", "Тренировка", IconWhistle],

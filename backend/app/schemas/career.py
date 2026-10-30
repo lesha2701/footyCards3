@@ -205,6 +205,10 @@ class CareerRoundReportOut(BaseModel):
     injured: list[str] = []
     form_up: list[str] = []
     form_down: list[str] = []
+    # Coins for the match (result + home matchday) and my place after the
+    # round; absent in rounds played before they were recorded.
+    coins: Optional[int] = None
+    place: Optional[int] = None
 
 
 class CareerRoundOut(BaseModel):

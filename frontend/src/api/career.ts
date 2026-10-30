@@ -35,6 +35,10 @@ export interface CareerRoundReport {
   injured: string[];
   form_up: string[];
   form_down: string[];
+  /** Coins for the match (result + home matchday) and my place after the
+   * round; missing for rounds played before they were recorded. */
+  coins?: number | null;
+  place?: number | null;
 }
 
 export interface CareerRound {

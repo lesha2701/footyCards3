@@ -1866,6 +1866,7 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
                 related_object_type="career_season", related_object_id=season.id,
             )
             part.coins_earned += matchday
+        report["coins"] = reward + max(0, matchday)
         # «Академия»: experience for the path cards that played this league
         # round (own daily cap per card; idempotent per card and round).
         await path_match_service.award_side(
@@ -1887,6 +1888,11 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
             + unlocked_text,
             related_object_type="career_season", related_object_id=season.id,
         )
+
+    # My place after the round, for the after-match screen.
+    for place, row in enumerate(standings(state), start=1):
+        if str(row["team_index"]) in reports:
+            reports[str(row["team_index"])]["place"] = place
 
     if v1 and state.get("cup") and round_index in CUP_AFTER_ROUNDS:
         await _play_cup_round(

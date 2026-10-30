@@ -12,6 +12,7 @@ from app.models.career import CareerParticipant, CareerSeason
 from app.models.enums import CardSource, Position
 from app.models.trophy import TrophyDefinition, UserTrophy
 from app.models.user import User
+from app.services.game_config_service import get_config
 from app.services import career_service
 from app.services.club_formation_service import get_formation_slots
 from tests.factories import create_player, get_user_by_telegram_id
@@ -265,4 +266,12 @@ async def test_round_report_and_reminder_once_per_round(client, db_session, bot_
     view = (await client.get(f"{API}/career", headers=headers)).json()["season"]
     report = view["rounds"][0]["report"]
     assert report is not None and set(report) >= {"yellow", "red", "injured", "form_up", "form_down"}
+    # For the after-match screen: the coins for the match and my place after the round.
+    my = next(m for m in view["rounds"][0]["matches"] if view["my_team_index"] in (m["home"], m["away"]))
+    own, opp = (my["hs"], my["as"]) if my["home"] == view["my_team_index"] else (my["as"], my["hs"])
+    config = await get_config(db_session)
+    result_coins = config.career_match_reward_win if own > opp else config.career_match_reward_draw if own == opp else 0
+    assert report["coins"] >= result_coins
+    place = next(i for i, r in enumerate(view["table"], start=1) if r["team_index"] == view["my_team_index"])
+    assert report["place"] == place
     assert all("yellows" in s and "suspended_rounds" in s and "form" in s for s in view["squad"])
