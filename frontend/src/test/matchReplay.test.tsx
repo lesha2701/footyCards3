@@ -188,6 +188,10 @@ describe("ReplayPlayer", () => {
     expect(screen.getByLabelText("Счёт")).toHaveTextContent("1:0");
     expect(screen.getByText("Гол хозяев")).toBeInTheDocument();
     expect(screen.getByText(/Матч окончен/)).toBeInTheDocument();
+    // Full time: the man of the match and the ratings in the line-ups.
+    expect(screen.getByLabelText("Лучший игрок матча")).toHaveTextContent("P2");
+    fireEvent.click(screen.getByRole("tab", { name: "Составы" }));
+    expect(screen.getByLabelText("Составы команд")).toHaveTextContent("7.7");
   });
 
   it("the latest moment shows on the pitch, scorers under the score; speed cycles with a tap", () => {

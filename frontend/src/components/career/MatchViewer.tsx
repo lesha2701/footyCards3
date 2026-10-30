@@ -3,6 +3,7 @@ import { Suspense, lazy, memo, useCallback, useEffect, useMemo, useRef, useState
 
 import { fetchCareerCupReplay, fetchCareerFriendlyReplay, fetchCareerReplay, type CareerReplayResponse } from "@/api/career";
 import { goalEpisodes } from "@/lib/goalReplay3d";
+import { manOfTheMatch, matchRatings, ratingTone } from "@/lib/playerRatings";
 import {
   PITCH_L,
   PITCH_W,
@@ -195,6 +196,14 @@ export function ReplayPlayer({ data, extraTabs, footer }: {
   const homeKit = kitOf("a");
   const awayKit = kitOf("b");
   const allTabs = [...BASE_TABS, ...(extraTabs ?? [])];
+  // After the final whistle (a whole match, not the live break): ratings
+  // and the man of the match.
+  const fullTime = ended && !data.live && replay.halves === 2;
+  const ratings = useMemo(
+    () => (fullTime ? matchRatings(replay, events, [data.home_score, data.away_score]) : null),
+    [fullTime, replay, events, data.home_score, data.away_score],
+  );
+  const motm = ratings ? manOfTheMatch(ratings) : null;
   const markFrame = useMemo(() => new Map(replay.marks.map(([f, idx]) => [idx, f])), [replay]);
   const scorers = useMemo(() => {
     const out: { idx: number; minute: number; name: string }[][] = [[], []];
@@ -257,6 +266,13 @@ export function ReplayPlayer({ data, extraTabs, footer }: {
             </p>
           ))}
         </div>
+      )}
+      {motm && (
+        <p className="flex items-center justify-center gap-1.5 rounded-xl bg-amber-300/10 px-2 py-1 text-caption text-amber-200" aria-label="Лучший игрок матча">
+          <span>⭐</span>
+          <span className="truncate">Лучший игрок: <span className="font-semibold text-ink-chalk">{motm.name}</span></span>
+          <span className="rounded-md bg-amber-300 px-1.5 font-mono text-micro font-bold text-bg-base">{motm.rating.toFixed(1)}</span>
+        </p>
       )}
       <div className="flex items-center gap-2 text-micro text-ink-mist">
         <span className="w-8 text-right font-mono text-ink-chalk">{stats.possession[0]}%</span>
@@ -413,7 +429,10 @@ export function ReplayPlayer({ data, extraTabs, footer }: {
           <MatchStats events={events} shown={shown} possession={stats.possession} home={data.home_name} away={data.away_name}
             homeKit={homeKit.fill} awayKit={awayKit.fill} />
         )}
-        {tab === "lineups" && <Lineups data={data} roster={roster} home={homeKit.fill} away={awayKit.fill} />}
+        {tab === "lineups" && (
+          <Lineups data={data} roster={roster} home={homeKit.fill} away={awayKit.fill}
+            ratings={ratings ? new Map(ratings.map((r) => [r.index, r.rating])) : null} motm={motm?.index ?? null} />
+        )}
         {extraTabs?.find((t) => t.key === tab)?.content}
       </div>
       {footer}
@@ -505,9 +524,16 @@ function StatRow({ label, a, b, suffix = "", homeKit, awayKit }: {
   );
 }
 
-/** Who is on the pitch now (substitutes marked), both sides. */
-function Lineups({ data, roster, home, away }: {
+const RATING_TONE = {
+  great: "bg-accent-lime text-bg-base", good: "bg-white/10 text-ink-chalk", poor: "bg-red-500/20 text-red-300",
+} as const;
+
+/** Who is on the pitch now (substitutes marked), both sides; with match
+ * ratings once it's over. */
+function Lineups({ data, roster, home, away, ratings, motm }: {
   data: CareerReplayResponse; roster: number[]; home: string; away: string;
+  /** After the final whistle: player index → match rating; the best one. */
+  ratings: Map<number, number> | null; motm: number | null;
 }) {
   const { replay } = data;
   const starters = new Set(replay.roster);
@@ -524,6 +550,11 @@ function Lineups({ data, roster, home, away }: {
             <span className="w-5 shrink-0 text-right font-mono text-ink-mist">{p?.n ?? ""}</span>
             <span className="min-w-0 flex-1 truncate">{p?.name ?? "—"}</span>
             {!starters.has(pi) && <span className="text-accent-lime" title="Вышел на замену">↑</span>}
+            {pi === motm && <span title="Лучший игрок матча">⭐</span>}
+            {ratings?.has(pi) && (
+              <span className={`shrink-0 rounded-md px-1 font-mono text-micro font-bold ${
+                RATING_TONE[ratingTone(ratings.get(pi)!)]}`}>{ratings.get(pi)!.toFixed(1)}</span>
+            )}
           </p>
         );
       })}
