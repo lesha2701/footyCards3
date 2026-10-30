@@ -1,21 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { CareerSeason, CareerSquadCard, TacticsCatalog } from "@/api/career";
 import CareerSquad from "@/components/career/CareerSquad";
-import { lineY } from "@/lib/careerRoles";
-
-const setCareerRoles = vi.fn();
-const setCareerMarking = vi.fn();
-const setCareerPlan = vi.fn();
-vi.mock("@/api/career", async (orig) => ({
-  ...(await orig<typeof import("@/api/career")>()),
-  setCareerRoles: (r: unknown, i: unknown) => setCareerRoles(r, i),
-  setCareerMarking: (m: unknown, i: unknown) => setCareerMarking(m, i),
-  setCareerPlan: (p: unknown) => setCareerPlan(p),
-}));
+import { lineY } from "@/lib/squadTactic";
 
 const card = (card_id: number, name: string, position: string, fatigue = 20): CareerSquadCard => ({
   card: { player: { display_name: name, last_name: name, position, rating: 80, image_path: null, club: "Клуб", country: "Страна", rarity: "rare" } } as never,
@@ -65,42 +55,12 @@ describe("the tactic under the squad", () => {
   });
 });
 
-describe("«Состав»: roles of the players", () => {
-  beforeEach(() => {
-    for (const f of [setCareerRoles, setCareerMarking, setCareerPlan]) f.mockReset().mockResolvedValue({});
-  });
-
-  const squad = () => wrap(<CareerSquad season={season} catalog={catalog} onView={vi.fn()} onError={vi.fn()} />);
-
-  it("the legend says what the drawing under the cards shows", () => {
-    squad();
+describe("«Состав»", () => {
+  it("the legend says what the drawing under the cards shows; no player roles here", () => {
+    wrap(<CareerSquad season={season} catalog={catalog} onView={vi.fn()} onError={vi.fn()} />);
     const legend = screen.getByRole("list", { name: "Тактика на поле" });
     expect(legend).toHaveTextContent("Фланги");
     expect(legend).toHaveTextContent("Высокий прессинг");
-  });
-
-  it("the roles view: the role of the line under the card; a tap opens the card with role, marking and set pieces", async () => {
-    squad();
-    expect(screen.queryByText("+ роль")).toBeNull();
-    fireEvent.click(screen.getByRole("tab", { name: "Роли игроков" }));
-    expect(screen.getByText("+ роль")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "FWD1: Крайнев" }));
-    expect(within(screen.getByRole("dialog")).getByLabelText("Энергия 20% — сильно устал")).toBeInTheDocument();
-    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Роль: Крайние полузащитники" })).getByRole("radio", { name: /Срезка в центр/ }));
-    await vi.waitFor(() => expect(setCareerRoles).toHaveBeenCalledWith({ winger: "inside" }, 2));
-    fireEvent.click(screen.getByRole("button", { name: /Опекать звезду: Звездин/ }));
-    await vi.waitFor(() => expect(setCareerMarking).toHaveBeenCalledWith(1, 2));
-    fireEvent.click(screen.getByRole("button", { name: /Угловые/ }));
-    await vi.waitFor(() => expect(setCareerPlan).toHaveBeenCalled());
-    expect(setCareerPlan.mock.calls[0][0]).toMatchObject({ round_index: 2, set_pieces: { corner_taker: 1 } });
-  });
-
-  it("a set role shows on the card; the keeper's card has no marking or set pieces", () => {
-    wrap(<CareerSquad season={{ ...season, roles: { winger: "crosser" } }} catalog={catalog} onView={vi.fn()} onError={vi.fn()} />);
-    fireEvent.click(screen.getByRole("tab", { name: "Роли игроков" }));
-    expect(screen.getByTitle("Навесы с фланга")).toHaveTextContent("Навесы");
-    fireEvent.click(screen.getByRole("button", { name: "GK: Вратарёв" }));
-    expect(screen.queryByRole("button", { name: /Опекать звезду/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Угловые/ })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Роли игроков" })).toBeNull();
   });
 });

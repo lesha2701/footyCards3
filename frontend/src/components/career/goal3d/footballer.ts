@@ -1,16 +1,19 @@
 /** The skinned footballer of the 3D goal replay: the Mixamo model and clips
- * of the free-kick prototype (public/career-3d/footballer.glb, meshopt),
- * prepared for 22 players whose positions come from the key frames:
- * clips play in place (no root motion but the keeper's dive), a run cycle
- * is built from the idle pose on the same bones, and the one-off clips'
- * timing (kick contact, jump apex, dive reach) is read from the clips. */
+ * of the free-kick prototype (public/career-3d/footballer.glb, meshopt)
+ * plus Mixamo's run, sprint, backpedal, header and celebrations on the same
+ * rig (footballer-moves.glb, tools/career-replay-3d/build_moves.py),
+ * prepared for 22 players whose positions come from the key frames: clips
+ * play in place (no root motion but the keeper's dive), the loops' natural
+ * speeds and the one-off clips' timing (kick contact, jump apex, dive
+ * reach) are read from the clips. */
 import * as THREE from "three";
 import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 
-import { DEFAULT_TIMING, RUN_AT, type ClipName, type ClipTiming } from "@/lib/footballerMotion";
+import { DEFAULT_TIMING, type ClipName, type ClipTiming } from "@/lib/footballerMotion";
 
 export const FOOTBALLER_URL = "/career-3d/footballer.glb";
+export const MOVES_URL = "/career-3d/footballer-moves.glb";
 
 export interface FootballerAsset {
   gltf: GLTF;
@@ -68,8 +71,44 @@ function fromOrigin(clip: THREE.AnimationClip, up: number): THREE.AnimationClip 
   return out;
 }
 
-function timingOf(clips: Record<string, THREE.AnimationClip>, up: number): ClipTiming {
+/** The top of a jump: when the hips are highest. */
+function apexOf(clip: THREE.AnimationClip | undefined, up: number): number | null {
+  const hips = clip?.tracks.find((tr) => HIPS.test(tr.name));
+  if (!hips) return null;
+  let best = -Infinity;
+  let at = 0;
+  for (let i = 0; i < hips.times.length; i++) {
+    if (hips.values[i * 3 + up] > best) {
+      best = hips.values[i * 3 + up];
+      at = hips.times[i];
+    }
+  }
+  return at;
+}
+
+/** How fast a clip travels as recorded (m/s): the hips' way over the ground
+ * from its first to its last frame. `metres` = metres per unit of the track. */
+function travelSpeed(clip: THREE.AnimationClip | undefined, up: number, metres: number): number | null {
+  const hips = clip?.tracks.find((tr) => HIPS.test(tr.name));
+  if (!clip || !hips || clip.duration <= 0) return null;
+  const last = hips.values.length - 3;
+  let d = 0;
+  for (let k = 0; k < 3; k++) if (k !== up) d += (hips.values[last + k] - hips.values[k]) ** 2;
+  const v = (Math.sqrt(d) * metres) / clip.duration;
+  return v > 0.5 ? v : null;
+}
+
+function timingOf(clips: Record<string, THREE.AnimationClip>, up: number, metres: number): ClipTiming {
   const timing = { ...DEFAULT_TIMING };
+  timing.runSpeed = travelSpeed(clips.run, up, metres) ?? timing.runSpeed;
+  timing.sprintSpeed = travelSpeed(clips.sprint, up, metres) ?? timing.sprintSpeed;
+  timing.backSpeed = travelSpeed(clips.run_back, up, metres) ?? timing.backSpeed;
+  if (clips.header) {
+    timing.headerApex = apexOf(clips.header, up) ?? timing.headerApex;
+    timing.headerDuration = clips.header.duration;
+  }
+  if (clips.celebrate) timing.celebrateDuration = clips.celebrate.duration;
+  if (clips.victory) timing.victoryDuration = clips.victory.duration;
   const jump = clips.wall_jump?.tracks.find((tr) => HIPS.test(tr.name));
   if (jump) {
     let best = -Infinity;
@@ -118,89 +157,44 @@ function bonesOf(root: THREE.Object3D): Record<string, THREE.Bone> {
   return out;
 }
 
-/** A run cycle on the model's own skeleton, from its idle pose: thighs,
- * knees, arms and elbows swing about axes worked out from the bones
- * themselves (the axis that turns the bone's child towards the body's
- * front), so no hand-tuned rig conventions. One stride pair per period at
- * RUN_AT m/s; the mixer's time scale follows the player's speed. */
-function runClip(gltf: GLTF, idle: THREE.AnimationClip, up: number): THREE.AnimationClip {
+/** When a clip first has a hand above the head (the victory pose's arms
+ * up), sampled on a posed copy of the model; 0 when it never does. */
+function armsUpAt(gltf: GLTF, clip: THREE.AnimationClip | undefined): number {
+  if (!clip) return 0;
   const model = cloneSkinned(gltf.scene);
   const mixer = new THREE.AnimationMixer(model);
-  mixer.clipAction(idle).play();
-  mixer.setTime(0);
-  model.updateMatrixWorld(true);
+  mixer.clipAction(clip).play();
   const bones = bonesOf(model);
-  const front = new THREE.Vector3(0, 0, 1); // the model faces +z
-
-  // Rest of the pose: every bone the idle clip moves, at its first frame.
-  const base: Record<string, THREE.Quaternion> = {};
-  for (const tr of idle.tracks) {
-    if (!tr.name.endsWith(".quaternion")) continue;
-    const name = tr.name.slice(0, -".quaternion".length);
-    base[name] = new THREE.Quaternion(tr.values[0], tr.values[1], tr.values[2], tr.values[3]);
-  }
-  const axisOf = (bone: THREE.Bone, child: THREE.Bone): THREE.Vector3 => {
-    const toLocal = bone.getWorldQuaternion(new THREE.Quaternion()).invert();
-    const f = front.clone().applyQuaternion(toLocal);
-    const d = child.position.clone().normalize();
-    const axis = new THREE.Vector3().crossVectors(d, f);
-    return axis.lengthSq() > 1e-8 ? axis.normalize() : new THREE.Vector3(1, 0, 0);
-  };
-  type Swing = (w: number) => number;
-  const swings: [string, string, Swing][] = [
-    ["RightUpLeg", "RightLeg", (w) => 0.62 * Math.sin(w)],
-    ["LeftUpLeg", "LeftLeg", (w) => -0.62 * Math.sin(w)],
-    ["RightLeg", "RightFoot", (w) => -(0.3 + 1.0 * Math.max(0, Math.cos(w)))],
-    ["LeftLeg", "LeftFoot", (w) => -(0.3 + 1.0 * Math.max(0, -Math.cos(w)))],
-    ["RightArm", "RightForeArm", (w) => -0.55 * Math.sin(w)],
-    ["LeftArm", "LeftForeArm", (w) => 0.55 * Math.sin(w)],
-    ["RightForeArm", "RightHand", (w) => 1.15 - 0.2 * Math.sin(w)],
-    ["LeftForeArm", "LeftHand", (w) => 1.15 + 0.2 * Math.sin(w)],
-    ["Spine", "Spine1", () => 0.14],
-    ["Spine1", "Spine2", () => 0.05],
-  ];
-  const period = 0.68 * (7 / RUN_AT);
-  const samples = 16;
-  const times = Array.from({ length: samples + 1 }, (_, i) => (i / samples) * period);
-  const tracks: THREE.KeyframeTrack[] = [];
-  const moved = new Set<string>();
-  for (const [boneName, childName, swing] of swings) {
-    const bone = bones[boneName];
-    const child = bones[childName];
-    if (!bone || !child || !base[bone.name]) continue;
-    const axis = axisOf(bone, child);
-    const values: number[] = [];
-    const q = new THREE.Quaternion();
-    for (const time of times) {
-      q.copy(base[bone.name]).multiply(new THREE.Quaternion().setFromAxisAngle(axis, swing((time / period) * Math.PI * 2)));
-      values.push(q.x, q.y, q.z, q.w);
+  const head = bones.Head;
+  const hands = [bones.LeftHand, bones.RightHand].filter(Boolean);
+  const v = new THREE.Vector3();
+  let at = 0;
+  if (head && hands.length) {
+    for (let time = 0; time < clip.duration; time += 0.1) {
+      mixer.setTime(time);
+      model.updateMatrixWorld(true);
+      const top = head.getWorldPosition(v).y;
+      if (hands.some((h) => h.getWorldPosition(v).y > top)) {
+        at = time;
+        break;
+      }
     }
-    tracks.push(new THREE.QuaternionKeyframeTrack(`${bone.name}.quaternion`, times, values));
-    moved.add(bone.name);
-  }
-  for (const [name, q] of Object.entries(base)) {
-    if (moved.has(name)) continue;
-    tracks.push(new THREE.QuaternionKeyframeTrack(`${name}.quaternion`, [0], [q.x, q.y, q.z, q.w]));
-  }
-  // Hips: over the origin, a little lower than standing, bobbing twice a cycle.
-  const hips = idle.tracks.find((tr) => HIPS.test(tr.name));
-  if (hips) {
-    const h0 = hips.values[up];
-    const values: number[] = [];
-    for (const time of times) {
-      const v = [0, 0, 0];
-      v[up] = h0 * (0.95 + 0.025 * Math.abs(Math.sin((time / period) * Math.PI * 2)));
-      values.push(...v);
-    }
-    tracks.push(new THREE.VectorKeyframeTrack(hips.name, times, values));
   }
   mixer.stopAllAction();
-  return new THREE.AnimationClip("run", period, tracks);
+  return at;
 }
 
-export function prepareFootballer(gltf: GLTF): FootballerAsset {
+/** Metres per unit of the hips track: the scale of the rig above them. */
+function hipsMetres(gltf: GLTF): number {
+  gltf.scene.updateMatrixWorld(true);
+  const hips = bonesOf(gltf.scene).Hips;
+  return hips?.parent ? hips.parent.getWorldScale(new THREE.Vector3()).y : 1;
+}
+
+/** The model's clips and the extra moves (same rig, played by bone name). */
+export function prepareFootballer(gltf: GLTF, moves?: GLTF): FootballerAsset {
   const byName: Record<string, THREE.AnimationClip> = {};
-  for (const clip of gltf.animations) byName[clip.name] = clip;
+  for (const clip of [...gltf.animations, ...(moves?.animations ?? [])]) byName[clip.name] = clip;
   const hips = byName.idle?.tracks.find((tr) => HIPS.test(tr.name));
   const up = hips ? upAxis(hips) : 1;
   const clips = {
@@ -211,9 +205,14 @@ export function prepareFootballer(gltf: GLTF): FootballerAsset {
     gk_dive_left: fromOrigin(byName.gk_dive_left, up),
     gk_dive_right: fromOrigin(byName.gk_dive_right, up),
     gk_catch: inPlace(byName.gk_catch, up),
-    run: runClip(gltf, inPlace(byName.idle, up), up),
   } as Record<ClipName, THREE.AnimationClip>;
-  const timing = timingOf(byName, up);
+  // Moves missing from an older file fall back to the closest clip there.
+  const extra: [ClipName, ClipName][] = [
+    ["run", "idle"], ["sprint", "run"], ["run_back", "run"], ["header", "wall_jump"], ["celebrate", "wall_jump"], ["victory", "celebrate"],
+  ];
+  for (const [name, fallback] of extra) clips[name] = byName[name] ? inPlace(byName[name], up) : clips[fallback];
+  const timing = timingOf(byName, up, hipsMetres(gltf));
+  timing.victoryFrom = armsUpAt(gltf, clips.victory);
   return { gltf, clips, timing, kickToe: kickToe(gltf, clips.kick, timing.kickContact) };
 }
 

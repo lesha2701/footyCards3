@@ -11,11 +11,11 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 
 import type { CareerReplay } from "@/api/career";
-import { DIVE_REACH, STEP_S, keeperMove, keeperSlot, motionAt, placeForStrike, playerAction, strikeWeight, strikes } from "@/lib/footballerMotion";
+import { DIVE_REACH, STEP_S, keeperMove, poseTime, keeperSlot, motionAt, placeForStrike, playerAction, strikeWeight, strikes } from "@/lib/footballerMotion";
 import { ballState, toWorld, type GoalEpisode } from "@/lib/goalReplay3d";
 import { SLOTS, type Timeline } from "@/lib/matchReplay";
 
-import { FOOTBALLER_URL, MaterialCache, makePlayer, prepareFootballer, setClip, type SkinnedPlayer } from "./footballer";
+import { FOOTBALLER_URL, MOVES_URL, MaterialCache, makePlayer, prepareFootballer, setClip, type SkinnedPlayer } from "./footballer";
 import type { ReplayClock, SlotLook } from "./GoalScene";
 import { numberTexture } from "./textures";
 
@@ -37,10 +37,10 @@ export function SkinnedPlayers({ tl, replay, ep, flip, looks, clock, onReady }: 
   clock: MutableRefObject<ReplayClock>;
   onReady?: () => void;
 }) {
-  const gltf = useLoader(GLTFLoader, FOOTBALLER_URL, (loader) => {
+  const [gltf, moves] = useLoader(GLTFLoader, [FOOTBALLER_URL, MOVES_URL], (loader) => {
     loader.setMeshoptDecoder(MeshoptDecoder);
   });
-  const asset = useMemo(() => prepareFootballer(gltf), [gltf]);
+  const asset = useMemo(() => prepareFootballer(gltf, moves), [gltf, moves]);
   const materials = useMemo(() => new MaterialCache(), []);
   const players = useMemo<SkinnedPlayer[]>(() => looks.map((l, i) => makePlayer(asset, {
     shirt: l.keeper ? l.kit.gk : l.kit.fill,
@@ -92,11 +92,15 @@ export function SkinnedPlayers({ tl, replay, ep, flip, looks, clock, onReady }: 
     const turn = 1 - Math.exp(-18 * Math.min(dtReal, 0.1));
     for (let i = 0; i < SLOTS; i++) {
       const p = players[i];
-      const m = motionAt(tl, i, t, flip);
+      const m = motionAt(tl, i, poseTime(ep, i, t), flip);
       const act = playerAction(tl, replay, ep, i, t, flip, asset.timing, kicks);
+      const celebrating = act.clip === "victory" || act.clip === "celebrate";
       // Facing: along the run; at a strike, where the ball goes; standing, the ball.
       let target: number;
-      if (act.clip === "kick" || act.clip === "wall_jump") target = Math.atan2(ahead.x - m.x, ahead.z - m.z);
+      if (act.clip === "kick" || act.clip === "header") target = Math.atan2(ahead.x - m.x, ahead.z - m.z);
+      // Backpedalling: facing the ball, moving away from it.
+      else if (act.clip === "run_back") target = Math.atan2(ball.x - m.x, ball.z - m.z);
+      else if (celebrating && t > ep.goal + 1) target = s.heading[i];
       else if (m.speed >= 0.9) target = Math.atan2(m.vx, m.vz);
       else target = Math.atan2(ball.x - m.x, ball.z - m.z);
       // The beaten keeper squares up to his line to dive along it / catch.

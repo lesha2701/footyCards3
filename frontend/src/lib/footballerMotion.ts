@@ -12,10 +12,21 @@ import { interpolatePlayer, type Timeline } from "@/lib/matchReplay";
 export const STEP_S = 0.5;
 /** Below this a player stands (m/s). */
 export const RUN_FROM = 0.9;
-/** The run clip's natural speed (m/s): its time scale is speed / RUN_AT. */
+/** The hand-built run's natural speed (m/s), kept for the simple figures. */
 export const RUN_AT = 7;
+/** From this speed a player sprints (m/s). */
+export const SPRINT_FROM = 6;
+/** Up to this speed a player going back towards his goal with the ball in
+ * front of him backpedals, facing it (m/s); faster, he turns and runs. */
+export const BACKPEDAL_UP_TO = 3.5;
 
-export type ClipName = "idle" | "run" | "kick" | "wall_jump" | "gk_idle" | "gk_dive_left" | "gk_dive_right" | "gk_catch";
+/** Key frames after the goal when the scorer's side stop where they are
+ * and celebrate (the key frames go on running them off). */
+export const CELEBRATE_AFTER = 5;
+
+export type ClipName =
+  | "idle" | "run" | "sprint" | "run_back" | "kick" | "wall_jump" | "header" | "celebrate" | "victory"
+  | "gk_idle" | "gk_dive_left" | "gk_dive_right" | "gk_catch";
 
 /** Timing of the one-off clips, read from the model when it loads. */
 export interface ClipTiming {
@@ -28,12 +39,26 @@ export interface ClipTiming {
   diveReach: number;
   diveDuration: number;
   catchDuration: number;
+  /** Natural speeds of the run, the sprint and the backpedal (m/s): a
+   * loop's time scale is the player's speed over it. */
+  runSpeed: number;
+  sprintSpeed: number;
+  backSpeed: number;
+  /** The header: the jump's top (head to the ball) and its length. */
+  headerApex: number;
+  headerDuration: number;
+  celebrateDuration: number;
+  victoryDuration: number;
+  /** The victory pose starts calm: shown from when the arms go up. */
+  victoryFrom: number;
 }
 
 /** Mixamo soccer clips of public/career-3d/footballer.glb (30 fps). */
 export const DEFAULT_TIMING: ClipTiming = {
   kickContact: 22 / 30, kickDuration: 1.53, jumpApex: 0.9, jumpDuration: 1.93,
   diveStart: 0.5, diveReach: 1.2, diveDuration: 3.3, catchDuration: 1,
+  runSpeed: 5, sprintSpeed: 7.5, backSpeed: 2.5,
+  headerApex: 0.8, headerDuration: 1.6, celebrateDuration: 1.6, victoryDuration: 3, victoryFrom: 0,
 };
 
 /** How far sideways the hips get in each dive at the reach (m, measured on
@@ -118,9 +143,15 @@ export function playerAction(
 ): PlayerAction {
   const keeper = slot === 0 || slot === 11;
   const motion = motionAt(tl, slot, t, flip);
-  const loop = (): PlayerAction => motion.speed >= RUN_FROM
-    ? { clip: "run", time: null, speed: clampTo(motion.speed / RUN_AT, 0.45, 1.35) }
-    : { clip: keeper ? "gk_idle" : "idle", time: null, speed: 1 };
+  const loop = (): PlayerAction => {
+    const v = motion.speed;
+    if (v < RUN_FROM) return { clip: keeper ? "gk_idle" : "idle", time: null, speed: 1 };
+    if (!keeper && t < ep.goal && v <= BACKPEDAL_UP_TO && backpedals(tl, ep, motion, t, flip)) {
+      return { clip: "run_back", time: null, speed: clampTo(v / timing.backSpeed, 0.6, 1.5) };
+    }
+    if (v >= SPRINT_FROM) return { clip: "sprint", time: null, speed: clampTo(v / timing.sprintSpeed, 0.75, 1.3) };
+    return { clip: "run", time: null, speed: clampTo(v / timing.runSpeed, 0.45, 1.35) };
+  };
 
   // The keeper who is beaten: dives as the ball comes, then stays down
   // (the dive's last frame).
@@ -144,8 +175,8 @@ export function playerAction(
     if (k.slot !== slot) continue;
     const header = k.shot && ep.finish === "header";
     if (header) {
-      const time = timing.jumpApex + (t - k.frame) * STEP_S;
-      if (time >= 0 && time <= timing.jumpDuration) return { clip: "wall_jump", time, speed: 1 };
+      const time = timing.headerApex + (t - k.frame) * STEP_S;
+      if (time >= 0 && time <= timing.headerDuration) return { clip: "header", time, speed: 1 };
       continue;
     }
     const swing = k.shot ? 1 : 1.6;
@@ -155,15 +186,40 @@ export function playerAction(
     if (time >= from && time <= timing.kickDuration) return { clip: "kick", time, speed: 1, strike: k.frame };
   }
 
-  // After the goal the scorer's side celebrates: running to the corner,
-  // jumping once they get there.
+  // After the goal the scorer's side celebrates: running off, then (or as
+  // soon as they stop) the scorer's victory pose and his team-mates jumping
+  // for joy — standing where they are (poseTime).
   const scoring = (slot < 11 ? "a" : "b") === ep.side;
   if (scoring && !keeper && t > ep.goal + 1) {
-    if (motion.speed >= RUN_FROM) return loop();
-    const time = ((t - ep.goal) * STEP_S + slot * 0.37) % timing.jumpDuration;
-    return { clip: "wall_jump", time, speed: 1 };
+    if (motion.speed >= RUN_FROM && t <= ep.goal + CELEBRATE_AFTER) return loop();
+    if (slot === ep.scorer) {
+      const from = Math.min(timing.victoryFrom, timing.victoryDuration * 0.8);
+      const time = from + ((t - ep.goal - 1) * STEP_S) % (timing.victoryDuration - from);
+      return { clip: "victory", time, speed: 1 };
+    }
+    const time = ((t - ep.goal) * STEP_S + slot * 0.37) % timing.celebrateDuration;
+    return { clip: "celebrate", time, speed: 1 };
   }
   return loop();
+}
+
+/** The key-frame time a player is drawn at: the scorer's side stand still
+ * from CELEBRATE_AFTER frames after the goal, everyone else follows the
+ * key frames. */
+export function poseTime(ep: GoalEpisode, slot: number, t: number): number {
+  const scoring = (slot < 11 ? "a" : "b") === ep.side && slot !== 0 && slot !== 11;
+  return scoring ? Math.min(t, ep.goal + CELEBRATE_AFTER) : t;
+}
+
+/** Going back towards his own goal with the ball in front of him: he
+ * backpedals facing it instead of turning his back on it. */
+export function backpedals(tl: Timeline, ep: GoalEpisode, motion: Motion, t: number, flip: boolean): boolean {
+  const ball = toWorld(ballState(tl, ep, t), flip);
+  const bx = ball.x - motion.x;
+  const bz = ball.z - motion.z;
+  const d = Math.hypot(bx, bz);
+  if (d < 2 || motion.speed < 1e-3) return false;
+  return (motion.vx * bx + motion.vz * bz) / (motion.speed * d) < -0.6;
 }
 
 /** How much of a kick the body is placed by the ball rather than by the

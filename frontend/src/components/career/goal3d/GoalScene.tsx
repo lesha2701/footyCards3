@@ -22,6 +22,7 @@ import {
   type GoalEpisode,
 } from "@/lib/goalReplay3d";
 import type { CareerReplay } from "@/api/career";
+import { poseTime } from "@/lib/footballerMotion";
 import { PITCH_L, PITCH_W, SLOTS, interpolatePlayer, type Timeline } from "@/lib/matchReplay";
 
 import { SkinnedPlayers } from "./SkinnedPlayers";
@@ -344,8 +345,10 @@ function Players({ tl, ep, flip, looks, clock }: Pick<SceneProps, "tl" | "ep" | 
     const turn = 1 - Math.exp(-10 * Math.min(dtReal, 0.1));
 
     for (let i = 0; i < SLOTS; i++) {
-      const p = toWorld(interpolatePlayer(tl, f, t - f, i), flip);
-      const q = toWorld(interpolatePlayer(tl, f2, t2 - f2, i), flip);
+      // The scorer's side stand to celebrate (footballerMotion.poseTime).
+      const at = poseTime(ep, i, t);
+      const p = at < t ? toWorld(interpolatePlayer(tl, Math.floor(at), at - Math.floor(at), i), flip) : toWorld(interpolatePlayer(tl, f, t - f, i), flip);
+      const q = at < t ? p : toWorld(interpolatePlayer(tl, f2, t2 - f2, i), flip);
       const span = Math.max(1e-3, (t2 - t) * STEP_S);
       const vx = (q.x - p.x) / span;
       const vz = (q.z - p.z) / span;
@@ -481,8 +484,10 @@ function CameraRig({ tl, ep, flip, mode, clock, goalX }: Pick<SceneProps, "tl" |
     const portrait = size.height > size.width;
     let target = toWorld(ballState(tl, ep, t), flip);
     if (ep.scorer !== null && (mode === "player" || t > ep.goal + 1)) {
-      const f = Math.floor(t);
-      target = toWorld(interpolatePlayer(tl, f, t - f, ep.scorer), flip);
+      // He stops to celebrate (footballerMotion.poseTime): so does the camera.
+      const at = poseTime(ep, ep.scorer, t);
+      const f = Math.floor(at);
+      target = toWorld(interpolatePlayer(tl, f, at - f, ep.scorer), flip);
     }
     const k = ready.current ? 1 - Math.exp(-Math.min(dt, 0.1) * 3) : 1;
     focus.current.lerp(tmp.v2.set(target.x, target.z), ready.current ? 1 - Math.exp(-Math.min(dt, 0.1) * 6) : 1);

@@ -25,7 +25,7 @@ import { CoachProfileCard, ObjectiveCard, TrainingCard } from "@/components/care
 import CupCard from "@/components/career/CupCard";
 import { LiveMatchCenter } from "@/components/career/CareerLive";
 import { CoachExtras } from "@/components/career/CoachExtras";
-import { MarkingCard, PlanHints } from "@/components/career/RolesMarking";
+import { MarkingCard, PlanHints, RolesCard } from "@/components/career/RolesMarking";
 import { OffseasonPanel, SeasonSummaryView } from "@/components/career/Offseason";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
@@ -368,6 +368,7 @@ function ActiveSeason({ season, catalog, onView, onError }: { season: CareerSeas
             <>
               <TrainingCard season={season} onView={onView} onError={onError} />
               <TacticsBoard season={season} catalog={catalog} onView={onView} onError={onError} />
+              <RolesCard season={season} catalog={catalog} onView={onView} onError={onError} />
               <PlanHints season={season} />
               <PlanEditor season={season} catalog={catalog} onView={onView} onError={onError} />
               <SetPiecesCard season={season} catalog={catalog} onView={onView} onError={onError} />

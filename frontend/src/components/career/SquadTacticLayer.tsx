@@ -7,7 +7,7 @@
 import { useLayoutEffect, useState, type RefObject } from "react";
 
 import type { Tactic } from "@/api/career";
-import { lineY, type Band } from "@/lib/careerRoles";
+import { lineY, type Band } from "@/lib/squadTactic";
 
 interface Rows { w: number; h: number; FWD?: Band; MID?: Band; DEF?: Band; GK?: Band }
 

@@ -3,9 +3,13 @@ import { describe, expect, it } from "vitest";
 import type { CareerReplay } from "@/api/career";
 import {
   DEFAULT_TIMING as T,
-  RUN_AT,
+  BACKPEDAL_UP_TO,
+  CELEBRATE_AFTER,
+  poseTime,
   CATCH_WITHIN,
   RUN_FROM,
+  SPRINT_FROM,
+  backpedals,
   keeperMove,
   keeperSlot,
   motionAt,
@@ -29,7 +33,7 @@ describe("footballer motion in a goal replay", () => {
     for (const ep of episodes) {
       const act = playerAction(tl, replay, ep, ep.scorer!, ep.shot, false);
       if (ep.finish === "header") {
-        expect(act).toEqual({ clip: "wall_jump", time: T.jumpApex, speed: 1 });
+        expect(act).toEqual({ clip: "header", time: T.headerApex, speed: 1 });
       } else {
         expect(act).toEqual({ clip: "kick", time: T.kickContact, speed: 1, strike: ep.shot });
         // The run-up is shown before, the follow-through after.
@@ -72,28 +76,41 @@ describe("footballer motion in a goal replay", () => {
     }
   });
 
-  it("players run at their speed or stand; the scorer's side celebrates after the goal", () => {
-    let runs = 0;
+  it("players run, sprint or backpedal at their speed, or stand; the scorer's side celebrates after the goal", () => {
+    const seen = new Set<string>();
     for (const ep of episodes) {
       for (let slot = 0; slot < 22; slot++) {
-        const t = ep.f0 + 0.5;
-        const act = playerAction(tl, replay, ep, slot, t, false);
-        if (act.clip !== "run" && act.clip !== "idle" && act.clip !== "gk_idle") continue;
-        const speed = motionAt(tl, slot, t, false).speed;
-        if (speed >= RUN_FROM) {
-          expect(act.clip).toBe("run");
-          expect(act.speed).toBeCloseTo(Math.max(0.45, Math.min(1.35, speed / RUN_AT)));
-          runs += 1;
-        } else {
-          expect(act.clip).toBe(slot === 0 || slot === 11 ? "gk_idle" : "idle");
+        for (const t of [ep.f0 + 0.5, (ep.f0 + ep.shot) / 2, ep.shot - 1]) {
+          const act = playerAction(tl, replay, ep, slot, t, false);
+          if (!["run", "sprint", "run_back", "idle", "gk_idle"].includes(act.clip)) continue;
+          const m = motionAt(tl, slot, t, false);
+          const keeper = slot === 0 || slot === 11;
+          seen.add(act.clip);
+          if (m.speed < RUN_FROM) {
+            expect(act.clip).toBe(keeper ? "gk_idle" : "idle");
+          } else if (!keeper && m.speed <= BACKPEDAL_UP_TO && backpedals(tl, ep, m, t, false)) {
+            expect(act).toEqual({ clip: "run_back", time: null, speed: Math.max(0.6, Math.min(1.5, m.speed / T.backSpeed)) });
+          } else if (m.speed >= SPRINT_FROM) {
+            expect(act).toEqual({ clip: "sprint", time: null, speed: Math.max(0.75, Math.min(1.3, m.speed / T.sprintSpeed)) });
+          } else {
+            expect(act).toEqual({ clip: "run", time: null, speed: Math.max(0.45, Math.min(1.35, m.speed / T.runSpeed)) });
+          }
         }
       }
       const mate = Array.from({ length: 22 }, (_, i) => i)
-        .find((i) => (i < 11 ? "a" : "b") === ep.side && i !== 0 && i !== 11)!;
-      const party = playerAction(tl, replay, ep, mate, ep.f1, false);
-      expect(["run", "wall_jump"]).toContain(party.clip);
+        .find((i) => (i < 11 ? "a" : "b") === ep.side && i !== 0 && i !== 11 && i !== ep.scorer)!;
+      expect(["run", "sprint", "celebrate"]).toContain(playerAction(tl, replay, ep, mate, ep.f1, false).clip);
+      // After CELEBRATE_AFTER frames the scorer stands in his victory pose,
+      // arms already up, and the team-mates jump where they stopped.
+      const scorer = playerAction(tl, replay, ep, ep.scorer!, ep.f1, false);
+      expect(scorer.clip).toBe("victory");
+      expect(scorer.time).toBeGreaterThanOrEqual(T.victoryFrom);
+      expect(playerAction(tl, replay, ep, mate, ep.f1, false).clip).toBe("celebrate");
+      expect(poseTime(ep, ep.scorer!, ep.f1)).toBe(ep.goal + CELEBRATE_AFTER);
+      expect(poseTime(ep, keeperSlot(ep), ep.f1)).toBe(ep.f1);
     }
-    expect(runs).toBeGreaterThan(20);
+    expect(seen.has("run")).toBe(true);
+    expect(seen.has("idle")).toBe(true);
   });
 
   it("a pass is struck the moment the ball leaves the passer's foot", () => {
