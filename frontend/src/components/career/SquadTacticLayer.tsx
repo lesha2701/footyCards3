@@ -15,6 +15,7 @@ interface Rows { w: number; h: number; FWD?: Band; MID?: Band; DEF?: Band; GK?: 
 const LIME = "#c6f432";
 const CYAN = "#67e8f9";
 const GOLD = "#facc15";
+const RED = "#f87171";
 const STRIPES = 12;
 
 /** The rows of one line together (a 4-2-3-1 has two midfield rows). */
@@ -92,8 +93,16 @@ function chevron(x: number, y: number, dir: 1 | -1, size = 6): string {
   return `M${x - size} ${y - dir * size * 0.55} L${x} ${y + dir * size * 0.55} L${x + size} ${y - dir * size * 0.55}`;
 }
 
-export function SquadTacticLayer({ containerRef, tactic, lineLabel, layoutKey }: {
-  containerRef: RefObject<HTMLElement>; tactic?: Tactic | null; lineLabel?: string;
+/** A bracket arc around (x, y): `span`° either side of the horizontal,
+ * on the right or (mirrored) on the left. */
+function arc(x: number, y: number, r: number, span: number, left = false): string {
+  const a = (span * Math.PI) / 180, dx = Math.cos(a) * r, dy = Math.sin(a) * r;
+  const sx = left ? x - dx : x + dx;
+  return `M${sx} ${y - dy} A ${r} ${r} 0 0 ${left ? 0 : 1} ${sx} ${y + dy}`;
+}
+
+export function SquadTacticLayer({ containerRef, tactic, layoutKey }: {
+  containerRef: RefObject<HTMLElement>; tactic?: Tactic | null;
   /** Changes when the rows of cards do (formation, view): measure again. */
   layoutKey?: string;
 }) {
@@ -141,24 +150,15 @@ export function SquadTacticLayer({ containerRef, tactic, lineLabel, layoutKey }:
           <stop offset="0.5" stopColor={CYAN} stopOpacity="0.13" />
           <stop offset="1" stopColor={CYAN} stopOpacity="0" />
         </linearGradient>
-        <linearGradient id="cp-line" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor={GOLD} stopOpacity="0" />
-          <stop offset="0.12" stopColor={GOLD} stopOpacity="0.95" />
-          <stop offset="0.88" stopColor={GOLD} stopOpacity="0.95" />
-          <stop offset="1" stopColor={GOLD} stopOpacity="0" />
-        </linearGradient>
-        <filter id="cp-glow" x="-10%" y="-300%" width="120%" height="700%">
-          <feGaussianBlur stdDeviation="2.5" />
-        </filter>
       </defs>
       <Pitch w={w} h={h} />
-      {drawTactic && <TacticDrawing tactic={tactic!} w={w} h={h} fwd={fwd!} mid={mid!} def={def!} gk={gk} lineLabel={lineLabel} />}
+      {drawTactic && <TacticDrawing tactic={tactic!} w={w} h={h} fwd={fwd!} mid={mid!} def={def!} gk={gk} />}
     </svg>
   );
 }
 
-function TacticDrawing({ tactic, w, h, fwd, mid, def, gk, lineLabel }: {
-  tactic: Tactic; w: number; h: number; fwd: Band; mid: Band; def: Band; gk?: Band; lineLabel?: string;
+function TacticDrawing({ tactic, w, h, fwd, mid, def, gk }: {
+  tactic: Tactic; w: number; h: number; fwd: Band; mid: Band; def: Band; gk?: Band;
 }) {
   const block = tactic.block ?? "mid";
   const ly = lineY(block, mid, def, gk);
@@ -169,7 +169,6 @@ function TacticDrawing({ tactic, w, h, fwd, mid, def, gk, lineLabel }: {
   const laneW = direction === "mixed" ? w * 0.09 : w * 0.12;
   // The arrowheads sit above the forwards, in the room left for them.
   const top = 5;
-  const pill = lineLabel ? lineLabel.length * 5.2 + 14 : 0;
   return (
     <>
       {/* Where the team presses. */}
@@ -199,6 +198,19 @@ function TacticDrawing({ tactic, w, h, fwd, mid, def, gk, lineLabel }: {
             </>
           );
         })()}
+        {(tactic.buildup ?? "mixed") === "mixed" && (
+          <>
+            {/* Both, quieter: a couple of short passes and a long ball. */}
+            <polyline points={`${w * 0.3},${def.mid} ${w * 0.25},${(def.top + mid.bottom) / 2} ${w * 0.32},${mid.mid}`} fill="none"
+              stroke="#ffffff" strokeOpacity="0.45" strokeWidth="1.6" strokeDasharray="0.1 5" strokeLinecap="round" />
+            {[[0.3, def.mid], [0.25, (def.top + mid.bottom) / 2], [0.32, mid.mid]].map(([x, y], i) => (
+              <circle key={i} cx={w * x} cy={y} r="2.3" fill="#ffffff" fillOpacity={0.35 + i * 0.12} />
+            ))}
+            <path d={`M${w * 0.68} ${def.mid} Q ${w * 0.84} ${mid.top}, ${w * 0.6} ${fwd.bottom + 4}`} fill="none" stroke="#ffffff"
+              strokeOpacity="0.4" strokeWidth="1.6" strokeDasharray="5 5" strokeLinecap="round" />
+            <circle cx={w * 0.6} cy={fwd.bottom + 4} r="3" fill="#ffffff" fillOpacity="0.85" stroke="#0b1a12" strokeWidth="1" />
+          </>
+        )}
         {tactic.buildup === "direct" && (
           <>
             <path d={`M${w * 0.36} ${def.mid} Q ${w * 0.2} ${mid.top}, ${w * 0.62} ${fwd.bottom + 4}`} fill="none" stroke="#ffffff"
@@ -208,35 +220,40 @@ function TacticDrawing({ tactic, w, h, fwd, mid, def, gk, lineLabel }: {
         )}
       </g>
 
-      {/* After losing the ball: press at once (up), or drop back into shape (down). */}
-      <g fill="none" stroke={CYAN} strokeOpacity="0.85" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
-        data-on-loss={tactic.on_loss ?? "drop"}>
-        {/* In the gap above the midfield, where no card covers them. */}
+      {/* After losing the ball, in the gap above the midfield where no card
+          covers it: red brackets closing in on the ball (counterpress), or
+          quiet chevrons back into shape (drop). */}
+      <g data-on-loss={tactic.on_loss ?? "drop"}>
         {[w * 0.2, w * 0.8].map((x) => {
           const y = (fwd.bottom + mid.top) / 2;
-          const dir = tactic.on_loss === "counterpress" ? -1 : 1;
+          if (tactic.on_loss === "counterpress") {
+            return (
+              <g key={x} fill="none" stroke={RED} strokeLinecap="round" strokeWidth="2">
+                <circle cx={x} cy={y} r="2.6" fill={RED} stroke="none" />
+                <path d={arc(x, y, 6.5, 50)} />
+                <path d={arc(x, y, 6.5, 50, true)} />
+                <path d={arc(x, y, 11, 38)} strokeOpacity="0.5" />
+                <path d={arc(x, y, 11, 38, true)} strokeOpacity="0.5" />
+              </g>
+            );
+          }
           return (
-            <g key={x}>
-              <path d={chevron(x, y - 4, dir)} />
-              <path d={chevron(x, y + 3, dir)} strokeOpacity="0.45" />
+            <g key={x} fill="none" stroke="#ffffff" strokeOpacity="0.55" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d={chevron(x, y - 3.5, 1, 5)} />
+              <path d={chevron(x, y + 3, 1, 5)} strokeOpacity="0.3" />
             </g>
           );
         })}
       </g>
 
-      {/* The defensive line at its height. */}
+      {/* The defensive line at its height: flags on both touchlines and a
+          faint dotted line between them. */}
       <g data-line={block}>
-        {/* Rects, not lines: a gradient or a filter on a zero-height box draws nothing. */}
-        <rect x={w * 0.04} y={ly - 2} width={w * 0.92} height="4" fill={GOLD} fillOpacity="0.5" filter="url(#cp-glow)" />
-        <rect x="0" y={ly - 0.9} width={w} height="1.8" fill="url(#cp-line)" />
+        <line x1={14} y1={ly} x2={w - 14} y2={ly} stroke="#ffffff" strokeOpacity="0.4" strokeWidth="2"
+          strokeDasharray="0.1 6" strokeLinecap="round" />
+        <path d={`M0 ${ly - 8} L13 ${ly} L0 ${ly + 8} Z`} fill={GOLD} />
+        <path d={`M${w} ${ly - 8} L${w - 13} ${ly} L${w} ${ly + 8} Z`} fill={GOLD} />
       </g>
-      {lineLabel && (
-        <g data-line-label="">
-          <rect x={w - pill - 8} y={ly - 7.5} width={pill} height="15" rx="7.5" fill="#0b1a12" fillOpacity="0.92" stroke={GOLD} strokeOpacity="0.7" strokeWidth="1" />
-          <text x={w - pill / 2 - 8} y={ly + 3.2} textAnchor="middle" fontSize="9" fontWeight="700" fill={GOLD}>{lineLabel}</text>
-        </g>
-      )}
-
     </>
   );
 }

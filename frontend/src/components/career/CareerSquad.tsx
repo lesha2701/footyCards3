@@ -43,14 +43,14 @@ function PitchCard({ slot, entry, chemPoints, chemMax, onClick, target = false, 
     >
 
       {info ? (
-        <PlayerTile info={info} entry={entry} width="w-[48px] min-[400px]:w-[54px]" offPosition={!!off}>
+        <PlayerTile info={info} entry={entry} width="w-[42px] min-[400px]:w-[47px]" offPosition={!!off}>
           {chemPoints && <ChemistryDiamonds points={chemPoints.points} max={chemMax} onPosition={chemPoints.on_position} />}
           {entry && (
             <EnergyBar fatigue={entry.fatigue} thin />
           )}
         </PlayerTile>
       ) : (
-        <div className="flex w-[48px] flex-col items-center gap-1 rounded-xl border border-dashed border-white/25 bg-black/30 p-2 min-[400px]:w-[54px]">
+        <div className="flex w-[42px] flex-col items-center gap-1 rounded-xl border border-dashed border-white/25 bg-black/30 p-2 min-[400px]:w-[47px]">
           <span className="text-lg leading-none text-ink-mist-dim">+</span>
           <span className="font-mono text-micro text-ink-mist-dim">{slot.ideal_position}</span>
         </div>
@@ -234,8 +234,7 @@ export default function CareerSquad({ season, catalog = null, onView, onError }:
         ref={pitchRef}
         className="relative overflow-hidden rounded-[22px] bg-gradient-to-b from-[#17633a] via-[#12512f] to-[#0e4026] px-1 pb-3 pt-7 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
       >
-        <SquadTacticLayer containerRef={pitchRef} tactic={season.tactic} layoutKey={season.formation}
-          lineLabel={catalog && season.tactic ? axisValueLabel(catalog, "block", season.tactic.block).toLowerCase() : undefined} />
+        <SquadTacticLayer containerRef={pitchRef} tactic={season.tactic} layoutKey={season.formation} />
         <ChemistryLinksOverlay containerRef={pitchRef} chemistry={chemistry} />
         {/* Room between the lines for the tactic drawn under them. */}
         <div className="relative flex flex-col gap-6">

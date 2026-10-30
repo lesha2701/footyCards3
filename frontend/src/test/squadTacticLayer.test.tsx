@@ -13,7 +13,7 @@ function Pitch({ tactic }: { tactic?: Tactic }) {
   const ref = useRef<HTMLDivElement>(null);
   return (
     <div ref={ref} data-testid="pitch">
-      <SquadTacticLayer containerRef={ref} tactic={tactic} lineLabel="высокий прессинг" />
+      <SquadTacticLayer containerRef={ref} tactic={tactic} />
       {Object.keys(ROWS).map((k) => <div key={k} data-row={k} />)}
     </div>
   );
@@ -39,8 +39,16 @@ describe("the «Состав» pitch", () => {
     const { container } = render(<Pitch tactic={{ direction: "wings", block: "high", buildup: "direct", on_loss: "counterpress" }} />);
     expect(container.querySelectorAll("[data-direction=wings] path")).toHaveLength(2);
     expect(container.querySelector("[data-line=high]")).not.toBeNull();
-    expect(container.querySelector("[data-line-label]")).toHaveTextContent("высокий прессинг");
+    expect(container.querySelectorAll("[data-line=high] path")).toHaveLength(2);
     expect(container.querySelector("[data-buildup=direct] circle")).not.toBeNull();
-    expect(container.querySelector("[data-on-loss=counterpress]")).not.toBeNull();
+    expect(container.querySelectorAll("[data-on-loss=counterpress] circle")).toHaveLength(2);
+  });
+
+  it("mixed build-up draws both: short passes and a long ball", () => {
+    layout();
+    const { container } = render(<Pitch tactic={{ buildup: "mixed" }} />);
+    const mixed = container.querySelector("[data-buildup=mixed]")!;
+    expect(mixed.querySelector("polyline")).not.toBeNull();
+    expect(mixed.querySelector("path")).not.toBeNull();
   });
 });
