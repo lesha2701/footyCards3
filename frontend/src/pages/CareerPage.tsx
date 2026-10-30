@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import {
@@ -29,7 +29,9 @@ import { MarkingCard, PlanHints, RolesCard } from "@/components/career/RolesMark
 import { OffseasonPanel, SeasonSummaryView } from "@/components/career/Offseason";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconChevronRight, IconClock, IconCoin, IconTrophy, IconUsers } from "@/components/icons";
+import {
+  IconCalendar, IconChevronRight, IconClock, IconCoin, IconProfile, IconShirt, IconTactics, IconTarget, IconTrophy, IconUsers, IconWhistle,
+} from "@/components/icons";
 import GameHero from "@/components/common/GameHero";
 import { EnergyBar } from "@/components/career/EnergyBar";
 import { FORMATIONS, MENTALITIES, PLAYSTYLES } from "@/lib/clubTactics";
@@ -37,7 +39,8 @@ import { formatGameError } from "@/lib/errors";
 import { CATEGORY_POSITIONS } from "@/lib/formation";
 import { haptic } from "@/lib/telegram";
 
-type Tab = "prep" | "squad" | "table" | "calendar" | "cup";
+type Tab = "prep" | "calendar" | "profile";
+type PrepTab = "tactic" | "squad" | "training";
 
 /** Round times in the viewer's own time zone (the server schedules them in
  * its own one, e.g. 12:00/19:00 Moscow). */
@@ -81,12 +84,12 @@ export default function CareerPage() {
       <GameHero game="career" title="Карьера тренера" />
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
 
-      {data.profile && <CoachProfileCard profile={data.profile} />}
-      {data.profile && <CoachExtras achievements={data.profile.achievements} />}
       {data.invite && <InviteCard view={data} onView={onView} onError={onError} />}
 
       {!data.season || data.season.status === "finished" || data.season.my_status === "left" ? (
         <>
+          {data.profile && <CoachProfileCard profile={data.profile} />}
+          {data.profile && <CoachExtras achievements={data.profile.achievements} />}
           {data.season?.status === "finished" && <FinishedCard season={data.season} catalog={data.tactics_catalog ?? null} />}
           {data.season?.my_status === "left" && data.season.status !== "finished" && (
             <p className="rounded-2xl bg-bg-surface p-4 text-sm text-ink-mist">Ты покинул сезон. Можно начать новый.</p>
@@ -94,9 +97,20 @@ export default function CareerPage() {
           {!data.invite && <NewSeason view={data} onView={onView} onError={onError} />}
         </>
       ) : data.season.status === "pending" ? (
-        <PendingCard season={data.season} onView={onView} onError={onError} />
+        <>
+          {data.profile && <CoachProfileCard profile={data.profile} />}
+          <PendingCard season={data.season} onView={onView} onError={onError} />
+        </>
       ) : (
-        <ActiveSeason season={data.season} catalog={data.tactics_catalog ?? null} onView={onView} onError={onError} />
+        <ActiveSeason
+          season={data.season} catalog={data.tactics_catalog ?? null} onView={onView} onError={onError}
+          coach={data.profile && (
+            <>
+              <CoachProfileCard profile={data.profile} />
+              <CoachExtras achievements={data.profile.achievements} />
+            </>
+          )}
+        />
       )}
     </div>
   );
@@ -279,9 +293,15 @@ function DivisionMove({ from, to }: { from: CareerDivision; to: CareerDivision }
   return <p className={`rounded-xl px-3 py-2 text-sm font-semibold ${tone}`}>{text}</p>;
 }
 
-function ActiveSeason({ season, catalog, onView, onError }: { season: CareerSeason; catalog: TacticsCatalog | null } & Handlers) {
+/** The season in three sections: «Подготовка» (tactic, squad, training),
+ * «Календарь» (table, rounds, cup) and «Профиль» (the coach); the next
+ * match stays on top of all of them. */
+function ActiveSeason({ season, catalog, coach, onView, onError }: {
+  season: CareerSeason; catalog: TacticsCatalog | null; coach: ReactNode;
+} & Handlers) {
   const hasTactics = (season.tactics_version ?? 0) > 0;
-  const [tab, setTab] = useState<Tab>(season.scouting ? "prep" : "squad");
+  const [tab, setTab] = useState<Tab>("prep");
+  const [prep, setPrep] = useState<PrepTab>(season.scouting && hasTactics ? "tactic" : "squad");
   const [confirmLeave, setConfirmLeave] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -335,65 +355,98 @@ function ActiveSeason({ season, catalog, onView, onError }: { season: CareerSeas
         )}
       </section>
 
-      <div className="flex gap-1 overflow-x-auto rounded-2xl bg-bg-surface p-1" style={{ scrollbarWidth: "none" }}>
+      <div className="grid grid-cols-3 gap-1 rounded-2xl bg-bg-surface p-1" role="tablist" aria-label="Разделы карьеры">
         {([
-          ...(season.scouting ? [["prep", "Подготовка"]] : []),
-          ["squad", "Состав"], ["table", "Таблица"], ["calendar", "Календарь"],
-          ...(season.cup ? [["cup", "Кубок"]] : []),
-        ] as [Tab, string][]).map(([id, label]) => (
+          ["prep", "Подготовка", IconTactics], ["calendar", "Календарь", IconCalendar], ["profile", "Профиль", IconProfile],
+        ] as const).map(([id, label, Icon]) => (
           <button
             key={id}
+            role="tab"
+            aria-selected={tab === id}
             onClick={() => setTab(id)}
-            className={`shrink-0 flex-1 rounded-xl px-3 py-2 text-xs font-semibold ${tab === id ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}
+            className={`flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold ${tab === id ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}
           >
-            {label}
+            <Icon size={15} aria-hidden="true" />{label}
           </button>
         ))}
       </div>
 
-      {tab === "prep" && season.scouting && season.live && (
-        <p className="rounded-2xl bg-bg-surface p-4 text-xs text-ink-mist">
-          Идёт тур {season.live.round + 1}: указания на второй тайм — в матч-центре выше. Подготовка к следующему туру
-          откроется после финального свистка.
-        </p>
-      )}
-      {tab === "prep" && season.scouting && !season.live && (
+      {tab === "prep" && (
         <>
-          <OffseasonPanel season={season} catalog={catalog} onView={onView} onError={onError} />
-          <SquadWarnings warnings={season.squad_warnings} />
-          {hasTactics && <ObjectiveCard season={season} onView={onView} onError={onError} />}
-          <ScoutingCard scouting={season.scouting} catalog={catalog} difficultyLabel={season.difficulty_label} />
-          {hasTactics && <MarkingCard season={season} onView={onView} onError={onError} />}
-          {hasTactics && catalog ? (
+          {season.scouting && !season.live && <OffseasonPanel season={season} catalog={catalog} onView={onView} onError={onError} />}
+          <div className="grid grid-cols-3 gap-1 rounded-2xl bg-bg-base/40 p-1" role="tablist" aria-label="Подготовка">
+            {([
+              ["tactic", "Тактика", IconTarget], ["squad", "Состав", IconShirt], ["training", "Тренировка", IconWhistle],
+            ] as const).map(([id, label, Icon]) => (
+              <button
+                key={id}
+                role="tab"
+                aria-selected={prep === id}
+                onClick={() => setPrep(id)}
+                className={`flex items-center justify-center gap-1 rounded-xl py-1.5 text-caption font-semibold ${prep === id ? "bg-bg-raised text-ink-chalk" : "text-ink-mist"}`}
+              >
+                <Icon size={14} aria-hidden="true" />{label}
+              </button>
+            ))}
+          </div>
+          {prep !== "squad" && season.live && (
+            <p className="rounded-2xl bg-bg-surface p-4 text-xs text-ink-mist">
+              Идёт тур {season.live.round + 1}: указания на второй тайм — в матч-центре выше. Подготовка к следующему туру
+              откроется после финального свистка.
+            </p>
+          )}
+          {prep !== "squad" && !season.live && (!season.scouting || !hasTactics || !catalog) && (
+            <p className="rounded-2xl bg-bg-surface p-4 text-xs text-ink-mist">
+              {hasTactics
+                ? "Подготовка к туру откроется, когда станет известен соперник."
+                : "Сыгранность и план на матч появятся в следующем сезоне — этот доигрывается по прежним правилам."}
+            </p>
+          )}
+          {prep === "tactic" && season.scouting && !season.live && hasTactics && catalog && (
             <>
-              <TrainingCard season={season} onView={onView} onError={onError} />
+              <SquadWarnings warnings={season.squad_warnings} />
+              <ScoutingCard scouting={season.scouting} catalog={catalog} difficultyLabel={season.difficulty_label} />
               <TacticsBoard season={season} catalog={catalog} onView={onView} onError={onError} />
               <RolesCard season={season} catalog={catalog} onView={onView} onError={onError} />
+              <MarkingCard season={season} onView={onView} onError={onError} />
               <PlanHints season={season} />
               <PlanEditor season={season} catalog={catalog} onView={onView} onError={onError} />
               <SetPiecesCard season={season} catalog={catalog} onView={onView} onError={onError} />
             </>
-          ) : (
-            <p className="rounded-2xl bg-bg-surface p-4 text-xs text-ink-mist">
-              Сыгранность и план на матч появятся в следующем сезоне — этот доигрывается по прежним правилам.
-            </p>
           )}
+          {prep === "training" && season.scouting && !season.live && hasTactics && catalog && (
+            <TrainingCard season={season} onView={onView} onError={onError} />
+          )}
+          {prep === "squad" && hasTactics && (
+            <>
+              <SquadWarnings warnings={season.squad_warnings} />
+              <CareerSquad season={season} catalog={catalog} onView={onView} onError={onError} />
+            </>
+          )}
+          {prep === "squad" && !hasTactics && <LineupEditor season={season} onView={onView} onError={onError} />}
         </>
       )}
-      {tab === "squad" && hasTactics && (
-        <>
-          <SquadWarnings warnings={season.squad_warnings} />
-          <CareerSquad season={season} catalog={catalog} onView={onView} onError={onError} />
-        </>
-      )}
-      {tab === "squad" && !hasTactics && <LineupEditor season={season} onView={onView} onError={onError} />}
-      {tab === "table" && <section className="rounded-3xl bg-bg-surface p-4"><StandingsTable season={season} /></section>}
-      {tab === "calendar" && <Calendar season={season} />}
-      {tab === "cup" && <CupCard season={season} onView={onView} onError={onError} />}
 
-      <button onClick={() => setConfirmLeave(true)} className="self-center text-xs text-ink-mist-dim underline underline-offset-2">
-        Покинуть сезон
-      </button>
+      {tab === "calendar" && (
+        <>
+          <section className="rounded-3xl bg-bg-surface p-4"><StandingsTable season={season} /></section>
+          <Calendar season={season} />
+          {season.cup && <CupCard season={season} onView={onView} onError={onError} />}
+        </>
+      )}
+
+      {tab === "profile" && (
+        <>
+          {coach}
+          {hasTactics && <ObjectiveCard season={season} onView={onView} onError={onError} />}
+        </>
+      )}
+
+      {tab === "profile" && (
+        <button onClick={() => setConfirmLeave(true)} className="self-center text-xs text-ink-mist-dim underline underline-offset-2">
+          Покинуть сезон
+        </button>
+      )}
       <ConfirmDialog
         open={confirmLeave}
         title="Покинуть сезон?"

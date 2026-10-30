@@ -461,6 +461,17 @@ export function IconCard(props: IconProps) {
   );
 }
 
+/** Calendar: a page with rings and a day marked. */
+export function IconCalendar(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect x="3.5" y="5" width="17" height="15" rx="2" />
+      <path d="M3.5 10h17M8 3v4M16 3v4" />
+      <rect x="7" y="13" width="3" height="3" rx="0.6" />
+    </IconBase>
+  );
+}
+
 export function IconBoot(props: IconProps) {
   return (
     <IconBase {...props}>

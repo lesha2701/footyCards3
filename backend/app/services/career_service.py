@@ -302,6 +302,42 @@ def _squad_ids(part: CareerParticipant, cards_by_id: dict) -> list[int]:
     return ids
 
 
+# A season squad carries at least this many keepers (when the coach owns them).
+MIN_KEEPERS = 2
+
+
+def _is_keeper(card) -> bool:
+    return card.player.position in CATEGORY_POSITIONS["GK"]
+
+
+def _keepers_needed(cards) -> int:
+    """How many keepers a squad must have: MIN_KEEPERS, or every distinct
+    keeper the coach owns when he has fewer."""
+    return min(MIN_KEEPERS, len({card_person(c) for c in cards if _usable(c) and _is_keeper(c)}))
+
+
+def _ensure_keepers(ids: list[int], cards: list, size: int) -> list[int]:
+    """The squad with its missing keepers added (best first); when it is
+    full, each one takes the place of the weakest outfield player."""
+    by_id = {c.id: c for c in cards}
+    out = list(ids)
+    used = {card_person(by_id[cid]) for cid in out if cid in by_id}
+    spare = sorted(
+        (c for c in cards if _usable(c) and _is_keeper(c) and c.id not in out and card_person(c) not in used),
+        key=lambda c: (-_effective(c), c.id),
+    )
+    while sum(1 for cid in out if cid in by_id and _is_keeper(by_id[cid])) < _keepers_needed(cards) and spare:
+        keeper = spare.pop(0)
+        if len(out) >= size:
+            outfield = [cid for cid in out if cid in by_id and not _is_keeper(by_id[cid])]
+            if not outfield:
+                break
+            out.remove(min(outfield, key=lambda cid: (_effective(by_id[cid]), -cid)))
+        out.append(keeper.id)
+        used.add(card_person(keeper))
+    return out
+
+
 def pick_squad(cards: list[UserCard], formation: str = "4-3-3", size: int = SQUAD_SIZE) -> list[int]:
     """Best XI for the formation plus a 5-card bench (one per line + the best
     remaining), distinct players only."""
@@ -328,7 +364,7 @@ def pick_squad(cards: list[UserCard], formation: str = "4-3-3", size: int = SQUA
                 chosen.append(card.id)
                 used_players.add(card_person(card))
                 break
-    return chosen[:size]
+    return _ensure_keepers(chosen[:size], cards, size)
 
 
 _FRESH = {"fatigue": 0, "injured_until": 0, "suspended_until": 0, "yellows": 0, "form": 0}
@@ -764,7 +800,8 @@ def _next_squad(prev: list[int], cards: list, formation: str, size: int) -> list
         if cid not in kept and card_person(by_id[cid]) not in used_players:
             kept.append(cid)
             used_players.add(card_person(by_id[cid]))
-    return kept
+    # Last season's full squad may have lost its second keeper.
+    return _ensure_keepers(kept, cards, size)
 
 
 async def _create_next_season(
@@ -868,6 +905,8 @@ async def set_squad(db: AsyncSession, user: User, card_ids: list[int]) -> None:
         if card_person(card) in players:
             raise ConflictError("Один игрок не может быть в заявке дважды")
         players.add(card_person(card))
+    if sum(1 for cid in card_ids if _is_keeper(cards[cid])) < _keepers_needed(list(cards.values())):
+        raise ConflictError("В заявке нужно минимум два вратаря")
     probe = CareerParticipant(squad_card_ids=list(card_ids), formation=part.formation, condition={}, lineup=None, user_id=user.id)
     xi = resolve_lineup(probe, cards, 0, [])
     if len(xi) < len(get_formation_slots(part.formation)):

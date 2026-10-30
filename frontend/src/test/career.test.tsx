@@ -194,14 +194,19 @@ describe("CareerPage", () => {
     renderPage();
     expect(await screen.findByText(/В гостях: Бот 2/)).toBeInTheDocument();
     expect(screen.getByText(/тур 2 из 14/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Таблица" })).toBeInTheDocument();
+    // Three sections; the table is in «Календарь», the coach in «Профиль».
+    expect(screen.getByRole("tab", { name: "Подготовка" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("1 место")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Календарь" }));
+    expect(screen.getAllByText("Бот 2").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("tab", { name: "Профиль" }));
+    expect(screen.getByText("Покинуть сезон")).toBeInTheDocument();
   });
 
   it("shows the after-match report (cards) in the calendar", async () => {
     fetchCareer.mockResolvedValue({ ...baseView, season: activeSeason });
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "Календарь" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "Календарь" }));
     expect(screen.getByText("жёлтые: Иванов")).toBeInTheDocument();
   });
 

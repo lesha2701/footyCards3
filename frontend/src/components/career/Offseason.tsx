@@ -113,6 +113,10 @@ export function SquadBuilder({ onClose, onView, onError }: { onClose: () => void
     cards: (data?.cards ?? []).filter((c) => lineOf(c.card?.player.position ?? c.my_player?.position ?? "") === line.cat)
       .sort((a, b) => (b.card?.player.rating ?? b.my_player?.rating ?? 0) - (a.card?.player.rating ?? a.my_player?.rating ?? 0)),
   })), [data]);
+  // At least two keepers (or every keeper owned, when fewer): the server checks too.
+  const keepers = byLine[0].cards;
+  const keepersNeeded = Math.min(2, keepers.length);
+  const keepersIn = keepers.filter((c) => selected.has(c.card_id)).length;
   const toggle = (c: CareerCollectionCard) => {
     const next = new Set(selected);
     if (next.has(c.card_id)) next.delete(c.card_id);
@@ -165,7 +169,12 @@ export function SquadBuilder({ onClose, onView, onError }: { onClose: () => void
           ))}
         </div>
         <div className="p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-          <button onClick={() => save.mutate()} disabled={save.isPending || selected.size < 11}
+          {keepersIn < keepersNeeded && (
+            <p className="mb-2 rounded-xl bg-amber-300/15 px-3 py-2 text-caption font-semibold text-amber-300">
+              В заявке нужно минимум два вратаря — сейчас {keepersIn}
+            </p>
+          )}
+          <button onClick={() => save.mutate()} disabled={save.isPending || selected.size < 11 || keepersIn < keepersNeeded}
             className="w-full rounded-2xl bg-floodlight py-3 text-sm font-bold text-bg-base active:scale-95 disabled:opacity-40"
           >
             {save.isPending ? "Сохраняем..." : "Сохранить заявку"}

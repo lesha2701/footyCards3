@@ -878,6 +878,33 @@ async def test_cup_runs_alongside_the_league(client, db_session, bot_token):
 
 # --- off-season, living league, tenure ------------------------------------------------------------
 
+def _keeper(entry: dict) -> bool:
+    player = (entry.get("card") or {}).get("player") or entry.get("my_player") or {}
+    return player.get("position") == "GK"
+
+
+def _xi_and_keeper(squad: list[dict]) -> list[int]:
+    """The first 11 of a squad (the XI) plus a second keeper."""
+    keep = [s["card_id"] for s in squad][:11]
+    keep.append(next(s["card_id"] for s in squad if _keeper(s) and s["card_id"] not in keep))
+    return keep
+
+
+def test_squad_keeps_two_keepers():
+    from types import SimpleNamespace as NS
+
+    def card(cid, pos, rating):
+        return NS(id=cid, player=NS(position=pos, rating=rating, id=cid, display_name=f"P{cid}"),
+                  is_locked_by_admin=False, is_locked_in_trade=False, stars=0, level=1)
+    cards = [card(1, "GK", 80), card(2, "GK", 70), card(3, "GK", 60)] + [card(10 + i, "CM", 75 - i) for i in range(5)]
+    by_id = {c.id: c for c in cards}
+    # A full squad that lost its second keeper: the weakest outfield player makes room.
+    out = career_service._ensure_keepers([1, 10, 11, 12, 13, 14], cards, 6)
+    assert len(out) == 6 and sum(by_id[c].player.position == "GK" for c in out) == 2
+    assert 2 in out and 14 not in out
+    # Only one keeper owned: one is enough.
+    assert career_service._ensure_keepers([1, 10], cards[:1] + cards[3:], 6) == [1, 10]
+
 async def test_offseason_auto_start_core_camp_friendly(client, db_session, bot_token):
     user_id, headers, season = await _season(client, db_session, bot_token, 870013)
     later = datetime.now(timezone.utc) + timedelta(days=8)
@@ -900,10 +927,10 @@ async def test_offseason_auto_start_core_camp_friendly(client, db_session, bot_t
     stored = min(config.career_familiarity_max_tenths, expected + config.career_camp_tactical_tenths)
     assert resp.json()["season"]["familiarity"]["stored_pct"] == stored / 10
 
-    keep = [s["card_id"] for s in nxt["squad"]][:11]
+    keep = _xi_and_keeper(nxt["squad"])
     resp = await client.put(f"{API}/career/squad", headers=headers, json={"card_ids": keep})
     assert resp.status_code == 200, resp.text
-    assert resp.json()["season"]["offseason"]["core_count"] == 11
+    assert resp.json()["season"]["offseason"]["core_count"] == 12
     assert (await client.put(f"{API}/career/squad", headers=headers, json={"card_ids": keep[:5]})).status_code == 409
 
     resp = await client.post(f"{API}/career/friendly", headers=headers)
@@ -917,7 +944,7 @@ async def test_offseason_auto_start_core_camp_friendly(client, db_session, bot_t
     assert replay["my_side"] == "a" and len(replay["replay"]["marks"]) == len(data["events"])
     assert len([p for p in replay["replay"]["players"] if p["name"]]) >= 22
     coll = (await client.get(f"{API}/career/collection", headers=headers)).json()
-    assert coll["squad_size"] == 22 and sum(c["in_squad"] for c in coll["cards"]) == 11
+    assert coll["squad_size"] == 22 and sum(c["in_squad"] for c in coll["cards"]) == 12
 
 
 async def test_inactive_coach_is_not_renewed_and_drops(client, db_session, bot_token):
@@ -1012,7 +1039,12 @@ async def test_first_season_squad_can_be_rebuilt_before_round_one(client, db_ses
     user_id, headers, season = await _season(client, db_session, bot_token, 870016)
     off = season["offseason"]  # the very first season opens with a pre-season too
     assert off["first_season"] and off["prev_season_id"] is None and off["summary"] is None and off["camps"]
-    keep = [s["card_id"] for s in season["squad"]][:12]
+    keep = _xi_and_keeper(season["squad"])
+    assert sum(_keeper(s) for s in season["squad"]) >= 2  # the automatic squad has two keepers
+    # Without the second keeper the squad is refused.
+    one_keeper = [cid for cid in keep if cid != keep[-1]] + [s["card_id"] for s in season["squad"] if not _keeper(s) and s["card_id"] not in keep][:1]
+    bad = await client.put(f"{API}/career/squad", headers=headers, json={"card_ids": one_keeper})
+    assert bad.status_code == 409 and "два вратаря" in bad.text
     resp = await client.put(f"{API}/career/squad", headers=headers, json={"card_ids": keep})
     assert resp.status_code == 200, resp.text
     assert len(resp.json()["season"]["squad"]) == 12

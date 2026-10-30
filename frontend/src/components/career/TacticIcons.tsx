@@ -2,9 +2,20 @@
  * value, drawn on the shared icon grid (24×24, the attack goes up). */
 import type { ReactNode } from "react";
 
-import { IconBase, IconBoot, type IconProps } from "@/components/icons";
+import { IconBase, type IconProps } from "@/components/icons";
 
 const arrowUp = (x: number, y: number) => `M${x - 2.4} ${y + 2.6}L${x} ${y}l2.4 2.6`;
+
+// A slide tackle: the body low, the leg stretched out to the ball.
+const tackle = (extra: ReactNode = null, legOpacity = 1) => (
+  <>
+    <circle cx="6" cy="7" r="2" />
+    <path d="M7.5 9.5L11 14l-6 4.5" />
+    <path d="M11 14l8 3" strokeOpacity={legOpacity} />
+    <circle cx="20" cy="18.5" r="1.8" strokeOpacity={legOpacity} />
+    {extra}
+  </>
+);
 
 // A plain function, not a component: this file only exports pictograms.
 const pic = (children: ReactNode, props: IconProps = {}) => <IconBase size={18} {...props}>{children}</IconBase>;
@@ -33,7 +44,7 @@ export const AXIS_ICONS: Record<string, (p: IconProps) => ReactNode> = {
     <path d="M3 13h18" strokeDasharray="2.4 2" />
     <path d="M12 10V4M9.6 6.6L12 4l2.4 2.6M12 16v4" />
   </>, p),
-  tackling: (p) => <IconBoot width={18} height={18} {...p} />,
+  tackling: (p) => pic(tackle(), p),
 };
 
 /** Each value's pictogram, by axis then value. */
@@ -106,13 +117,10 @@ export const VALUE_ICONS: Record<string, Record<string, ReactNode>> = {
     </>),
   },
   tackling: {
-    normal: <IconBoot width={18} height={18} />,
-    hard: (
-      <span className="relative inline-flex">
-      <IconBoot width={18} height={18} />
-      <span className="absolute -right-1.5 -top-1 text-[10px] font-black leading-none">!</span>
-      </span>
-    ),
-    soft: <IconBoot width={18} height={18} strokeOpacity={0.55} />,
+    normal: pic(tackle()),
+    // Hard: into the ball with force.
+    hard: pic(tackle(<path d="M17 12.5l1-2M20.5 13.5l1.5-1.5M22 16.5h1.5" />)),
+    // Soft: stays on his feet, the leg only reaches.
+    soft: pic(tackle(null, 0.45)),
   },
 };
