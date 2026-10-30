@@ -48,12 +48,16 @@ CARD_VALUES = (
 def upgrade() -> None:
     op.add_column("user_cards", sa.Column("from_free_source", sa.Boolean(), nullable=False, server_default=sa.false()))
     sources = ", ".join(f"'{s}'" for s in BOUND_SOURCES)
+    # Three plain updates rather than one with `IN (subquery)` under an OR:
+    # on a big user_cards that form ran the subquery per row and took hours
+    # (the deploy hung on it). Same rows end up true.
+    op.execute(f"UPDATE user_cards SET from_free_source = true WHERE source::text IN ({sources})")
+    op.execute("UPDATE user_cards SET from_free_source = true WHERE source::text = 'pack' AND source_ref_id IS NULL")
     op.execute(
-        f"""
-        UPDATE user_cards SET from_free_source = true
-        WHERE source::text IN ({sources})
-           OR (source::text = 'pack' AND (source_ref_id IS NULL OR source_ref_id IN (
-                SELECT id FROM pack_openings WHERE price_paid = 0)))
+        """
+        UPDATE user_cards uc SET from_free_source = true
+        FROM pack_openings po
+        WHERE uc.source::text = 'pack' AND uc.source_ref_id = po.id AND po.price_paid = 0
         """
     )
 
