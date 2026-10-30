@@ -59,6 +59,7 @@ _TYPE_PATHS = {
     "weekly_cup_result": "/weekly-cup",
     "match_day_result": "/match-day",
     "my_player_duel": "/my-player",
+    "my_player_gift": "/my-player",
     "club_league_reward": "/clubs/league",
     "club_donation": "/clubs/treasury",
     "club_join_request_accepted": "/clubs",

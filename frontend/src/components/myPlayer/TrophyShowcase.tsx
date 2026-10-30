@@ -1,23 +1,44 @@
-import type { MyPlayerTrophy } from "@/api/myPlayer";
+import type { MyPlayerCabinet, MyPlayerTrophy } from "@/api/myPlayer";
 import { staticUrl } from "@/lib/api";
+import { SHOWCASE_STYLE } from "@/lib/myPlayer";
 
 function season(iso: string): string {
   return new Date(iso).toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" });
 }
 
-/** «Витрина трофеев»: «Карьера игрока» cups, newest first, with the date
- * and what they were for. */
-export default function TrophyShowcase({ trophies, emptyHint }: { trophies: MyPlayerTrophy[]; emptyHint?: string }) {
-  if (!trophies.length && !emptyHint) return null;
+const TOTALS: [keyof MyPlayerCabinet["totals"], string][] = [
+  ["seasons", "Сезоны"], ["matches", "Матчи"], ["goals", "Голы"], ["assists", "Передачи"], ["titles", "Титулы"],
+];
+
+/** «Шкаф трофеев»: «Карьера игрока» cups, newest first, on the shelf of the
+ * chosen showcase, with lifetime career totals and the «Меценат» badge. */
+export default function TrophyShowcase({ trophies, emptyHint, cabinet }: {
+  trophies: MyPlayerTrophy[]; emptyHint?: string; cabinet?: MyPlayerCabinet | null;
+}) {
+  if (!trophies.length && !emptyHint && !cabinet) return null;
+  const style = SHOWCASE_STYLE[cabinet?.showcase ?? "wood"] ?? SHOWCASE_STYLE.wood;
+  const totals = cabinet ? TOTALS.filter(([k]) => (cabinet.totals[k] ?? 0) > 0) : [];
   return (
-    <section className="rounded-2xl bg-gradient-to-b from-amber-400/10 to-bg-surface p-4" data-testid="trophy-showcase">
-      <h2 className="font-display text-base font-bold text-ink-chalk">Витрина трофеев</h2>
+    <section className={`rounded-2xl bg-gradient-to-b ${style.shelf} p-4 ring-1 ${style.ring}`} data-testid="trophy-showcase">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="font-display text-base font-bold text-ink-chalk">Витрина трофеев</h2>
+        {cabinet?.patron.name && (
+          <span className="rounded-full bg-amber-400/20 px-2.5 py-1 text-micro font-bold text-amber-300">🎁 {cabinet.patron.name}</span>
+        )}
+      </div>
+      {totals.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1" data-testid="career-totals">
+          {totals.map(([k, label]) => (
+            <span key={k} className="text-caption text-ink-mist">{label} <b className="text-ink-chalk">{cabinet!.totals[k]}</b></span>
+          ))}
+        </div>
+      )}
       {trophies.length === 0 ? (
-        <p className="mt-2 text-caption text-ink-mist">{emptyHint}</p>
+        emptyHint && <p className="mt-2 text-caption text-ink-mist">{emptyHint}</p>
       ) : (
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+        <div className="mt-3 flex gap-2 overflow-x-auto border-b-4 border-black/30 pb-2">
           {trophies.map((t) => (
-            <div key={t.id} className="flex w-24 shrink-0 flex-col items-center rounded-xl bg-bg-raised p-2 text-center">
+            <div key={t.id} className={`flex w-24 shrink-0 flex-col items-center rounded-xl bg-bg-raised/80 p-2 text-center ring-1 ${style.ring}`}>
               {t.image_path ? (
                 <img src={staticUrl(t.image_path) ?? undefined} alt="" className="h-12 w-12 object-contain" loading="lazy" decoding="async" />
               ) : (
@@ -30,6 +51,7 @@ export default function TrophyShowcase({ trophies, emptyHint }: { trophies: MyPl
           ))}
         </div>
       )}
+      <p className="mt-2 text-micro text-ink-mist-dim">{style.label}</p>
     </section>
   );
 }

@@ -26,7 +26,10 @@ import MyPlayerArtifacts from "@/components/artifacts/MyPlayerArtifacts";
 import MyPlayerMuse from "@/components/muses/MyPlayerMuse";
 import MyPlayerCard from "@/components/myPlayer/MyPlayerCard";
 import MyPlayerDuels from "@/components/myPlayer/MyPlayerDuels";
+import MyPlayerGifts from "@/components/myPlayer/MyPlayerGifts";
+import MyPlayerHallOfFame from "@/components/myPlayer/MyPlayerHallOfFame";
 import MyPlayerLeaderboard from "@/components/myPlayer/MyPlayerLeaderboard";
+import MyPlayerSponsor from "@/components/myPlayer/MyPlayerSponsor";
 import MyPlayerSkillSection from "@/components/myPlayer/MyPlayerSkillSection";
 import MyPlayerStyleShop, { type StylePreview } from "@/components/myPlayer/MyPlayerStyleShop";
 import PlayerAvatar from "@/components/myPlayer/PlayerAvatar";
@@ -61,9 +64,10 @@ const LINES: { category: MyPlayer["category"]; label: string; positions: string[
 // Genitive: «до Серебра +6».
 const NEXT_TIER = ["Серебра", "Золота", "Легенды"];
 
-type Tab = "progress" | "style" | "property" | "duels" | "rating";
+type Tab = "progress" | "sponsor" | "style" | "property" | "duels" | "rating";
 const TABS: [Tab, string][] = [
-  ["progress", "Прокачка"], ["style", "Раздевалка"], ["property", "Имущество"], ["duels", "Дуэли"], ["rating", "Рейтинг"],
+  ["progress", "Прокачка"], ["sponsor", "Спонсор"], ["style", "Раздевалка"], ["property", "Имущество"], ["duels", "Дуэли"],
+  ["rating", "Рейтинг"],
 ];
 
 const DEFAULT_LOOK: MyPlayerAppearance = { skin: 1, hair: 1, hair_color: 1, beard: 0, eye_color: 0, kit: 0, kit_pattern: 0 };
@@ -144,6 +148,7 @@ function Overview({
   const fresh = view.freshness;
   const tabDot: Partial<Record<Tab, boolean>> = {
     progress: view.attention.points || view.attention.training,
+    sponsor: !!view.attention.sponsor,
     property: view.attention.income,
   };
 
@@ -160,7 +165,7 @@ function Overview({
       </div>
 
       <div className="mx-auto w-full max-w-[300px]">
-        <MyPlayerCard player={shown} level={view.level} size="lg" />
+        <MyPlayerCard player={shown} level={view.level} size="lg" sponsor={view.sponsor} />
       </div>
 
       <div className="-mt-1 flex flex-col gap-2">
@@ -199,8 +204,10 @@ function Overview({
       {tab === "style" && (
         <MyPlayerStyleShop view={view} player={player} preview={preview} onPreview={setPreview} onSaved={onSaved} />
       )}
+      {tab === "sponsor" && <MyPlayerSponsor />}
       {tab === "duels" && <MyPlayerDuels />}
-      {tab === "rating" && <MyPlayerLeaderboard />}
+      {tab === "duels" && <MyPlayerGifts />}
+      {tab === "rating" && <RatingTab />}
 
       {tab === "progress" && (
         <>
@@ -321,6 +328,7 @@ function Overview({
 
           <TrophyShowcase
             trophies={view.trophies}
+            cabinet={view.cabinet}
             emptyHint="Выиграй лигу, стань лучшим бомбардиром или игроком сезона в «Карьере игрока» — кубки появятся здесь."
           />
 
@@ -723,6 +731,24 @@ function RoleChange({ view, player, onSaved }: { view: MyPlayerView; player: MyP
       )}
       {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
       <button onClick={() => setOpen(false)} className="text-xs text-ink-mist">Отмена</button>
+    </div>
+  );
+}
+
+/** «Рейтинг»: the current one (rating) or the all-time «Зал славы». */
+function RatingTab() {
+  const [hall, setHall] = useState(false);
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-2 gap-1 rounded-xl bg-bg-surface p-1">
+        {([[false, "Рейтинг"], [true, "🏛️ Зал славы"]] as const).map(([id, label]) => (
+          <button key={label} onClick={() => setHall(id)}
+            className={`rounded-lg py-1.5 text-xs font-semibold ${hall === id ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {hall ? <MyPlayerHallOfFame /> : <MyPlayerLeaderboard />}
     </div>
   );
 }

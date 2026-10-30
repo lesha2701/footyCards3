@@ -1,6 +1,6 @@
 import { motion, useMotionTemplate, useTransform } from "framer-motion";
 
-import type { MyPlayer } from "@/api/myPlayer";
+import type { MyPlayer, MyPlayerSponsorBadge } from "@/api/myPlayer";
 import { ATTR_ORDER, ATTR_SHORT, TIER_FRAMES, TIER_TEXT } from "@/lib/myPlayer";
 
 import CardEffect from "./CardEffect";
@@ -12,11 +12,13 @@ interface Props {
   level?: number | null;
   /** sm — lists, md — profile, lg — the hero on «Мой игрок» (tilt, holo, big stats). */
   size?: "sm" | "md" | "lg";
+  /** This week's sponsor — a patch on the kit. */
+  sponsor?: MyPlayerSponsorBadge | null;
 }
 
 /** «Мой игрок» as a collectible-style card; the frame follows the tier. */
-export default function MyPlayerCard({ player, level, size = "md" }: Props) {
-  if (size === "lg") return <HeroCard player={player} level={level} />;
+export default function MyPlayerCard({ player, level, size = "md", sponsor }: Props) {
+  if (size === "lg") return <HeroCard player={player} level={level} sponsor={sponsor} />;
   const small = size === "sm";
   return (
     <div
@@ -35,7 +37,7 @@ export default function MyPlayerCard({ player, level, size = "md" }: Props) {
           </div>
           <PlayerAvatar
             appearance={player.appearance} number={player.number} accessory={player.accessory} backdrop={player.background} country={player.country}
-            className="absolute inset-0 h-full w-full"
+            sponsor={sponsor} className="absolute inset-0 h-full w-full"
           />
         </div>
         <div className="border-t border-white/10 bg-black/30 px-2 py-1.5 text-center">
@@ -60,7 +62,7 @@ export default function MyPlayerCard({ player, level, size = "md" }: Props) {
 
 const HOLO_TIERS = new Set(["gold", "legend"]);
 
-function HeroCard({ player, level }: { player: MyPlayer; level?: number | null }) {
+function HeroCard({ player, level, sponsor }: { player: MyPlayer; level?: number | null; sponsor?: MyPlayerSponsorBadge | null }) {
   const tilt = useCardTilt();
   const holo = HOLO_TIERS.has(player.tier);
   // The sheen and the glare slide with the tilt.
@@ -81,7 +83,7 @@ function HeroCard({ player, level }: { player: MyPlayer; level?: number | null }
         <div className="relative h-full w-full overflow-hidden rounded-[18px] bg-bg-surface">
           <PlayerAvatar
             appearance={player.appearance} number={player.number} accessory={player.accessory} backdrop={player.background} country={player.country}
-            className="absolute inset-0 h-full w-full"
+            sponsor={sponsor} className="absolute inset-0 h-full w-full"
           />
           <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/85 via-black/40 to-transparent" />
 

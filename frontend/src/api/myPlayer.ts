@@ -37,6 +37,9 @@ export interface MyPlayer {
   country?: string | null;
   /** Goal celebration (cosmetic). */
   celebration?: string | null;
+  /** Walk-out before key moments and duels; trophy showcase (null = wooden). */
+  walkout?: string | null;
+  showcase?: string | null;
   /** «Карьера Pro» is active. */
   pro?: boolean;
 }
@@ -49,7 +52,9 @@ export type MyPlayerCosmeticKind =
   | "celebration"
   | "ball"
   | "boots"
-  | "gloves";
+  | "gloves"
+  | "walkout"
+  | "showcase";
 export type MyPlayerDrill = "shot" | "pass" | "tackle" | "save";
 
 export interface MyPlayerTrophy {
@@ -69,6 +74,32 @@ export interface MyPlayerAttention {
   training: boolean;
   income: boolean;
   career_offers: boolean;
+  /** «Спонсор»: a contract to sign or coins to collect. */
+  sponsor?: boolean;
+}
+
+export interface MyPlayerSponsorBadge {
+  code: string;
+  name: string;
+  emoji: string;
+  color: string;
+  premium: boolean;
+}
+
+export interface MyPlayerPatron {
+  /** 0 = not a «Меценат» yet. */
+  level: number;
+  name: string | null;
+  sent: number;
+  next_at: number | null;
+}
+
+export interface MyPlayerCabinet {
+  /** Showcase style item; null = the wooden one. */
+  showcase: string | null;
+  totals: Partial<Record<"seasons" | "matches" | "goals" | "assists" | "titles" | "top_scorer" | "mvp", number>>;
+  cups: number;
+  patron: MyPlayerPatron;
 }
 
 export interface MyPlayerSkillOption {
@@ -112,6 +143,10 @@ export interface MyPlayerCosmeticItem {
   status?: number;
   /** Premium hairstyle: the appearance hair index it sets. */
   hair_index?: number | null;
+  /** Limited item: copies in all, sold, my number. */
+  supply?: number | null;
+  sold?: number | null;
+  edition?: number | null;
 }
 
 export interface MyPlayerLeaderboardEntry {
@@ -185,6 +220,8 @@ export interface MyPlayerView {
     ball?: string | null;
     boots?: string | null;
     gloves?: string | null;
+    walkout?: string | null;
+    showcase?: string | null;
     catalog: MyPlayerCosmeticItem[];
   };
   freshness: {
@@ -201,6 +238,9 @@ export interface MyPlayerView {
   trophies: MyPlayerTrophy[];
   /** What the top-bar dot is for. */
   attention: MyPlayerAttention;
+  /** This week's sponsor on the kit; the trophy cabinet. */
+  sponsor?: MyPlayerSponsorBadge | null;
+  cabinet?: MyPlayerCabinet | null;
   /** Countries the player can represent. */
   countries: string[];
   /** Only on the training-finish response. */
@@ -240,6 +280,8 @@ export interface MyPlayerPublic {
   player: MyPlayer | null;
   level: number | null;
   trophies: MyPlayerTrophy[];
+  cabinet?: MyPlayerCabinet | null;
+  sponsor?: MyPlayerSponsorBadge | null;
 }
 
 export async function fetchPublicMyPlayer(userId: number): Promise<MyPlayerPublic> {
@@ -301,13 +343,16 @@ export type MyPlayerStarsPurchase =
   | { purchase: "cosmetic"; code: string }
   | { purchase: "role"; position: string }
   | { purchase: "career"; code: "pro" | "agent" | "refresh" | "heal" | "save_offer" | "fast"; arg?: string }
-  | { purchase: "manager"; code: string };
+  | { purchase: "manager"; code: string }
+  | { purchase: "sponsor" }
+  | { purchase: "gift"; friendId: number; code: string };
 
 export async function createMyPlayerStarsInvoice(order: MyPlayerStarsPurchase): Promise<MyPlayerStarsInvoice> {
   const { data } = await api.post<MyPlayerStarsInvoice>("/my-player/stars-invoice", {
     purchase: order.purchase,
-    item_id: order.purchase === "item" ? order.itemId : null,
-    code: order.purchase === "cosmetic" || order.purchase === "career" || order.purchase === "manager" ? order.code : null,
+    item_id: order.purchase === "item" ? order.itemId : order.purchase === "gift" ? order.friendId : null,
+    code: order.purchase === "cosmetic" || order.purchase === "career" || order.purchase === "manager" || order.purchase === "gift"
+      ? order.code : null,
     position: order.purchase === "role" ? order.position : order.purchase === "career" ? order.arg ?? null : null,
   });
   return data;
@@ -371,5 +416,109 @@ export async function playMyPlayerDuel(opponentUserId: number): Promise<{ duel: 
   const { data } = await api.post<{ duel: MyPlayerDuel; duels: MyPlayerDuels; balance: number }>("/my-player/duels", {
     opponent_user_id: opponentUserId,
   });
+  return data;
+}
+
+// --- «Спонсор», gifts, «Зал славы» ---------------------------------------------------
+
+export interface MyPlayerSponsorGoal {
+  code: string;
+  label: string;
+  target: number;
+  coins: number;
+  /** Counts only with the premium contract. */
+  premium_only: boolean;
+  value?: number;
+  done?: boolean;
+  claimed?: boolean;
+  /** Premium-only goal of a free contract. */
+  locked?: boolean;
+}
+
+export interface MyPlayerSponsorBrand {
+  code: string;
+  name: string;
+  emoji: string;
+  color: string;
+  goals: MyPlayerSponsorGoal[];
+}
+
+export interface MyPlayerSponsorView {
+  week: string;
+  ends_at: string;
+  stars: number;
+  premium_pct: number;
+  bonus_coins: number;
+  /** The week's three brands while no contract is signed. */
+  offers: MyPlayerSponsorBrand[];
+  contract: (MyPlayerSponsorBrand & {
+    premium: boolean;
+    bonus: { coins: number; claimed: boolean; ready: boolean };
+  }) | null;
+  /** On claim: the new coin balance. */
+  balance?: number;
+}
+
+export async function fetchMyPlayerSponsor(): Promise<MyPlayerSponsorView> {
+  const { data } = await api.get<MyPlayerSponsorView>("/my-player/sponsor");
+  return data;
+}
+
+export async function signMyPlayerSponsor(brand: string): Promise<MyPlayerSponsorView> {
+  const { data } = await api.post<MyPlayerSponsorView>("/my-player/sponsor", { brand });
+  return data;
+}
+
+export async function claimMyPlayerSponsor(goal: string): Promise<MyPlayerSponsorView> {
+  const { data } = await api.post<MyPlayerSponsorView>("/my-player/sponsor/claim", { goal });
+  return data;
+}
+
+export interface MyPlayerGiftFriend {
+  user_id: number;
+  user_name: string;
+  player_name: string;
+  player: MyPlayer;
+}
+
+export interface MyPlayerGifts {
+  friends: MyPlayerGiftFriend[];
+  received: { id: number; from_name: string; kind: string; name: string; at: string }[];
+  patron: MyPlayerPatron;
+}
+
+export interface MyPlayerGiftOption {
+  /** training | pro | cosmetic:<code> */
+  code: string;
+  /** training | pro | a cosmetic kind */
+  kind: string;
+  name: string;
+  stars: number;
+  limited?: number | null;
+}
+
+export async function fetchMyPlayerGifts(): Promise<MyPlayerGifts> {
+  const { data } = await api.get<MyPlayerGifts>("/my-player/gifts");
+  return data;
+}
+
+export async function fetchMyPlayerGiftOptions(friendId: number): Promise<{
+  friend: { user_id: number; user_name: string; player_name: string };
+  options: MyPlayerGiftOption[];
+}> {
+  const { data } = await api.get(`/my-player/gifts/${friendId}`);
+  return data;
+}
+
+export type MyPlayerHallMetric = "goals" | "assists" | "titles" | "matches" | "golden_ball" | "trophies";
+
+export interface MyPlayerHallOfFame {
+  metric: MyPlayerHallMetric;
+  entries: { place: number; user_id: number; user_name: string; value: number; player: MyPlayer }[];
+  me: { place: number; value: number } | null;
+}
+
+export async function fetchMyPlayerHallOfFame(metric: MyPlayerHallMetric): Promise<MyPlayerHallOfFame> {
+  const { data } = await api.get<MyPlayerHallOfFame>("/my-player/hall-of-fame", { params: { metric } });
   return data;
 }

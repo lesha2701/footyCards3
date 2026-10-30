@@ -440,6 +440,14 @@ export interface GameConfig {
   my_player_role_change_coins: number;
   my_player_role_change_stars: number;
   my_player_cosmetic_stars_prices: Record<string, number>;
+  /** Limited style items: {code: copies}, Stars only, numbered by sale order. */
+  my_player_limited_supply: Record<string, number>;
+  my_player_sponsor_goals: Record<string, { label: string; target: number; coins: number }>;
+  my_player_sponsors: { code: string; name: string; emoji: string; color: string; goals: string[] }[];
+  my_player_sponsor_bonus_coins: number;
+  my_player_sponsor_stars: number;
+  my_player_sponsor_premium_pct: number;
+  my_player_patron_levels: number[];
   player_career_level_ratings: number[];
   player_career_level_salary: number[];
   player_career_level_prestige: number[];

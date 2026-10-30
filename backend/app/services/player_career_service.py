@@ -667,7 +667,7 @@ async def _finalize_my_round(
                 f"{mp.name} сыграл уставшим и выбывает на {out} {'тур' if out == 1 else 'тура'}. Вылечить можно сразу.",
                 related_object_type="player_career_season", related_object_id=season.id,
             )
-        await cups.record_match(db, season.user_id, at, goals, assists, rating, clean_sheet=opp == 0, line=line)
+        await cups.record_match(db, season.user_id, at, goals, assists, rating, clean_sheet=opp == 0, line=line, won=own > opp)
     celebration = my_player_service.cosmetics_of(mp)["celebration"] if mp else None
     me["headline"] = life.headline(mp.name if mp else "Игрок", state["teams"][0]["name"], me["opponent"], own, opp, me, celebration)
     event = life.maybe_new_event(state, round_index, config, rng) if mp is not None else None

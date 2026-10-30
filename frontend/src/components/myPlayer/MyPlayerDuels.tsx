@@ -10,6 +10,7 @@ import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 
 import PlayerAvatar from "./PlayerAvatar";
+import WalkoutIntro from "./WalkoutIntro";
 
 const RESULT_TEXT = { win: "Победа", draw: "Ничья", loss: "Поражение" } as const;
 const RESULT_COLOR = { win: "text-accent-lime", draw: "text-ink-mist", loss: "text-red-400" } as const;
@@ -23,6 +24,8 @@ export default function MyPlayerDuels() {
   const updateBalance = useAuthStore((s) => s.updateBalance);
   const { data, isLoading } = useQuery({ queryKey: ["my-player", "duels"], queryFn: fetchMyPlayerDuels });
   const [shown, setShown] = useState<MyPlayerDuel | null>(null);
+  // A duel just played starts with the player's walk-out (if one is worn).
+  const [walkout, setWalkout] = useState<MyPlayerDuel | null>(null);
   const [error, setError] = useState<string | null>(null);
   const play = useMutation({
     mutationFn: (opponentUserId: number) => playMyPlayerDuel(opponentUserId),
@@ -31,7 +34,8 @@ export default function MyPlayerDuels() {
       queryClient.setQueryData(["my-player", "duels"], res.duels);
       updateBalance(res.balance);
       void queryClient.invalidateQueries({ queryKey: ["my-player"], exact: true });
-      setShown(res.duel);
+      if (res.duel.me?.walkout) setWalkout(res.duel);
+      else setShown(res.duel);
     },
     onError: (err) => setError(formatGameError(err, "Не получилось начать дуэль")),
   });
@@ -105,6 +109,9 @@ export default function MyPlayerDuels() {
       )}
 
       <AnimatePresence>{shown && <DuelReplay duel={shown} onClose={() => setShown(null)} />}</AnimatePresence>
+      <AnimatePresence>
+        {walkout?.me && <WalkoutIntro player={walkout.me} onDone={() => { setShown(walkout); setWalkout(null); }} />}
+      </AnimatePresence>
     </div>
   );
 }

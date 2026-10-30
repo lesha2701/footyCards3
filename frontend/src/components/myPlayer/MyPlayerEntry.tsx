@@ -64,11 +64,11 @@ export function PublicMyPlayer({ userId }: { userId: number }) {
     <section className="flex flex-col items-center gap-2 rounded-2xl bg-bg-surface p-4">
       <h2 className="self-start font-display text-base font-bold text-ink-chalk">Мой игрок</h2>
       <div className="w-44">
-        <MyPlayerCard player={data.player} level={data.level} />
+        <MyPlayerCard player={data.player} level={data.level} sponsor={data.sponsor} />
       </div>
-      {data.trophies.length > 0 && (
+      {(data.trophies.length > 0 || !!data.cabinet?.totals.matches) && (
         <div className="w-full">
-          <TrophyShowcase trophies={data.trophies} />
+          <TrophyShowcase trophies={data.trophies} cabinet={data.cabinet} />
         </div>
       )}
       {!!property?.items.length && (

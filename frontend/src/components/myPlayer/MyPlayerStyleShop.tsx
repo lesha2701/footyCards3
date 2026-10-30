@@ -12,7 +12,7 @@ import {
 import { IconCoin } from "@/components/icons";
 import { formatGameError } from "@/lib/errors";
 import { gearSwatch } from "@/lib/gameGear";
-import { CELEBRATION_EMOJI, COSMETIC_GROUPS } from "@/lib/myPlayer";
+import { CELEBRATION_EMOJI, COSMETIC_GROUPS, SHOWCASE_STYLE, WALKOUT_EMOJI } from "@/lib/myPlayer";
 import { payMyPlayerWithStars } from "@/lib/myPlayerStars";
 import { haptic, hapticNotify } from "@/lib/telegram";
 
@@ -121,6 +121,22 @@ export default function MyPlayerStyleShop({ view, player, preview, onPreview, on
                       {(kind === "ball" || kind === "boots" || kind === "gloves") && (
                         <GearTile code={item.code} />
                       )}
+                      {kind === "walkout" && (
+                        <span className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-black/70 to-black/10 text-5xl">
+                          {WALKOUT_EMOJI[item.code] ?? "🏟️"}
+                        </span>
+                      )}
+                      {kind === "showcase" && (
+                        <span className={`absolute inset-0 flex items-end justify-center bg-gradient-to-b pb-3 text-4xl ring-2 ring-inset ${
+                          SHOWCASE_STYLE[item.code]?.shelf ?? ""} ${SHOWCASE_STYLE[item.code]?.ring ?? ""} bg-bg-raised`}>
+                          🏆
+                        </span>
+                      )}
+                      {item.supply != null && (
+                        <span className="absolute left-1 top-1 rounded-full bg-fuchsia-500 px-1.5 text-micro font-bold text-white">
+                          {item.edition ? `№${item.edition}` : "LIMITED"}
+                        </span>
+                      )}
                       {item.stars_price > 0 && !item.owned && (
                         <span className="absolute right-1 top-1 rounded-full bg-amber-400 px-1.5 text-micro font-bold text-bg-base">⭐</span>
                       )}
@@ -128,6 +144,11 @@ export default function MyPlayerStyleShop({ view, player, preview, onPreview, on
                     <div className="flex flex-1 flex-col p-1.5">
                       <p className="line-clamp-2 min-h-[2rem] text-micro font-semibold leading-tight text-ink-chalk">{item.name}</p>
                       {!!item.status && <p className="text-micro font-semibold text-amber-300">+{item.status} статуса</p>}
+                      {item.supply != null && !item.owned && (
+                        <p className="text-micro font-semibold text-fuchsia-300">
+                          {(item.sold ?? 0) >= item.supply ? "Тираж распродан" : `Осталось ${item.supply - (item.sold ?? 0)} из ${item.supply}`}
+                        </p>
+                      )}
                       {item.owned ? (
                         <button
                           disabled={busy}
@@ -149,7 +170,7 @@ export default function MyPlayerStyleShop({ view, player, preview, onPreview, on
                           )}
                           {item.stars_price > 0 && (
                             <button
-                              disabled={busy}
+                              disabled={busy || (item.supply != null && (item.sold ?? 0) >= item.supply)}
                               onClick={() => buyStars(item)}
                               className="w-full rounded-lg bg-amber-400 py-1.5 text-micro font-bold text-bg-base disabled:opacity-40"
                             >

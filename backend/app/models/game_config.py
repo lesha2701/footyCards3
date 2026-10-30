@@ -521,6 +521,9 @@ class GameConfig(TimestampMixin, Base):
             "headband": 300, "earring": 400, "chain": 600, "goggles": 800,
             "bg_sunset": 500, "bg_neon": 700, "bg_gold": 1200,
             "captain": 700, "headphones": 900, "bg_night": 900,
+            # The simplest celebration is the only one for coins.
+            "cel_fist": 500,
+            "walk_tunnel": 400, "walk_flags": 900, "sc_marble": 1500,
         },
     )
     # The same for Telegram Stars; an item may be sold for either or both.
@@ -535,8 +538,53 @@ class GameConfig(TimestampMixin, Base):
             "ball_gold": 60, "ball_neon": 40, "ball_retro": 40,
             "boots_red": 30, "boots_neon": 40, "boots_gold": 60,
             "gloves_lime": 30, "gloves_pink": 30, "gloves_gold": 60,
+            "cel_shush": 60, "cel_flex": 60, "cel_knee": 75, "cel_calma": 90, "cel_flip": 120, "cel_siu_gold": 300,
+            "walk_smoke": 60, "walk_fireworks": 100, "walk_legend": 250,
+            "sc_gold": 75, "sc_crystal": 150,
         },
     )
+    # Limited style items: {code: copies}; each copy is numbered by sale
+    # order (MyPlayerEdition) and they sell for Stars only.
+    my_player_limited_supply: Mapped[dict] = mapped_column(
+        JSON, nullable=False, default=lambda: {"cel_siu_gold": 100, "walk_legend": 100},
+    )
+    # «Спонсор» (my_player_extras): goals {code: {label, target, coins}} and
+    # brands [{code, name, emoji, color, goals: [4 goal codes]}] — three
+    # brands are offered a week, the first three goals count, the fourth
+    # only with the premium contract (Stars), which also pays premium_pct%.
+    my_player_sponsor_goals: Mapped[dict] = mapped_column(
+        JSON, nullable=False,
+        default=lambda: {
+            "training": {"label": "Тренировки", "target": 5, "coins": 150},
+            "duel_win": {"label": "Победы в дуэлях", "target": 3, "coins": 150},
+            "career_match": {"label": "Матчи в карьере", "target": 8, "coins": 150},
+            "career_goal": {"label": "Голы в карьере", "target": 4, "coins": 200},
+            "career_win": {"label": "Победы в карьере", "target": 4, "coins": 200},
+            "game_reward": {"label": "Наградные игры", "target": 25, "coins": 150},
+        },
+    )
+    my_player_sponsors: Mapped[list] = mapped_column(
+        JSON, nullable=False,
+        default=lambda: [
+            {"code": "volt", "name": "Volt Energy", "emoji": "⚡", "color": "#facc15",
+             "goals": ["training", "game_reward", "career_match", "duel_win"]},
+            {"code": "strike", "name": "Strike Boots", "emoji": "👟", "color": "#38bdf8",
+             "goals": ["career_goal", "career_match", "training", "career_win"]},
+            {"code": "northbay", "name": "Northbay Bank", "emoji": "🏦", "color": "#22c55e",
+             "goals": ["career_win", "duel_win", "game_reward", "career_goal"]},
+            {"code": "pulse", "name": "Pulse Mobile", "emoji": "📱", "color": "#a855f7",
+             "goals": ["duel_win", "training", "game_reward", "career_win"]},
+            {"code": "golazo", "name": "Golazo Pizza", "emoji": "🍕", "color": "#f97316",
+             "goals": ["game_reward", "career_match", "duel_win", "career_goal"]},
+            {"code": "tempo", "name": "Tempo Watches", "emoji": "⌚", "color": "#eab308",
+             "goals": ["career_goal", "career_win", "training", "duel_win"]},
+        ],
+    )
+    my_player_sponsor_bonus_coins: Mapped[int] = mapped_column(Integer, default=300, nullable=False)
+    my_player_sponsor_stars: Mapped[int] = mapped_column(Integer, default=49, nullable=False)
+    my_player_sponsor_premium_pct: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+    # «Меценат»: gifts sent (Stars) for levels I, II, III.
+    my_player_patron_levels: Mapped[list] = mapped_column(JSON, nullable=False, default=lambda: [1, 5, 20])
     # «Карьера игрока»: every completed club objective pays objective_coins
     # and objective_rep (prestige).
     player_career_objective_coins: Mapped[int] = mapped_column(Integer, default=150, nullable=False)

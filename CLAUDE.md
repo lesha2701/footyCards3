@@ -67,6 +67,14 @@ Main features:
   mentality / playstyle columns are kept but no longer played.
   The style shop / merchandise / «Менеджер Pro» are cosmetics and
   convenience only (Stars via my_player_service, key "manager:<code>");
+- «Мой игрок» extras (`my_player_extras.py`): a weekly «Спонсор» (one of
+  three brands of `my_player_sponsors`, goals counted by hooks in the
+  training, duels, `player_career_cups.record_match` and the rewarded-game
+  XP hook; premium contract for Stars tops up what was paid), gifts to
+  friends — Telegram Stars only — that make the sender a «Меценат», numbered
+  limited style items (`my_player_limited_supply`, Stars only), walk-outs,
+  trophy showcases and the all-time «Зал славы». Celebrations: only the
+  simplest («Кулак вверх») sells for coins;
 - player-to-player card exchanges;
 - «Трансферный рынок» — player-to-player auction of specific card copies
   (`auction_service.py`): bids are escrowed off the balance and refunded
