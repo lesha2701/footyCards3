@@ -64,69 +64,150 @@ function Settings() {
 
   const value = <K extends ConfigKey>(k: K): GameConfig[K] => (k in draft ? (draft[k] as GameConfig[K]) : config[k]);
   const set = (k: ConfigKey, v: unknown) => setDraft((d) => ({ ...d, [k]: v }));
-  const num = (k: ConfigKey, label: string) => (
+  const num = (k: ConfigKey, label: string, hint?: string) => (
     <label className="flex flex-col gap-0.5">
-      <span className="text-micro text-slate-500">{label}</span>
+      <span className="text-xs text-slate-300">{label}</span>
       <input type="number" min={0} value={value(k) as number} onChange={(e) => set(k, Number(e.target.value))} className={input} />
+      {hint && <span className="text-micro text-slate-500">{hint}</span>}
     </label>
   );
   const dirty = Object.keys(draft).length > 0 || durationsText !== null;
+  const open = value("auction_enabled") as boolean;
+  const licenseOn = value("agent_license_enabled") as boolean;
+  const group = "flex flex-col gap-3 rounded-xl bg-black/20 p-3";
+  const grid = "grid grid-cols-1 gap-3 sm:grid-cols-3";
 
   return (
     <section className="flex flex-col gap-3 rounded-2xl border border-white/5 bg-bg-surface p-4">
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={value("auction_enabled") as boolean} onChange={(e) => set("auction_enabled", e.target.checked)} />
-        Рынок открыт (новые лоты и ставки). Закрытие не мешает завершению уже идущих лотов.
-      </label>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <label className="flex flex-col gap-0.5">
-          <span className="text-micro text-slate-500">Сроки лота, часы (через запятую)</span>
+      <div className={`flex flex-wrap items-center gap-3 rounded-xl p-3 ${open ? "bg-emerald-500/15" : "bg-red-500/10"}`}>
+        <div className="flex-1">
+          <p className="font-display text-base font-bold">{open ? "🟢 Рынок открыт" : "🔴 Рынок закрыт"}</p>
+          <p className="text-xs text-slate-400">
+            {open
+              ? "Игроки видят вкладку «Рынок», покупают и делают ставки; агенты выставляют лоты."
+              : "Вкладки «Рынок» у игроков нет, новые лоты и ставки запрещены. Уже идущие лоты доживут до конца."}
+          </p>
+        </div>
+        <button
+          onClick={() => set("auction_enabled", !open)}
+          className={`rounded-lg px-4 py-2 text-xs font-bold ${open ? "bg-white/10 text-slate-200" : "bg-accent text-bg-base"}`}
+        >
+          {open ? "Закрыть рынок" : "Открыть рынок"}
+        </button>
+      </div>
+
+      <div className={group}>
+        <p className="text-sm font-bold">Лоты</p>
+        <p className="text-micro text-slate-500">
+          Два вида: «Купить сразу» (фиксированная цена) и «Аукцион» (ставки с таймером). Минимальная цена любой карточки —
+          её ценность (Обмены → ценность карточек), но не меньше числа ниже.
+        </p>
+        <div className={grid}>
+          <label className="flex flex-col gap-0.5">
+            <span className="text-xs text-slate-300">Сроки аукциона, часов</span>
+            <input
+              value={durationsText ?? (config.auction_durations_hours ?? []).join(", ")}
+              onChange={(e) => setDurationsText(e.target.value)}
+              className={input}
+            />
+            <span className="text-micro text-slate-500">Варианты на выбор продавцу, через запятую</span>
+          </label>
+          {num("auction_fixed_duration_hours", "«Купить сразу» висит, часов", "Потом карточка возвращается продавцу")}
+          {num("auction_max_active_lots", "Лотов у одного агента", "Одновременно")}
+          {num("auction_min_price", "Минимальная цена, монет", "Нижняя граница поверх ценности карточки")}
+          {num("auction_fee_pct", "Комиссия рынка, %", "Берётся с продавца и сгорает")}
+        </div>
+      </div>
+
+      <div className={group}>
+        <p className="text-sm font-bold">Ставки на аукционе</p>
+        <div className={grid}>
+          {num("auction_min_increment_pct", "Шаг ставки, %", "Следующая ставка выше текущей минимум на столько…")}
+          {num("auction_min_increment_coins", "Шаг ставки, монет", "…и минимум на столько монет (берётся большее)")}
+          {num("auction_snipe_window_seconds", "Анти-снайпинг: последние, сек", "Ставка в эти секунды до конца…")}
+          {num("auction_snipe_extend_seconds", "…продлевает до, сек", "…и до конца снова остаётся столько")}
+        </div>
+      </div>
+
+      <div className={group}>
+        <p className="text-sm font-bold">Защита от твинков</p>
+        <div className={grid}>
+          {num("auction_min_account_age_days", "Возраст аккаунта для ставок, дней", "0 — покупать может любой незабаненный")}
+          {num("auction_max_wins_per_seller_daily", "Покупок у одного продавца в сутки", "Сколько лотов один игрок может выиграть у одного продавца")}
+        </div>
+      </div>
+
+      <div className={group}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-bold">Агентская лицензия — только агенты выставляют лоты</p>
+          <label className="flex items-center gap-2 text-xs">
+            <input type="checkbox" checked={licenseOn} onChange={(e) => set("agent_license_enabled", e.target.checked)} />
+            {licenseOn ? "продаётся" : "не продаётся"}
+          </label>
+        </div>
+        <div className={grid}>
+          {num("agent_license_stars", "Цена, ⭐")}
+          {num("agent_license_days", "Срок, дней", "Повторная покупка добавляет дни")}
+          {num("agent_license_min_account_age_days", "Купить можно с возраста аккаунта, дней")}
+        </div>
+        <label className="flex items-center gap-2 text-xs text-slate-300">
           <input
-            value={durationsText ?? (config.auction_durations_hours ?? []).join(", ")}
-            onChange={(e) => setDurationsText(e.target.value)}
-            className={input}
+            type="checkbox"
+            checked={value("agent_license_requires_verified") as boolean}
+            onChange={(e) => set("agent_license_requires_verified", e.target.checked)}
           />
+          Только «Проверенный аккаунт» (правило из Обменов: возраст + покупки за ⭐)
         </label>
-        {num("auction_fixed_duration_hours", "«Купить сразу»: лот висит, часов")}
-        {num("auction_fee_pct", "Комиссия (сжигается), %")}
-        {num("auction_min_increment_pct", "Мин. шаг ставки, %")}
-        {num("auction_min_increment_coins", "Мин. шаг ставки, монет")}
-        {num("auction_min_price", "Мин. стартовая цена, монет (иначе — ценность карточки)")}
-        {num("auction_max_active_lots", "Активных лотов на игрока")}
-        {num("auction_snipe_window_seconds", "Анти-снайпинг: окно, сек")}
-        {num("auction_snipe_extend_seconds", "Анти-снайпинг: продление до, сек")}
-        {num("auction_min_account_age_days", "Возраст аккаунта для ставок, дней (0 = все)")}
-        {num("auction_max_wins_per_seller_daily", "Побед у одного продавца за сутки")}
       </div>
-      <p className="font-display text-sm font-bold">Агентская лицензия (выставлять лоты могут только агенты)</p>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={value("agent_license_enabled") as boolean} onChange={(e) => set("agent_license_enabled", e.target.checked)} />
-        Продаётся
-      </label>
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={value("agent_license_requires_verified") as boolean}
-          onChange={(e) => set("agent_license_requires_verified", e.target.checked)}
-        />
-        Только для «Проверенного аккаунта»
-      </label>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {num("agent_license_stars", "Цена, ⭐")}
-        {num("agent_license_days", "Срок, дней")}
-        {num("agent_license_min_account_age_days", "Мин. возраст аккаунта, дней")}
-      </div>
+
       {error && <p className="text-sm text-red-400">{error}</p>}
-      <button
-        disabled={!dirty || save.isPending}
-        onClick={() => save.mutate()}
-        className="self-start rounded-lg bg-accent px-4 py-2 text-xs font-bold text-bg-base disabled:opacity-40"
-      >
-        {save.isPending ? "Сохранение..." : "Сохранить"}
-      </button>
+      <div className="flex flex-wrap gap-2">
+        <button
+          disabled={!dirty || save.isPending}
+          onClick={() => save.mutate()}
+          className="rounded-lg bg-accent px-4 py-2 text-xs font-bold text-bg-base disabled:opacity-40"
+        >
+          {save.isPending ? "Сохранение..." : dirty ? "Сохранить изменения" : "Изменений нет"}
+        </button>
+        <button
+          onClick={() => {
+            setDraft({ ...RECOMMENDED });
+            setDurationsText(null);
+          }}
+          className="rounded-lg bg-white/5 px-4 py-2 text-xs font-semibold text-slate-300"
+        >
+          Вернуть рекомендуемые
+        </button>
+        {dirty && (
+          <button onClick={() => { setDraft({}); setDurationsText(null); }} className="rounded-lg px-3 py-2 text-xs text-slate-400">
+            Отменить
+          </button>
+        )}
+      </div>
     </section>
   );
 }
+
+/** The launch settings we agreed on (also set by migration 0220). */
+const RECOMMENDED: Partial<GameConfig> = {
+  auction_enabled: true,
+  auction_durations_hours: [1, 6, 24],
+  auction_fixed_duration_hours: 72,
+  auction_fee_pct: 10,
+  auction_min_increment_pct: 5,
+  auction_min_increment_coins: 10,
+  auction_min_price: 10,
+  auction_max_active_lots: 5,
+  auction_snipe_window_seconds: 120,
+  auction_snipe_extend_seconds: 120,
+  auction_min_account_age_days: 0,
+  auction_max_wins_per_seller_daily: 3,
+  agent_license_enabled: true,
+  agent_license_stars: 99,
+  agent_license_days: 30,
+  agent_license_min_account_age_days: 30,
+  agent_license_requires_verified: true,
+};
 
 function Lots() {
   const queryClient = useQueryClient();

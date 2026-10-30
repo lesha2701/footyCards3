@@ -957,7 +957,7 @@ class TaskChestConfigIn(BaseModel):
     coins: int = Field(default=0, ge=0, le=1_000_000)
     card_rarity: Optional[str] = Field(default=None, pattern=r"^(common|rare|epic|legendary)$")
     pack_id: Optional[int] = None
-    auction_enabled: bool = False
+    auction_enabled: bool = True
     auction_durations_hours: list[int] = [1, 6, 24]
     auction_fixed_duration_hours: int = 72
     auction_fee_pct: int = 10

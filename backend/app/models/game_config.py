@@ -1401,7 +1401,7 @@ class GameConfig(TimestampMixin, Base):
     # the last window pushes the end to now + extend) and anti-laundering
     # limits (account age to bid — 0 = anyone, lots one buyer may win from one
     # seller per day).
-    auction_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    auction_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     auction_durations_hours: Mapped[list] = mapped_column(JSON, default=lambda: [1, 6, 24], nullable=False)
     # «Купить сразу» (fixed-price) lots stay this long, then the card goes back.
     auction_fixed_duration_hours: Mapped[int] = mapped_column(Integer, default=72, nullable=False)
