@@ -76,3 +76,28 @@ async def test_ranking_excludes_admins(client, db_session, bot_token):
     body = resp.json()
     assert all(entry["user_id"] != admin.id for entry in body["top"])
     assert body["top"][0]["user_id"] == user.id
+
+
+async def test_rank_of_matches_the_full_ranking_for_every_metric_shape(client, db_session, bot_token):
+    """The database's row_number() places each user exactly where he stands
+    in the full ordered ranking — ties broken by the earlier account — for a
+    plain column, a sum and an aggregate (cards)."""
+    ids = (760020, 760021, 760022, 760023, 760024)
+    for telegram_id in ids:
+        await client.post("/api/v1/auth/session", headers=telegram_headers(telegram_id, bot_token))
+    users = [await get_user_by_telegram_id(db_session, t) for t in ids]
+    for user, rating in zip(users, (1200, 1500, 1200, 900, 1500)):
+        user.tactics_rating = rating
+        db_session.add(user)
+    player = await create_player(db_session)
+    for user, n in zip(users, (2, 0, 4, 2, 1)):
+        for _ in range(n):
+            await create_user_card(db_session, user.id, player.id, CardSource.seed)
+    await db_session.commit()
+
+    for metric in (RankingMetric.tactics_rating, RankingMetric.league_rating, RankingMetric.cards_count):
+        full = (await db_session.execute(ranking_service.ranking_statement(metric))).all()
+        expected = {user.id: (i + 1, value) for i, (user, value) in enumerate(full)}
+        for user in users:
+            rank, value = await ranking_service.rank_of(db_session, metric, user.id)
+            assert (rank, int(value)) == (expected[user.id][0], int(expected[user.id][1])), metric

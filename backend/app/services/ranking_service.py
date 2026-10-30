@@ -78,21 +78,42 @@ def _week_counts(metric: RankingMetric, week_start: date):
     return select(games.c.uid, func.count().label("n")).group_by(games.c.uid).subquery()
 
 
-def ranking_statement(metric: RankingMetric, week_start: Optional[date] = None):
-    """(User, value) rows of a ranking, best first (ties: the earlier
-    account first). Weekly metrics count the week starting `week_start`
-    (default: the current one)."""
+def _unordered(metric: RankingMetric, week_start: Optional[date] = None):
+    """The ranking's (User, value) statement without ORDER BY, its value
+    expression and its order (best first; ties: the earlier account first)."""
     if metric in WEEKLY_METRICS:
         from app.services.club_league_service import week_start_for
 
         counts = _week_counts(metric, week_start or week_start_for())
-        return (
+        stmt = (
             select(User, counts.c.n)
             .join(counts, counts.c.uid == User.id)
             .where(User.is_banned.is_(False), User.is_admin.is_(False), counts.c.n > 0)
-            .order_by(counts.c.n.desc(), User.id)
         )
-    return _standing_statement(metric).order_by(User.id)
+        return stmt, counts.c.n, [counts.c.n.desc(), User.id]
+    stmt, value = _standing_statement(metric)
+    return stmt, value, [value.desc(), User.id]
+
+
+def ranking_statement(metric: RankingMetric, week_start: Optional[date] = None):
+    """(User, value) rows of a ranking, best first (ties: the earlier
+    account first). Weekly metrics count the week starting `week_start`
+    (default: the current one)."""
+    stmt, _value, order = _unordered(metric, week_start)
+    return stmt.order_by(*order)
+
+
+async def rank_of(db: AsyncSession, metric: RankingMetric, user_id: int, week_start: Optional[date] = None):
+    """(rank, value) of one user, or None when he isn't ranked — counted by
+    the database. Loading the whole ranking into Python to find one row
+    (every game's /stats did) blocked the server for seconds."""
+    stmt, value, order = _unordered(metric, week_start)
+    ranked = (
+        stmt.with_only_columns(User.id.label("uid"), value.label("value"), func.row_number().over(order_by=order).label("rn"))
+        .subquery()
+    )
+    row = (await db.execute(select(ranked.c.rn, ranked.c.value).where(ranked.c.uid == user_id))).first()
+    return (int(row.rn), row.value) if row else None
 
 
 def _start_value(column) -> int:
@@ -130,7 +151,6 @@ def _standing_statement(metric: RankingMetric):
             .outerjoin(UserCard, UserCard.owner_id == User.id)
             .where(User.is_banned.is_(False), User.is_admin.is_(False))
             .group_by(User.id)
-            .order_by(value_expr.desc())
         )
     elif metric == RankingMetric.unique_players:
         value_expr = func.count(func.distinct(UserCard.player_id))
@@ -140,7 +160,6 @@ def _standing_statement(metric: RankingMetric):
             .outerjoin(UserCard, UserCard.owner_id == User.id)
             .where(User.is_banned.is_(False), User.is_admin.is_(False))
             .group_by(User.id)
-            .order_by(value_expr.desc())
         )
     elif metric == RankingMetric.academy_level:
         # «Уровень Академии»: the sum of the building's wing levels.
@@ -150,8 +169,8 @@ def _standing_statement(metric: RankingMetric):
             select(User, UserAcademy.total_level)
             .join(UserAcademy, UserAcademy.user_id == User.id)
             .where(User.is_banned.is_(False), User.is_admin.is_(False), UserAcademy.total_level > 0)
-            .order_by(UserAcademy.total_level.desc())
         )
+        value_expr = UserAcademy.total_level
     elif metric == RankingMetric.base_level:
         # «Уровень базы»: the «Клубная база» buildings plus the «Академия» wings.
         from app.models.card_path import UserAcademy
@@ -163,7 +182,6 @@ def _standing_statement(metric: RankingMetric):
             .outerjoin(UserClubBase, UserClubBase.user_id == User.id)
             .outerjoin(UserAcademy, UserAcademy.user_id == User.id)
             .where(User.is_banned.is_(False), User.is_admin.is_(False), value_expr > 0)
-            .order_by(value_expr.desc())
         )
     elif metric == RankingMetric.academy_prestige:
         # «Престиж Академии»: total prestige tiers of the user's copies.
@@ -174,20 +192,15 @@ def _standing_statement(metric: RankingMetric):
             .join(UserCard, UserCard.owner_id == User.id)
             .where(User.is_banned.is_(False), User.is_admin.is_(False), UserCard.prestige > 0)
             .group_by(User.id)
-            .order_by(value_expr.desc())
         )
     else:
-        column = _DIRECT_COLUMNS[metric]
-        stmt = (
-            select(User, column)
-            .where(User.is_banned.is_(False), User.is_admin.is_(False))
-            .order_by(column.desc())
-        )
-    return stmt
+        value_expr = _DIRECT_COLUMNS[metric]
+        stmt = select(User, value_expr).where(User.is_banned.is_(False), User.is_admin.is_(False))
+    return stmt, value_expr
 
 
 async def get_ranking(db: AsyncSession, metric: RankingMetric, current_user: User, limit: int = 10) -> RankingOut:
-    rows = (await db.execute(ranking_statement(metric))).all()
+    rows = (await db.execute(ranking_statement(metric).limit(limit))).all()
 
     def to_entry(rank: int, user: User, value) -> RankingEntry:
         return RankingEntry(
@@ -199,12 +212,9 @@ async def get_ranking(db: AsyncSession, metric: RankingMetric, current_user: Use
             active_badge=BadgeOut.model_validate(user.active_badge) if user.active_badge else None,
         )
 
-    top = [to_entry(i + 1, user, value) for i, (user, value) in enumerate(rows[:limit])]
+    top = [to_entry(i + 1, user, value) for i, (user, value) in enumerate(rows)]
 
-    me = None
-    for i, (user, value) in enumerate(rows):
-        if user.id == current_user.id:
-            me = to_entry(i + 1, user, value)
-            break
+    mine = await rank_of(db, metric, current_user.id)
+    me = to_entry(mine[0], current_user, mine[1]) if mine else None
 
     return RankingOut(metric=metric, top=top, me=me)
