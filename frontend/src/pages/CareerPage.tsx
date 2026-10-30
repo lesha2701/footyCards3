@@ -283,6 +283,7 @@ function ActiveSeason({ season, catalog, onView, onError }: { season: CareerSeas
   const hasTactics = (season.tactics_version ?? 0) > 0;
   const [tab, setTab] = useState<Tab>(season.scouting ? "prep" : "squad");
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const leave = useMutation({
     mutationFn: leaveCareer,
@@ -297,6 +298,23 @@ function ActiveSeason({ season, catalog, onView, onError }: { season: CareerSeas
   return (
     <>
       {season.live && <LiveMatchCenter live={season.live} catalog={catalog} seasonId={season.id} onView={onView} onError={onError} />}
+      {season.second_half && (
+        <button
+          type="button"
+          onClick={() => navigate(`/play/career/seasons/${season.id}/rounds/${season.second_half!.round}/matches/${season.second_half!.match_index}`)}
+          className="flex items-center gap-3 rounded-3xl bg-gradient-to-br from-bg-surface to-bg-raised p-4 text-left ring-1 ring-red-400/40 active:scale-[0.99]"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-red-500/15">
+            <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-400" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-caption font-bold uppercase tracking-wider text-red-300">Live · тур {season.second_half.round + 1}</span>
+            <span className="block font-display text-base font-bold text-ink-chalk">Второй тайм в эфире</span>
+            <span className="block text-caption text-ink-mist">Смотреть вживую — счёт узнаешь вместе со всеми</span>
+          </span>
+          <span className="text-lg text-ink-mist">›</span>
+        </button>
+      )}
       <section className="rounded-3xl bg-bg-surface p-4">
         <div className="flex items-center justify-between text-xs text-ink-mist">
           <span>{season.division?.name ?? season.difficulty_label} · тур {Math.min(season.rounds_played + 1, season.total_rounds)} из {season.total_rounds}</span>

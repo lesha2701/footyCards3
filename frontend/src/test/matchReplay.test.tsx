@@ -18,6 +18,7 @@ import {
   minuteLabel,
   moments,
   rosterAt,
+  liveEdge,
   secondHalfFrame,
   segmentKindAt,
 } from "@/lib/matchReplay";
@@ -138,6 +139,16 @@ describe("matchReplay timeline", () => {
     expect(after.possession).toEqual([71, 29]); // 5 of 7 frames held by home
   });
 
+  it("a second half on air plays in real time from its kick-off and ends with the show", () => {
+    const at = new Date("2026-10-30T19:10:00Z").getTime();
+    const iso = new Date(at).toISOString();
+    expect(liveEdge(tl, replay, iso, at - 1000)).toBeNull(); // not kicked off yet
+    expect(liveEdge(tl, replay, iso, at)).toBe(tl.starts[7]);
+    expect(liveEdge(tl, replay, iso, at + 700)).toBe(tl.starts[7] + 700);
+    expect(liveEdge(tl, replay, iso, at + 60_000)).toBeNull(); // over
+    expect(liveEdge(tl, replay, null, at)).toBeNull();
+  });
+
   it("knows the accelerated stretches between moments", () => {
     expect(segmentKindAt(replay, 0)).toBe("kickoff");
     expect(segmentKindAt(replay, 3)).toBe("bridge");
@@ -188,6 +199,23 @@ describe("ReplayPlayer", () => {
     expect(screen.getByText("Сейв", { selector: "p span" })).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Скорость x1"));
     expect(screen.getByLabelText("Скорость x2")).toBeInTheDocument();
+  });
+
+  it("watching a second half on air: from its kick-off, LIVE badge, no peeking ahead", () => {
+    const tlx = buildTimeline(replay);
+    // Kicked off two minutes ago: still on air, so it starts from its kick-off.
+    const at = new Date(Date.now() - 120_000).toISOString();
+    render(<ReplayPlayer data={{ ...data, second_half_at: at }} />);
+    expect(screen.getByText("LIVE")).toBeInTheDocument();
+    // The goal of the first half is known, the future isn't on the timeline.
+    fireEvent.change(screen.getByLabelText("Перемотка"), { target: { value: String(tlx.total) } });
+    expect(screen.getByText(/2-й тайм/)).toBeInTheDocument();
+    expect(screen.queryByText(/Матч окончен/)).toBeNull();
+  });
+
+  it("a second half long over is an ordinary replay", () => {
+    render(<ReplayPlayer data={{ ...data, second_half_at: new Date(Date.now() - 3_600_000).toISOString() }} />);
+    expect(screen.queryByText("LIVE")).toBeNull();
   });
 
   it("tabs under the pitch: feed, stats, line-ups and the live break's own tabs", () => {

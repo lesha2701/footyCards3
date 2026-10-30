@@ -27,6 +27,10 @@ export default function CareerMatchPage() {
   // The tactics catalog (axis labels) comes with the career view.
   const { data: view } = useQuery({ queryKey: ["career"], queryFn: fetchCareer, staleTime: 60_000 });
 
+  // The second half of this match is on air: no spoilers below the pitch.
+  const sh = view?.season?.second_half;
+  const onAir = !isCup && !isFriendly && !!sh && sh.round === Number(round) && sh.match_index === Number(match);
+
   if (isLoading) return <ListSkeleton count={4} />;
   if (isError || !data) return <EmptyState icon={IconFlagCheckered} title="Матч не найден" description="Он ещё не сыгран или недоступен" />;
 
@@ -66,7 +70,9 @@ export default function CareerMatchPage() {
           </div>
         </section>
       )}
-      {data.analysis && <CareerMatchAnalysis analysis={data.analysis} catalog={view?.tactics_catalog ?? null} />}
+      {data.analysis && (onAir
+        ? <p className="rounded-3xl bg-bg-surface p-4 text-caption text-ink-mist">Тактический разбор — после финального свистка.</p>
+        : <CareerMatchAnalysis analysis={data.analysis} catalog={view?.tactics_catalog ?? null} />)}
     </div>
   );
 }

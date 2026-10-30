@@ -21,6 +21,7 @@ import {
   playerAt,
   revealedEvents,
   rosterAt,
+  liveEdge,
   secondHalfFrame,
   segmentKindAt,
   type Moment,
@@ -44,6 +45,10 @@ const MOMENT_STYLE: Record<Moment["kind"], string> = {
 /** An extra tab under the pitch (the live break's substitutions and
  * tactics); `badge` marks it, e.g. tired players waiting for a change. */
 export interface ReplayTab { key: string; label: string; badge?: string; content: ReactNode }
+
+/** How long a second half is "on air" after its kick-off (backend
+ * career_service.SECOND_HALF_ON_AIR). */
+const ON_AIR_MS = 6 * 60_000;
 
 const BASE_TABS: { key: string; label: string; badge?: string }[] = [
   { key: "feed", label: "Лента" },
@@ -70,7 +75,18 @@ export function ReplayPlayer({ data, extraTabs, footer }: {
   replay3dRef.current = replay3d !== null;
   const leaveImmersive = useRef<(() => void) | null>(null);
 
-  const timeRef = useRef(0);
+  // A second half on air (the server keeps it so for ON_AIR_MS after its
+  // kick-off): opened then, it starts at its kick-off for this viewer and
+  // runs in real time; he can't run ahead of it (goals to come stay unknown).
+  const [onAirAt] = useState<string | null>(() => {
+    const at = data.live || !data.second_half_at ? NaN : Date.parse(data.second_half_at);
+    const now = Date.now();
+    return now >= at && now - at < ON_AIR_MS ? new Date(now).toISOString() : null;
+  });
+  const startEdge = useMemo(() => liveEdge(tl, replay, onAirAt, Date.now()), [tl, replay, onAirAt]);
+  const edgeRef = useRef<number | null>(startEdge);
+  const [onAir, setOnAir] = useState(startEdge !== null);
+  const timeRef = useRef(startEdge ?? 0);
   const [frame, setFrame] = useState(0);
   const [tab, setTab] = useState("feed");
   const [playing, setPlaying] = useState(true);
@@ -129,8 +145,12 @@ export function ReplayPlayer({ data, extraTabs, footer }: {
     const loop = (now: number) => {
       const dt = Math.min(100, now - last);
       last = now;
+      const edge = liveEdge(tl, replay, onAirAt, Date.now());
+      if ((edge === null) !== (edgeRef.current === null)) setOnAir(edge !== null);
+      edgeRef.current = edge;
       if (playingRef.current) {
         timeRef.current = Math.min(tl.total, timeRef.current + dt * speedRef.current);
+        if (edge !== null) timeRef.current = Math.min(timeRef.current, edge);
         if (timeRef.current >= tl.total) setPlaying(false);
       }
       // The 2D pitch is hidden under the 3D replay: don't draw it meanwhile.
@@ -139,10 +159,10 @@ export function ReplayPlayer({ data, extraTabs, footer }: {
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [tl, draw]);
+  }, [tl, draw, replay, onAirAt]);
 
   const seek = (ms: number) => {
-    timeRef.current = Math.max(0, Math.min(tl.total, ms));
+    timeRef.current = Math.max(0, Math.min(edgeRef.current ?? tl.total, ms));
     draw(timeRef.current);
   };
   const open3d = (event: number) => {
@@ -215,7 +235,8 @@ export function ReplayPlayer({ data, extraTabs, footer }: {
             {stats.score[0]}:{stats.score[1]}
           </p>
           <p className="mt-0.5 flex items-center gap-1 font-mono text-micro text-ink-mist">
-            {data.live && !ended && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" />}
+            {(data.live || onAir) && !ended && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" />}
+            {onAir && !ended && <span className="rounded bg-red-500/80 px-1 font-bold text-white">LIVE</span>}
             <span ref={clockRef}>1'</span>
             <span className="text-ink-mist-dim">· {halfLabel}</span>
             {!ended && segmentKindAt(replay, frame) === "bridge" && (
@@ -309,7 +330,7 @@ export function ReplayPlayer({ data, extraTabs, footer }: {
         </button>
       <div className="relative min-w-0 flex-1 px-1 pt-3">
         <div className="pointer-events-none absolute inset-x-1 top-0 h-3">
-          {marks.filter((m) => m.kind !== "chance").map((m) => (
+          {marks.filter((m) => m.kind !== "chance" && m.ms <= (edgeRef.current ?? Infinity)).map((m) => (
             <button
               key={`${m.event}`}
               type="button"
@@ -328,7 +349,7 @@ export function ReplayPlayer({ data, extraTabs, footer }: {
           ))}
         </div>
         <div className="pointer-events-none absolute inset-x-1 top-[18px] h-1">
-          {marks.filter((m) => m.kind === "chance").map((m) => (
+          {marks.filter((m) => m.kind === "chance" && m.ms <= (edgeRef.current ?? Infinity)).map((m) => (
             <span key={`${m.event}`} className="absolute h-1 w-0.5 -translate-x-1/2 rounded-full bg-white/40"
               style={{ left: `${tl.total ? (m.ms / tl.total) * 100 : 0}%` }} />
           ))}
@@ -344,6 +365,15 @@ export function ReplayPlayer({ data, extraTabs, footer }: {
           aria-label="Перемотка"
         />
       </div>
+        {onAir && edgeRef.current !== null && edgeRef.current - (tl.starts[frame] ?? 0) > 4000 && (
+          <button
+            type="button"
+            onClick={() => { seek(edgeRef.current ?? 0); setPlaying(true); }}
+            className="flex h-8 shrink-0 items-center rounded-xl bg-red-500/80 px-2 text-micro font-bold text-white"
+          >
+            В эфир
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setSpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length])}

@@ -165,6 +165,23 @@ async def test_live_round_first_half_break_and_second_half(client, db_session, b
     assert any("в перерыве" in e["description"] for e in rec["events"] if e["event_type"] == "substitution")
     assert (await client.get(f"{API}/career", headers=headers)).json()["season"]["live"] is None
 
+    # The second half can be followed in real time: the replay says when it
+    # kicked off, and while it is on air the career screen offers it.
+    match_index = row.state["results"][0].index(rec)
+    replay = (await client.get(f"{API}/career/seasons/{season['id']}/rounds/0/matches/{match_index}/replay",
+                               headers=headers)).json()
+    assert replay["live"] is False and datetime.fromisoformat(replay["second_half_at"]) == first + timedelta(minutes=10)
+    config = await get_config(db_session)
+    me = next(p for p in row.participants if p.user_id == user_id)
+    assert career_service._second_half_out(row, me, config) is None  # the schedule is in the future
+    state = dict(row.state)
+    state["schedule"] = [(datetime.now(timezone.utc) - timedelta(minutes=11)).isoformat(), *state["schedule"][1:]]
+    row.state = state
+    on_air = career_service._second_half_out(row, me, config)
+    assert on_air == {"round": 0, "match_index": match_index, "second_half_at": on_air["second_half_at"]}
+    state["schedule"][0] = (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat()
+    assert career_service._second_half_out(row, me, config) is None  # long over
+
 
 async def test_live_can_be_switched_off(client, db_session, bot_token):
     user_id, headers, season = await _season(client, db_session, bot_token, 880002)

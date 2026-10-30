@@ -371,6 +371,8 @@ export interface CareerSeason {
   roles?: Record<string, string>;
   /** Live match centre: my match at half-time (first half played). */
   live?: CareerLive | null;
+  /** My match whose second half is on air right now (watch it live). */
+  second_half?: { round: number; match_index: number; second_half_at: string } | null;
   /** What the coach could still add to the match plan. */
   plan_hints?: { code: string; text: string }[];
 }

@@ -321,3 +321,15 @@ export function segmentKindAt(replay: CareerReplay, frame: number): string | nul
   for (const [kind, f0, n] of replay.segments) if (f0 <= frame && frame < f0 + n) return kind;
   return null;
 }
+
+/** Where the show of a second half that started playing at `at` is "on
+ * air" now (ms of the show at x1): from its kick-off in real time. Null
+ * when there is no such half or its show is already over. */
+export function liveEdge(tl: Timeline, replay: CareerReplay, at: string | null | undefined, now: number): number | null {
+  if (!at) return null;
+  const h2 = secondHalfFrame(replay);
+  const start = new Date(at).getTime();
+  if (h2 === null || !Number.isFinite(start) || now < start) return null;
+  const edge = tl.starts[h2] + (now - start);
+  return edge < tl.total ? edge : null;
+}

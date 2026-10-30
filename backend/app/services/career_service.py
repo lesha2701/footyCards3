@@ -2143,6 +2143,37 @@ async def resolve_due(db: AsyncSession, season_id: int, now: Optional[datetime] 
     return played
 
 
+# How long after the second half kicks off it is "on air" (its show is
+# 1.5-2.5 minutes; a margin for coming in late).
+SECOND_HALF_ON_AIR = timedelta(minutes=6)
+
+
+def _second_half_at(season: CareerSeason, round_index: int, config) -> Optional[datetime]:
+    """When the second half of a live round kicked off (the end of its
+    break), or None when the round wasn't played live."""
+    at = _round_at(season, round_index)
+    if at is None or not _live_applies(season, config):
+        return None
+    return at + timedelta(minutes=int(config.career_halftime_minutes))
+
+
+def _second_half_out(season: CareerSeason, me: CareerParticipant, config) -> Optional[dict]:
+    """My match whose second half is on air right now (just played after the
+    break): the career screen offers to watch it live."""
+    r = season.rounds_played - 1
+    results = (season.state or {}).get("results") or []
+    if r < 0 or r >= len(results):
+        return None
+    at = _second_half_at(season, r, config)
+    now = datetime.now(timezone.utc)
+    if at is None or not (at <= now < at + SECOND_HALF_ON_AIR):
+        return None
+    for index, m in enumerate(results[r]):
+        if me.team_index in (m["home"], m["away"]) and m.get("lineups"):
+            return {"round": r, "match_index": index, "second_half_at": at.isoformat()}
+    return None
+
+
 def _live_applies(season: CareerSeason, config) -> bool:
     return (bool(config.career_live_enabled) and _tactics_version(season.state) >= tactics.TACTICS_VERSION
             and any(p.status == "accepted" for p in season.participants))
@@ -2486,6 +2517,7 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
         if out["tactics_version"] >= tactics.TACTICS_VERSION and season.status == "active":
             config = await get_config(db)
             out["live"] = _live_out(season, me, by_id, config)
+            out["second_half"] = None if out["live"] else _second_half_out(season, me, config)
             out["plan_hints"] = _plan_hints(me, xi, config, out["scouting"])
         # Chemistry of the XI that would play the next round, under the
         # season's frozen rules (tactics seasons only).
@@ -2754,7 +2786,10 @@ async def match_replay(db: AsyncSession, user: User, season_id: int, round_index
             lineups = {side: {"formation": (m["tactics"].get(str(m[team])) or {}).get("formation"),
                               "tactic": (m["tactics"].get(str(m[team])) or {}).get("tactic")}
                        for side, team in (("a", "home"), ("b", "away"))}
-        second_half_at = None
+        # A live round's second half: the viewer can follow it in real time
+        # from this moment (its frames still come all at once).
+        at = _second_half_at(season, round_index, await get_config(db)) if m.get("lineups") else None
+        second_half_at = at.isoformat() if at else None
     elif live.get("round") == round_index and str(match_index) in (live.get("matches") or {}):
         m = live["matches"][str(match_index)]
         events, lineups, halves, hs, as_ = m["events"], m.get("lineups"), 1, m["hs"], m["as"]

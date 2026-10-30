@@ -288,6 +288,8 @@ class CareerSeasonOut(BaseModel):
     # what the coach could still add to the match plan.
     roles: dict[str, str] = {}
     live: Optional[dict] = None
+    # My match whose second half is on air right now (watch it live).
+    second_half: Optional[dict] = None
     plan_hints: list[dict] = []
     ambition: Optional[str] = None
     ambitions: list[dict] = []
