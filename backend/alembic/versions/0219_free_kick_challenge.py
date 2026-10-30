@@ -1,8 +1,8 @@
 """«Штрафной 3D»: «Испытание дня» — one attempt per player per day, the
 same positions and targets for everyone, a daily leaderboard.
 
-Revision ID: 0217
-Revises: 0216
+Revision ID: 0219
+Revises: 0218
 Create Date: 2026-10-30
 """
 from typing import Sequence, Union
@@ -10,8 +10,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0217"
-down_revision: Union[str, None] = "0216"
+revision: str = "0219"
+down_revision: Union[str, None] = "0218"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

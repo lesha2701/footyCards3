@@ -1,8 +1,8 @@
 """«Мой игрок»: gear for the 3D free kick and penalty — balls, boots and
 keeper's gloves — for Stars
 
-Revision ID: 0216
-Revises: 0215
+Revision ID: 0218
+Revises: 0217
 Create Date: 2026-10-30
 
 Adds their Stars prices to game_config.my_player_cosmetic_stars_prices,
@@ -12,8 +12,8 @@ from typing import Sequence, Union
 
 from alembic import op
 
-revision: str = "0216"
-down_revision: Union[str, None] = "0215"
+revision: str = "0218"
+down_revision: Union[str, None] = "0217"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
