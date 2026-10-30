@@ -3,8 +3,9 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 
 import { playPlayerCareerMoment, type PlayerCareerMoment, type PlayerCareerView } from "@/api/playerCareer";
+import CelebrationBurst from "@/components/myPlayer/CelebrationBurst";
+import WalkoutIntro from "@/components/myPlayer/WalkoutIntro";
 import { formatGameError } from "@/lib/errors";
-import { CELEBRATION_EMOJI } from "@/lib/myPlayer";
 import { haptic, hapticNotify } from "@/lib/telegram";
 
 const KIND_ICON: Record<PlayerCareerMoment["kind"], string> = { attack: "⚡", defense: "🛡️", save: "🧤" };
@@ -21,10 +22,16 @@ export default function KeyMoments({
 }: { view: PlayerCareerView; onView: (v: PlayerCareerView) => void; onError: (e: unknown) => void }) {
   const pending = view.pending;
   const [active, setActive] = useState<PlayerCareerMoment | null>(null);
+  // The worn walk-out plays once before the first moment of the match.
+  const [walkout, setWalkout] = useState<PlayerCareerMoment | null>(null);
+  const [walkedOut, setWalkedOut] = useState(false);
   // The popup outlives the section: the last moment finalizes the match and
   // clears `pending`, but the player still has to see how it went.
   const modal = (
     <AnimatePresence>
+      {walkout && view.player && (
+        <WalkoutIntro key="walkout" player={view.player} onDone={() => { setActive(walkout); setWalkout(null); }} />
+      )}
       {active && (
         <MomentModal
           moment={active}
@@ -62,7 +69,13 @@ export default function KeyMoments({
               </span>
               {m.status === "open" ? (
                 <button
-                  onClick={() => { haptic("medium"); setActive(m); }}
+                  onClick={() => {
+                    haptic("medium");
+                    if (view.player?.walkout && !walkedOut) {
+                      setWalkedOut(true);
+                      setWalkout(m);
+                    } else setActive(m);
+                  }}
                   className="shrink-0 rounded-lg bg-floodlight px-3 py-1.5 text-xs font-bold text-bg-base"
                 >
                   Играть
@@ -188,11 +201,7 @@ function MomentModal({
             <p className={`font-display text-4xl font-black ${result.success ? "text-accent-lime" : "text-red-400"}`}>
               {result.success ? (goal ? (option === "pass" ? "ГОЛЕВОЙ ПАС!" : "ГОЛ!") : "СПАС!") : goal ? "Мимо…" : "Пропустили…"}
             </p>
-            {result.success && goal && option !== "pass" && celebration && (
-              <motion.p className="mt-1 text-5xl" initial={{ rotate: -20, y: 10 }} animate={{ rotate: 0, y: 0 }}>
-                {CELEBRATION_EMOJI[celebration] ?? "🎉"}
-              </motion.p>
-            )}
+            {result.success && goal && option !== "pass" && celebration && <CelebrationBurst code={celebration} size="text-5xl" />}
             <p className="mt-1 text-caption text-ink-mist">{result.hit ? "Тайминг идеальный!" : "Тайминг мимо зоны"}</p>
             <button onClick={onClose} className="mt-3 w-full rounded-2xl bg-floodlight py-3 text-sm font-bold text-bg-base">Дальше</button>
           </motion.div>

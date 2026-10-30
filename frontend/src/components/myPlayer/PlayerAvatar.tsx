@@ -19,6 +19,8 @@ interface Props {
   backdrop?: string | null;
   /** National team, for the «Флаг сборной» background. */
   country?: string | null;
+  /** This week's «Спонсор»: its emoji on a patch on the chest. */
+  sponsor?: { emoji: string; color: string } | null;
 }
 
 // Flag stripes for «Флаг сборной» (top to bottom); unknown countries get a
@@ -84,7 +86,7 @@ const MOUSTACHE = "M84 126 Q100 118 116 126 Q100 124 84 126Z";
 /** The constructor's footballer: a shaded head-and-shoulders SVG drawn from
  * option indexes (no uploaded photos — nothing to moderate). Option counts
  * must match backend my_player_service.APPEARANCE_OPTIONS. */
-export default function PlayerAvatar({ appearance: a, number, className, background = true, accessory, backdrop, country }: Props) {
+export default function PlayerAvatar({ appearance: a, number, className, background = true, accessory, backdrop, country, sponsor }: Props) {
   const id = useId().replace(/:/g, "");
   const skin = SKIN_TONES[a.skin] ?? SKIN_TONES[0];
   const hair = HAIR_COLORS[a.hair_color] ?? HAIR_COLORS[0];
@@ -447,6 +449,12 @@ export default function PlayerAvatar({ appearance: a, number, className, backgro
         <path d="M0 0 h14 v8 q0 8 -7 11 q-7 -3 -7 -11z" fill={trim} opacity="0.9" />
         <circle cx="7" cy="8" r="3" fill={kit} />
       </g>
+      {sponsor && (
+        <g data-testid="kit-sponsor">
+          <rect x="80" y="184" width="28" height="15" rx="4" fill={sponsor.color} stroke="#000" strokeOpacity="0.3" />
+          <text x="94" y="195.5" textAnchor="middle" fontSize="10">{sponsor.emoji}</text>
+        </g>
+      )}
       {number != null && (
         <text
           x="124" y="222" textAnchor="middle" fontSize="30" fontWeight="900" fontFamily="system-ui, sans-serif"

@@ -19,6 +19,7 @@ from app.models.manager_club import (
     ManagerValueHistory,
 )
 from app.models.my_player import MyPlayer, MyPlayerDuel
+from app.models.my_player_extras import MyPlayerEdition, MyPlayerGift, MyPlayerSponsorContract
 from app.models.newbie import NewbieProgress
 from app.models.streak_reward import StreakReward
 from app.models.player_career import (

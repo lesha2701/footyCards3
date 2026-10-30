@@ -452,6 +452,13 @@ class GameConfigOut(BaseModel):
     my_player_role_change_coins: int = 25000
     my_player_role_change_stars: int = 300
     my_player_cosmetic_stars_prices: dict[str, int] = {}
+    my_player_limited_supply: dict[str, int] = {}
+    my_player_sponsor_goals: dict = {}
+    my_player_sponsors: list = []
+    my_player_sponsor_bonus_coins: int = 300
+    my_player_sponsor_stars: int = 49
+    my_player_sponsor_premium_pct: int = 200
+    my_player_patron_levels: list[int] = []
     player_career_level_ratings: list[int] = []
     player_career_level_salary: list[int] = []
     player_career_level_prestige: list[int] = []
@@ -1241,6 +1248,13 @@ class GameConfigUpdate(BaseModel):
     my_player_role_change_coins: Optional[int] = Field(default=None, ge=0)
     my_player_role_change_stars: Optional[int] = Field(default=None, ge=0, le=100000)
     my_player_cosmetic_stars_prices: Optional[dict[str, int]] = None
+    my_player_limited_supply: Optional[dict[str, int]] = None
+    my_player_sponsor_goals: Optional[dict] = None
+    my_player_sponsors: Optional[list] = Field(default=None, max_length=30)
+    my_player_sponsor_bonus_coins: Optional[int] = Field(default=None, ge=0, le=100000)
+    my_player_sponsor_stars: Optional[int] = Field(default=None, ge=0, le=10000)
+    my_player_sponsor_premium_pct: Optional[int] = Field(default=None, ge=100, le=1000)
+    my_player_patron_levels: Optional[list[int]] = Field(default=None, max_length=3)
     player_career_level_ratings: Optional[list[int]] = Field(default=None, min_length=5, max_length=5)
     player_career_level_salary: Optional[list[int]] = Field(default=None, min_length=5, max_length=5)
     player_career_level_prestige: Optional[list[int]] = Field(default=None, min_length=5, max_length=5)

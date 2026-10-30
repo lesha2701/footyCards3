@@ -132,8 +132,27 @@ COSMETICS = {
     "gloves_lime": ("gloves", "Перчатки «Лайм»"),
     "gloves_pink": ("gloves", "Перчатки «Розовые»"),
     "gloves_gold": ("gloves", "Перчатки «Золото»"),
+    "cel_fist": ("celebration", "Празднование «Кулак вверх»"),
+    "cel_shush": ("celebration", "Празднование «Тсс!»"),
+    "cel_flex": ("celebration", "Празднование «Бицепс»"),
+    "cel_knee": ("celebration", "Празднование «Скольжение на коленях»"),
+    "cel_calma": ("celebration", "Празднование «Спокойно»"),
+    "cel_flip": ("celebration", "Празднование «Сальто»"),
+    "cel_siu_gold": ("celebration", "Празднование «Золотое Сиу»"),
+    # Walk-outs: played before key moments and duels.
+    "walk_tunnel": ("walkout", "Выход «Из тоннеля»"),
+    "walk_flags": ("walkout", "Выход «Коридор флагов»"),
+    "walk_smoke": ("walkout", "Выход «Дым и прожекторы»"),
+    "walk_fireworks": ("walkout", "Выход «Фейерверк»"),
+    "walk_legend": ("walkout", "Выход «Легенда»"),
+    # The trophy cabinet («Шкаф трофеев»); no item = the wooden one.
+    "sc_marble": ("showcase", "Мраморная витрина"),
+    "sc_gold": ("showcase", "Золотая витрина"),
+    "sc_crystal": ("showcase", "Хрустальная витрина"),
 }
-COSMETIC_KINDS = ("accessory", "background", "effect", "hair", "celebration", "ball", "boots", "gloves")
+COSMETIC_KINDS = (
+    "accessory", "background", "effect", "hair", "celebration", "ball", "boots", "gloves", "walkout", "showcase",
+)
 # Premium hairstyles: wearing one sets appearance["hair"] to this index
 # (PlayerAvatar draws 14+ as these styles); the free choices stay 0..13.
 PREMIUM_HAIR = {"hair_neymar": 14, "hair_cr7": 15, "hair_pogba": 16}
@@ -142,6 +161,7 @@ PREMIUM_HAIR = {"hair_neymar": 14, "hair_cr7": 15, "hair_pogba": 16}
 COSMETIC_STATUS = {
     "hair_neymar": 30, "hair_cr7": 25, "hair_pogba": 20, "aviators": 15, "diamond_chain": 20,
     "crown": 25, "bg_galaxy": 10, "bg_champions": 15, "fx_sparkle": 8, "fx_fire": 10, "fx_lightning": 15,
+    "cel_siu_gold": 40, "walk_legend": 35, "cel_flip": 10, "walk_fireworks": 10, "sc_gold": 10, "sc_crystal": 20,
 }
 
 TRAINING_MAX_HITS = 3
@@ -332,6 +352,9 @@ async def grant_reward_xp(db: AsyncSession, user: User, tx_type: TransactionType
     config = await db.get(GameConfig, 1)
     if config is None or not config.my_player_enabled:
         return 0
+    from app.services import my_player_extras
+
+    await my_player_extras.progress(db, user.id, "game_reward")
     return add_xp(user, config.my_player_xp_per_reward, config, bonus_pct=await xp_bonus_pct(db, user.id))
 
 
@@ -484,6 +507,7 @@ def player_out(mp: MyPlayer, config) -> dict:
         "background": cosmetics["background"],
         "effect": cosmetics["effect"],
         "celebration": cosmetics["celebration"],
+        "walkout": cosmetics["walkout"], "showcase": cosmetics["showcase"],
         "tier": tier, "tier_label": TIER_LABELS[tier],
         "country": mp.country,
         "pro": bool(mp.pro_until and ensure_aware(mp.pro_until) > datetime.now(timezone.utc)),
@@ -567,6 +591,7 @@ async def _career_offers_waiting(db: AsyncSession, user_id: int) -> bool:
 
 
 async def get_view(db: AsyncSession, user: User) -> dict:
+    from app.services import my_player_extras
     from app.services.lifestyle_service import effects_of, income_ready
 
     config = await get_config(db)
@@ -618,7 +643,12 @@ async def get_view(db: AsyncSession, user: User) -> dict:
         "next_tier_at": next((t for t in (config.my_player_tier_thresholds or []) if rating is not None and t > rating), None),
         "skill": await _skill_view(db, mp, level, config) if mp else None,
         "training": training,
-        "cosmetics": _cosmetics_view(mp, config),
+        "cosmetics": _cosmetics_view(
+            mp, config, await my_player_extras.sold_counts(db, config),
+            await my_player_extras.editions_of(db, user.id) if mp else {},
+        ),
+        "sponsor": await my_player_extras.sponsor_badge(db, user.id, config) if mp else None,
+        "cabinet": await my_player_extras.cabinet(db, mp, config) if mp else None,
         "freshness": _freshness_view(mp, config, effects.get("freshness_regen", 0)) if mp else None,
         "role_change": {
             "coins_price": config.my_player_role_change_coins, "stars_price": config.my_player_role_change_stars,
@@ -633,6 +663,7 @@ async def get_view(db: AsyncSession, user: User) -> dict:
         "training": bool(mp) and not training["done_today"],
         "income": bool(mp) and await income_ready(db, user.id) > 0,
         "career_offers": bool(mp) and await _career_offers_waiting(db, user.id),
+        "sponsor": bool(mp) and my_player_extras.claimable(await my_player_extras.sponsor_view(db, user)),
     }
     return view
 
@@ -734,10 +765,16 @@ def _training_view(mp: Optional[MyPlayer], config) -> dict:
     }
 
 
-def _cosmetics_view(mp: Optional[MyPlayer], config) -> dict:
+def _cosmetics_view(
+    mp: Optional[MyPlayer], config, sold: Optional[dict] = None, editions: Optional[dict] = None,
+) -> dict:
+    """The «Раздевалка» catalog; limited items carry their supply, copies
+    sold (`sold`) and the owner's numbers (`editions`)."""
+    from app.services.my_player_extras import supply_of
+
+    sold, editions = sold or {}, editions or {}
     state = cosmetics_of(mp) if mp else {
-        "owned": [], "accessory": None, "background": None, "effect": None, "hair": None, "base_hair": 0,
-        "celebration": None, "ball": None, "boots": None, "gloves": None,
+        "owned": [], "base_hair": 0, **{kind: None for kind in COSMETIC_KINDS},
     }
     coins = config.my_player_cosmetic_prices or {}
     stars = config.my_player_cosmetic_stars_prices or {}
@@ -748,6 +785,8 @@ def _cosmetics_view(mp: Optional[MyPlayer], config) -> dict:
                 "code": code, "kind": kind, "name": name, "price": int(coins.get(code) or 0),
                 "stars_price": int(stars.get(code) or 0), "owned": code in state["owned"],
                 "status": COSMETIC_STATUS.get(code, 0), "hair_index": PREMIUM_HAIR.get(code),
+                "supply": supply_of(code, config) or None, "sold": sold.get(code, 0) if supply_of(code, config) else None,
+                "edition": editions.get(code),
             }
             for code, (kind, name) in COSMETICS.items()
             if code in state["owned"] or int(coins.get(code) or 0) > 0 or int(stars.get(code) or 0) > 0
@@ -770,7 +809,13 @@ async def public_view(db: AsyncSession, user_id: int) -> dict:
         return {"player": None, "level": None, "trophies": []}
     owner = await db.get(User, user_id)
     level, _, _ = level_info(owner.my_player_xp if owner else 0, config)
-    return {"player": player_out(mp, config), "level": level, "trophies": await trophies_of(db, user_id)}
+    from app.services import my_player_extras
+
+    return {
+        "player": player_out(mp, config), "level": level, "trophies": await trophies_of(db, user_id),
+        "cabinet": await my_player_extras.cabinet(db, mp, config),
+        "sponsor": await my_player_extras.sponsor_badge(db, user_id, config),
+    }
 
 
 # --- writes --------------------------------------------------------------------
@@ -1029,6 +1074,9 @@ async def training_finish(db: AsyncSession, user: User, hits: int, now: Optional
     )
     bonus = await regen_bonus(db, user.id)
     set_freshness(mp, freshness_now(mp, config, now, bonus) + config.my_player_freshness_training, now)
+    from app.services import my_player_extras
+
+    await my_player_extras.progress(db, user.id, "training", 1, now)
     streak_reward = None
     if free_available:
         mp.training_streak = (mp.training_streak or 0) + 1 if mp.training_day == today - timedelta(days=1) else 1
@@ -1076,9 +1124,10 @@ async def buy_cosmetic(db: AsyncSession, user: User, code: str) -> dict:
     price, stars = _cosmetic_prices(code, config)
     if code not in COSMETICS or (price <= 0 and stars <= 0):
         raise ConflictError("Этого предмета нет в продаже")
-    if price <= 0:
+    from app.services import my_player_extras, wallet_service
+
+    if price <= 0 or my_player_extras.supply_of(code, config):
         raise ConflictError("Этот предмет продаётся только за звёзды")
-    from app.services import wallet_service
 
     locked = await wallet_service.lock_user_for_update(db, user.id)
     mp = await _locked_player(db, user.id)
@@ -1319,6 +1368,10 @@ async def play_duel(
             related_object_type="my_player_duel", related_object_id=duel.id,
         )
     add_xp(locked, config.my_player_duel_xp, config, today, bonus_pct=await xp_bonus_pct(db, user.id))
+    if result == "win":
+        from app.services import my_player_extras
+
+        await my_player_extras.progress(db, user.id, "duel_win", 1, now)
     challenger = locked.first_name or locked.username or "Друг"
     verdict = {"win": "победил", "draw": "сыграл вничью с", "loss": "проиграл"}[result]
     await notify(
@@ -1372,8 +1425,10 @@ async def create_stars_invoice(
     «Имущество» item ("item"), a cosmetic ("cosmetic"), a line change
     ("role"), a «Карьера игрока» extra ("career": code = pro | agent |
     refresh | heal | save_offer | fast, position carries the club key for
-    save_offer) or a «Менеджер» purchase ("manager": code = pro | a style
-    item). The price is frozen on the invoice."""
+    save_offer), a «Менеджер» purchase ("manager": code = pro | a style
+    item), «Спонсор» premium ("sponsor") or a gift to a friend ("gift":
+    item_id = the friend, code = training | pro | cosmetic:<code>). The
+    price is frozen on the invoice."""
     import secrets
 
     from app.models.lifestyle import LifestyleItem
@@ -1394,6 +1449,14 @@ async def create_stars_invoice(
         from app.services import manager_shop
 
         key, title, description, stars = await manager_shop.stars_order(db, user.id, code or "", config)
+    elif purchase == "sponsor":
+        from app.services import my_player_extras
+
+        key, title, description, stars = await my_player_extras.sponsor_stars_order(db, user.id, config)
+    elif purchase == "gift":
+        from app.services import my_player_extras
+
+        key, title, description, stars = await my_player_extras.gift_stars_order(db, user.id, item_id, code or "", config)
     elif purchase == "training":
         stars = config.my_player_extra_training_stars
         if stars <= 0:
@@ -1416,6 +1479,9 @@ async def create_stars_invoice(
             raise ConflictError("Этот предмет продаётся только за монеты")
         if code in cosmetics_of(mp)["owned"]:
             raise ConflictError("Уже куплено")
+        from app.services import my_player_extras
+
+        await my_player_extras.check_supply(db, code, config)
         key, title, description = f"cosmetic:{code}", COSMETICS[code][1], f"Стиль для твоего игрока: {COSMETICS[code][1]}"
     elif purchase == "role" and position:
         stars = config.my_player_role_change_stars
@@ -1463,7 +1529,21 @@ async def validate_stars_purchase(db: AsyncSession, invoice) -> tuple[bool, str]
             return False, "Этот предмет больше не продаётся"
         if code in cosmetics_of(mp)["owned"]:
             return False, "Уже куплено"
+        from app.services import my_player_extras
+
+        try:
+            await my_player_extras.check_supply(db, code, config)
+        except ConflictError as exc:
+            return False, exc.message
         return True, ""
+    if purchase.startswith("sponsor:"):
+        from app.services import my_player_extras
+
+        return await my_player_extras.validate_sponsor_stars(db, invoice, config)
+    if purchase.startswith("gift:"):
+        from app.services import my_player_extras
+
+        return await my_player_extras.validate_gift_stars(db, invoice, config)
     if purchase.startswith("career:"):
         from app.services import player_career_shop
 
@@ -1501,8 +1581,19 @@ async def deliver_stars_purchase(db: AsyncSession, user: User, invoice) -> dict:
         code = purchase.split(":", 1)[1]
         mp = await _locked_player(db, user.id)
         if code in COSMETICS:
+            from app.services import my_player_extras
+
+            await my_player_extras.grant_edition(db, user.id, code, config)
             _give_cosmetic(mp, code)
         return {"kind": "cosmetic", "name": COSMETICS.get(code, ("", code))[1]}
+    if purchase.startswith("sponsor:"):
+        from app.services import my_player_extras
+
+        return await my_player_extras.deliver_sponsor_stars(db, user, invoice, config)
+    if purchase.startswith("gift:"):
+        from app.services import my_player_extras
+
+        return await my_player_extras.deliver_gift_stars(db, user, invoice, config)
     if purchase.startswith("career:"):
         from app.services import player_career_shop
 

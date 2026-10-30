@@ -41,6 +41,21 @@ const MY_PLAYER_COSMETICS: [string, string][] = [
   ["gloves_lime", "Перчатки «Лайм»"],
   ["gloves_pink", "Перчатки «Розовые»"],
   ["gloves_gold", "Перчатки «Золото»"],
+  ["cel_fist", "Празднование «Кулак вверх» (единственное за монеты)"],
+  ["cel_shush", "Празднование «Тсс!»"],
+  ["cel_flex", "Празднование «Бицепс»"],
+  ["cel_knee", "Празднование «Скольжение на коленях»"],
+  ["cel_calma", "Празднование «Спокойно»"],
+  ["cel_flip", "Празднование «Сальто»"],
+  ["cel_siu_gold", "Празднование «Золотое Сиу» (лимитка)"],
+  ["walk_tunnel", "Выход «Из тоннеля»"],
+  ["walk_flags", "Выход «Коридор флагов»"],
+  ["walk_smoke", "Выход «Дым и прожекторы»"],
+  ["walk_fireworks", "Выход «Фейерверк»"],
+  ["walk_legend", "Выход «Легенда» (лимитка)"],
+  ["sc_marble", "Мраморная витрина трофеев"],
+  ["sc_gold", "Золотая витрина трофеев"],
+  ["sc_crystal", "Хрустальная витрина трофеев"],
 ];
 
 const WEEKLY_TOP_METRICS: [string, string][] = [
@@ -153,7 +168,8 @@ export default function AdminGamesPage() {
   const jsonField = (
     key:
       | "manager_slots" | "manager_cosmetics" | "manager_merch" | "newbie_tasks" | "task_daily_chests" | "task_weekly_chests"
-      | "card_values",
+      | "card_values"
+      | "my_player_sponsors" | "my_player_sponsor_goals" | "my_player_limited_supply" | "my_player_patron_levels",
     label: string,
   ) => (
     <label className="col-span-2 flex flex-col gap-1">
@@ -691,6 +707,13 @@ export default function AdminGamesPage() {
           {field("my_player_duel_xp", "Дуэль: опыт")}
           {field("my_player_role_change_coins", "Смена амплуа, монеты (0 — нет)")}
           {field("my_player_role_change_stars", "Смена амплуа, звёзды ⭐ (0 — нет)")}
+          {field("my_player_sponsor_bonus_coins", "Спонсор: бонус за все цели, монеты")}
+          {field("my_player_sponsor_stars", "Спонсор: премиум-контракт, звёзды ⭐ (0 — не продаётся)")}
+          {field("my_player_sponsor_premium_pct", "Спонсор: премиум платит, % монет (200 = ×2)")}
+          {jsonField("my_player_patron_levels", "«Меценат» I / II / III: подарков отправлено")}
+          {jsonField("my_player_sponsor_goals", "Спонсор: цели {код: {label, target, coins}} — коды: training, duel_win, career_match, career_goal, career_win, game_reward")}
+          {jsonField("my_player_sponsors", "Спонсор: бренды [{code, name, emoji, color, goals: 4 цели}] — 3 в неделю; 4-я цель только в премиуме")}
+          {jsonField("my_player_limited_supply", "Лимитки: тираж {код: штук} — только за звёзды, номер по порядку продажи")}
         </div>
         <p className="mb-2 mt-4 text-xs text-slate-400">Цены косметики: монеты / звёзды ⭐ (0 — не продаётся за эту валюту)</p>
         <div className="grid grid-cols-1 gap-2">

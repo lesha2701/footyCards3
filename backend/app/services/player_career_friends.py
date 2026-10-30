@@ -270,7 +270,7 @@ async def _play_round(db: AsyncSession, league: PlayerCareerFriendLeague, round_
                     + assists * config.player_career_rep_per_assist + (config.player_career_rep_per_win if own > opp else 0)
                 fresh = my_player_service.freshness_now(mp, config, at, await my_player_service.regen_bonus(db, uid))
                 my_player_service.set_freshness(mp, fresh - config.my_player_freshness_per_match, at)
-            await cups.record_match(db, uid, at, goals, assists, rating, clean_sheet=opp == 0, line=line)
+            await cups.record_match(db, uid, at, goals, assists, rating, clean_sheet=opp == 0, line=line, won=own > opp)
             if derby:
                 rival = teams[away if idx == home else home]
                 verdict = "победа" if own > opp else "ничья" if own == opp else "поражение"

@@ -43,8 +43,25 @@ export const COSMETIC_GROUPS: { kind: MyPlayerCosmeticKind; title: string }[] = 
   { kind: "ball", title: "Мяч (штрафной и пенальти)" },
   { kind: "boots", title: "Бутсы (штрафной и пенальти)" },
   { kind: "gloves", title: "Перчатки вратаря (пенальти)" },
+  { kind: "walkout", title: "Выход на поле" },
+  { kind: "showcase", title: "Шкаф трофеев" },
 ];
 
-export const CELEBRATION_EMOJI: Record<string, string> = { cel_siu: "🙌", cel_plane: "✈️", cel_heart: "❤️", cel_dance: "🕺", cel_silly: "🤪" };
+export const CELEBRATION_EMOJI: Record<string, string> = {
+  cel_siu: "🙌", cel_plane: "✈️", cel_heart: "❤️", cel_dance: "🕺", cel_fist: "✊", cel_shush: "🤫",
+  cel_flex: "💪", cel_knee: "🧎", cel_calma: "🙏", cel_flip: "🤸", cel_siu_gold: "🏆", cel_silly: "🤪",
+};
+
+export const WALKOUT_EMOJI: Record<string, string> = {
+  walk_tunnel: "🚇", walk_flags: "🚩", walk_smoke: "💨", walk_fireworks: "🎆", walk_legend: "👑",
+};
+
+/** Trophy cabinet styles: the shelf gradient and the frame ring. null = wood. */
+export const SHOWCASE_STYLE: Record<string, { shelf: string; ring: string; label: string }> = {
+  wood: { shelf: "from-amber-900/50 via-amber-800/30 to-bg-surface", ring: "ring-amber-700/50", label: "Деревянная витрина" },
+  sc_marble: { shelf: "from-slate-200/25 via-slate-400/15 to-bg-surface", ring: "ring-slate-300/60", label: "Мраморная витрина" },
+  sc_gold: { shelf: "from-yellow-400/35 via-amber-500/20 to-bg-surface", ring: "ring-yellow-300/80", label: "Золотая витрина" },
+  sc_crystal: { shelf: "from-cyan-300/30 via-fuchsia-300/20 to-bg-surface", ring: "ring-cyan-200/80", label: "Хрустальная витрина" },
+};
 
 export const TIER_NAMES: Record<MyPlayerTier, string> = { bronze: "Бронза", silver: "Серебро", gold: "Золото", legend: "Легенда" };

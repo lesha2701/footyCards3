@@ -51,6 +51,19 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
     if updates.get("club_base_caps") is not None:
         if any(v < 0 for v in updates["club_base_caps"].values()):
             raise ConflictError("Клубная база: потолки не могут быть отрицательными")
+    if updates.get("my_player_sponsors") is not None or updates.get("my_player_sponsor_goals") is not None:
+        from app.services import my_player_extras
+
+        try:
+            my_player_extras.validate_sponsors(
+                updates.get("my_player_sponsors", config.my_player_sponsors),
+                updates.get("my_player_sponsor_goals", config.my_player_sponsor_goals),
+            )
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise ConflictError(f"Спонсоры «Моего игрока»: {exc}")
+    if updates.get("my_player_limited_supply") is not None:
+        if any(int(v) < 0 for v in updates["my_player_limited_supply"].values()):
+            raise ConflictError("Тираж не может быть отрицательным")
     # Switched on now: existing players' window starts from this moment.
     starter_for_all_started = bool(updates.get("starter_offer_for_all")) and not config.starter_offer_for_all
     artifact_keys = {"artifacts_enabled", "artifact_max_stat"}

@@ -18,6 +18,8 @@ from app.schemas.my_player import (
     MyPlayerPublicOut,
     MyPlayerRoleIn,
     MyPlayerSkillIn,
+    MyPlayerSponsorClaimIn,
+    MyPlayerSponsorSignIn,
     MyPlayerStarsInvoiceIn,
     MyPlayerStarsInvoiceOut,
     MyPlayerTrainIn,
@@ -27,7 +29,7 @@ from app.schemas.my_player import (
     MyPlayerViewOut,
 )
 from app.schemas.stars import StarsInvoiceStatusOut
-from app.services import my_player_service, stars_payment_service
+from app.services import my_player_extras, my_player_service, stars_payment_service
 
 router = APIRouter(prefix="/my-player", tags=["my-player"])
 
@@ -155,3 +157,43 @@ async def get_duels(db: AsyncSession = Depends(get_db), user: User = Depends(get
 async def play_duel(payload: MyPlayerDuelIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     await check_rate_limit(f"my_player_duel:{user.id}", max_calls=10, window_seconds=60)
     return await my_player_service.play_duel(db, user, payload.opponent_user_id)
+
+
+# --- «Спонсор», gifts, «Зал славы» (my_player_extras) ------------------------------------
+
+@router.get("/sponsor")
+async def sponsor_view(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """This week's sponsor offers or contract (premium: /stars-invoice purchase=sponsor)."""
+    return await my_player_extras.sponsor_view(db, user)
+
+
+@router.post("/sponsor")
+async def sponsor_sign(payload: MyPlayerSponsorSignIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"my_player_sponsor:{user.id}", max_calls=10, window_seconds=60)
+    return await my_player_extras.sign_sponsor(db, user, payload.brand)
+
+
+@router.post("/sponsor/claim")
+async def sponsor_claim(payload: MyPlayerSponsorClaimIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"my_player_sponsor:{user.id}", max_calls=20, window_seconds=60)
+    return await my_player_extras.claim_sponsor(db, user, payload.goal)
+
+
+@router.get("/gifts")
+async def gifts_view(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Friends to give to, gifts received and the «Меценат» level."""
+    return await my_player_extras.gifts_view(db, user)
+
+
+@router.get("/gifts/{friend_id}")
+async def gift_options(friend_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """What can be given to this friend (paid with /stars-invoice purchase=gift)."""
+    return await my_player_extras.gift_options(db, user, friend_id)
+
+
+@router.get("/hall-of-fame")
+async def hall_of_fame(
+    metric: str = Query(default="goals", max_length=16), db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return await my_player_extras.hall_of_fame(db, user, metric)

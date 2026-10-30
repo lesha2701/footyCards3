@@ -83,7 +83,7 @@ async def countries(db: AsyncSession) -> list[str]:
 
 async def record_match(
     db: AsyncSession, user_id: int, at: datetime, goals: int, assists: int, rating: float,
-    clean_sheet: bool = False, line: str = "FWD",
+    clean_sheet: bool = False, line: str = "FWD", won: bool = False,
 ) -> None:
     """Adds one played match to the player's month line (the line is the
     player's current one). Caller holds the user lock."""
@@ -100,9 +100,15 @@ async def record_match(
     row.clean_sheets = (row.clean_sheets or 0) + int(clean_sheet)
     row.rating_sum += float(rating)
     row.line = line
+    from app.services import my_player_extras
     from app.services.player_career_life import record_week
 
     await record_week(db, user_id, at, goals, assists, rating, clean_sheet)
+    # «Спонсор» goals: every career match (league, cups, friends, «Менеджер»).
+    await my_player_extras.progress(db, user_id, "career_match", 1, at)
+    await my_player_extras.progress(db, user_id, "career_goal", goals, at)
+    if won:
+        await my_player_extras.progress(db, user_id, "career_win", 1, at)
 
 
 def score_of(row: PlayerCareerMonthStat) -> float:
@@ -402,7 +408,7 @@ async def _play_cup_round(db: AsyncSession, cup: PlayerCareerCup, config) -> Non
         my_player_service.add_xp(
             locked, config.player_career_match_xp, config, bonus_pct=await my_player_service.xp_bonus_pct(db, cup.user_id),
         )
-        await record_match(db, cup.user_id, at, goals, assists, rating, clean_sheet=opp == 0, line=line)
+        await record_match(db, cup.user_id, at, goals, assists, rating, clean_sheet=opp == 0, line=line, won=won)
     label = ROUND_LABELS[r]
     if not won:
         state["alive"] = False

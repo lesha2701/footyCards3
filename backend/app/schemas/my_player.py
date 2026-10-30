@@ -87,6 +87,8 @@ class MyPlayerOut(BaseModel):
     background: Optional[str] = None
     effect: Optional[str] = None
     celebration: Optional[str] = None
+    walkout: Optional[str] = None
+    showcase: Optional[str] = None
     country: Optional[str] = None
     # «Карьера Pro» is active.
     pro: bool = False
@@ -134,6 +136,8 @@ class MyPlayerAttentionOut(BaseModel):
     training: bool = False
     income: bool = False
     career_offers: bool = False
+    # «Спонсор»: a contract to sign or coins to collect.
+    sponsor: bool = False
 
 
 class MyPlayerStreakRewardOut(BaseModel):
@@ -179,6 +183,9 @@ class MyPlayerViewOut(BaseModel):
     role_change: Optional[MyPlayerRoleChangeOut] = None
     trophies: list[MyPlayerTrophyOut] = []
     attention: MyPlayerAttentionOut = MyPlayerAttentionOut()
+    # This week's sponsor on the kit, the trophy cabinet.
+    sponsor: Optional["MyPlayerSponsorBadgeOut"] = None
+    cabinet: Optional["MyPlayerCabinetOut"] = None
     # Countries the player can represent (national team).
     countries: list[str] = []
     # Only on the training-finish response: XP credited by that run, and
@@ -187,10 +194,36 @@ class MyPlayerViewOut(BaseModel):
     streak_reward: Optional[MyPlayerStreakRewardOut] = None
 
 
+class MyPlayerSponsorBadgeOut(BaseModel):
+    code: str
+    name: str
+    emoji: str
+    color: str
+    premium: bool = False
+
+
+class MyPlayerPatronOut(BaseModel):
+    # 0 = not a «Меценат» yet; name «Меценат I…III».
+    level: int = 0
+    name: Optional[str] = None
+    sent: int = 0
+    next_at: Optional[int] = None
+
+
+class MyPlayerCabinetOut(BaseModel):
+    # Showcase style item (None = the wooden one).
+    showcase: Optional[str] = None
+    totals: dict[str, int] = {}
+    cups: int = 0
+    patron: MyPlayerPatronOut = MyPlayerPatronOut()
+
+
 class MyPlayerPublicOut(BaseModel):
     player: Optional[MyPlayerOut] = None
     level: Optional[int] = None
     trophies: list[MyPlayerTrophyOut] = []
+    cabinet: Optional[MyPlayerCabinetOut] = None
+    sponsor: Optional[MyPlayerSponsorBadgeOut] = None
 
 
 class MyPlayerSkillOptionOut(BaseModel):
@@ -277,6 +310,10 @@ class MyPlayerCosmeticItemOut(BaseModel):
     # «Статус» it adds; premium hairstyle → the appearance hair index it sets.
     status: int = 0
     hair_index: Optional[int] = None
+    # Limited items: copies in all, copies sold, the owner's number.
+    supply: Optional[int] = None
+    sold: Optional[int] = None
+    edition: Optional[int] = None
 
 
 class MyPlayerCosmeticsOut(BaseModel):
@@ -289,6 +326,8 @@ class MyPlayerCosmeticsOut(BaseModel):
     ball: Optional[str] = None
     boots: Optional[str] = None
     gloves: Optional[str] = None
+    walkout: Optional[str] = None
+    showcase: Optional[str] = None
     catalog: list[MyPlayerCosmeticItemOut]
 
 
@@ -466,3 +505,12 @@ class AdminLifestyleItemOut(BaseModel):
     sort_order: int
     effect: str = "none"
     effect_value: int = 0
+
+
+class MyPlayerSponsorSignIn(BaseModel):
+    brand: str = Field(max_length=32)
+
+
+class MyPlayerSponsorClaimIn(BaseModel):
+    # A goal code, or "bonus" once every goal is paid.
+    goal: str = Field(max_length=32)

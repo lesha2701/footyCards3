@@ -1402,7 +1402,7 @@ async def _settle_match(db, club, team, lineup, match, side, home, division, at,
             if mp is not None:
                 fresh = my_player_service.freshness_now(mp, config, at, await my_player_service.regen_bonus(db, uid))
                 my_player_service.set_freshness(mp, fresh - config.manager_freshness_cost, at)
-        await cups.record_match(db, uid, at, goals, assists, rating, clean_sheet=opp == 0, line=line)
+        await cups.record_match(db, uid, at, goals, assists, rating, clean_sheet=opp == 0, line=line, won=own > opp)
 
 
 def _local_day(schedule: list[str], index: int) -> Optional[date]:
