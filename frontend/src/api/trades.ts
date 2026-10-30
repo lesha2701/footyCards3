@@ -22,6 +22,26 @@ export interface TradeRules {
   coin_tax_pct: number;
   coins_enabled: boolean;
   cards_both_sides: boolean;
+  /** «Проверенный аккаунт»: may give legendaries, diamonds, «Академия», limited. */
+  verified: boolean;
+  verified_block_reason: string | null;
+  min_value_ratio_pct: number;
+  value_check_min: number;
+}
+
+/** Dry run of the trade value rules (backend trade_service.preview). */
+export interface TradePreview {
+  give_value: number;
+  get_value: number;
+  ok: boolean;
+  problem: string | null;
+}
+
+export async function previewTrade(payload: {
+  receiver_id: number; offered_card_ids: number[]; requested_card_ids: number[]; sender_coins: number;
+}): Promise<TradePreview> {
+  const { data } = await api.post<TradePreview>("/trades/preview", payload);
+  return data;
 }
 
 export async function fetchTradeRules(): Promise<TradeRules> {

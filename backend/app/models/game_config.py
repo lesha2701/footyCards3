@@ -1111,6 +1111,32 @@ class GameConfig(TimestampMixin, Base):
     stake_max_coins: Mapped[int] = mapped_column(Integer, default=500, nullable=False)
     stake_pair_daily_limit: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     stake_daily_profit_cap: Mapped[int] = mapped_column(Integer, default=2000, nullable=False)
+    # Valuable cards (legendary, diamond, «Академия», limited —
+    # card_value_service) may be given in a trade only by a «проверенный
+    # аккаунт»: this old, active on this many days, and with at least this
+    # many Stars spent in total — the bar that costs a farm per account
+    # (age / activity a bot just waits out). 0 = no requirement.
+    trade_verified_min_age_days: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    trade_verified_min_active_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    trade_verified_min_stars: Mapped[int] = mapped_column(Integer, default=49, nullable=False)
+    # Equal-value rule: once the dearer side is worth at least
+    # trade_value_check_min, the cheaper side must be worth at least
+    # trade_min_value_ratio_pct % of it (0 = rule off).
+    trade_min_value_ratio_pct: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    trade_value_check_min: Mapped[int] = mapped_column(Integer, default=2000, nullable=False)
+    # Trades with the same partner counted for tasks / bingo per day (0 = all).
+    trade_progress_pair_daily: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Card value table in coins (card_value_service.card_value): the floor of
+    # what a card is worth — the trade equal-value rule and market minimums.
+    card_values: Mapped[dict] = mapped_column(
+        JSON, nullable=False,
+        default=lambda: {
+            "legendary": 6000, "legendary_top": 12000, "legendary_top_rating": 93,
+            "limited_legendary": 30000, "limited_legendary_scarce": 60000, "limited_epic": 10000,
+            "limited_rare": 5000, "limited_max_copies": 50, "limited_scarce_copies": 15,
+            "diamond": 60000, "academy": [40000, 40000, 60000, 60000, 100000], "sell_multiplier": 2,
+        },
+    )
     # Shop sales boosters (migration 0183), 0 = off:
     # - pity_packs: a paid coin pack with a legendary chance that comes after
     #   this many such packs without a legendary turns one card legendary
@@ -1367,3 +1393,32 @@ class GameConfig(TimestampMixin, Base):
         default=lambda: [{"points": 30, "coins": 1000}, {"points": 60, "coins": 2000},
                          {"points": 90, "coins": 3000, "card_rarity": "epic"}],
     )
+    # «Трансферный рынок» (services/auction_service.py): off until an admin
+    # launches it. Allowed lot durations, the market fee burnt from every sale
+    # (frozen on the lot), the minimum raise (max of % and coins), the absolute
+    # start price floor (the real floor is the copy's card_value — no selling a
+    # pricey card to an alt for pennies), active-lot cap, anti-sniping (a bid in
+    # the last window pushes the end to now + extend) and anti-laundering
+    # limits (account age to bid — 0 = anyone, lots one buyer may win from one
+    # seller per day).
+    auction_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    auction_durations_hours: Mapped[list] = mapped_column(JSON, default=lambda: [1, 6, 24], nullable=False)
+    # «Купить сразу» (fixed-price) lots stay this long, then the card goes back.
+    auction_fixed_duration_hours: Mapped[int] = mapped_column(Integer, default=72, nullable=False)
+    auction_fee_pct: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    auction_min_increment_pct: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    auction_min_increment_coins: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    auction_min_price: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    auction_max_active_lots: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    auction_snipe_window_seconds: Mapped[int] = mapped_column(Integer, default=120, nullable=False)
+    auction_snipe_extend_seconds: Mapped[int] = mapped_column(Integer, default=120, nullable=False)
+    auction_min_account_age_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    auction_max_wins_per_seller_daily: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # «Агентская лицензия» (services/agent_license_service.py): only agents
+    # list lots. Price in Stars, days per purchase (stacks), and who may buy:
+    # an account at least this old that is also a «Проверенный аккаунт».
+    agent_license_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    agent_license_stars: Mapped[int] = mapped_column(Integer, default=99, nullable=False)
+    agent_license_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    agent_license_min_account_age_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    agent_license_requires_verified: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

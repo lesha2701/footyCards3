@@ -64,6 +64,7 @@ from app.services.card_pool_service import load_top_copies
 from app.services.game_config_service import get_config
 from app.services.match_service import BOT_NAMES
 from app.services.notification_service import notify
+from app.services.player_identity import person_key
 from app.services.player_stats_service import card_rating_bonus, effective_card_stats
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
@@ -90,11 +91,12 @@ _BASE_RATING_DELTA = {MatchResult.win: 3, MatchResult.loss: -1, MatchResult.draw
 def _player_info(player: Player, user_card_id: Optional[int] = None, diamond_bonus: int = 0) -> dict:
     rating, _, _ = effective_card_stats(player, diamond_bonus)
     return {
+        "person": person_key(player),
         "power": rating,
         "rarity_rank": RARITY_ORDER[player.rarity],
         "card": {
             "user_card_id": user_card_id, "player_id": player.id, "display_name": player.display_name,
-            "position": player.position.value, "image_path": player.image_path,
+            "person": person_key(player), "position": player.position.value, "image_path": player.image_path,
             "rarity": player.rarity.value, "rating": rating,
             # «Академия»: counted against their own squad limit, not the diamond one.
             "is_path": getattr(player, "path_talent_code", None) is not None,
@@ -134,11 +136,12 @@ def _my_player_info(card) -> dict:
     counts toward the squad rarity rules like any card."""
     player = card.player
     return {
+        "person": person_key(player),
         "power": player.rating,
         "rarity_rank": RARITY_ORDER[player.rarity],
         "card": {
             "user_card_id": card.id, "player_id": card.player_id, "display_name": player.display_name,
-            "position": player.position.value, "image_path": None, "rarity": player.rarity.value,
+            "person": person_key(player), "position": player.position.value, "image_path": None, "rarity": player.rarity.value,
             "rating": player.rating, "is_my_player": True,
         },
     }
@@ -231,6 +234,11 @@ def rarity_violations(picked: list[dict], rules: dict) -> list[str]:
 _NO_RULES = {"max": {}, "min": {}}
 
 
+def _person(info: dict):
+    """The footballer behind a piece (player_identity.person_key): one per squad."""
+    return info.get("person") or (info.get("card") or {}).get("display_name") or id(info)
+
+
 def _assign_once(infos: list[dict], slots: list[str], fixed: dict[str, dict], rules: dict) -> dict[str, dict]:
     chosen = dict(fixed)
     used = {id(i) for i in chosen.values()}
@@ -248,7 +256,8 @@ def _assign_once(infos: list[dict], slots: list[str], fixed: dict[str, dict], ru
         return all(sum(1 for i in pool if id(i) not in taken and _limit_group(i) == r) >= n for r, n in need.items())
 
     def best(role: str, slots_left_after: int) -> Optional[dict]:
-        free = [i for i in pool if id(i) not in used and _role_allows(role, i, rules)]
+        persons = {_person(i) for i in chosen.values()}
+        free = [i for i in pool if id(i) not in used and _person(i) not in persons and _role_allows(role, i, rules)]
         for cand in [i for i in free if _fits(role, i)] + [i for i in free if not _fits(role, i)]:
             if feasible(cand, slots_left_after):
                 return cand
@@ -349,7 +358,11 @@ async def _resolve_squad(
     fixed: dict[str, dict] = {}
     for slot, card_id in (saved.get("cards") or {}).items():
         info = by_card_id.get(card_id)
-        if slot in cslots and info is not None and all(info is not v for v in fixed.values()):
+        # A saved squad from before the one-footballer rule may hold two
+        # copies of a player: the second one is re-picked.
+        if slot in cslots and info is not None and all(
+            info is not v and _person(info) != _person(v) for v in fixed.values()
+        ):
             fixed[slot] = info
     if role_violations(fixed, rules) or any(v.startswith("Максимум") for v in rarity_violations(list(fixed.values()), rules)):
         fixed = {}  # saved picks break a cap (e.g. the admin lowered it) — re-pick
@@ -420,6 +433,10 @@ async def set_squad(db: AsyncSession, user: User, cards: dict[str, int], layout:
         if info is None:
             raise ForbiddenError("Можно использовать только свои карточки")
         chosen[slot] = info
+    # One footballer once: two copies (or versions) of the same player can't both play.
+    persons = [_person(i) for i in chosen.values()]
+    if len(set(persons)) != len(persons):
+        raise ConflictError("Один футболист не может быть в составе дважды")
     # A card parked on a regular slot could just as well take the role, so
     # only cards bound to the star or another role count as "taken".
     bound_ids = {cid for slot, cid in cards.items() if engine.role_of(slot) != "regular"}

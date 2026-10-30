@@ -877,6 +877,13 @@ class GameConfigOut(BaseModel):
     stake_max_coins: int = 500
     stake_pair_daily_limit: int = 2
     stake_daily_profit_cap: int = 2000
+    trade_verified_min_age_days: int = 3
+    trade_verified_min_active_days: int = 0
+    trade_verified_min_stars: int = 49
+    trade_min_value_ratio_pct: int = 50
+    trade_value_check_min: int = 2000
+    trade_progress_pair_daily: int = 1
+    card_values: dict = {}
     equipment_enabled: bool = False
     equipment_max_rating: int = 3
     equipment_max_pp: int = 8
@@ -950,6 +957,23 @@ class TaskChestConfigIn(BaseModel):
     coins: int = Field(default=0, ge=0, le=1_000_000)
     card_rarity: Optional[str] = Field(default=None, pattern=r"^(common|rare|epic|legendary)$")
     pack_id: Optional[int] = None
+    auction_enabled: bool = False
+    auction_durations_hours: list[int] = [1, 6, 24]
+    auction_fixed_duration_hours: int = 72
+    auction_fee_pct: int = 10
+    auction_min_increment_pct: int = 5
+    auction_min_increment_coins: int = 10
+    auction_min_price: int = 10
+    auction_max_active_lots: int = 5
+    auction_snipe_window_seconds: int = 120
+    auction_snipe_extend_seconds: int = 120
+    auction_min_account_age_days: int = 0
+    auction_max_wins_per_seller_daily: int = 3
+    agent_license_enabled: bool = True
+    agent_license_stars: int = 99
+    agent_license_days: int = 30
+    agent_license_min_account_age_days: int = 30
+    agent_license_requires_verified: bool = True
 
 
 class GameConfigUpdate(BaseModel):
@@ -1552,6 +1576,13 @@ class GameConfigUpdate(BaseModel):
     stake_max_coins: Optional[int] = Field(default=None, ge=0, le=1_000_000)
     stake_pair_daily_limit: Optional[int] = Field(default=None, ge=0, le=100)
     stake_daily_profit_cap: Optional[int] = Field(default=None, ge=0)
+    trade_verified_min_age_days: Optional[int] = Field(default=None, ge=0, le=365)
+    trade_verified_min_active_days: Optional[int] = Field(default=None, ge=0, le=365)
+    trade_verified_min_stars: Optional[int] = Field(default=None, ge=0, le=100_000)
+    trade_min_value_ratio_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    trade_value_check_min: Optional[int] = Field(default=None, ge=0)
+    trade_progress_pair_daily: Optional[int] = Field(default=None, ge=0, le=100)
+    card_values: Optional[dict] = None
     pity_packs: Optional[int] = Field(default=None, ge=0, le=1000)
     bulk10_discount_pct: Optional[int] = Field(default=None, ge=0, le=50)
     first_coin_purchase_bonus_pct: Optional[int] = Field(default=None, ge=0, le=300)
@@ -1679,6 +1710,25 @@ class GameConfigUpdate(BaseModel):
     club_raid_reward_coins: Optional[int] = Field(default=None, ge=0, le=10000000)
     club_raid_reward_pack_id: Optional[int] = Field(default=None, ge=0)
     club_raid_reward_budget: Optional[int] = Field(default=None, ge=0, le=10000000)
+    auction_enabled: Optional[bool] = None
+    auction_durations_hours: Optional[list[Annotated[int, Field(ge=1, le=168)]]] = Field(
+        default=None, min_length=1, max_length=6,
+    )
+    auction_fee_pct: Optional[int] = Field(default=None, ge=0, le=50)
+    auction_fixed_duration_hours: Optional[int] = Field(default=None, ge=1, le=720)
+    auction_min_increment_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    auction_min_increment_coins: Optional[int] = Field(default=None, ge=1)
+    auction_min_price: Optional[int] = Field(default=None, ge=1)
+    auction_max_active_lots: Optional[int] = Field(default=None, ge=1, le=100)
+    auction_snipe_window_seconds: Optional[int] = Field(default=None, ge=0, le=3600)
+    auction_snipe_extend_seconds: Optional[int] = Field(default=None, ge=0, le=3600)
+    auction_min_account_age_days: Optional[int] = Field(default=None, ge=0, le=365)
+    auction_max_wins_per_seller_daily: Optional[int] = Field(default=None, ge=0, le=1000)
+    agent_license_enabled: Optional[bool] = None
+    agent_license_stars: Optional[int] = Field(default=None, ge=1, le=100000)
+    agent_license_days: Optional[int] = Field(default=None, ge=1, le=365)
+    agent_license_min_account_age_days: Optional[int] = Field(default=None, ge=0, le=3650)
+    agent_license_requires_verified: Optional[bool] = None
 
     @field_validator("ptour_place_skill_tokens")
     @classmethod

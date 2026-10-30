@@ -34,7 +34,7 @@ export default function BottomNav() {
   const requestNavigate = useMatchGuardStore((s) => s.requestNavigate);
   const { pathname } = useLocation();
   const badges = useNavBadges();
-  const cardsSection = pathname.startsWith("/trades") || pathname.startsWith("/upgrade");
+  const cardsSection = pathname.startsWith("/trades") || pathname.startsWith("/upgrade") || pathname.startsWith("/market");
   // Out of the way while typing: otherwise it rides up on the keyboard.
   const keyboardOpen = useKeyboardOpen();
   if (keyboardOpen) return null;

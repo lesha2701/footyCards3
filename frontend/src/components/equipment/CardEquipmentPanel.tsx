@@ -69,6 +69,24 @@ export default function CardEquipmentPanel({ cardId }: { cardId: number }) {
       <p className="rounded-xl bg-black/20 px-3 py-2 text-xs text-ink-mist">
         {bonusParts.length ? <>Даёт: <b className="text-accent-lime">{bonusParts.join(" · ")}</b></> : "Пока ничего не надето"}
       </p>
+      {(data.sets ?? []).map((set) => (
+        <div
+          key={set.name}
+          className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs ${
+            set.complete ? "bg-accent-lime/10 text-accent-lime ring-1 ring-accent-lime/40" : "bg-black/20 text-ink-mist"
+          }`}
+        >
+          <span className="font-semibold">{set.complete ? "✓ Сет собран" : "Сет"} «{set.name}»</span>
+          <span className="font-mono">{set.have}/{set.needed}</span>
+          <span className="ml-auto text-right">
+            {[
+              set.bonus_rating ? `+${set.bonus_rating} к рейтингу` : null,
+              set.team_country && set.team_chemistry ? `+${set.team_chemistry} химии игрокам «${set.team_country}»` : null,
+            ].filter(Boolean).join(" · ") || "бонус сета"}
+            {!set.complete && " — когда соберёшь"}
+          </span>
+        </div>
+      ))}
       {error && <p className="rounded-lg bg-red-500/10 px-2 py-1 text-xs text-red-400">{error}</p>}
       <div className="grid grid-cols-3 gap-2">
         {data.slots.map((slot) => (

@@ -8,3 +8,4 @@ class FeatureFlagsOut(BaseModel):
     leagues_enabled: bool
     # Largest stake per side in open chat challenges (0 = stakes off).
     stake_max_coins: int = 0
+    auction_enabled: bool = False

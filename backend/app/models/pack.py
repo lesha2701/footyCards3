@@ -48,6 +48,9 @@ class Pack(TimestampMixin, Base):
     available_from: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     available_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Counts for the legendary pity (GameConfig.pity_packs) — off for a cheap
+    # «all or nothing» pack that would otherwise be a legendary faucet.
+    pity_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Fraction of this pack's card_count slots that roll a coach instead of
     # a player (independent per-slot coin flip, see
     # pack_service.roll_and_create_cards — mirrors ClubPack.coach_drop_chance

@@ -34,6 +34,8 @@ interface PackForm {
   /** "path" = the «Академия» pack: diamond slots drop only path cards. */
   player_pool: "default" | "path";
   guaranteed_min_rarity: Rarity | "";
+  /** Counts for the legendary pity (GameConfig.pity_packs). */
+  pity_enabled: boolean;
   is_active: boolean;
   image_path: string | null;
   probabilities: Record<Rarity, number>;
@@ -58,6 +60,7 @@ function packToForm(p?: Pack): PackForm {
     muse_drop_chance: (p?.muse_drop_chance ?? 0) * 100,
     player_pool: (p?.player_pool as PackForm["player_pool"]) ?? "default",
     guaranteed_min_rarity: p?.guaranteed_min_rarity ?? "",
+    pity_enabled: p?.pity_enabled ?? true,
     is_active: p?.is_active ?? true,
     image_path: p?.image_path ?? null,
     probabilities,
@@ -107,6 +110,7 @@ export default function AdminPacksPage() {
     muse_drop_chance: form.muse_drop_chance / 100,
     player_pool: form.player_pool,
     guaranteed_min_rarity: form.guaranteed_min_rarity || null,
+    pity_enabled: form.pity_enabled,
     is_active: form.is_active,
     image_path: form.image_path,
     rarity_probabilities: RARITIES.filter((r) => form.probabilities[r] > 0).map((r) => ({ rarity: r, probability: form.probabilities[r] })),
@@ -289,6 +293,10 @@ export default function AdminPacksPage() {
               {Math.abs(probabilitySum - 1) > 0.02 && (
                 <p className="text-xs text-amber-400">Сумма шансов должна быть ≈ 100%, иначе сохранить нельзя</p>
               )}
+              <label className="mt-1 flex items-center gap-2 text-xs">
+                <input type="checkbox" checked={form.pity_enabled} onChange={(e) => setForm({ ...form, pity_enabled: e.target.checked })} />
+                Гарантия легендарки после серии неудач (паки за монеты)
+              </label>
               <label className="mt-1 flex items-center gap-2 text-xs">
                 <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
                 Активен

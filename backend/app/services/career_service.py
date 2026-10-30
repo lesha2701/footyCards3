@@ -967,10 +967,18 @@ async def collection(db: AsyncSession, user: User) -> dict:
     part = await _current_participation(db, user.id)
     cards = await _career_cards(db, user.id, config)
     squad = set(part.squad_card_ids or []) if part else set()
-    out = []
+    # One tile per footballer (a squad holds each player once): the copy in
+    # the squad, else the strongest one.
+    best: dict[str, object] = {}
     for card in cards:
         if not _usable(card):
             continue
+        key = card_person(card)
+        held = best.get(key)
+        if held is None or (card.id in squad, _effective(card), -card.id) > (held.id in squad, _effective(held), -held.id):
+            best[key] = card
+    out = []
+    for card in best.values():
         mine = getattr(card, "is_my_player", False)
         out.append({
             "card_id": card.id, "in_squad": card.id in squad,

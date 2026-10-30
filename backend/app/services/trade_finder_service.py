@@ -55,6 +55,12 @@ def _tradeable_card_filter():
         UserCard.is_in_tactico_squad.is_(False),
         Player.is_active.is_(True),
         or_(Player.rarity != Rarity.diamond, Player.path_talent_code.is_not(None)),
+        # A valuable copy from a free source never leaves its account
+        # (card_value_service) — limited cards are left to the offer check.
+        or_(
+            UserCard.from_free_source.is_(False),
+            and_(Player.rarity.not_in([Rarity.legendary, Rarity.diamond]), Player.path_talent_code.is_(None)),
+        ),
     )
 
 

@@ -1700,3 +1700,15 @@ async def test_open_challenge_expires_and_cannot_be_accepted(client, db_session,
 # Stake tests here are about stake mechanics; the anti-farming limits have
 # their own file (test_stake_guard.py).
 pytestmark = pytest.mark.usefixtures("stake_guards_off")
+
+
+async def test_set_squad_rejects_two_copies_of_one_footballer(client, db_session, bot_token):
+    headers = await _register(client, bot_token, 950099)
+    user = await get_user_by_telegram_id(db_session, 950099)
+    card_ids = await _build_squad_cards(db_session, user.id, count=10)
+    first = await db_session.get(UserCard, card_ids[0])
+    twin = await create_user_card(db_session, user.id, first.player_id, CardSource.seed)
+    await db_session.commit()
+
+    resp = await client.put("/api/v1/tactico/squad", headers=headers, json={"user_card_ids": card_ids + [twin.id]})
+    assert resp.status_code == 409 and "дважды" in resp.json()["error"]["message"]

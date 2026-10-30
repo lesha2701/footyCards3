@@ -182,6 +182,23 @@ export interface GameConfig {
   club_raid_reward_coins: number;
   club_raid_reward_pack_id: number | null;
   club_raid_reward_budget: number;
+  auction_enabled: boolean;
+  auction_durations_hours: number[];
+  auction_fixed_duration_hours: number;
+  auction_fee_pct: number;
+  auction_min_increment_pct: number;
+  auction_min_increment_coins: number;
+  auction_min_price: number;
+  auction_max_active_lots: number;
+  auction_snipe_window_seconds: number;
+  auction_snipe_extend_seconds: number;
+  auction_min_account_age_days: number;
+  auction_max_wins_per_seller_daily: number;
+  agent_license_enabled: boolean;
+  agent_license_stars: number;
+  agent_license_days: number;
+  agent_license_min_account_age_days: number;
+  agent_license_requires_verified: boolean;
   club_pass_frame_cosmetic_id: number | null;
   club_pass_badge_id: number | null;
   club_pass_ad_free: boolean;
@@ -795,6 +812,13 @@ export interface GameConfig {
   first_coin_purchase_bonus_pct: number;
   stake_pair_daily_limit: number;
   stake_daily_profit_cap: number;
+  trade_verified_min_age_days: number;
+  trade_verified_min_active_days: number;
+  trade_verified_min_stars: number;
+  trade_min_value_ratio_pct: number;
+  trade_value_check_min: number;
+  trade_progress_pair_daily: number;
+  card_values: Record<string, number | number[]>;
 }
 
 export interface AdminPathTalent {

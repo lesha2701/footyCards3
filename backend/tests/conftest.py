@@ -76,6 +76,11 @@ async def trade_guards_off(_fresh_schema):
         config.trade_coin_tax_pct = 0
         config.trade_coins_enabled = True
         config.trade_cards_both_sides = False
+        config.trade_verified_min_age_days = 0
+        config.trade_verified_min_active_days = 0
+        config.trade_verified_min_stars = 0
+        config.trade_min_value_ratio_pct = 0
+        config.trade_progress_pair_daily = 0
         await session.commit()
 
 

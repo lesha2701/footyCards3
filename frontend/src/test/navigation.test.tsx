@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, renderHook, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -9,9 +10,11 @@ import { useTelegramBackButton } from "@/lib/useTelegramBackButton";
 describe("CardsSectionTabs", () => {
   const renderAt = (url: string) =>
     render(
-      <MemoryRouter initialEntries={[url]}>
-        <CardsSectionTabs />
-      </MemoryRouter>,
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter initialEntries={[url]}>
+          <CardsSectionTabs />
+        </MemoryRouter>
+      </QueryClientProvider>,
     );
   const current = () => screen.getByRole("link", { current: "page" }).textContent;
 
@@ -28,6 +31,16 @@ describe("CardsSectionTabs", () => {
   it("treats a trade detail page as the Обмены tab", () => {
     renderAt("/trades/42");
     expect(current()).toBe("Обмены");
+  });
+
+  it("shows the Рынок tab on a market lot page even before the flags load", () => {
+    renderAt("/market/5");
+    expect(current()).toBe("Рынок");
+  });
+
+  it("hides the Рынок tab elsewhere until the market is enabled", () => {
+    renderAt("/collection");
+    expect(screen.queryByRole("link", { name: "Рынок" })).toBeNull();
   });
 });
 

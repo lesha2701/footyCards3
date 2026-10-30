@@ -200,6 +200,11 @@ async def create_offer(db: AsyncSession, sender: User, payload: TradeCreateReque
             if card.is_locked() or card.hidden_from_trade:
                 raise ConflictError(f"Card #{card.serial_number} is not available for trade")
 
+    await trade_guard_service.ensure_value_rules(
+        db, config, sender, receiver, offered_cards, requested_cards,
+        payload.sender_coins, payload.receiver_coins, actor_is_sender=True,
+    )
+
     offer = TradeOffer(
         sender_id=sender.id,
         receiver_id=receiver.id,
@@ -317,7 +322,8 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcce
     if card_ids:
         cards_result = await db.execute(
             select(UserCard).where(UserCard.id.in_(card_ids)).order_by(UserCard.id)
-            .with_for_update().execution_options(populate_existing=True)
+            .options(selectinload(UserCard.player))
+            .with_for_update(of=UserCard).execution_options(populate_existing=True)
         )
         cards_by_id = {c.id: c for c in cards_result.scalars().all()}
 
@@ -337,6 +343,13 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcce
             raise ConflictError(f"Card #{card.serial_number} is currently used in a Tactico squad")
         if card.is_bound():
             raise ConflictError(f"Card #{card.serial_number} is a gift card and can't be traded yet")
+
+    await trade_guard_service.ensure_value_rules(
+        db, config, sender, receiver,
+        [cards_by_id[tc.user_card_id] for tc in trade_cards if tc.side == TradeCardSide.offered],
+        [cards_by_id[tc.user_card_id] for tc in trade_cards if tc.side == TradeCardSide.requested],
+        offer.sender_coins, offer.receiver_coins, actor_is_sender=False,
+    )
 
     # Anti-farming, under both user locks: this is the check that counts
     # (offers created before a rule was switched on can't slip through).
@@ -398,6 +411,9 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcce
                 f"Налог на монеты в обмене ({config.trade_coin_tax_pct}%)", "trade_offer", offer.id,
             )
 
+    # Tasks / bingo count at most N trades per pair per day, so two accounts
+    # can't farm «complete N trades» by passing a card back and forth.
+    offer.counts_for_progress = await trade_guard_service.counts_for_progress(db, config, sender.id, receiver.id)
     offer.status = TradeStatus.accepted
     offer.resolved_at = datetime.now(timezone.utc)
     db.add(offer)
@@ -407,11 +423,11 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcce
         "Обмен принят", f"{receiver.full_display_name()} принял(а) ваше предложение обмена.", "trade_offer", offer.id,
     )
 
-    for participant in (sender, receiver):
+    for participant in (sender, receiver) if offer.counts_for_progress else ():
         completed_count = (
             await db.execute(
                 select(func.count(TradeOffer.id)).where(
-                    TradeOffer.status == TradeStatus.accepted,
+                    TradeOffer.status == TradeStatus.accepted, TradeOffer.counts_for_progress.is_(True),
                     or_(TradeOffer.sender_id == participant.id, TradeOffer.receiver_id == participant.id),
                 )
             )
@@ -422,7 +438,8 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcce
     await db.refresh(offer)
 
     # Bingo of the Week: one completed trade counts once, not per side.
-    await bingo_service.increment_goal(db, BingoGoalType.trades_completed, 1)
+    if offer.counts_for_progress:
+        await bingo_service.increment_goal(db, BingoGoalType.trades_completed, 1)
 
     hydrated = await hydrate_offer(db, offer)
     return TradeAcceptOut(**hydrated.model_dump(), new_balance=receiver.balance)
@@ -451,3 +468,36 @@ async def get_offer(db: AsyncSession, user: User, offer_id: int) -> TradeOfferOu
     if user.id not in (offer.sender_id, offer.receiver_id) and not user.is_admin:
         raise ForbiddenError("You are not part of this trade")
     return await hydrate_offer(db, offer)
+
+
+async def preview(db: AsyncSession, sender: User, payload) -> dict:
+    """Card values of both sides and whether the value rules would let the
+    offer through (no locks, nothing written) — for the new-trade screen."""
+    from app.core.exceptions import AppError
+    from app.services import card_value_service
+
+    config = await get_config(db)
+    receiver = await db.get(User, payload.receiver_id)
+    if receiver is None:
+        raise NotFoundError("Trade partner not found")
+    ids = list(dict.fromkeys([*payload.offered_card_ids, *payload.requested_card_ids]))
+    cards = {}
+    if ids:
+        cards = {c.id: c for c in (await db.execute(
+            select(UserCard).where(UserCard.id.in_(ids)).options(selectinload(UserCard.player))
+        )).scalars().all()}
+    offered = [cards[i] for i in dict.fromkeys(payload.offered_card_ids) if i in cards and cards[i].owner_id == sender.id]
+    requested = [cards[i] for i in dict.fromkeys(payload.requested_card_ids) if i in cards and cards[i].owner_id == receiver.id]
+    problem = None
+    try:
+        await trade_guard_service.ensure_value_rules(
+            db, config, sender, receiver, offered, requested, payload.sender_coins, 0, actor_is_sender=True,
+        )
+    except AppError as exc:
+        problem = exc.message
+    return {
+        "give_value": card_value_service.side_value(offered, payload.sender_coins, config),
+        "get_value": card_value_service.side_value(requested, 0, config),
+        "ok": problem is None,
+        "problem": problem,
+    }

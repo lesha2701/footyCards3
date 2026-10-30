@@ -128,7 +128,10 @@ export function SquadBuilder({ onClose, onView, onError }: { onClose: () => void
             <p className="font-display text-base font-bold text-ink-chalk">Заявка на сезон</p>
             <span className={`font-mono text-sm font-bold ${selected.size === size ? "text-accent-lime" : "text-ink-chalk"}`}>{selected.size}/{size}</span>
           </div>
-          <p className="text-caption text-ink-mist">Отмеченные — в заявке. Кто был в прошлом сезоне, тот ядро команды.</p>
+          <p className="text-caption text-ink-mist">
+            Отмеченные — в заявке, каждый футболист один раз. Кто был в прошлом сезоне — ядро команды. Новичков потом
+            выставь на поле во вкладке «Состав» (или нажми там «Лучший состав»).
+          </p>
         </div>
         <div className="flex-1 overflow-y-auto px-4">
           {byLine.map((line) => (

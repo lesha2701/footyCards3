@@ -53,6 +53,7 @@ import { useAuthStore } from "@/store/authStore";
 import { useMatchGuardStore } from "@/store/matchGuardStore";
 import ArenaNewbieGuide from "@/components/newbie/ArenaNewbieGuide";
 import type { LineupTactic, Match, MatchActionKind, MatchPendingMoment, MatchResult, UserCard } from "@/types";
+import { personKey } from "@/lib/person";
 
 const EVENT_STEP_MS = 950;
 
@@ -238,10 +239,11 @@ export default function ArenaPage() {
 
   // A player already fielded in another slot is blocked even via a duplicate
   // card copy (same player, different card id) — one player can't start twice.
-  const usedPlayerIds = (pickerSlot
+  // One footballer once: other copies / versions of a player already in the XI are blocked.
+  const usedPersons = (pickerSlot
     ? lineup?.slots.filter((s) => s.card && s.slot_code !== pickerSlot.code)
     : lineup?.slots.filter((s) => s.card)
-  )?.map((s) => s.card!.player.id) ?? [];
+  )?.map((s) => personKey(s.card!.player)) ?? [];
 
   const maxDiamond = lineup?.max_diamond ?? 1;
   // «Академия» cards are diamonds with a squad limit of their own.
@@ -751,7 +753,7 @@ export default function ArenaPage() {
           title={`Выбери на позицию ${CATEGORY_LABELS[pickerSlot.category]}`}
           cards={cardsForSlot(pickerSlot)}
           disabledCardIds={cardsForSlot(pickerSlot)
-            .filter((c) => usedPlayerIds.includes(c.player.id) || limitBlocked(c))
+            .filter((c) => usedPersons.includes(personKey(c.player)) || limitBlocked(c))
             .map((c) => c.id)}
           onSelect={(card) => assignSlot(pickerSlot, card)}
           onClose={() => { setPickerSlot(null); setPickerSearch(""); }}

@@ -142,6 +142,9 @@ export interface UserCard {
   path_level?: number;
   path_stage?: number;
   path_rating_bonus?: number;
+  /** Came from a free source: a legendary / diamond / «Академия» / limited
+   * copy then can't be traded (backend card_value_service). */
+  from_free_source?: boolean;
   /** «Экипировка» it wears (already included in player.rating). */
   equipment_rating_bonus?: number;
   /** Its worn things: +chemistry and the boosts (shot/save/…, a national-team set). */
@@ -290,6 +293,7 @@ export interface Pack {
   muse_drop_chance?: number;
   /** "path" = the «Академия» pack (diamond slots drop only path cards). */
   player_pool?: string;
+  pity_enabled?: boolean;
   /** Why the pack cannot be bought right now (e.g. no «Академия» players yet). */
   unavailable_reason?: string | null;
   user_purchase_count: number;
@@ -861,6 +865,7 @@ export interface FeatureFlags {
   leagues_enabled: boolean;
   /** Largest stake per side in open chat challenges; 0 = stakes off. */
   stake_max_coins?: number;
+  auction_enabled?: boolean;
 }
 
 export interface GameLimits {
@@ -2841,6 +2846,8 @@ export interface StrategoCard {
   skill_level?: number | null;
   skill_kind?: "atk" | "def" | null;
   skill_bonus?: number;
+  /** The footballer (backend person_key): one per squad. */
+  person?: string | null;
 }
 
 export type StrategoNoteTag = "cup" | "wall" | "star" | "strong" | "weak" | "speedster";

@@ -58,7 +58,7 @@ async def _current_metric_value(db: AsyncSession, user: User, metric: Optional[s
         return (
             await db.execute(
                 select(func.count(TradeOffer.id)).where(
-                    TradeOffer.status == TradeStatus.accepted,
+                    TradeOffer.status == TradeStatus.accepted, TradeOffer.counts_for_progress.is_(True),
                     or_(TradeOffer.sender_id == user.id, TradeOffer.receiver_id == user.id),
                 )
             )

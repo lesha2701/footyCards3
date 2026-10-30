@@ -72,6 +72,11 @@ class TradeRulesOut(BaseModel):
     coin_tax_pct: int
     coins_enabled: bool
     cards_both_sides: bool
+    # «Проверенный аккаунт»: may give legendaries, diamonds, «Академия», limited.
+    verified: bool = True
+    verified_block_reason: Optional[str] = None
+    min_value_ratio_pct: int = 0
+    value_check_min: int = 0
 
 
 class TradeWishRequest(BaseModel):
@@ -98,3 +103,19 @@ class TradeMatchOut(BaseModel):
     mutual: bool
     they_have: list[TradeMatchCardOut]
     they_want: list[TradeMatchCardOut]
+
+
+class TradePreviewRequest(BaseModel):
+    receiver_id: int
+    offered_card_ids: list[int] = Field(default_factory=list, max_length=MAX_TRADE_CARDS_PER_SIDE)
+    requested_card_ids: list[int] = Field(default_factory=list, max_length=MAX_TRADE_CARDS_PER_SIDE)
+    sender_coins: int = Field(default=0, ge=0)
+
+
+class TradePreviewOut(BaseModel):
+    """Dry run of the value rules for the new-trade screen."""
+
+    give_value: int
+    get_value: int
+    ok: bool
+    problem: Optional[str] = None

@@ -1336,3 +1336,17 @@ async def test_admin_sets_role_caps(client, db_session, bot_token):
 # Stake tests here are about stake mechanics; the anti-farming limits have
 # their own file (test_stake_guard.py).
 pytestmark = pytest.mark.usefixtures("stake_guards_off")
+
+
+def test_auto_assign_never_picks_two_copies_of_one_footballer():
+    def info(cid, power, position, person):
+        return {"person": person, "power": power, "rarity_rank": 0, "card": {
+            "user_card_id": cid, "player_id": cid, "display_name": person, "position": position,
+            "image_path": None, "rarity": "common", "rating": power,
+        }}
+
+    infos = [info(1, 90, "CB", "неста"), info(2, 89, "CB", "неста"), info(3, 70, "CB", "мальдини"),
+             info(4, 65, "LW", "фигу"), info(5, 60, "CM", "пирло"), info(6, 50, "GK", "буффон"), info(7, 40, "ST", "индзаги")]
+    chosen = stratego_service._auto_assign(infos, engine.card_slots(SMALL_COUNTS))
+    persons = [c["person"] for c in chosen.values()]
+    assert len(persons) == len(set(persons))

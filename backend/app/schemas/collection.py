@@ -43,6 +43,8 @@ class UserCardListItem(BaseModel):
     path_level: int = 0
     path_stage: int = 0
     path_rating_bonus: int = 0
+    # Came from a free source: a valuable copy can't be traded (card_value_service).
+    from_free_source: bool = False
     # «Экипировка» it wears (services/equipment_service.py; rating already in player.rating).
     equipment_rating_bonus: int = 0
     equipment_chemistry: int = 0
@@ -93,6 +95,7 @@ class UserCardListItem(BaseModel):
             "prestige": getattr(data, "prestige", 0) or 0,
             "prestige_icon_number": getattr(data, "prestige_icon_number", None),
             "talent_override": getattr(data, "talent_override", None),
+            "from_free_source": bool(getattr(data, "from_free_source", False)),
         }
 
 
