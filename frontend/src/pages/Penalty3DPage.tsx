@@ -12,6 +12,7 @@ import FreeKickScene3D, { type LiveShot } from "@/components/freeKick3d/FreeKick
 import PenaltyHowTo, { type HowToRole } from "@/components/freeKick3d/PenaltyHowTo";
 import SceneCrash from "@/components/freeKick3d/SceneCrash";
 import { formatGameError } from "@/lib/errors";
+import { shirtPrint } from "@/lib/gameGear";
 import { useCrashLog } from "@/lib/freeKick3d/crashLog";
 import { isSeen, markSeen } from "@/lib/seenSections";
 import { crowdChant, crowdHush, crowdTension, playFreeKickSfx, startCrowd } from "@/lib/freeKick3d/sfx";
@@ -429,6 +430,7 @@ function ShootoutKick({
           gear={{
             ball: series.ball,
             kickerBoots: keeping ? null : series.boots,
+            kickerPrint: keeping ? null : shirtPrint(series.card.player),
             keeperGloves: keeping ? series.gloves : null,
           }}
           shotClockRef={shotClock}

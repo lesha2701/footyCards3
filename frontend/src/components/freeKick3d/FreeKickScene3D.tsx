@@ -27,11 +27,17 @@ import type { FreeKickTarget } from "@/types";
 import Confetti from "./Confetti";
 import { KICK } from "./kickStyles";
 import { LOOKS } from "./looks";
-import { KeeperModel, KickerModel, WallPlayerModel, type Celebration, type PlayerClock } from "./Players";
+import { KeeperModel, KickerModel, WallPlayerModel, type Celebration, type PlayerClock, type ShirtPrint } from "./Players";
 import { Stadium, type Hype, type Quality } from "./Stadium";
 import { NET_TILE, ballGeometry, netTexture } from "./textures";
 
-export type SceneGear = { ball?: string | null; kickerBoots?: string | null; keeperGloves?: string | null };
+export type SceneGear = {
+  ball?: string | null;
+  kickerBoots?: string | null;
+  keeperGloves?: string | null;
+  /** Name and number on the kicker's back (the card he shoots with). */
+  kickerPrint?: ShirtPrint | null;
+};
 const NO_GEAR: SceneGear = {};
 
 export type LiveShot = { id: number; kick: KickParams; trajectory: ShotTrajectory };
@@ -286,6 +292,7 @@ function ShotWorld({
           kit={kickerKit}
           celebration={kickerCelebration}
           boots={(gear.kickerBoots && BOOTS[gear.kickerBoots]) || null}
+          print={gear.kickerPrint ?? null}
           castShadow={quality === "high"}
         />
       </Suspense>

@@ -34,6 +34,16 @@ export function glovesColor(code: string | null | undefined): string {
   return (code && GLOVES[code]) || GLOVES.default;
 }
 
+/** The classic shirt number for a position — cards carry none. */
+const POSITION_NUMBER: Record<string, number> = {
+  GK: 1, RB: 2, RWB: 2, LB: 3, LWB: 3, CB: 4, CDM: 6, RW: 7, RM: 7, CM: 8, ST: 9, CAM: 10, LW: 11, LM: 11,
+};
+
+/** Name and number for the kicker's back, from the card he shoots with. */
+export function shirtPrint(player: { last_name: string; display_name: string; position: string }): { name: string; number: number } {
+  return { name: player.last_name || player.display_name, number: POSITION_NUMBER[player.position] ?? 10 };
+}
+
 /** The style shop's tile for a gear item: an emoji on its colours. */
 export function gearSwatch(code: string): { emoji: string; from: string; to: string } | null {
   if (BALL_SKINS[code]) return { emoji: "⚽", from: BALL_SKINS[code].light, to: BALL_SKINS[code].dark };

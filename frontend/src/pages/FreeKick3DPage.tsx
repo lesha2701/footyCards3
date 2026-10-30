@@ -18,6 +18,7 @@ import { IconCoin } from "@/components/icons";
 import FreeKickScene3D, { type LiveShot } from "@/components/freeKick3d/FreeKickScene3D";
 import SceneCrash from "@/components/freeKick3d/SceneCrash";
 import { formatGameError } from "@/lib/errors";
+import { shirtPrint } from "@/lib/gameGear";
 import { useCrashLog } from "@/lib/freeKick3d/crashLog";
 import { crowdChant, crowdHush, crowdTension, playFreeKickSfx, startCrowd } from "@/lib/freeKick3d/sfx";
 import { swipeFromPoints, type SwipePoint } from "@/lib/freeKick3d/swipe";
@@ -409,7 +410,7 @@ function SeriesKick({
           onReady={onReady}
           fpsRef={fpsRef}
           kickerCelebration={series.celebration === "cel_silly" ? "silly_dance" : "celebrate"}
-          gear={{ ball: series.ball, kickerBoots: series.boots }}
+          gear={{ ball: series.ball, kickerBoots: series.boots, kickerPrint: shirtPrint(series.card.player) }}
         />
       </ErrorBoundary>
 

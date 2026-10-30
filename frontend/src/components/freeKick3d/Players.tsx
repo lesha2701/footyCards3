@@ -93,12 +93,53 @@ function heightFrame(scene: THREE.Object3D, mesh: THREE.SkinnedMesh) {
   };
   const row = new THREE.Vector4(m[1], m[5], m[9], m[13]);
   const rowX = new THREE.Vector4(m[0], m[4], m[8], m[12]);
-  return { row, range: span(row), rowX, rangeX: span(rowX) };
+  // The whole transform too: the back of the shirt is found by position
+  // (metres from the feet) and by which way the surface faces.
+  return { row, range: span(row), rowX, rangeX: span(rowX), rest: new THREE.Matrix4().fromArray(m) };
+}
+
+/** Name and number on the back of the shirt (the card the player shoots
+ * with). Laid on a 0.36 × 0.42 m patch of the upper back. */
+export type ShirtPrint = { name: string; number: number };
+const PRINT_W = 0.36;
+const PRINT_BOTTOM = 1.06;
+const PRINT_TOP = 1.48;
+const NO_PRINT = new THREE.DataTexture(new Uint8Array(4), 1, 1);
+NO_PRINT.needsUpdate = true;
+
+function printTexture(print: ShirtPrint): THREE.Texture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 288;
+  canvas.height = 336;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#fff";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const name = print.name.toUpperCase();
+  // The name as wide as fits, never above 46 px.
+  let size = 46;
+  ctx.font = `bold ${size}px Arial, sans-serif`;
+  while (size > 18 && ctx.measureText(name).width > canvas.width - 20) {
+    size -= 2;
+    ctx.font = `bold ${size}px Arial, sans-serif`;
+  }
+  ctx.fillText(name, canvas.width / 2, 34);
+  ctx.font = "bold 210px Arial, sans-serif";
+  ctx.fillText(String(print.number), canvas.width / 2, 196);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.anisotropy = 4;
+  return tex;
+}
+
+/** White or near-black print, whichever reads on the shirt. */
+function printColor(shirt: string): THREE.Color {
+  const c = new THREE.Color(shirt);
+  return new THREE.Color(c.r * 0.3 + c.g * 0.59 + c.b * 0.11 > 0.45 ? "#111827" : "#ffffff");
 }
 
 /** Boots and gloves («Мой игрок» gear, lib/gameGear.ts): colours, or null
  * for the model's own black boots / bare hands. */
-export type Gear = { boots?: string | null; gloves?: string | null };
+export type Gear = { boots?: string | null; gloves?: string | null; print?: ShirtPrint | null };
 
 /** The model's white kit takes the team's colours — shirt, shorts and
  * socks by bind-pose height, keeping the fabric's shading — and the skin
@@ -121,6 +162,13 @@ function tintMaterial(
     uBoots: { value: new THREE.Color(gear.boots ?? "#000000") },
     uGloves: { value: new THREE.Color(gear.gloves ?? "#000000") },
     uGear: { value: new THREE.Vector2(gear.boots ? 1 : 0, gear.gloves ? 1 : 0) },
+    uRest: { value: frame.rest },
+    uPrint: { value: gear.print ? printTexture(gear.print) : NO_PRINT },
+    uPrintColor: { value: printColor(kit.shirt) },
+    // Patch: centre x, width, bottom, top (m); w = on/off.
+    uPrintRect: {
+      value: new THREE.Vector4((frame.rangeX.x + frame.rangeX.y) / 2, PRINT_W, PRINT_BOTTOM, gear.print ? PRINT_TOP : -1),
+    },
     uBands: { value: new THREE.Vector3(character.socksTop, character.shirtHem, character.hairline) },
     uShirt: { value: new THREE.Color(kit.shirt) },
     uShorts: { value: new THREE.Color(kit.shorts) },
@@ -134,18 +182,22 @@ function tintMaterial(
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
-        "#include <common>\nuniform vec4 uKitRow, uKitRowX;\nuniform vec2 uKitRange, uKitRangeX;\nvarying float vKitH, vKitX;",
+        "#include <common>\nuniform vec4 uKitRow, uKitRowX;\nuniform vec2 uKitRange, uKitRangeX;\nuniform mat4 uRest;\nvarying float vKitH, vKitX, vBack;\nvarying vec2 vRestXY;",
       )
       .replace(
         "#include <begin_vertex>",
         `#include <begin_vertex>
+        vec4 rest = uRest * vec4(position, 1.0);
+        vRestXY = rest.xy;
+        // The model faces +z: the back of the shirt faces −z.
+        vBack = -(mat3(uRest) * normal).z;
         vKitH = (dot(uKitRow.xyz, position) + uKitRow.w - uKitRange.x) / (uKitRange.y - uKitRange.x);
         vKitX = (dot(uKitRowX.xyz, position) + uKitRowX.w - uKitRangeX.x) / (uKitRangeX.y - uKitRangeX.x) * 2.0 - 1.0;`,
       );
     shader.fragmentShader = shader.fragmentShader
       .replace(
         "#include <common>",
-        "#include <common>\nuniform vec3 uBands, uShirt, uShorts, uSocks, uSkin, uHair, uBoots, uGloves;\nuniform vec2 uGear;\nvarying float vKitH, vKitX;",
+        "#include <common>\nuniform vec3 uBands, uShirt, uShorts, uSocks, uSkin, uHair, uBoots, uGloves, uPrintColor;\nuniform vec2 uGear;\nuniform vec4 uPrintRect;\nuniform sampler2D uPrint;\nvarying float vKitH, vKitX, vBack;\nvarying vec2 vRestXY;",
       )
       .replace(
         "#include <map_fragment>",
@@ -162,6 +214,14 @@ function tintMaterial(
           diffuseColor.rgb = mix(diffuseColor.rgb, uBoots * (0.4 + 3.0 * hi), boot);
           float glove = uGear.y * smoothstep(0.78, 0.82, abs(vKitX)) * (1.0 - white);
           diffuseColor.rgb = mix(diffuseColor.rgb, uGloves * min(1.0, 0.55 + hi * 0.6), glove);
+          // Mirrored in u so it reads from behind (his left is +x).
+          vec2 puv = vec2(
+            (uPrintRect.x + uPrintRect.y * 0.5 - vRestXY.x) / uPrintRect.y,
+            (vRestXY.y - uPrintRect.z) / (uPrintRect.w - uPrintRect.z)
+          );
+          float inPatch = step(0.0, puv.x) * step(puv.x, 1.0) * step(0.0, puv.y) * step(puv.y, 1.0);
+          float ink = texture2D(uPrint, clamp(puv, 0.0, 1.0)).a * inPatch * white * smoothstep(0.15, 0.45, vBack);
+          diffuseColor.rgb = mix(diffuseColor.rgb, uPrintColor * min(1.0, hi / 0.65), ink);
         }`,
       );
   };
@@ -193,7 +253,7 @@ function useFootballer(kit: Kit, look: Look, castShadow: boolean, gear: Gear = {
     return root;
     // The gear's colours, not the object (a fresh literal every render).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gltf.scene, frame, character, kit, look, castShadow, gear.boots, gear.gloves]);
+  }, [gltf.scene, frame, character, kit, look, castShadow, gear.boots, gear.gloves, gear.print?.name, gear.print?.number]);
   const mixer = useMemo(() => new THREE.AnimationMixer(model), [model]);
   const actions = useMemo(() => {
     const out = {} as Record<Clip, THREE.AnimationAction>;
@@ -372,6 +432,7 @@ export function KickerModel({
   kit = "home",
   castShadow,
   boots = null,
+  print = null,
 }: {
   setup: ShotSetup;
   clock: PlayerClock;
@@ -383,9 +444,11 @@ export function KickerModel({
   castShadow: boolean;
   /** Boots colour, or null for the model's black ones. */
   boots?: string | null;
+  /** Name and number on his back, or none. */
+  print?: ShirtPrint | null;
 }) {
   const look = kit === "away" ? LOOKS[3] : KICKER_LOOK;
-  const { model, mixer, actions, clips } = useFootballer(kit === "away" ? KITS.away : KITS.home, look, castShadow, { boots });
+  const { model, mixer, actions, clips } = useFootballer(kit === "away" ? KITS.away : KITS.home, look, castShadow, { boots, print });
   const group = useRef<THREE.Group>(null);
   // The kick ends a couple of metres on from where the celebration clip
   // starts: the hips' gap (in the hips' parent space), made up by moving
