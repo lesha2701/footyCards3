@@ -13,10 +13,11 @@ import {
   type CareerView,
   type TacticsCatalog,
 } from "@/api/career";
-import { IconCoin } from "@/components/icons";
-import { staticUrl } from "@/lib/api";
-import { CATEGORY_POSITIONS } from "@/lib/formation";
-import { RARITY_GRADIENTS } from "@/lib/rarity";
+import EmptyState from "@/components/common/EmptyState";
+import { ListSkeleton } from "@/components/common/Skeleton";
+import { PlayerTile } from "@/components/career/PlayerTile";
+import { IconCard, IconCoin } from "@/components/icons";
+import { lineOf, playerInfo } from "@/lib/careerPlayer";
 import { haptic } from "@/lib/telegram";
 
 type Handlers = { onView: (v: CareerView) => void; onError: (e: unknown) => void };
@@ -93,13 +94,9 @@ export function SeasonSummaryView({ summary, catalog }: { summary: CareerSeasonS
   );
 }
 
-function lineOf(position: string): "GK" | "DEF" | "MID" | "FWD" {
-  return (Object.keys(CATEGORY_POSITIONS) as ("GK" | "DEF" | "MID" | "FWD")[]).find((c) => CATEGORY_POSITIONS[c].includes(position)) ?? "MID";
-}
-
 /** Bottom sheet: pick the season squad from the collection (before round 1). */
 export function SquadBuilder({ onClose, onView, onError }: { onClose: () => void } & Handlers) {
-  const { data } = useQuery({ queryKey: ["career", "collection"], queryFn: fetchCareerCollection });
+  const { data, isLoading } = useQuery({ queryKey: ["career", "collection"], queryFn: fetchCareerCollection });
   const [picked, setPicked] = useState<Set<number> | null>(null);
   const selected = picked ?? new Set((data?.cards ?? []).filter((c) => c.in_squad).map((c) => c.card_id));
   const size = data?.squad_size ?? 22;
@@ -135,6 +132,11 @@ export function SquadBuilder({ onClose, onView, onError }: { onClose: () => void
           <p className="text-caption text-ink-mist">Отмеченные — в заявке. Кто был в прошлом сезоне, тот ядро команды.</p>
         </div>
         <div className="flex-1 overflow-y-auto px-4">
+          {isLoading && <ListSkeleton count={3} />}
+          {data && data.cards.length === 0 && (
+            <EmptyState compact icon={IconCard} title="Пока некого заявить"
+              description="Открой паки — футболисты из коллекции попадут в список для заявки." />
+          )}
           {byLine.map((line) => (
             <div key={line.cat} className="mb-3">
               <p className="mb-1 text-micro font-bold uppercase tracking-[0.12em] text-accent-cyan">
@@ -143,24 +145,15 @@ export function SquadBuilder({ onClose, onView, onError }: { onClose: () => void
               <div className="grid grid-cols-4 gap-1.5">
                 {line.cards.map((c) => {
                   const on = selected.has(c.card_id);
-                  const p = c.card?.player;
+                  const info = playerInfo(c);
+                  if (!info) return null;
                   return (
-                    <button key={c.card_id} onClick={() => toggle(c)}
-                      className={`rounded-[11px] bg-gradient-to-b p-[1.5px] ${p ? RARITY_GRADIENTS[p.rarity] : RARITY_GRADIENTS.epic} ${on ? "" : "opacity-40 grayscale"}`}
+                    <button key={c.card_id} type="button" onClick={() => toggle(c)} aria-pressed={on}
+                      aria-label={`${info.name}, ${info.position}, ${info.rating}`}
+                      className={`rounded-[12px] active:scale-95 ${on ? "" : "opacity-40 grayscale"}`}
                     >
-                      <span className="flex flex-col items-center gap-0.5 rounded-[10px] bg-bg-surface p-1">
-                        <span className="relative block aspect-square w-full overflow-hidden rounded-lg bg-black/40">
-                          <img decoding="async" src={staticUrl(p?.image_path ?? "players/placeholder/player_placeholder.webp")} alt="" className="h-full w-full object-cover" loading="lazy" />
-                          <span className="absolute left-0.5 top-0.5 rounded bg-black/75 px-1 font-mono text-micro font-bold text-accent-lime">
-                            {p?.rating ?? c.my_player?.rating}
-                          </span>
-                          {on && <span className="absolute right-0.5 top-0.5 rounded-full bg-accent-lime px-1 text-micro font-black text-bg-base">✓</span>}
-                        </span>
-                        <span className="w-full truncate text-center text-micro font-semibold text-ink-chalk">
-                          {(p?.display_name ?? c.my_player?.name ?? "").split(" ").slice(-1)[0]}
-                        </span>
-                        <span className="font-mono text-micro text-accent-cyan">{p?.position ?? c.my_player?.position}</span>
-                      </span>
+                      <PlayerTile info={info}
+                        corner={on ? <span className="absolute right-0.5 top-0.5 rounded-full bg-accent-lime px-1 text-micro font-black text-bg-base">✓</span> : undefined} />
                     </button>
                   );
                 })}

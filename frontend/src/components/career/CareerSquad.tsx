@@ -1,120 +1,28 @@
 import { useMutation } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { setCareerLineup, type CareerSeason, type CareerSlot, type CareerSquadCard, type CareerView, type TacticsCatalog } from "@/api/career";
 import { ChemistryDiamonds, ChemistryLinksOverlay, ChemistrySummary } from "@/components/squad/Chemistry";
 import { SquadBuilder } from "@/components/career/Offseason";
 import PitchBackground from "@/components/squad/PitchBackground";
 import { EnergyBar } from "@/components/career/EnergyBar";
+import { PlayerTile } from "@/components/career/PlayerTile";
 import { SquadTacticLayer } from "@/components/career/SquadTacticLayer";
 import { VALUE_ICONS } from "@/components/career/TacticIcons";
+import { isOut, lineOf, playerInfo } from "@/lib/careerPlayer";
 import { axisValueLabel } from "@/lib/careerTactics";
-import { staticUrl } from "@/lib/api";
 import { chemistryGain, computeChemistry } from "@/lib/chemistry";
 import { CATEGORY_POSITIONS, onIdealPosition } from "@/lib/formation";
 import { formationLabel, inRow, pitchRows, PITCH_STYLE } from "@/lib/formationLayout";
-import { RARITY_GLOW_STATIC, RARITY_GRADIENTS } from "@/lib/rarity";
 import { haptic } from "@/lib/telegram";
-import type { ChemistryOut, Rarity } from "@/types";
+import type { ChemistryOut } from "@/types";
 
 type Handlers = { onView: (v: CareerView) => void; onError: (e: unknown) => void };
 
-const PLACEHOLDER = "players/placeholder/player_placeholder.webp";
 const LINES: { category: "GK" | "DEF" | "MID" | "FWD"; label: string }[] = [
   { category: "GK", label: "Вратари" }, { category: "DEF", label: "Защита" },
   { category: "MID", label: "Полузащита" }, { category: "FWD", label: "Атака" },
 ];
-
-interface Info {
-  name: string;
-  short: string;
-  position: string;
-  rating: number;
-  club: string;
-  country: string;
-  image?: string;
-  rarity: Rarity;
-  mine: boolean;
-}
-
-/** Short label for a tile: the last word of the name (surname), never empty
- * — trailing spaces or a one-word name fall back to the whole name. */
-function shortName(...names: (string | null | undefined)[]): string {
-  for (const n of names) {
-    const words = (n ?? "").trim().split(/\s+/).filter(Boolean);
-    if (words.length) return words[words.length - 1];
-  }
-  return "";
-}
-
-function infoOf(entry: CareerSquadCard | undefined): Info | null {
-  if (!entry) return null;
-  if (entry.card) {
-    const p = entry.card.player;
-    return {
-      name: p.display_name, short: shortName(p.display_name, p.last_name, p.first_name), position: p.position, rating: p.rating,
-      club: p.club, country: p.country, image: staticUrl(p.image_path ?? PLACEHOLDER), rarity: p.rarity, mine: false,
-    };
-  }
-  if (entry.my_player) {
-    const m = entry.my_player;
-    return { name: m.name, short: shortName(m.name), position: m.position, rating: m.rating,
-      club: m.club ?? "", country: m.country ?? "", image: staticUrl(PLACEHOLDER), rarity: "epic", mine: true };
-  }
-  return null;
-}
-
-function lineOf(position: string): "GK" | "DEF" | "MID" | "FWD" {
-  return (Object.keys(CATEGORY_POSITIONS) as ("GK" | "DEF" | "MID" | "FWD")[]).find((c) => CATEGORY_POSITIONS[c].includes(position)) ?? "MID";
-}
-
-function isOut(entry: CareerSquadCard): boolean {
-  return entry.injured_rounds > 0 || entry.suspended_rounds > 0;
-}
-
-function StatusBadge({ entry }: { entry: CareerSquadCard }) {
-  if (entry.suspended_rounds > 0) {
-    return <span className="rounded bg-red-500 px-1 text-micro font-bold leading-tight text-white">🟥 {entry.suspended_rounds}</span>;
-  }
-  if (entry.injured_rounds > 0) {
-    return <span className="rounded bg-red-500 px-1 text-micro font-bold leading-tight text-white">✚ {entry.injured_rounds}</span>;
-  }
-  if (entry.form > 0) return <span className="rounded bg-accent-lime px-1 text-micro font-bold leading-tight text-bg-base">▲{entry.form}</span>;
-  if (entry.form < 0) return <span className="rounded bg-red-400 px-1 text-micro font-bold leading-tight text-white">▼</span>;
-  return null;
-}
-
-/** A player card in a rarity frame: photo, rating, position, name.
- * `compact` (the pitch): a shorter photo with the position on it, so the
- * whole XI fits on one phone screen. */
-function CardFace({ info, entry, width, children, compact = false, position, offPosition = false }: {
-  info: Info; entry?: CareerSquadCard; width: string; children?: ReactNode;
-  compact?: boolean; position?: string; offPosition?: boolean;
-}) {
-  return (
-    <div className={`${width} rounded-[11px] bg-gradient-to-b p-[1.5px] ${RARITY_GRADIENTS[info.rarity]} ${RARITY_GLOW_STATIC[info.rarity]}`}>
-      <div className={`flex flex-col items-center gap-0.5 rounded-[10px] bg-bg-surface/95 ${compact ? "p-0.5" : "p-1"}`}>
-        <div className={`relative w-full overflow-hidden rounded-lg bg-gradient-to-b from-white/10 to-black/40 ${compact ? "aspect-[5/4]" : "aspect-square"}`}>
-          <img decoding="async" src={info.image} alt="" className="h-full w-full object-cover" loading="lazy" />
-          <span className="absolute left-0.5 top-0.5 rounded-md bg-black/75 px-1 font-mono text-micro font-bold leading-tight text-accent-lime">
-            {info.rating}
-          </span>
-          {info.mine && <span className="absolute right-0.5 top-0.5 rounded bg-accent-lime px-0.5 text-micro font-black text-bg-base">Я</span>}
-          {entry && <span className="absolute bottom-0.5 left-0.5"><StatusBadge entry={entry} /></span>}
-          {position && (
-            <span className={`absolute bottom-0.5 right-0.5 rounded px-0.5 font-mono text-micro font-bold leading-tight ${
-              offPosition ? "bg-red-500/90 text-white" : "bg-black/75 text-accent-cyan"
-            }`}>
-              {position}
-            </span>
-          )}
-        </div>
-        <span className="w-full truncate text-center text-micro font-semibold leading-tight text-ink-chalk">{info.short}</span>
-        {children}
-      </div>
-    </div>
-  );
-}
 
 function PitchCard({ slot, entry, chemPoints, chemMax, onClick, target = false, dimmed = false }: {
   slot: CareerSlot; entry?: CareerSquadCard; chemPoints?: { points: number; on_position: boolean }; chemMax: number;
@@ -123,7 +31,7 @@ function PitchCard({ slot, entry, chemPoints, chemMax, onClick, target = false, 
   target?: boolean;
   dimmed?: boolean;
 }) {
-  const info = infoOf(entry);
+  const info = playerInfo(entry);
   const off = info && !onIdealPosition(info.position, slot.ideal_position);
   return (
     <button
@@ -136,12 +44,12 @@ function PitchCard({ slot, entry, chemPoints, chemMax, onClick, target = false, 
     >
 
       {info ? (
-        <CardFace info={info} entry={entry} width="w-[48px] min-[400px]:w-[54px]" compact position={info.position} offPosition={!!off}>
+        <PlayerTile info={info} entry={entry} width="w-[48px] min-[400px]:w-[54px]" offPosition={!!off}>
           {chemPoints && <ChemistryDiamonds points={chemPoints.points} max={chemMax} onPosition={chemPoints.on_position} />}
           {entry && (
             <EnergyBar fatigue={entry.fatigue} thin />
           )}
-        </CardFace>
+        </PlayerTile>
       ) : (
         <div className="flex w-[48px] flex-col items-center gap-1 rounded-xl border border-dashed border-white/25 bg-black/30 p-2 min-[400px]:w-[54px]">
           <span className="text-lg leading-none text-ink-mist-dim">+</span>
@@ -153,28 +61,28 @@ function PitchCard({ slot, entry, chemPoints, chemMax, onClick, target = false, 
 }
 
 function BenchCard({ entry, onClick, gain, selected }: { entry: CareerSquadCard; onClick?: () => void; gain?: number | null; selected?: boolean }) {
-  const info = infoOf(entry);
+  const info = playerInfo(entry);
   if (!info) return null;
   const out = isOut(entry);
   return (
     <button onClick={onClick} disabled={!onClick || out}
       className={`relative flex min-w-0 flex-col items-center ${out ? "opacity-45 grayscale" : "active:scale-95"} ${selected ? "rounded-[12px] ring-2 ring-accent-lime" : ""}`}
     >
-      <CardFace info={info} entry={entry} width="w-full" compact position={info.position}>
+      <PlayerTile info={info} entry={entry}>
         <EnergyBar fatigue={entry.fatigue} thin />
         {gain != null && gain !== 0 && (
           <span className={`font-mono text-micro font-bold leading-tight ${gain > 0 ? "text-accent-green" : "text-red-400"}`}>
             {gain > 0 ? `+${gain}` : gain} хим.
           </span>
         )}
-      </CardFace>
+      </PlayerTile>
     </button>
   );
 }
 
 /** A small bench tile for the sideways strip: photo, rating, position, surname. */
 function BenchTile({ entry, onClick, selected }: { entry: CareerSquadCard; onClick: () => void; selected: boolean }) {
-  const info = infoOf(entry);
+  const info = playerInfo(entry);
   if (!info) return null;
   const out = isOut(entry);
   return (
@@ -187,9 +95,9 @@ function BenchTile({ entry, onClick, selected }: { entry: CareerSquadCard; onCli
         selected ? "ring-2 ring-accent-lime" : ""
       }`}
     >
-      <CardFace info={info} entry={entry} width="w-full" compact position={info.position}>
+      <PlayerTile info={info} entry={entry}>
         <EnergyBar fatigue={entry.fatigue} thin />
-      </CardFace>
+      </PlayerTile>
     </button>
   );
 }
@@ -237,7 +145,7 @@ export default function CareerSquad({ season, catalog = null, onView, onError }:
   const dirty = JSON.stringify(slots) !== savedKey;
 
   const slotLikes = useMemo(() => season.slots.map((s) => {
-    const info = infoOf(byId.get(slots[s.code]));
+    const info = playerInfo(byId.get(slots[s.code]));
     return {
       slot_code: s.code, ideal_position: s.ideal_position,
       player: info ? { id: slots[s.code], display_name: info.name, club: info.club, country: info.country, position: info.position } : null,
@@ -272,12 +180,12 @@ export default function CareerSquad({ season, catalog = null, onView, onError }:
   const benchByLine = LINES.map((line) => ({
     ...line,
     entries: bench
-      .filter((e) => lineOf(infoOf(e)?.position ?? "") === line.category)
-      .sort((a, b) => Number(isOut(a)) - Number(isOut(b)) || (infoOf(b)?.rating ?? 0) - (infoOf(a)?.rating ?? 0)),
+      .filter((e) => lineOf(playerInfo(e)?.position ?? "") === line.category)
+      .sort((a, b) => Number(isOut(a)) - Number(isOut(b)) || (playerInfo(b)?.rating ?? 0) - (playerInfo(a)?.rating ?? 0)),
   })).filter((line) => line.entries.length > 0);
   const candidates = picking
     ? season.squad.filter((s) => {
-      const pos = infoOf(s)?.position;
+      const pos = playerInfo(s)?.position;
       return s.owned && !!pos && CATEGORY_POSITIONS[picking.category].includes(pos);
     })
     : [];
@@ -296,7 +204,7 @@ export default function CareerSquad({ season, catalog = null, onView, onError }:
     haptic("light");
   };
   const fitsSlot = (slot: CareerSlot, entry: CareerSquadCard) =>
-    CATEGORY_POSITIONS[slot.category as keyof typeof CATEGORY_POSITIONS]?.includes(infoOf(entry)?.position ?? "") ?? false;
+    CATEGORY_POSITIONS[slot.category as keyof typeof CATEGORY_POSITIONS]?.includes(playerInfo(entry)?.position ?? "") ?? false;
   const benchShown = benchByLine
     .filter((line) => benchLine === "ALL" || line.category === benchLine)
     .flatMap((line) => line.entries);
@@ -386,7 +294,7 @@ export default function CareerSquad({ season, catalog = null, onView, onError }:
         </div>
         {benchPick ? (
           <p className="flex items-center justify-between gap-2 rounded-xl bg-accent-lime/10 px-3 py-1.5 text-caption text-accent-lime">
-            <span>Нажми на поле, кого заменит {infoOf(benchPick)?.short}</span>
+            <span>Нажми на поле, кого заменит {playerInfo(benchPick)?.short}</span>
             <button onClick={() => setBenchPick(null)} className="font-semibold text-ink-mist">Отмена</button>
           </p>
         ) : (
@@ -430,7 +338,7 @@ export default function CareerSquad({ season, catalog = null, onView, onError }:
             <p className="mb-3 text-caption text-ink-mist">Цифра под карточкой — как изменится химия состава</p>
             <div className="grid grid-cols-5 gap-1.5">
               {candidates.map((entry) => {
-                const info = infoOf(entry)!;
+                const info = playerInfo(entry)!;
                 const gain = chemistry?.enabled
                   ? chemistryGain(chemistry, slotLikes, picking.code, { club: info.club, country: info.country, position: info.position })
                   : null;

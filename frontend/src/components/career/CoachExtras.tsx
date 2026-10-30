@@ -2,7 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { fetchCareerLeaderboard, type CareerAchievements, type CareerLeaderboardRow } from "@/api/career";
+import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
+import { IconTrophy, IconUsers } from "@/components/icons";
 
 const TROPHY_ICON: Record<string, string> = { title: "🏆", cup: "🏅", promotion: "⬆️" };
 
@@ -13,9 +15,7 @@ export function AchievementsPanel({ data }: { data: CareerAchievements }) {
       <div>
         <p className="mb-1.5 text-caption font-semibold text-ink-mist">Трофеи</p>
         {data.trophies.length === 0 ? (
-          <p className="rounded-xl bg-bg-base/40 px-3 py-2 text-caption text-ink-mist-dim">
-            Пока пусто: титулы, кубки и повышения попадут сюда.
-          </p>
+          <EmptyState compact icon={IconTrophy} title="Трофеев пока нет" description="Титулы, кубки и повышения попадут сюда." />
         ) : (
           <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
             {data.trophies.map((t, i) => (
@@ -89,7 +89,7 @@ export function CoachLeaderboard() {
       {isLoading || !data ? (
         <ListSkeleton count={3} />
       ) : data.rows.length === 0 ? (
-        <p className="text-caption text-ink-mist-dim">В этом дивизионе пока никого.</p>
+        <EmptyState compact icon={IconUsers} title="В этом дивизионе пока никого" description="Здесь появятся тренеры, которые играют в этом дивизионе." />
       ) : (
         <div className="flex flex-col gap-0.5">
           {data.rows.map((r) => <Row key={r.user_id} row={r} />)}

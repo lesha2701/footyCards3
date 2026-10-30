@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   createCareerSeason,
@@ -29,6 +29,7 @@ import { CoachExtras } from "@/components/career/CoachExtras";
 import { MarkingCard, PlanHints, RolesCard } from "@/components/career/RolesMarking";
 import { OffseasonPanel, SeasonSummaryView } from "@/components/career/Offseason";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
+import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import {
   IconCalendar, IconChart, IconChevronRight, IconClock, IconCoin, IconProfile, IconShirt, IconTactics, IconTarget, IconTrophy, IconUsers, IconWhistle,
@@ -161,7 +162,9 @@ function NewSeason({ view, onView, onError }: { view: CareerView } & Handlers) {
       {withFriend && (
         <div className="flex flex-col gap-1.5">
           {!friends?.friends.length ? (
-            <p className="text-xs text-ink-mist">Пока нет друзей — добавь их в разделе «Друзья» в профиле.</p>
+            <EmptyState compact icon={IconUsers} title="Пока нет друзей"
+              description="Добавь друга — и сыграйте сезон вместе."
+              action={<Link to="/friends" className="rounded-xl bg-white/10 px-4 py-2 text-caption font-bold text-ink-chalk active:scale-95">Найти друзей</Link>} />
           ) : (
             friends.friends.map(({ user }) => (
               <button
@@ -399,17 +402,17 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
             ))}
           </div>
           {prep !== "squad" && season.live && (
-            <p className="rounded-2xl bg-bg-surface p-4 text-xs text-ink-mist">
-              Идёт тур {season.live.round + 1}: указания на второй тайм — в матч-центре выше. Подготовка к следующему туру
-              откроется после финального свистка.
-            </p>
+            <EmptyState compact icon={IconWhistle} title={`Идёт тур ${season.live.round + 1}`}
+              description="Указания на второй тайм — в матч-центре выше. Подготовка к следующему туру откроется после финального свистка." />
           )}
           {prep !== "squad" && !season.live && (!season.scouting || !hasTactics || !catalog) && (
-            <p className="rounded-2xl bg-bg-surface p-4 text-xs text-ink-mist">
-              {hasTactics
-                ? "Подготовка к туру откроется, когда станет известен соперник."
-                : "Сыгранность и план на матч появятся в следующем сезоне — этот доигрывается по прежним правилам."}
-            </p>
+            hasTactics ? (
+              <EmptyState compact icon={IconClock} title="Соперник ещё не известен"
+                description="Подготовка к туру откроется, когда определится следующий соперник." />
+            ) : (
+              <EmptyState compact icon={IconTactics} title="Этот сезон — по прежним правилам"
+                description="Сыгранность и план на матч появятся в следующем сезоне." />
+            )
           )}
           {prep === "tactic" && season.scouting && !season.live && hasTactics && catalog && (
             <>
