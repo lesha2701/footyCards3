@@ -4,8 +4,8 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CareerSeason, CareerSquadCard, TacticsCatalog } from "@/api/career";
-import { TacticBoard } from "@/components/career/TacticBoard";
-import { LINE_Y, boardLayout } from "@/lib/careerBoard";
+import CareerSquad from "@/components/career/CareerSquad";
+import { lineY } from "@/lib/careerRoles";
 
 const setCareerRoles = vi.fn();
 const setCareerMarking = vi.fn();
@@ -18,7 +18,7 @@ vi.mock("@/api/career", async (orig) => ({
 }));
 
 const card = (card_id: number, name: string, position: string, fatigue = 20): CareerSquadCard => ({
-  card: { player: { display_name: name, last_name: name, position, rating: 80, image_path: null } } as never,
+  card: { player: { display_name: name, last_name: name, position, rating: 80, image_path: null, club: "Клуб", country: "Страна", rarity: "rare" } } as never,
   card_id, fatigue, injured_rounds: 0, suspended_rounds: 0, yellows: 0, form: 1, owned: true,
 });
 
@@ -36,7 +36,8 @@ const catalog: TacticsCatalog = {
 };
 
 const season = {
-  rounds_played: 2, formation: "4-3-3",
+  id: 1, rounds_played: 2, formation: "4-3-3", status: "active", tactics_version: 2, chemistry: null,
+  tactic: { direction: "wings", block: "high" },
   slots: [{ code: "GK", category: "GK", ideal_position: "GK" }, { code: "FWD1", category: "FWD", ideal_position: "LW" }],
   lineup: { GK: 9, FWD1: 1 },
   squad: [card(9, "Вратарёв", "GK"), card(1, "Крайнев", "LW", 80)],
@@ -51,54 +52,40 @@ function wrap(node: ReactNode) {
   return render(<QueryClientProvider client={client}>{node}</QueryClientProvider>);
 }
 
-describe("tactics board layout", () => {
-  it("lines stand higher with a high block, the keeper at the bottom; slots carry the line-up", () => {
-    const squad = season.squad;
-    const high = boardLayout("4-3-3", "high", { GK: 9, FWD1: 1 }, squad);
-    const low = boardLayout("4-3-3", "low", { GK: 9, FWD1: 1 }, squad);
-    expect(high).toHaveLength(11);
-    const def = (l: typeof high) => l.find((p) => p.code === "DEF1")!.y;
-    expect(def(high)).toBe(LINE_Y.high.DEF);
-    expect(def(low)).toBe(LINE_Y.low.DEF);
-    expect(high.find((p) => p.code === "GK")).toMatchObject({ x: 50, y: 128 });
-    expect(high.find((p) => p.code === "FWD1")!.entry?.card_id).toBe(1);
-    expect(high.find((p) => p.code === "MID1")!.entry).toBeUndefined();
+describe("the tactic under the squad", () => {
+  const band = (top: number, bottom: number) => ({ top, bottom, mid: (top + bottom) / 2 });
+  it("the defensive line goes up with a high block and down with a low one", () => {
+    const mid = band(100, 160), def = band(200, 260), gk = band(300, 360);
+    const [high, middle, low] = ["high", "mid", "low"].map((b) => lineY(b, mid, def, gk));
+    expect(high).toBeLessThan(middle);
+    expect(middle).toBeGreaterThan(mid.bottom);
+    expect(middle).toBeLessThan(def.top);
+    expect(low).toBeGreaterThan(def.bottom);
+    expect(low).toBeLessThan(gk.top);
   });
 });
 
-describe("tactics board", () => {
+describe("«Состав»: roles of the players", () => {
   beforeEach(() => {
     for (const f of [setCareerRoles, setCareerMarking, setCareerPlan]) f.mockReset().mockResolvedValue({});
   });
 
-  const board = (over: Partial<Parameters<typeof TacticBoard>[0]> = {}) => {
-    const setTactic = vi.fn();
-    const setMentality = vi.fn();
-    wrap(<TacticBoard season={season} catalog={catalog} formation="4-3-3" tactic={{ direction: "wings", block: "high" }}
-      setTactic={setTactic} mentality="BALANCED" setMentality={setMentality} onView={vi.fn()} onError={vi.fn()} {...over} />);
-    return { setTactic, setMentality };
-  };
+  const squad = () => wrap(<CareerSquad season={season} catalog={catalog} onView={vi.fn()} onError={vi.fn()} />);
 
-  it("a setting on the pitch opens its options with the hint; the mentality is a thermometer", () => {
-    const { setTactic, setMentality } = board();
-    fireEvent.click(screen.getByRole("button", { name: "Направление атаки: Фланги" }));
-    const options = screen.getByRole("radiogroup", { name: "Направление атаки" });
-    expect(within(options).getByRole("radio", { name: "Фланги" })).toHaveAttribute("aria-checked", "true");
-    expect(options).toHaveTextContent("атака флангами");
-    fireEvent.click(within(options).getByRole("radio", { name: "Центр" }));
-    // Picking closes the options.
-    expect(screen.queryByRole("radiogroup", { name: "Направление атаки" })).toBeNull();
-    expect(setTactic).toHaveBeenCalledWith({ direction: "center", block: "high" });
-    fireEvent.click(screen.getByRole("radio", { name: "Атакующий" }));
-    expect(setMentality).toHaveBeenCalledWith("ATTACKING");
+  it("the legend says what the drawing under the cards shows", () => {
+    squad();
+    const legend = screen.getByRole("list", { name: "Тактика на поле" });
+    expect(legend).toHaveTextContent("Фланги");
+    expect(legend).toHaveTextContent("Высокий прессинг");
   });
 
-  it("the roles view: the line-up on the pitch; a player card with energy, role, marking and set pieces", async () => {
-    board();
-    expect(screen.queryByRole("button", { name: "Крайнев, LW" })).toBeNull();
+  it("the roles view: the role of the line under the card; a tap opens the card with role, marking and set pieces", async () => {
+    squad();
+    expect(screen.queryByText("+ роль")).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "Роли игроков" }));
-    fireEvent.click(screen.getByRole("button", { name: "Крайнев, LW" }));
-    expect(screen.getByLabelText("Энергия 20% — сильно устал")).toBeInTheDocument();
+    expect(screen.getByText("+ роль")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "FWD1: Крайнев" }));
+    expect(within(screen.getByRole("dialog")).getByLabelText("Энергия 20% — сильно устал")).toBeInTheDocument();
     fireEvent.click(within(screen.getByRole("radiogroup", { name: "Роль: Крайние полузащитники" })).getByRole("radio", { name: /Срезка в центр/ }));
     await vi.waitFor(() => expect(setCareerRoles).toHaveBeenCalledWith({ winger: "inside" }, 2));
     fireEvent.click(screen.getByRole("button", { name: /Опекать звезду: Звездин/ }));
@@ -108,10 +95,11 @@ describe("tactics board", () => {
     expect(setCareerPlan.mock.calls[0][0]).toMatchObject({ round_index: 2, set_pieces: { corner_taker: 1 } });
   });
 
-  it("the keeper's card has no marking or set pieces", () => {
-    board();
+  it("a set role shows on the card; the keeper's card has no marking or set pieces", () => {
+    wrap(<CareerSquad season={{ ...season, roles: { winger: "crosser" } }} catalog={catalog} onView={vi.fn()} onError={vi.fn()} />);
     fireEvent.click(screen.getByRole("tab", { name: "Роли игроков" }));
-    fireEvent.click(screen.getByRole("button", { name: "Вратарёв, GK" }));
+    expect(screen.getByTitle("Навесы с фланга")).toHaveTextContent("Навесы");
+    fireEvent.click(screen.getByRole("button", { name: "GK: Вратарёв" }));
     expect(screen.queryByRole("button", { name: /Опекать звезду/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Угловые/ })).toBeNull();
   });

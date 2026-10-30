@@ -382,7 +382,7 @@ function ActiveSeason({ season, catalog, onView, onError }: { season: CareerSeas
       {tab === "squad" && hasTactics && (
         <>
           <SquadWarnings warnings={season.squad_warnings} />
-          <CareerSquad season={season} onView={onView} onError={onError} />
+          <CareerSquad season={season} catalog={catalog} onView={onView} onError={onError} />
         </>
       )}
       {tab === "squad" && !hasTactics && <LineupEditor season={season} onView={onView} onError={onError} />}

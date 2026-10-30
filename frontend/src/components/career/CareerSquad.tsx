@@ -1,11 +1,16 @@
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { setCareerLineup, type CareerSeason, type CareerSlot, type CareerSquadCard, type CareerView } from "@/api/career";
+import { setCareerLineup, type CareerSeason, type CareerSlot, type CareerSquadCard, type CareerView, type TacticsCatalog } from "@/api/career";
 import { ChemistryDiamonds, ChemistryLinksOverlay, ChemistrySummary } from "@/components/squad/Chemistry";
 import { SquadBuilder } from "@/components/career/Offseason";
 import PitchBackground from "@/components/squad/PitchBackground";
 import { EnergyBar } from "@/components/career/EnergyBar";
+import { PlayerSheet } from "@/components/career/PlayerSheet";
+import { SquadTacticLayer } from "@/components/career/SquadTacticLayer";
+import { VALUE_ICONS } from "@/components/career/TacticIcons";
+import { dutiesOf, hasRole, roleLabel } from "@/lib/careerRoles";
+import { axisValueLabel } from "@/lib/careerTactics";
 import { staticUrl } from "@/lib/api";
 import { chemistryGain, computeChemistry } from "@/lib/chemistry";
 import { CATEGORY_POSITIONS, onIdealPosition } from "@/lib/formation";
@@ -113,9 +118,12 @@ function CardFace({ info, entry, width, children, compact = false, position, off
   );
 }
 
-function PitchCard({ slot, entry, chemPoints, chemMax, onClick, target = false, dimmed = false }: {
+function PitchCard({ slot, entry, chemPoints, chemMax, onClick, target = false, dimmed = false, role }: {
   slot: CareerSlot; entry?: CareerSquadCard; chemPoints?: { points: number; on_position: boolean }; chemMax: number;
   onClick: () => void;
+  /** «Роли» view: the role of his line ("" = the line's role is the
+   * ordinary one, undefined = the line has no roles) and his duties. */
+  role?: { tag: { label: string; short: string } | null | undefined; duties: string };
   /** A bench player is picked and can go here: the slot pulses. */
   target?: boolean;
   dimmed?: boolean;
@@ -131,15 +139,25 @@ function PitchCard({ slot, entry, chemPoints, chemMax, onClick, target = false, 
       } ${dimmed ? "opacity-35" : ""}`}
       aria-label={info ? `${slot.code}: ${info.name}` : `${slot.code}: пусто`}
     >
+      {role?.duties && (
+        <span className="absolute -left-1 -top-1 z-10 rounded-full bg-black/75 px-0.5 text-[9px] leading-tight">{role.duties}</span>
+      )}
       {info ? (
-        <CardFace info={info} entry={entry} width="w-[54px] min-[400px]:w-[60px]" compact position={info.position} offPosition={!!off}>
-          {chemPoints && <ChemistryDiamonds points={chemPoints.points} max={chemMax} onPosition={chemPoints.on_position} />}
+        <CardFace info={info} entry={entry} width="w-[48px] min-[400px]:w-[54px]" compact position={info.position} offPosition={!!off}>
+          {role ? (
+            role.tag !== undefined && (
+              <span title={role.tag?.label} className={`w-full truncate rounded px-0.5 text-center text-[9px] font-bold leading-tight ${
+                role.tag ? "bg-accent-lime text-bg-base" : "bg-white/10 text-ink-mist"}`}>
+                {role.tag ? role.tag.short : "+ роль"}
+              </span>
+            )
+          ) : chemPoints && <ChemistryDiamonds points={chemPoints.points} max={chemMax} onPosition={chemPoints.on_position} />}
           {entry && (
             <EnergyBar fatigue={entry.fatigue} thin />
           )}
         </CardFace>
       ) : (
-        <div className="flex w-[54px] flex-col items-center gap-1 rounded-xl border border-dashed border-white/25 bg-black/30 p-2 min-[400px]:w-[60px]">
+        <div className="flex w-[48px] flex-col items-center gap-1 rounded-xl border border-dashed border-white/25 bg-black/30 p-2 min-[400px]:w-[54px]">
           <span className="text-lg leading-none text-ink-mist-dim">+</span>
           <span className="font-mono text-micro text-ink-mist-dim">{slot.ideal_position}</span>
         </div>
@@ -190,13 +208,38 @@ function BenchTile({ entry, onClick, selected }: { entry: CareerSquadCard; onCli
   );
 }
 
+/** What the faint drawing under the cards means: the tactic's main
+ * settings with their pictograms (changed on the «Тактика» card). */
+function TacticLegend({ tactic, catalog }: { tactic: NonNullable<CareerSeason["tactic"]>; catalog: TacticsCatalog }) {
+  const items = ([["direction", "Атака"], ["buildup", "Розыгрыш"], ["block", "Линия обороны"], ["on_loss", "После потери"]] as const)
+    .map(([axis, label]) => ({ axis, label, value: tactic[axis] }))
+    .filter((x) => x.value);
+  if (!items.length) return null;
+  return (
+    <ul className="grid grid-cols-2 gap-1" aria-label="Тактика на поле">
+      {items.map((x) => (
+        <li key={x.axis} className="flex min-w-0 items-center gap-1.5 rounded-xl bg-bg-raised px-2 py-1">
+          <span aria-hidden="true" className="shrink-0 text-ink-mist">{VALUE_ICONS[x.axis]?.[x.value!]}</span>
+          <span className="min-w-0">
+            <span className="block truncate text-[9px] uppercase tracking-wider text-ink-mist-dim">{x.label}</span>
+            <span className="block truncate text-micro font-semibold text-ink-chalk">{axisValueLabel(catalog, x.axis, x.value)}</span>
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** Career squad: the XI on a pitch (rows follow the formation) with photos,
  * rarity frames and live chemistry links; the bench as a grid grouped by
  * line so every player is visible; a picker with each candidate's chemistry
  * gain. Unsaved swaps recompute chemistry client-side (lib/chemistry, the
  * server's rules and adjacency); what plays is what the server saves. */
-export default function CareerSquad({ season, onView, onError }: { season: CareerSeason } & Handlers) {
+export default function CareerSquad({ season, catalog = null, onView, onError }: { season: CareerSeason; catalog?: TacticsCatalog | null } & Handlers) {
   const [slots, setSlots] = useState<Record<string, number>>(season.lineup);
+  // «Расстановка» (who plays where) or «Роли» (a tap opens the player's card).
+  const [view, setView] = useState<"lineup" | "roles">("lineup");
+  const [sheet, setSheet] = useState<{ code: string; entry: CareerSquadCard } | null>(null);
   const [picking, setPicking] = useState<CareerSlot | null>(null);
   // Bench strip: line filter and a picked bench player waiting for a slot.
   const [benchLine, setBenchLine] = useState<"ALL" | "GK" | "DEF" | "MID" | "FWD">("ALL");
@@ -294,36 +337,71 @@ export default function CareerSquad({ season, onView, onError }: { season: Caree
       {squadEditable && (
         <p className="-mt-1 text-micro text-ink-mist-dim">Заявку можно менять до первого тура, состав — перед каждым туром.</p>
       )}
-      {chemistry?.enabled && <ChemistrySummary chemistry={chemistry} />}
+      {chemistry?.enabled && view === "lineup" && <ChemistrySummary chemistry={chemistry} />}
+
+      <div className="grid grid-cols-2 gap-1 rounded-2xl bg-bg-base/40 p-1" role="tablist" aria-label="Вид состава">
+        {([["lineup", "Расстановка"], ["roles", "Роли игроков"]] as const).map(([key, label]) => (
+          <button key={key} type="button" role="tab" aria-selected={view === key}
+            onClick={() => { setView(key); setBenchPick(null); }}
+            className={`rounded-xl py-1.5 text-caption font-semibold ${view === key ? "bg-bg-raised text-ink-chalk" : "text-ink-mist"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
 
       <div
         ref={pitchRef}
-        className="relative overflow-hidden rounded-[22px] px-1 py-3 ring-1 ring-white/10"
+        className="relative overflow-hidden rounded-[22px] px-1 pb-3 pt-5 ring-1 ring-white/10"
         style={PITCH_STYLE}
       >
         <PitchBackground />
-        <ChemistryLinksOverlay containerRef={pitchRef} chemistry={chemistry} />
-        <div className="relative flex flex-col gap-1.5">
+        {season.tactic && (
+          <SquadTacticLayer containerRef={pitchRef} tactic={season.tactic} layoutKey={`${season.formation}:${view}`}
+            lineLabel={catalog ? axisValueLabel(catalog, "block", season.tactic.block).toLowerCase() : undefined} />
+        )}
+        {view === "lineup" && <ChemistryLinksOverlay containerRef={pitchRef} chemistry={chemistry} />}
+        {/* Room between the lines for the tactic drawn under them. */}
+        <div className="relative flex flex-col gap-4">
           {rows.map((row) => (
-            <div key={row.key} className="flex justify-evenly gap-0.5">
-              {inRow(row, season.slots).map((slot) => (
-                <PitchCard
-                  key={slot.code}
-                  slot={slot}
-                  entry={byId.get(slots[slot.code])}
-                  chemPoints={chemBySlot.get(slot.code)}
-                  chemMax={chemMax}
-                  target={!!benchPick && fitsSlot(slot, benchPick)}
-                  dimmed={!!benchPick && !fitsSlot(slot, benchPick)}
-                  onClick={() => (benchPick ? fitsSlot(slot, benchPick) && put(slot, benchPick) : setPicking(slot))}
-                />
-              ))}
+            <div key={row.key} data-row={row.category} className="flex justify-evenly gap-0.5">
+              {inRow(row, season.slots).map((slot) => {
+                const entry = byId.get(slots[slot.code]);
+                const position = infoOf(entry)?.position ?? slot.ideal_position;
+                return (
+                  <PitchCard
+                    key={slot.code}
+                    slot={slot}
+                    entry={entry}
+                    chemPoints={chemBySlot.get(slot.code)}
+                    chemMax={chemMax}
+                    target={!!benchPick && fitsSlot(slot, benchPick)}
+                    dimmed={!!benchPick && !fitsSlot(slot, benchPick)}
+                    role={view === "roles" && entry ? {
+                      tag: hasRole(season, catalog, slot.code, position) ? roleLabel(season, catalog, slot.code, position) : undefined,
+                      duties: dutiesOf(season, entry.card_id),
+                    } : undefined}
+                    onClick={() => {
+                      if (view === "roles") { if (entry && catalog) { haptic("light"); setSheet({ code: slot.code, entry }); } return; }
+                      if (benchPick) { if (fitsSlot(slot, benchPick)) put(slot, benchPick); } else setPicking(slot);
+                    }}
+                  />
+                );
+              })}
             </div>
           ))}
         </div>
       </div>
 
-      <div className="flex flex-col gap-2">
+      {season.tactic && catalog && <TacticLegend tactic={season.tactic} catalog={catalog} />}
+
+      {view === "roles" && (
+        <p className="text-micro leading-snug text-ink-mist-dim">
+          Нажми на игрока: роль его линии, опека звезды соперника, стандарты. Роль одна на всю линию.
+          {" "}👁 опека · 🚩 угловые · 🎯 штрафные · ⚽ пенальти
+        </p>
+      )}
+
+      {view === "lineup" && <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
           <p className="text-micro font-bold uppercase tracking-[0.12em] text-accent-cyan">Запас · {bench.length}</p>
           <div className="flex gap-1" role="tablist" aria-label="Линия запаса">
@@ -365,12 +443,14 @@ export default function CareerSquad({ season, onView, onError }: { season: Caree
           ))}
           {benchShown.length === 0 && <p className="py-3 text-caption text-ink-mist-dim">В этой линии запасных нет</p>}
         </div>
-      </div>
+      </div>}
 
-      <p className="text-micro leading-snug text-ink-mist-dim">
-        Нажми на игрока на поле, чтобы заменить. Линии — химия соседей: зелёная — один клуб и страна, жёлтая — что-то
-        одно, красная — ничего общего.
-      </p>
+      {view === "lineup" && (
+        <p className="text-micro leading-snug text-ink-mist-dim">
+          Нажми на игрока на поле, чтобы заменить. Линии — химия соседей: зелёная — один клуб и страна, жёлтая — что-то
+          одно, красная — ничего общего.
+        </p>
+      )}
       <button
         onClick={() => save.mutate()}
         disabled={!dirty || save.isPending}
@@ -378,6 +458,11 @@ export default function CareerSquad({ season, onView, onError }: { season: Caree
       >
         {save.isPending ? "Сохраняем..." : dirty ? "Сохранить состав" : "Состав сохранён"}
       </button>
+
+      {sheet && catalog && (
+        <PlayerSheet season={season} catalog={catalog} code={sheet.code} entry={byId.get(sheet.entry.card_id) ?? sheet.entry}
+          onClose={() => setSheet(null)} onView={onView} onError={onError} />
+      )}
 
       {building && <SquadBuilder onClose={() => setBuilding(false)} onView={onView} onError={onError} />}
 

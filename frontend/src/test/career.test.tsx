@@ -164,8 +164,6 @@ describe("CareerPage", () => {
     expect(screen.getByText("+4.0%")).toBeInTheDocument();
 
     // Change one axis: the preview comes from the server, familiarity keeps 80%.
-    // On the board: the setting on the pitch opens its options right there.
-    fireEvent.click(screen.getByRole("button", { name: /^Построение атаки:/ }));
     fireEvent.click(within(screen.getByRole("radiogroup", { name: "Построение атаки" })).getByRole("radio", { name: "Прямой пас" }));
     expect(screen.getByLabelText("Тактика")).toHaveValue("CUSTOM");
     expect(await screen.findByText("Прямой пас за спину высокой линии")).toBeInTheDocument();
@@ -177,7 +175,8 @@ describe("CareerPage", () => {
 
     // A preset chip sets every axis at once.
     fireEvent.change(screen.getByLabelText("Тактика"), { target: { value: "COUNTER_ATTACK" } });
-    expect(screen.getByRole("button", { name: "Линия обороны и прессинга: Низкий блок" })).toBeInTheDocument();
+    expect(within(screen.getByRole("radiogroup", { name: "Линия обороны и прессинга" })).getByRole("radio", { name: "Низкий блок" }))
+      .toHaveAttribute("aria-checked", "true");
 
     fireEvent.click(screen.getByRole("button", { name: "+ Указание" }));
     fireEvent.change(within(screen.getByLabelText("Указание 1")).getByLabelText("Линия обороны и прессинга"), { target: { value: "high" } });

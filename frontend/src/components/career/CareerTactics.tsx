@@ -17,8 +17,11 @@ import {
   type Tactic,
   type TacticsCatalog,
 } from "@/api/career";
-import { TacticBoard } from "@/components/career/TacticBoard";
+import TacticPitch from "@/components/career/TacticPitch";
+import { AXIS_ICONS, VALUE_ICONS } from "@/components/career/TacticIcons";
+import { IconBall, IconFire, IconHandshake, IconLock, IconScroll, IconSwap, IconTactics } from "@/components/icons";
 import {
+  AXIS_PHASES,
   HINT_TEXT,
   axisValueLabel,
   presetOf,
@@ -32,6 +35,12 @@ import { haptic } from "@/lib/telegram";
 type Handlers = { onView: (v: CareerView) => void; onError: (e: unknown) => void };
 
 const CUSTOM_PRESET = "CUSTOM";
+
+const PHASE_ICONS: Record<string, ReactNode> = {
+  "С мячом": <IconBall size={14} aria-hidden="true" />,
+  "Переходы": <IconSwap size={14} aria-hidden="true" />,
+  "Без мяча": <IconLock size={14} aria-hidden="true" />,
+};
 
 function HintBadge({ hint }: { hint: MatchupHint }) {
   const h = HINT_TEXT[hint];
@@ -157,8 +166,10 @@ export function MatchupList({ report, compact = false }: { report: MatchupReport
   );
 }
 
-export function Segmented({ value, options, onChange, label }: {
+export function Segmented({ value, options, onChange, label, icons }: {
   value: string; options: { value: string; label: string }[]; onChange: (v: string) => void; label: string;
+  /** A pictogram above each option's label, by value. */
+  icons?: Record<string, ReactNode>;
 }) {
   return (
     <div role="radiogroup" aria-label={label} className={`grid gap-1 rounded-xl bg-bg-raised p-1 ${
@@ -170,9 +181,10 @@ export function Segmented({ value, options, onChange, label }: {
           role="radio"
           aria-checked={value === o.value}
           onClick={() => onChange(o.value)}
-          className={`rounded-lg px-1 py-1.5 text-caption font-semibold leading-tight transition-colors ${
+          className={`flex flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-caption font-semibold leading-tight transition-colors ${
             value === o.value ? "bg-floodlight text-bg-base" : "text-ink-mist active:bg-white/5"}`}
         >
+          {icons?.[o.value] && <span aria-hidden="true" className="flex h-[18px] items-center">{icons[o.value]}</span>}
           {o.label}
         </button>
       ))}
@@ -232,56 +244,95 @@ export function TacticsBoard({ season, catalog, onView, onError }: {
         {report && <HintBadge hint={report.hint} />}
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <label className="flex min-w-0 flex-col gap-1">
-          <span className="text-micro uppercase tracking-wider text-ink-mist">Схема</span>
-          <select
-            aria-label="Схема"
-            value={formation}
-            onChange={(e) => setFormation(e.target.value)}
-            className="rounded-xl bg-bg-raised px-2 py-2 text-xs text-ink-chalk outline-none"
-          >
-            {FORMATIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-        </label>
-        <label className="flex min-w-0 flex-col gap-1">
-          <span className="text-micro uppercase tracking-wider text-ink-mist">Готовая тактика</span>
-          <select
-            aria-label="Тактика"
-            value={activePreset?.code ?? CUSTOM_PRESET}
-            onChange={(e) => {
-              const preset = catalog.presets.find((p) => p.code === e.target.value);
-              if (preset) { setTactic({ ...preset.tactic }); haptic("light"); }
-            }}
-            className="rounded-xl bg-bg-raised px-2 py-2 text-xs text-ink-chalk outline-none"
-          >
-            {/* «Своя» = the axes as set by hand on the board; picking it keeps them. */}
-            <option value={CUSTOM_PRESET}>Своя тактика</option>
-            {catalog.presets.map((p) => <option key={p.code} value={p.code}>{p.label}</option>)}
-          </select>
-        </label>
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] items-start gap-3">
+        <TacticPitch formation={formation} tactic={tactic} />
+        <div className="flex flex-col gap-2">
+          <label className="flex flex-col gap-1">
+            <span className="flex items-center gap-1 text-micro uppercase tracking-wider text-ink-mist">
+              <IconTactics size={13} aria-hidden="true" />Схема
+            </span>
+            <select
+              aria-label="Схема"
+              value={formation}
+              onChange={(e) => setFormation(e.target.value)}
+              className="rounded-xl bg-bg-raised px-2 py-2 text-xs text-ink-chalk outline-none"
+            >
+              {FORMATIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="flex items-center gap-1 text-micro uppercase tracking-wider text-ink-mist">
+              <IconScroll size={13} aria-hidden="true" />Тактика
+            </span>
+            <select
+              aria-label="Тактика"
+              value={activePreset?.code ?? CUSTOM_PRESET}
+              onChange={(e) => {
+                const preset = catalog.presets.find((p) => p.code === e.target.value);
+                if (preset) { setTactic({ ...preset.tactic }); haptic("light"); }
+              }}
+              className="rounded-xl bg-bg-raised px-2 py-2 text-xs text-ink-chalk outline-none"
+            >
+              {/* «Своя» = the axes below as set by hand; picking it keeps them. */}
+              <option value={CUSTOM_PRESET}>Своя тактика</option>
+              {catalog.presets.map((p) => <option key={p.code} value={p.code}>{p.label}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="flex items-center gap-1 text-micro uppercase tracking-wider text-ink-mist">
+              <IconFire size={13} aria-hidden="true" />Настрой
+            </span>
+            <select
+              aria-label="Настрой"
+              value={mentality}
+              onChange={(e) => setMentality(e.target.value)}
+              className="rounded-xl bg-bg-raised px-2 py-2 text-xs text-ink-chalk outline-none"
+            >
+              {MENTALITIES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </label>
+          {fam && (
+            <div className="rounded-xl bg-bg-raised p-2">
+              <div className="flex items-center justify-between text-micro">
+                <span className="flex items-center gap-1 uppercase tracking-wider text-ink-mist">
+                  <IconHandshake size={13} aria-hidden="true" />Сыгранность
+                </span>
+                <span className="font-mono font-bold text-ink-chalk">+{famPreview.toFixed(1)}%</span>
+              </div>
+              <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-white/10">
+                <span className="block h-full bg-floodlight" style={{ width: `${Math.min(100, (famPreview / (fam.max_pct || 1)) * 100)}%` }} />
+              </span>
+              <p className="mt-1 text-micro leading-tight text-ink-mist-dim">
+                до {fam.max_pct}% · +{fam.step_pct}% за матч без изменений
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
-      <TacticBoard
-        season={season} catalog={catalog} formation={formation}
-        tactic={tactic} setTactic={setTactic} mentality={mentality} setMentality={setMentality}
-        onView={onView} onError={onError}
-      />
-
-      {fam && (
-        <div className="rounded-xl bg-bg-raised p-2">
-          <div className="flex items-center justify-between text-micro">
-            <span className="uppercase tracking-wider text-ink-mist">Сыгранность</span>
-            <span className="font-mono font-bold text-ink-chalk">+{famPreview.toFixed(1)}%</span>
-          </div>
-          <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-white/10">
-            <span className="block h-full bg-floodlight" style={{ width: `${Math.min(100, (famPreview / (fam.max_pct || 1)) * 100)}%` }} />
-          </span>
-          <p className="mt-1 text-micro leading-tight text-ink-mist-dim">
-            до {fam.max_pct}% · +{fam.step_pct}% за матч без изменений
+      {AXIS_PHASES.map((phase) => (
+        <div key={phase.title} className="flex flex-col gap-2">
+          <p className="flex items-center gap-1.5 text-micro font-bold uppercase tracking-[0.12em] text-accent-cyan">
+            {PHASE_ICONS[phase.title]}{phase.title}
           </p>
+          {phase.axes.map((axis) => {
+            const def = catalog.axes.find((a) => a.key === axis);
+            if (!def) return null;
+            const current = def.values.find((v) => v.value === tactic[axis]);
+            const AxisIcon = AXIS_ICONS[axis];
+            return (
+              <div key={axis} className="flex flex-col gap-1">
+                <span className="flex items-center gap-1.5 text-caption font-semibold text-ink-chalk">
+                  {AxisIcon?.({ className: "text-ink-mist", "aria-hidden": true })}{def.label}
+                </span>
+                <Segmented label={def.label} value={tactic[axis] ?? ""} options={def.values} icons={VALUE_ICONS[axis]}
+                  onChange={(v) => setTactic({ ...tactic, [axis]: v })} />
+                {current && <p className="text-micro leading-snug text-ink-mist">{current.hint}</p>}
+              </div>
+            );
+          })}
         </div>
-      )}
+      ))}
 
       {report && season.scouting && (
         <div className="rounded-2xl bg-bg-raised p-3">

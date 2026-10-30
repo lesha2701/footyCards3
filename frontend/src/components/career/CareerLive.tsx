@@ -10,6 +10,7 @@ import {
   type TacticsCatalog,
 } from "@/api/career";
 import { Segmented } from "@/components/career/CareerTactics";
+import { VALUE_ICONS } from "@/components/career/TacticIcons";
 import { EnergyBar } from "@/components/career/EnergyBar";
 import { CareerMatchViewer, type ReplayTab } from "@/components/career/MatchViewer";
 import { TournamentMatchReplay } from "@/components/clubs/TournamentMatchReplay";
@@ -126,7 +127,7 @@ function TacticsPanel({ catalog, mentality, setMentality, tactic, setTactic }: {
       {catalog?.axes.map((axis) => (
         <div key={axis.key} className="flex flex-col gap-1">
           <p className="text-caption text-ink-mist">{axis.label}</p>
-          <Segmented label={axis.label} value={tactic[axis.key] ?? ""}
+          <Segmented label={axis.label} value={tactic[axis.key] ?? ""} icons={VALUE_ICONS[axis.key]}
             options={axis.values.map((v) => ({ value: v.value, label: v.label }))}
             onChange={(v) => setTactic({ ...tactic, [axis.key]: v })} />
         </div>
