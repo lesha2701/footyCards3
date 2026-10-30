@@ -157,6 +157,12 @@ async def friendly_events(season_id: int, db: AsyncSession = Depends(get_db), us
     return await career_service.friendly_events(db, user, season_id)
 
 
+@router.get("/seasons/{season_id}/friendly/replay", response_model=CareerReplayOut)
+async def friendly_replay(season_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Key frames of the 2D view of the pre-season friendly."""
+    return await career_service.friendly_replay(db, user, season_id)
+
+
 @router.get("/collection")
 async def career_collection(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     """Own usable cards for building the season squad."""
@@ -191,6 +197,15 @@ async def match_events(
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
     return await career_service.match_events(db, user, season_id, round_index, match_index)
+
+
+@router.get("/seasons/{season_id}/cup/{round_index}/{tie_index}/replay", response_model=CareerReplayOut)
+async def cup_match_replay(
+    season_id: int, round_index: int, tie_index: int,
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    """Key frames of the 2D view of a cup tie with a human."""
+    return await career_service.cup_match_replay(db, user, season_id, round_index, tie_index)
 
 
 @router.get("/seasons/{season_id}/rounds/{round_index}/matches/{match_index}/replay", response_model=CareerReplayOut)

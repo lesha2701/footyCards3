@@ -916,12 +916,14 @@ async def play_friendly(db: AsyncSession, user: User) -> None:
     choice = {"tactic": tactics.tactic_for(bot.get("tactic"), bot.get("playstyle")), "familiarity": 0, "plan": None}
     other = _bot_runner(bot, "b", 0, config, chem_rules, choice)
     tracker: dict = {}
+    lineups = {"a": career_replay.lineup_record(runner), "b": career_replay.lineup_record(other)}
     match = tournament_match_engine.simulate_match_controlled(
         tactics.CareerMatchController(runner, other), config, me_team["name"], bot["name"], tracker=tracker,
     )
     state.setdefault("friendlies", {})[str(part.team_index)] = {
         "opponent": bot["name"], "home_score": match.score_a, "away_score": match.score_b, "events": match.event_log,
         "analysis": tactics.build_analysis(match.event_log, tracker, "a", runner, other),
+        "lineups": lineups,
     }
     season.state = state
     flag_modified(season, "state")
@@ -1875,6 +1877,7 @@ async def _play_cup_round(db, season, state, round_index, config, humans, runner
         res: dict = {"a": a, "b": b, "events": None, "pens": None}
         if run_a and run_b:
             tracker: dict = {}
+            lineups = {"a": career_replay.lineup_record(run_a), "b": career_replay.lineup_record(run_b)}
             match = tournament_match_engine.simulate_match_controlled(
                 tactics.CareerMatchController(run_a, run_b), config, team_a["name"], team_b["name"], tracker=tracker,
             )
@@ -1888,6 +1891,7 @@ async def _play_cup_round(db, season, state, round_index, config, humans, runner
                 winner = a if match.score_a > match.score_b else b
             if with_human:
                 res["events"] = match.event_log
+                res["lineups"] = lineups
                 res["analysis"] = {
                     str(index): tactics.build_analysis(match.event_log, tracker, label, runner, other)
                     for index, label, runner, other in ((a, "a", run_a, run_b), (b, "b", run_b, run_a))
@@ -2757,15 +2761,64 @@ async def match_replay(db: AsyncSession, user: User, season_id: int, round_index
         second_half_at = live["second_half_at"]
     else:
         raise NotFoundError("Матч ещё не сыгран")
+    my_side = "a" if m["home"] == me.team_index else "b" if m["away"] == me.team_index else None
+    return _replay_out(
+        teams[m["home"]]["name"], teams[m["away"]]["name"], hs, as_, events, lineups, my_side,
+        _match_seed(season.id, round_index, match_index), halves, second_half_at,
+    )
+
+
+def _replay_out(home_name: str, away_name: str, hs: int, as_: int, events, lineups, my_side, seed: int,
+                halves: int = 2, second_half_at=None) -> dict:
+    """The 2D replay payload of any career match (league, cup, friendly)."""
     if not events:
         raise NotFoundError("Для этого матча нет записи")
-    my_side = "a" if m["home"] == me.team_index else "b" if m["away"] == me.team_index else None
     return {
-        "home_name": teams[m["home"]]["name"], "away_name": teams[m["away"]]["name"],
+        "home_name": home_name, "away_name": away_name,
         "home_score": hs, "away_score": as_, "events": events, "my_side": my_side,
         "live": halves == 1, "second_half_at": second_half_at,
-        "replay": career_replay.build_replay(_match_seed(season.id, round_index, match_index), events, lineups, halves),
+        "replay": career_replay.build_replay(seed, events, lineups, halves),
     }
+
+
+# Replay seeds of cup ties and friendlies: apart from the league's
+# (_match_seed with round indices far above a season's rounds).
+CUP_SEED_ROUND, FRIENDLY_SEED_ROUND = 500, 900
+
+
+async def cup_match_replay(db: AsyncSession, user: User, season_id: int, round_index: int, tie_index: int) -> dict:
+    """2D replay of a cup tie with a human (the 90 minutes; a shoot-out is
+    shown by the match page)."""
+    season = await db.get(CareerSeason, season_id)
+    if season is None or not any(p.user_id == user.id for p in season.participants):
+        raise NotFoundError("Матч не найден")
+    rounds = ((season.state or {}).get("cup") or {}).get("rounds") or []
+    if round_index >= len(rounds) or tie_index >= len(rounds[round_index].get("results") or []):
+        raise NotFoundError("Матч ещё не сыгран")
+    res = rounds[round_index]["results"][tie_index]
+    me = next(p for p in season.participants if p.user_id == user.id)
+    my_side = "a" if res["a"] == me.team_index else "b" if res["b"] == me.team_index else None
+    return _replay_out(
+        _cup_team(season.state, res["a"])["name"], _cup_team(season.state, res["b"])["name"],
+        res.get("sa", 0), res.get("sb", 0), res.get("events"), res.get("lineups"), my_side,
+        _match_seed(season.id, CUP_SEED_ROUND + round_index, tie_index),
+    )
+
+
+async def friendly_replay(db: AsyncSession, user: User, season_id: int) -> dict:
+    """2D replay of the coach's pre-season friendly."""
+    season = await db.get(CareerSeason, season_id)
+    if season is None or not any(p.user_id == user.id for p in season.participants):
+        raise NotFoundError("Матч не найден")
+    me = next(p for p in season.participants if p.user_id == user.id)
+    friendly = _friendly_of(season.state or {}, me.team_index)
+    if not friendly:
+        raise NotFoundError("Товарищеский матч ещё не сыгран")
+    return _replay_out(
+        season.state["teams"][me.team_index]["name"], friendly["opponent"],
+        friendly["home_score"], friendly["away_score"], friendly["events"], friendly.get("lineups"), "a",
+        _match_seed(season.id, FRIENDLY_SEED_ROUND, me.team_index),
+    )
 
 
 async def invited_count(db: AsyncSession, user_id: int) -> int:

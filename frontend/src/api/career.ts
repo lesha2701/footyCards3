@@ -677,3 +677,15 @@ export async function fetchCareerReplay(seasonId: number, round: number, match: 
   const { data } = await api.get<CareerReplayResponse>(`/career/seasons/${seasonId}/rounds/${round}/matches/${match}/replay`);
   return data;
 }
+
+/** 2D replay of a cup tie with a human (the 90 minutes). */
+export async function fetchCareerCupReplay(seasonId: number, round: number, tie: number): Promise<CareerReplayResponse> {
+  const { data } = await api.get<CareerReplayResponse>(`/career/seasons/${seasonId}/cup/${round}/${tie}/replay`);
+  return data;
+}
+
+/** 2D replay of the coach's pre-season friendly. */
+export async function fetchCareerFriendlyReplay(seasonId: number): Promise<CareerReplayResponse> {
+  const { data } = await api.get<CareerReplayResponse>(`/career/seasons/${seasonId}/friendly/replay`);
+  return data;
+}

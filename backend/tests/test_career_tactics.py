@@ -865,6 +865,11 @@ async def test_cup_runs_alongside_the_league(client, db_session, bot_token):
     k, i = 0, next(i for i, res in enumerate(rounds[0]["results"]) if 0 in (res["a"], res["b"]))
     data = (await client.get(f"{API}/career/seasons/{season['id']}/cup/{k}/{i}", headers=headers)).json()
     assert data["events"] and data["analysis"] and data["my_side"] in ("a", "b")
+    # ...and on the 2D pitch: the starting XIs were kept, every event is placed.
+    replay = (await client.get(f"{API}/career/seasons/{season['id']}/cup/{k}/{i}/replay", headers=headers)).json()
+    assert replay["replay"]["count"] > 100 and len(replay["replay"]["marks"]) == len(data["events"])
+    assert rounds[0]["results"][i]["lineups"]["a"]["xi"]
+    assert (await client.get(f"{API}/career/seasons/{season['id']}/cup/9/0/replay", headers=headers)).status_code == 404
     row = await _season_row(db_session, season["id"])
     me = next(p for p in row.participants if p.user_id == user_id)
     config = await get_config(db_session)
@@ -908,6 +913,9 @@ async def test_offseason_auto_start_core_camp_friendly(client, db_session, bot_t
     assert (await client.post(f"{API}/career/friendly", headers=headers)).status_code == 409
     data = (await client.get(f"{API}/career/seasons/{nxt['id']}/friendly", headers=headers)).json()
     assert data["events"] and data["analysis"]
+    replay = (await client.get(f"{API}/career/seasons/{nxt['id']}/friendly/replay", headers=headers)).json()
+    assert replay["my_side"] == "a" and len(replay["replay"]["marks"]) == len(data["events"])
+    assert len([p for p in replay["replay"]["players"] if p["name"]]) >= 22
     coll = (await client.get(f"{API}/career/collection", headers=headers)).json()
     assert coll["squad_size"] == 22 and sum(c["in_squad"] for c in coll["cards"]) == 11
 

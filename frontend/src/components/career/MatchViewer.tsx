@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Suspense, lazy, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { fetchCareerReplay, type CareerReplayResponse } from "@/api/career";
+import { fetchCareerCupReplay, fetchCareerFriendlyReplay, fetchCareerReplay, type CareerReplayResponse } from "@/api/career";
 import { goalEpisodes } from "@/lib/goalReplay3d";
 import {
   PITCH_L,
@@ -576,15 +576,20 @@ const Pitch = memo(function Pitch() {
 
 /** Fetches the replay of a league match and plays it; `fallback` (the old
  * text replay) renders when the match has no 2D record. */
-export function CareerMatchViewer({ seasonId, round, match, extraTabs, fallback, footer }: {
-  seasonId: number; round: number; match: number;
+export function CareerMatchViewer({ seasonId, round = 0, match = 0, kind = "league", extraTabs, fallback, footer }: {
+  seasonId: number;
+  /** League: round and fixture; cup: cup round and tie; friendly: neither. */
+  round?: number; match?: number;
+  kind?: "league" | "cup" | "friendly";
   /** Extra tabs (the live break's orders) — shown only while it's live. */
   extraTabs?: ReplayTab[];
   fallback?: ReactNode; footer?: ReactNode;
 }) {
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["career", "replay", seasonId, round, match],
-    queryFn: () => fetchCareerReplay(seasonId, round, match),
+    queryKey: ["career", "replay", kind, seasonId, round, match],
+    queryFn: () => kind === "cup" ? fetchCareerCupReplay(seasonId, round, match)
+      : kind === "friendly" ? fetchCareerFriendlyReplay(seasonId)
+        : fetchCareerReplay(seasonId, round, match),
     staleTime: 60_000,
     retry: false,
   });

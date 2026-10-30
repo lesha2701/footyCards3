@@ -45,10 +45,11 @@ export default function CareerMatchPage() {
             scoreB={data.away_score}
           />
         );
-        // League matches have a 2D replay; cup ties and friendlies keep the text one.
-        return isCup || isFriendly ? text : (
-          <CareerMatchViewer seasonId={Number(seasonId)} round={Number(round)} match={Number(match)} fallback={text} />
-        );
+        // Every career match has a 2D replay; the text one stays as the fallback
+        // (a match played before replays were stored, or no network).
+        return isFriendly ? <CareerMatchViewer seasonId={Number(seasonId)} kind="friendly" fallback={text} />
+          : isCup ? <CareerMatchViewer seasonId={Number(seasonId)} kind="cup" round={Number(cupRound)} match={Number(tie)} fallback={text} />
+            : <CareerMatchViewer seasonId={Number(seasonId)} round={Number(round)} match={Number(match)} fallback={text} />;
       })()}
       {data.pens && (
         <section className="rounded-3xl bg-bg-surface p-4">
