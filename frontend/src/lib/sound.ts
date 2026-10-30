@@ -1,6 +1,6 @@
 /** Small UI sounds synthesized with Web Audio (no audio files to load).
  * Off with the «Звуки» switch in the profile (stored per device). */
-type SoundName = "reveal" | "rare" | "reward" | "tap";
+type SoundName = "reveal" | "rare" | "reward" | "tap" | "goal" | "concede" | "whistle";
 
 const KEY = "fc.sound";
 let ctx: AudioContext | null = null;
@@ -49,6 +49,10 @@ const PATTERNS: Record<SoundName, [number, number, number, OscillatorType, numbe
   reveal: [[523, 0, 0.12, "triangle", 0.07], [784, 0.08, 0.16, "triangle", 0.06]],
   rare: [[523, 0, 0.14, "triangle", 0.08], [659, 0.1, 0.14, "triangle", 0.08], [784, 0.2, 0.14, "triangle", 0.08], [1047, 0.3, 0.4, "sine", 0.09]],
   reward: [[784, 0, 0.1, "square", 0.035], [1175, 0.09, 0.22, "square", 0.035]],
+  // Match view: my goal (a rising fanfare), the opponent's, the final whistle.
+  goal: [[392, 0, 0.12, "square", 0.035], [523, 0.1, 0.12, "square", 0.035], [659, 0.2, 0.12, "square", 0.035], [784, 0.3, 0.5, "triangle", 0.08]],
+  concede: [[330, 0, 0.2, "triangle", 0.06], [247, 0.16, 0.34, "triangle", 0.06]],
+  whistle: [[2750, 0, 0.16, "sine", 0.035], [2750, 0.22, 0.12, "sine", 0.035], [2750, 0.4, 0.55, "sine", 0.035]],
 };
 
 export function playSound(name: SoundName): void {

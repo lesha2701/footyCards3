@@ -29,6 +29,8 @@ import {
   type Point,
 } from "@/lib/matchReplay";
 import { enterImmersive } from "@/lib/immersive";
+import { playSound } from "@/lib/sound";
+import { haptic, hapticNotify } from "@/lib/telegram";
 
 // three.js is a lazy chunk: it loads only when a 3D replay is opened.
 const GoalReplay3D = lazy(() => import("@/components/career/goal3d/GoalReplay3D"));
@@ -185,6 +187,23 @@ export function ReplayPlayer({ data, extraTabs, footer }: {
     if (!playing && timeRef.current >= tl.total) seek(0);
     setPlaying(!playing);
   };
+
+  // Goals and the final whistle heard (and felt) as the match plays on —
+  // not when scrubbing through it.
+  const lastFrame = useRef(frame);
+  useEffect(() => {
+    const prev = lastFrame.current;
+    lastFrame.current = frame;
+    if (!playingRef.current || frame <= prev || frame - prev > 3) return;
+    for (const [at, idx] of replay.marks) {
+      if (at <= prev || at > frame || events[idx]?.event_type !== "goal") continue;
+      const mine = events[idx].team === (data.my_side ?? "a");
+      playSound(mine ? "goal" : "concede");
+      if (mine) hapticNotify("success");
+      else haptic("medium");
+    }
+    if (frame >= tl.count - 1 && prev < tl.count - 1 && replay.halves === 2) playSound("whistle");
+  }, [frame, replay, events, data.my_side, tl.count]);
 
   const roster = useMemo(() => rosterAt(replay, frame), [replay, frame]);
   const stats = useMemo(() => boardStats(tl, replay, events, frame), [tl, replay, events, frame]);
