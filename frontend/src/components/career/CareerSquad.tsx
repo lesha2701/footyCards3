@@ -8,6 +8,7 @@ import { EnergyBar } from "@/components/career/EnergyBar";
 import { PlayerTile } from "@/components/career/PlayerTile";
 import { SquadTacticLayer } from "@/components/career/SquadTacticLayer";
 import { VALUE_ICONS } from "@/components/career/TacticIcons";
+import { energyOf } from "@/lib/careerEnergy";
 import { isOut, lineOf, playerInfo } from "@/lib/careerPlayer";
 import { axisValueLabel } from "@/lib/careerTactics";
 import { chemistryGain, computeChemistry } from "@/lib/chemistry";
@@ -248,7 +249,7 @@ export default function CareerSquad({ season, catalog = null, onView, onError }:
   const bestEleven = () => {
     const next: Record<string, number> = {};
     const used = new Set<string>();
-    const score = (e: CareerSquadCard) => (playerInfo(e)?.rating ?? 0) * (1 - (100 - energyOf(e)) / 400);
+    const score = (e: CareerSquadCard) => (playerInfo(e)?.rating ?? 0) * (1 - (100 - energyOf(e.fatigue)) / 400);
     const order = [...season.slots].sort((a, b) => Number(b.category === "GK") - Number(a.category === "GK"));
     for (const slot of order) {
       const pick = season.squad
