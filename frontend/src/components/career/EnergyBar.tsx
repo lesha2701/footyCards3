@@ -10,12 +10,23 @@ const LEVEL = {
   spent: { fill: "bg-red-400", text: "text-red-400", label: "сильно устал" },
 } as const;
 
-/** `thin`: a 3 px strip for card tiles; otherwise a small battery with the
- * percentage next to it. */
-export function EnergyBar({ fatigue, thin = false }: { fatigue: number; thin?: boolean }) {
+/** `thin`: a 3 px strip; `card`: a tiny battery with its % under a card
+ * tile; otherwise a small battery with the percentage next to it. */
+export function EnergyBar({ fatigue, thin = false, card = false }: { fatigue: number; thin?: boolean; card?: boolean }) {
   const energy = energyOf(fatigue);
   const level = LEVEL[energyLevel(energy)];
   const label = `Энергия ${energy}% — ${level.label}`;
+  if (card) {
+    return (
+      <span className="flex items-center justify-center gap-[3px]" title={label} aria-label={label}>
+        <span className="relative flex h-[9px] w-[17px] items-center rounded-[2.5px] border border-white/45 p-[1px]">
+          <span className={`block h-full rounded-[1px] ${level.fill}`} style={{ width: `${Math.max(8, energy)}%` }} />
+          <span className="absolute -right-[3px] top-1/2 h-[4px] w-[2px] -translate-y-1/2 rounded-r-sm bg-white/45" />
+        </span>
+        <span className={`font-mono text-[10px] font-bold leading-none ${level.text}`}>{energy}%</span>
+      </span>
+    );
+  }
   if (thin) {
     return (
       <span className="block h-[3px] w-full overflow-hidden rounded-full bg-white/10" title={label} aria-label={label}>

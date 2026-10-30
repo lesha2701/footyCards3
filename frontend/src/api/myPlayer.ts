@@ -41,7 +41,15 @@ export interface MyPlayer {
   pro?: boolean;
 }
 
-export type MyPlayerCosmeticKind = "accessory" | "background" | "effect" | "hair" | "celebration";
+export type MyPlayerCosmeticKind =
+  | "accessory"
+  | "background"
+  | "effect"
+  | "hair"
+  | "celebration"
+  | "ball"
+  | "boots"
+  | "gloves";
 export type MyPlayerDrill = "shot" | "pass" | "tackle" | "save";
 
 export interface MyPlayerTrophy {
@@ -174,6 +182,9 @@ export interface MyPlayerView {
     effect: string | null;
     hair: string | null;
     celebration: string | null;
+    ball?: string | null;
+    boots?: string | null;
+    gloves?: string | null;
     catalog: MyPlayerCosmeticItem[];
   };
   freshness: {

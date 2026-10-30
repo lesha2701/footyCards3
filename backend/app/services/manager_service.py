@@ -81,6 +81,7 @@ from app.services.club_tactical_matchup_service import build_side
 from app.services.game_config_service import get_config
 from app.services.lineup_service import CATEGORY_POSITIONS, on_ideal_position
 from app.services.notification_service import notify
+from app.services.player_identity import person_key
 from app.services.player_tournament_simulation_service import _EngineCard, _engine_card
 
 CONTRACT_SEASONS = (1, 2, 3)
@@ -367,6 +368,15 @@ async def _npcs(db: AsyncSession, club_id: int) -> list[ManagerNpc]:
     )).scalars().all())
 
 
+async def _npc_persons(db: AsyncSession, club_id: int) -> set[str]:
+    """Footballers the club's catalog players are (one version of each)."""
+    players = (await db.execute(
+        select(Player).join(ManagerNpc, ManagerNpc.player_id == Player.id)
+        .where(ManagerNpc.club_id == club_id, ManagerNpc.status == "active")
+    )).scalars().all()
+    return {person_key(p) for p in players}
+
+
 async def _academy_card(db: AsyncSession, club: ManagerClub) -> Optional[UserCard]:
     if not club.academy_card_id:
         return None
@@ -394,7 +404,8 @@ def _card_rating(card: UserCard, config) -> int:
 
 def _filler(club_name: str, slot, rating: int, n: int) -> dict:
     kid = pcc._academy(f"mgr:{club_name}", slot, rating, n)
-    return {"slot": slot.code, "kind": "kid", "ref": None, "name": kid["name"], "position": kid["position"], "rating": kid["rating"]}
+    return {"slot": slot.code, "key": f"kid:{slot.code}", "kind": "kid", "ref": None, "name": kid["name"],
+            "position": kid["position"], "rating": kid["rating"]}
 
 
 async def build_pool(db: AsyncSession, club: ManagerClub, config) -> tuple[list[dict], dict]:
@@ -458,7 +469,8 @@ def pick_xi(entries: list[dict], club_name: str, filler_rating: int, formation: 
     taken: dict[str, dict] = {}
     bench = []
     priority = {"own": 0, "academy": 1}
-    for e in sorted(entries, key=lambda x: (priority.get(x["kind"], 2), -x["rating"], x["key"])):
+    # .get: academy kids frozen into season state before they carried a key.
+    for e in sorted(entries, key=lambda x: (priority.get(x["kind"], 2), -x["rating"], x.get("key", ""))):
         position = Position(e["position"])
         free = [s for s in slots if s.category == _category(position) and s.code not in taken]
         ideal = [s for s in free if on_ideal_position(position, s.ideal_position)]
@@ -951,6 +963,8 @@ async def sign_npc(db: AsyncSession, user: User, player_id: int, kind: str, seas
         raise NotFoundError("Футболист не найден")
     if player_id in await _taken_players(db):
         raise ConflictError("Он уже играет за другой клуб")
+    if person_key(player) in await _npc_persons(db, club.id):
+        raise ConflictError(f"{player.display_name} уже есть в твоей заявке — один футболист только раз")
     if await _squad_size(db, club) >= config.manager_squad_max:
         raise ConflictError(f"В заявке не больше {config.manager_squad_max} игроков")
     snap = await base_snapshot(db, club.owner_id, config)
@@ -1109,11 +1123,13 @@ async def _prepare_club(db: AsyncSession, club: ManagerClub, key: str, now: date
     xi, _bench = pick_xi(entries, club.name, target - FILLER_GAP, club.formation)
     signed = 0
     slots = {s.code: s for s in get_formation_slots(tactics.clean_formation(club.formation))}
+    persons = await _npc_persons(db, club.id)
     for i, p in enumerate(xi):
         if p["kind"] != "kid":
             continue
         slot = slots[p["slot"]]
-        options = [pl for pl in pool_by_line.get(slot.category, []) if pl.id not in taken and abs(pl.rating - target) <= AUTO_RANGE]
+        options = [pl for pl in pool_by_line.get(slot.category, [])
+                   if pl.id not in taken and person_key(pl) not in persons and abs(pl.rating - target) <= AUTO_RANGE]
         options.sort(key=lambda pl: (not on_ideal_position(pl.position, slot.ideal_position), abs(pl.rating - target), pl.id))
         for pl in options[:6]:
             terms = npc_terms(pl.rating, config, club.division, snap["discount_pct"])
@@ -1122,6 +1138,7 @@ async def _prepare_club(db: AsyncSession, club: ManagerClub, key: str, now: date
                 continue
             club.budget -= cost
             taken.add(pl.id)
+            persons.add(person_key(pl))
             npc = ManagerNpc(club_id=club.id, player_id=pl.id, kind="loan", fee=terms["loan_fee"], wage=terms["wage"],
                              seasons_left=0, auto=True)
             db.add(npc)
@@ -1292,7 +1309,9 @@ async def _play_round(db: AsyncSession, league: ManagerLeague, round_index: int,
             # The frozen roster, today's form of the «Мои игроки», the club's
             # formation and style of this moment (tactics may change mid-season).
             club = clubs[t["club_id"]]
-            roster = [dict(e) for e in (t.get("roster") or t["xi"])]
+            # An empty roster is a real «nobody but academy kids» squad — only
+            # states frozen before rosters existed fall back to the XI.
+            roster = [dict(e) for e in (t["roster"] if "roster" in t else t["xi"])]
             live = await _live_cards(db, roster, config)
             for e in roster:
                 if e.get("key") in live:

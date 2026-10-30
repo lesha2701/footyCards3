@@ -142,6 +142,9 @@ export interface UserCard {
   path_level?: number;
   path_stage?: number;
   path_rating_bonus?: number;
+  /** Came from a free source: a legendary / diamond / «Академия» / limited
+   * copy then can't be traded (backend card_value_service). */
+  from_free_source?: boolean;
   /** «Экипировка» it wears (already included in player.rating). */
   equipment_rating_bonus?: number;
   /** Its worn things: +chemistry and the boosts (shot/save/…, a national-team set). */
@@ -290,6 +293,7 @@ export interface Pack {
   muse_drop_chance?: number;
   /** "path" = the «Академия» pack (diamond slots drop only path cards). */
   player_pool?: string;
+  pity_enabled?: boolean;
   /** Why the pack cannot be bought right now (e.g. no «Академия» players yet). */
   unavailable_reason?: string | null;
   user_purchase_count: number;
@@ -861,10 +865,13 @@ export interface FeatureFlags {
   leagues_enabled: boolean;
   /** Largest stake per side in open chat challenges; 0 = stakes off. */
   stake_max_coins?: number;
+  auction_enabled?: boolean;
 }
 
 export interface GameLimits {
   hourly_limit: number;
+  /** The free kick's own cap of series per hour. */
+  free_kick_hourly_limit?: number;
   memory: number;
   arena: number;
   saboteur: number;
@@ -1653,6 +1660,130 @@ export interface FreeKickKickResult {
   total_coins: number;
   is_finished: boolean;
   next_kick: FreeKickNextKick | null;
+}
+
+/** One position of a 3D free kick series: the scene is
+ * `createSetup(seed, rating)`, exactly what the server replays. */
+export interface FreeKick3DKick {
+  kick_index: number;
+  seed: number;
+}
+
+export interface FreeKick3DStartResult {
+  session_id: number;
+  rating: number;
+  total_kicks: number;
+  kick: FreeKick3DKick;
+  /** Goals in a row so far («Серия без промахов»), across series. */
+  streak: number;
+  /** «Мой игрок» gear worn in the scene (cosmetic codes; null = default). */
+  celebration?: string | null;
+  ball?: string | null;
+  boots?: string | null;
+  gloves?: string | null;
+}
+
+export interface FreeKick3DShotResult {
+  outcome: "goal" | "save" | "miss" | "wall";
+  bonuses: ("corner" | "curl")[];
+  coins_this_kick: number;
+  total_coins: number;
+  is_finished: boolean;
+  next_kick: FreeKick3DKick | null;
+  /** Goals in a row after this kick, and the bonus it paid (in coins_this_kick). */
+  streak: number;
+  streak_bonus: number;
+}
+
+/** «Испытание дня»: a ring on the goal plane (m). */
+export interface FreeKickTarget {
+  x: number;
+  y: number;
+  r: number;
+}
+
+export interface FreeKickChallengeStart {
+  session_id: number;
+  rating: number;
+  total_kicks: number;
+  kick: FreeKick3DKick;
+  targets: FreeKickTarget[];
+  score: number;
+  hits: number;
+  celebration?: string | null;
+  ball?: string | null;
+  boots?: string | null;
+  gloves?: string | null;
+}
+
+export interface FreeKickChallengeShot {
+  outcome: "goal" | "save" | "miss" | "wall";
+  hit: boolean;
+  points: number;
+  score: number;
+  hits: number;
+  is_finished: boolean;
+  next_kick: FreeKick3DKick | null;
+  reward_coins: number;
+  new_balance: number | null;
+  rank: number | null;
+}
+
+export interface FreeKickChallenge {
+  day: string;
+  total_kicks: number;
+  coins_per_hit: number;
+  perfect_bonus: number;
+  players: number;
+  my: { score: number; hits: number; rank: number; finished: boolean; reward_coins: number } | null;
+  top: { rank: number; name: string; score: number; hits: number; finished: boolean; is_me: boolean }[];
+}
+
+/** Buying another series without waiting for the hour: the day's first
+ * refill costs coins, the following ones Telegram Stars. */
+export interface FreeKick3DRefill {
+  can_refill: boolean;
+  /** The hourly series is used up and nothing is banked. */
+  on_cooldown: boolean;
+  bonus_series: number;
+  refills_today: number;
+  daily_limit: number;
+  price_coins: number | null;
+  price_stars: number | null;
+  retry_after_seconds: number;
+  new_balance?: number | null;
+}
+
+/** A kick of the 3D penalty shootout: «player» shoots against the bot
+ * keeper (createPenaltySetup), «bot» shoots against the player's dive
+ * (penaltyBotShot + playerKeeperSetup) — exactly what the server replays. */
+export interface Penalty3DKick {
+  kick_index: number;
+  kicker: "player" | "bot";
+  seed: number;
+}
+
+export interface Penalty3DStartResult {
+  session_id: number;
+  rating: number;
+  kick: Penalty3DKick;
+  /** «Мой игрок» gear worn in the scene (cosmetic codes; null = default). */
+  celebration?: string | null;
+  ball?: string | null;
+  boots?: string | null;
+  gloves?: string | null;
+}
+
+export interface Penalty3DResult {
+  kicker: "player" | "bot";
+  outcome: "goal" | "save" | "miss";
+  bot_kind: string | null;
+  player_score: number;
+  bot_score: number;
+  is_finished: boolean;
+  result: "win" | "loss" | null;
+  rating_delta: number | null;
+  next_kick: Penalty3DKick | null;
 }
 
 export interface FreeKickClaimResult {
@@ -2715,6 +2846,8 @@ export interface StrategoCard {
   skill_level?: number | null;
   skill_kind?: "atk" | "def" | null;
   skill_bonus?: number;
+  /** The footballer (backend person_key): one per squad. */
+  person?: string | null;
 }
 
 export type StrategoNoteTag = "cup" | "wall" | "star" | "strong" | "weak" | "speedster";

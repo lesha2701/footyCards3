@@ -26,6 +26,7 @@ import PitchBackground from "@/components/squad/PitchBackground";
 import { FORMATIONS, MENTALITIES, PLAYSTYLES } from "@/lib/clubTactics";
 import { formatGameError } from "@/lib/errors";
 import type { ClubCard, ClubLineupSlot } from "@/types";
+import { personKey } from "@/lib/person";
 
 export default function ClubSquadPage() {
   const navigate = useNavigate();
@@ -102,10 +103,11 @@ export default function ClubSquadPage() {
 
   if (lineupLoading) return <ListSkeleton />;
 
-  const usedPlayerIds = (pickerSlot
+  // One footballer once: other copies / versions of a player already in the XI are blocked.
+  const usedPersons = (pickerSlot
     ? lineup?.slots.filter((s) => s.card && s.slot_code !== pickerSlot.slot_code)
     : lineup?.slots.filter((s) => s.card)
-  )?.map((s) => s.card!.player.id) ?? [];
+  )?.map((s) => personKey(s.card!.player)) ?? [];
 
   const cardsForSlot = (slot: ClubLineupSlot): ClubCard[] => {
     const positions = CATEGORY_POSITIONS[slot.category as FormationSlot["category"]];
@@ -509,7 +511,7 @@ export default function ClubSquadPage() {
           open
           title={`Выбери на позицию ${CATEGORY_LABELS[pickerSlot.category as FormationSlot["category"]]}`}
           cards={cardsForSlot(pickerSlot)}
-          disabledCardIds={cardsForSlot(pickerSlot).filter((c) => usedPlayerIds.includes(c.player.id)).map((c) => c.id)}
+          disabledCardIds={cardsForSlot(pickerSlot).filter((c) => usedPersons.includes(personKey(c.player))).map((c) => c.id)}
           onSelect={(card) => assignSlot(pickerSlot, card)}
           onClose={() => setPickerSlot(null)}
         />

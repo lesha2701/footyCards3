@@ -46,6 +46,8 @@ from app.routers import (
     admin_tasks,
     admin_tournaments,
     admin_trades,
+    admin_auction,
+    auction,
     admin_trophies,
     admin_users,
     admin_wheel,
@@ -196,6 +198,7 @@ app.include_router(card_offers.router, prefix=API_PREFIX)
 app.include_router(card_offers.admin_router, prefix=API_PREFIX)
 app.include_router(magnate.router, prefix=API_PREFIX)
 app.include_router(trades.router, prefix=API_PREFIX)
+app.include_router(auction.router, prefix=API_PREFIX)
 app.include_router(daily_rewards.router, prefix=API_PREFIX)
 app.include_router(wheel.router, prefix=API_PREFIX)
 app.include_router(blackjack.router, prefix=API_PREFIX)
@@ -229,6 +232,7 @@ app.include_router(admin_clubs.router, prefix=API_PREFIX)
 app.include_router(admin_tournaments.router, prefix=API_PREFIX)
 app.include_router(admin_tasks.router, prefix=API_PREFIX)
 app.include_router(admin_trades.router, prefix=API_PREFIX)
+app.include_router(admin_auction.router, prefix=API_PREFIX)
 app.include_router(admin_trophies.router, prefix=API_PREFIX)
 app.include_router(admin_gifts.router, prefix=API_PREFIX)
 app.include_router(admin_leagues.router, prefix=API_PREFIX)

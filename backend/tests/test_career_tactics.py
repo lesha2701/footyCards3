@@ -1051,3 +1051,20 @@ async def test_first_season_squad_can_be_rebuilt_before_round_one(client, db_ses
     first = datetime.fromisoformat(season["schedule"][0])
     await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=11))
     assert (await client.put(f"{API}/career/squad", headers=headers, json={"card_ids": keep[:11]})).status_code == 409
+
+
+async def test_squad_collection_shows_each_footballer_once(client, db_session, bot_token):
+    from app.models.card import UserCard
+    from app.models.enums import CardSource
+
+    user_id, headers, season = await _season(client, db_session, bot_token, 870099)
+    squad_card = season["squad"][0]
+    db_session.expire_all()
+    original = await db_session.get(UserCard, squad_card["card_id"])
+    for serial in (990001, 990002):
+        db_session.add(UserCard(owner_id=user_id, player_id=original.player_id, source=CardSource.seed, serial_number=serial))
+    await db_session.commit()
+
+    coll = (await client.get(f"{API}/career/collection", headers=headers)).json()
+    same = [c for c in coll["cards"] if c["card"] and c["card"]["player"]["id"] == original.player_id]
+    assert len(same) == 1 and same[0]["card_id"] == original.id and same[0]["in_squad"]

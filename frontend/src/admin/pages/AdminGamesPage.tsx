@@ -31,6 +31,16 @@ const MY_PLAYER_COSMETICS: [string, string][] = [
   ["cel_plane", "Празднование «Самолётик»"],
   ["cel_heart", "Празднование «Сердечко»"],
   ["cel_dance", "Празднование «Танец у флажка»"],
+  ["cel_silly", "Празднование «Смешной танец»"],
+  ["ball_gold", "Мяч «Золотой»"],
+  ["ball_neon", "Мяч «Неон»"],
+  ["ball_retro", "Мяч «Ретро»"],
+  ["boots_red", "Бутсы «Огонь»"],
+  ["boots_neon", "Бутсы «Неон»"],
+  ["boots_gold", "Бутсы «Золото»"],
+  ["gloves_lime", "Перчатки «Лайм»"],
+  ["gloves_pink", "Перчатки «Розовые»"],
+  ["gloves_gold", "Перчатки «Золото»"],
 ];
 
 const WEEKLY_TOP_METRICS: [string, string][] = [
@@ -141,7 +151,9 @@ export default function AdminGamesPage() {
   );
 
   const jsonField = (
-    key: "manager_slots" | "manager_cosmetics" | "manager_merch" | "newbie_tasks" | "task_daily_chests" | "task_weekly_chests",
+    key:
+      | "manager_slots" | "manager_cosmetics" | "manager_merch" | "newbie_tasks" | "task_daily_chests" | "task_weekly_chests"
+      | "card_values",
     label: string,
   ) => (
     <label className="col-span-2 flex flex-col gap-1">
@@ -956,8 +968,7 @@ export default function AdminGamesPage() {
         </p>
         <div className="mb-3 flex flex-col gap-2">
           {toggle("trade_coins_enabled", "Монеты в обменах (выкл — только «карточка на карточку»)")}
-          {toggle("trade_cards_both_sides", "Карточки обязательны с обеих сторон (без подарков в одну сторону)")}
-        </div>
+          {toggle("trade_cards_both_sides", "Карточки обязательны с обеих сторон (без подарков в одну сторону)")}        </div>
         <div className="grid grid-cols-2 gap-3">
           {field("trade_send_min_account_age_days", "Мин. возраст аккаунта, дней")}
           {field("trade_send_min_active_days", "Мин. дней активности")}
@@ -983,6 +994,27 @@ export default function AdminGamesPage() {
           {field("stake_max_coins", "Макс. ставка с каждой стороны")}
           {field("stake_pair_daily_limit", "Матчей на ставку с одним игроком в день")}
           {field("stake_daily_profit_cap", "Лимит выигрыша на ставках в день")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-3 font-display text-base font-bold">Ценные карточки в обменах</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Ценные — легендарки, алмазы, «Академия» и лимитки (не выпадают из паков, тираж не больше limited_max_copies).
+          Полученные бесплатно (награды, бесплатные паки, колесо, подарки) привязаны к аккаунту и в обмен не идут.
+          Отдавать остальные может только «Проверенный аккаунт»: возраст аккаунта и сумма покупок за ⭐ (дни
+          активности — по желанию: бот их просто выжидает, а покупки стоят ферме денег за каждый аккаунт). Равноценность: если дорогая сторона стоит не меньше порога, дешёвая должна стоить не меньше указанного
+          процента от неё (0 — правило выключено). Ценность в монетах — по таблице ниже (у остальных карточек — цена
+          продажи системе × sell_multiplier). Задания и бинго засчитывают не больше N обменов в день с одним игроком.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("trade_verified_min_age_days", "Проверенный: возраст аккаунта, дней")}
+          {field("trade_verified_min_active_days", "Проверенный: дней активности (0 — не нужно)")}
+          {field("trade_verified_min_stars", "Проверенный: потрачено ⭐ всего (0 — не нужно)")}
+          {field("trade_min_value_ratio_pct", "Равноценность: мин. %")}
+          {field("trade_value_check_min", "Равноценность: проверять от ценности")}
+          {field("trade_progress_pair_daily", "Обменов с одним игроком в день для заданий")}
+          {jsonField("card_values", "Таблица ценности (монеты): legendary, legendary_top (+ legendary_top_rating), limited_*, diamond, academy [по стадиям 0–4], sell_multiplier")}
         </div>
       </section>
 
@@ -1238,12 +1270,35 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
-        <p className="mb-3 font-display text-base font-bold">Штрафной удар</p>
+        <p className="mb-1 font-display text-base font-bold">Штрафной удар (3D)</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Серия ударов с разных позиций; каждый удар сервер пересчитывает сам. «В угол» — гол у штанги или под
+          перекладиной, «с закруткой» — гол заметно закрученным ударом.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("free_kick_hourly_limit", "Серий в час")}
+          {field("free_kick_3d_kicks", "Ударов в серии")}
+          {field("free_kick_daily_limit", "Наградных серий в день")}
+          {field("free_kick_3d_goal_coins", "Монет за гол")}
+          {field("free_kick_3d_corner_bonus", "Бонус «в угол»")}
+          {field("free_kick_3d_curl_bonus", "Бонус «с закруткой»")}
+          {field("free_kick_3d_near_coins", "За сейв или штангу")}
+          {field("free_kick_refill_daily_limit", "Платных обновлений серии в день")}
+          {field("free_kick_refill_coins", "Первое обновление за день, монет")}
+          {field("free_kick_refill_stars", "Следующие обновления, звёзд")}
+          {field("free_kick_streak_3_bonus", "Серия: 3 гола подряд, монет")}
+          {field("free_kick_streak_5_bonus", "Серия: 5 голов подряд, монет")}
+          {field("free_kick_streak_10_bonus", "Серия: 10 голов (и каждые 10), монет")}
+          {field("free_kick_challenge_kicks", "Испытание дня: ударов")}
+          {field("free_kick_challenge_rating", "Испытание дня: рейтинг бьющего")}
+          {field("free_kick_challenge_coins_per_hit", "Испытание дня: монет за мишень")}
+          {field("free_kick_challenge_perfect_bonus", "Испытание дня: бонус за все мишени")}
+        </div>
+        <p className="mb-2 mt-4 text-xs text-slate-500">Классическая версия (шкала) — сохранена, в меню не показывается</p>
         <div className="grid grid-cols-2 gap-3">
           {field("free_kick_period_min_ms", "Мин. период шкалы, мс")}
           {field("free_kick_period_max_ms", "Макс. период шкалы, мс")}
           {field("free_kick_base_stake", "Базовая ставка")}
-          {field("free_kick_daily_limit", "Лимит наградных попыток/день")}
         </div>
       </section>
 

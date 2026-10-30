@@ -11,6 +11,7 @@ import {
 } from "@/api/myPlayer";
 import { IconCoin } from "@/components/icons";
 import { formatGameError } from "@/lib/errors";
+import { gearSwatch } from "@/lib/gameGear";
 import { CELEBRATION_EMOJI, COSMETIC_GROUPS } from "@/lib/myPlayer";
 import { payMyPlayerWithStars } from "@/lib/myPlayerStars";
 import { haptic, hapticNotify } from "@/lib/telegram";
@@ -117,6 +118,9 @@ export default function MyPlayerStyleShop({ view, player, preview, onPreview, on
                           {CELEBRATION_EMOJI[item.code] ?? "🎉"}
                         </span>
                       )}
+                      {(kind === "ball" || kind === "boots" || kind === "gloves") && (
+                        <GearTile code={item.code} />
+                      )}
                       {item.stars_price > 0 && !item.owned && (
                         <span className="absolute right-1 top-1 rounded-full bg-amber-400 px-1.5 text-micro font-bold text-bg-base">⭐</span>
                       )}
@@ -164,5 +168,20 @@ export default function MyPlayerStyleShop({ view, player, preview, onPreview, on
       })}
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
     </div>
+  );
+}
+
+/** A ball / boots / gloves item: worn in the 3D free kick and penalty, not
+ * on the card — its tile is the item on its own colours. */
+function GearTile({ code }: { code: string }) {
+  const swatch = gearSwatch(code);
+  if (!swatch) return null;
+  return (
+    <span
+      className="absolute inset-0 flex items-center justify-center text-5xl"
+      style={{ background: `radial-gradient(circle at 50% 40%, ${swatch.from}, ${swatch.to})` }}
+    >
+      {swatch.emoji}
+    </span>
   );
 }

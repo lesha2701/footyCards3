@@ -36,9 +36,11 @@ async def create_user_card(
     player.next_serial_number += 1
     db.add(player)
 
+    from app.services.card_value_service import bound_at_creation
+
     card = UserCard(
         owner_id=owner_id, player_id=player_id, source=source, source_ref_id=source_ref_id,
-        serial_number=serial_number,
+        serial_number=serial_number, from_free_source=await bound_at_creation(db, source, source_ref_id),
     )
     db.add(card)
     await db.flush()

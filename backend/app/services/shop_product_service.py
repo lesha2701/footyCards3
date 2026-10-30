@@ -8,7 +8,8 @@ Keys: "calendar_catchup:<YYYY-MM-DD>", "cosmetic:<id>", "club_pass",
 "club_pass_renewal" (created by delivery for each auto-renewal),
 "season_premium:<season_id>", "starter_offer",
 "club_emblem:<club_id>:<item_id>", "club_donation:<club_id>:<coins>",
-"club_stars:<club_id>", "muse_accessory:<user_muse_id>:<accessory_id>"."""
+"club_stars:<club_id>", "muse_accessory:<user_muse_id>:<accessory_id>",
+"free_kick_refill:<YYYY-MM-DD>", "agent_license"."""
 import secrets
 from datetime import date
 from typing import Optional
@@ -41,6 +42,8 @@ LABELS = {
     "club_stars": "Звёзды клуба",
     "kontra_chest": "Контратака: сундук комплекта",
     "card_offer": "Карты за звёзды",
+    "free_kick_refill": "Штрафной: ещё серия",
+    "agent_license": "Агентская лицензия",
 }
 
 
@@ -140,6 +143,14 @@ async def validate(db: AsyncSession, invoice: StarsInvoice) -> tuple[bool, str]:
         from app.services import card_offer_service
 
         return await card_offer_service.validate_stars(db, invoice.user_id, int(arg), invoice.stars_amount)
+    if kind == "free_kick_refill":
+        from app.services import free_kick_service
+
+        return await free_kick_service.validate_refill_stars(db, invoice.user_id, arg, invoice.stars_amount)
+    if kind == "agent_license":
+        from app.services import agent_license_service
+
+        return await agent_license_service.validate_stars(db, invoice.user_id, invoice.stars_amount)
     return False, "Unknown order"
 
 
@@ -207,4 +218,12 @@ async def deliver(
         from app.services import card_offer_service
 
         return await card_offer_service.deliver_stars(db, user, invoice)
+    if kind == "free_kick_refill":
+        from app.services import free_kick_service
+
+        return await free_kick_service.deliver_refill_stars(db, user)
+    if kind == "agent_license":
+        from app.services import agent_license_service
+
+        return await agent_license_service.deliver_stars(db, user, invoice)
     raise NotFoundError("Unknown product")

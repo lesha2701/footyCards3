@@ -1,4 +1,5 @@
 from app.models.admin_action import AdminAction
+from app.models.auction import AgentLicense, AuctionBid, AuctionLot
 from app.models.badge import Badge, UserBadge
 from app.models.blackjack import BlackjackMatch
 from app.models.card import CardStarLedger, UserCard
@@ -59,6 +60,7 @@ from app.models.club_pack_opening import ClubPackOpening, ClubPackOpeningCard
 from app.models.coach import Coach, CoachBoost
 from app.models.coin_package import CoinPackage
 from app.models.daily_reward import DailyReward
+from app.models.free_kick_challenge import FreeKickChallengeEntry
 from app.models.game import GameSession, MemoryGameRound
 from app.models.game_config import GameConfig
 from app.models.gift import Gift, GiftSet
@@ -199,6 +201,7 @@ __all__ = [
     "CoachBoost",
     "CoinPackage",
     "DailyReward",
+    "FreeKickChallengeEntry",
     "GameSession",
     "MemoryGameRound",
     "GameConfig",
@@ -292,4 +295,7 @@ __all__ = [
     "PlayerCareerFriendMember",
     "PlayerCareerWeekStat",
     "PlayerCareerWeeklyClaim",
+    "AuctionLot",
+    "AuctionBid",
+    "AgentLicense",
 ]

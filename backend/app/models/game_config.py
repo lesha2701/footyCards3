@@ -257,6 +257,33 @@ class GameConfig(TimestampMixin, Base):
     free_kick_period_max_ms: Mapped[int] = mapped_column(Integer, default=1700, nullable=False)
     free_kick_base_stake: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     free_kick_daily_limit: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
+    # «Штрафной 3D» (free_kick_service.start_3d): its own hourly cap of series
+    # (not the shared hourly_game_limit; the daily cap of rewarded series
+    # still bounds the coins), the series length and the coins per kick — a goal, plus bonuses for a goal
+    # in the corner/top bins or with real curl, a little for a save or the post.
+    free_kick_hourly_limit: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    free_kick_3d_kicks: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
+    free_kick_3d_goal_coins: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    free_kick_3d_corner_bonus: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    free_kick_3d_curl_bonus: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    free_kick_3d_near_coins: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # Paid refills of the hourly series (no waiting for the cooldown): at most
+    # this many a day; the day's first costs coins, the rest Telegram Stars.
+    free_kick_refill_daily_limit: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    free_kick_refill_coins: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+    free_kick_refill_stars: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    # «Серия без промахов»: bonus coins on the 3rd, 5th and 10th goal in a
+    # row (then on every 10th: 20, 30, …); a kick that isn't a goal resets it.
+    free_kick_streak_3_bonus: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    free_kick_streak_5_bonus: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
+    free_kick_streak_10_bonus: Mapped[int] = mapped_column(Integer, default=120, nullable=False)
+    # «Испытание дня» (free_kick_challenge_service): kicks, the card rating
+    # every player shoots with (a fair leaderboard), coins per target hit
+    # and the bonus for hitting them all.
+    free_kick_challenge_kicks: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    free_kick_challenge_rating: Mapped[int] = mapped_column(Integer, default=80, nullable=False)
+    free_kick_challenge_coins_per_hit: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    free_kick_challenge_perfect_bonus: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
 
     hourly_game_limit: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
 
@@ -504,7 +531,10 @@ class GameConfig(TimestampMixin, Base):
             "fx_sparkle": 50, "fx_fire": 75, "fx_lightning": 100,
             "hair_neymar": 120, "hair_cr7": 100, "hair_pogba": 90, "aviators": 60, "diamond_chain": 90,
             "bg_goal": 75, "bg_national": 75,
-            "cel_siu": 100, "cel_plane": 75, "cel_heart": 50, "cel_dance": 150,
+            "cel_siu": 100, "cel_plane": 75, "cel_heart": 50, "cel_dance": 150, "cel_silly": 50,
+            "ball_gold": 60, "ball_neon": 40, "ball_retro": 40,
+            "boots_red": 30, "boots_neon": 40, "boots_gold": 60,
+            "gloves_lime": 30, "gloves_pink": 30, "gloves_gold": 60,
         },
     )
     # «Карьера игрока»: every completed club objective pays objective_coins
@@ -1081,6 +1111,32 @@ class GameConfig(TimestampMixin, Base):
     stake_max_coins: Mapped[int] = mapped_column(Integer, default=500, nullable=False)
     stake_pair_daily_limit: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     stake_daily_profit_cap: Mapped[int] = mapped_column(Integer, default=2000, nullable=False)
+    # Valuable cards (legendary, diamond, «Академия», limited —
+    # card_value_service) may be given in a trade only by a «проверенный
+    # аккаунт»: this old, active on this many days, and with at least this
+    # many Stars spent in total — the bar that costs a farm per account
+    # (age / activity a bot just waits out). 0 = no requirement.
+    trade_verified_min_age_days: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    trade_verified_min_active_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    trade_verified_min_stars: Mapped[int] = mapped_column(Integer, default=49, nullable=False)
+    # Equal-value rule: once the dearer side is worth at least
+    # trade_value_check_min, the cheaper side must be worth at least
+    # trade_min_value_ratio_pct % of it (0 = rule off).
+    trade_min_value_ratio_pct: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    trade_value_check_min: Mapped[int] = mapped_column(Integer, default=2000, nullable=False)
+    # Trades with the same partner counted for tasks / bingo per day (0 = all).
+    trade_progress_pair_daily: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Card value table in coins (card_value_service.card_value): the floor of
+    # what a card is worth — the trade equal-value rule and market minimums.
+    card_values: Mapped[dict] = mapped_column(
+        JSON, nullable=False,
+        default=lambda: {
+            "legendary": 6000, "legendary_top": 12000, "legendary_top_rating": 93,
+            "limited_legendary": 30000, "limited_legendary_scarce": 60000, "limited_epic": 10000,
+            "limited_rare": 5000, "limited_max_copies": 50, "limited_scarce_copies": 15,
+            "diamond": 60000, "academy": [40000, 40000, 60000, 60000, 100000], "sell_multiplier": 2,
+        },
+    )
     # Shop sales boosters (migration 0183), 0 = off:
     # - pity_packs: a paid coin pack with a legendary chance that comes after
     #   this many such packs without a legendary turns one card legendary
@@ -1337,3 +1393,32 @@ class GameConfig(TimestampMixin, Base):
         default=lambda: [{"points": 30, "coins": 1000}, {"points": 60, "coins": 2000},
                          {"points": 90, "coins": 3000, "card_rarity": "epic"}],
     )
+    # «Трансферный рынок» (services/auction_service.py): off until an admin
+    # launches it. Allowed lot durations, the market fee burnt from every sale
+    # (frozen on the lot), the minimum raise (max of % and coins), the absolute
+    # start price floor (the real floor is the copy's card_value — no selling a
+    # pricey card to an alt for pennies), active-lot cap, anti-sniping (a bid in
+    # the last window pushes the end to now + extend) and anti-laundering
+    # limits (account age to bid — 0 = anyone, lots one buyer may win from one
+    # seller per day).
+    auction_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    auction_durations_hours: Mapped[list] = mapped_column(JSON, default=lambda: [1, 6, 24], nullable=False)
+    # «Купить сразу» (fixed-price) lots stay this long, then the card goes back.
+    auction_fixed_duration_hours: Mapped[int] = mapped_column(Integer, default=72, nullable=False)
+    auction_fee_pct: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    auction_min_increment_pct: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    auction_min_increment_coins: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    auction_min_price: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    auction_max_active_lots: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    auction_snipe_window_seconds: Mapped[int] = mapped_column(Integer, default=120, nullable=False)
+    auction_snipe_extend_seconds: Mapped[int] = mapped_column(Integer, default=120, nullable=False)
+    auction_min_account_age_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    auction_max_wins_per_seller_daily: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # «Агентская лицензия» (services/agent_license_service.py): only agents
+    # list lots. Price in Stars, days per purchase (stacks), and who may buy:
+    # an account at least this old that is also a «Проверенный аккаунт».
+    agent_license_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    agent_license_stars: Mapped[int] = mapped_column(Integer, default=99, nullable=False)
+    agent_license_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    agent_license_min_account_age_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    agent_license_requires_verified: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

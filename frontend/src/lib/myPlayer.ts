@@ -40,8 +40,11 @@ export const COSMETIC_GROUPS: { kind: MyPlayerCosmeticKind; title: string }[] = 
   { kind: "background", title: "Фон карточки" },
   { kind: "effect", title: "Эффект карточки" },
   { kind: "celebration", title: "Празднование гола" },
+  { kind: "ball", title: "Мяч (штрафной и пенальти)" },
+  { kind: "boots", title: "Бутсы (штрафной и пенальти)" },
+  { kind: "gloves", title: "Перчатки вратаря (пенальти)" },
 ];
 
-export const CELEBRATION_EMOJI: Record<string, string> = { cel_siu: "🙌", cel_plane: "✈️", cel_heart: "❤️", cel_dance: "🕺" };
+export const CELEBRATION_EMOJI: Record<string, string> = { cel_siu: "🙌", cel_plane: "✈️", cel_heart: "❤️", cel_dance: "🕺", cel_silly: "🤪" };
 
 export const TIER_NAMES: Record<MyPlayerTier, string> = { bronze: "Бронза", silver: "Серебро", gold: "Золото", legend: "Легенда" };

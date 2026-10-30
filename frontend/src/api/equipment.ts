@@ -82,6 +82,11 @@ export interface CardEquipment {
     xp_pct?: number; coins_pct?: number; team_country?: string; team_chemistry?: number;
   };
   slots: CardEquipmentSlot[];
+  /** Sets this card wears things of: progress toward each set bonus. */
+  sets?: {
+    name: string; have: number; needed: number; complete: boolean; bonus_rating: number;
+    team_country: string | null; team_chemistry: number;
+  }[];
 }
 
 export async function fetchEquipmentShop(): Promise<EquipmentShop> {

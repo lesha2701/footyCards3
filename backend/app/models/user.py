@@ -98,6 +98,14 @@ class User(TimestampMixin, Base):
     free_kick_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     free_kick_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     free_kick_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Paid series refills (free_kick_service.refill_*): bought today, and
+    # banked series a start spends once the hourly cap is reached.
+    free_kick_refills_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    free_kick_refills_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    free_kick_bonus_series: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # «Серия без промахов»: goals in a row in the 3D free kick, across series
+    # (free_kick_service.streak_bonus).
+    free_kick_goal_streak: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Football Hangman
     hangman_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

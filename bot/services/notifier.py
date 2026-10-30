@@ -36,6 +36,7 @@ _MATCH_PATH_PREFIXES = {
     "stratego_match": "/play/stratego/matches",
     "mordoboi_match": "/play/mordoboi/matches",
     "club_match": "/clubs/tournament",
+    "auction_lot": "/market",
 }
 
 

@@ -136,8 +136,15 @@ def coin_tax(amount: int, config: GameConfig) -> int:
 
 
 async def rules_for(db: AsyncSession, user: User, config: GameConfig) -> dict:
+    from app.services import card_value_service
+
     reason = await give_block_reason(db, user, config)
+    verified_reason = await card_value_service.verified_block_reason(db, user, config)
     return {
+        "verified": verified_reason is None,
+        "verified_block_reason": verified_reason,
+        "min_value_ratio_pct": config.trade_min_value_ratio_pct,
+        "value_check_min": config.trade_value_check_min,
         "can_give": reason is None,
         "give_block_reason": reason,
         "min_account_age_days": config.trade_send_min_account_age_days,
@@ -148,3 +155,80 @@ async def rules_for(db: AsyncSession, user: User, config: GameConfig) -> dict:
         "coins_enabled": config.trade_coins_enabled,
         "cards_both_sides": config.trade_cards_both_sides,
     }
+
+
+def _coins(value: int) -> str:
+    """12000 -> «12 000» (narrow no-break space, as ru-RU formats it)."""
+    return f"{value:,}".replace(",", " ")
+
+
+async def ensure_value_rules(
+    db: AsyncSession, config: GameConfig, sender: User, receiver: User,
+    offered_cards: list, requested_cards: list, sender_coins: int, receiver_coins: int, *, actor_is_sender: bool,
+) -> None:
+    """Valuable cards (card_value_service): never from a free source, and only
+    from a «проверенный аккаунт»; plus the equal-value rule. Cards need their
+    `player` loaded. `actor_is_sender` picks whose wording the errors use."""
+    from app.services import card_value_service as cv
+
+    for giver, cards, own in ((sender, offered_cards, actor_is_sender), (receiver, requested_cards, not actor_is_sender)):
+        valuable = [c for c in cards if cv.is_valuable(c, config)]
+        if not valuable:
+            continue
+        for card in valuable:
+            if card.from_free_source:
+                raise ConflictError(
+                    f"«{card.player.display_name}» получена бесплатно (награда, бесплатный пак, колесо…) "
+                    "и привязана к аккаунту — её нельзя обменять.",
+                    details={"rule": "trade_bound_card", "card_id": card.id},
+                )
+        reason = await cv.verified_block_reason(db, giver, config)
+        if reason is None:
+            continue
+        if own:
+            raise ForbiddenError(
+                f"Отдавать в обмене легендарки, алмазы, «Академию» и лимитки может только «Проверенный аккаунт». {reason}",
+                details={"rule": "trade_not_verified"},
+            )
+        raise ConflictError(
+            "Этот игрок пока не может отдавать ценные карточки (легендарки, алмазы, «Академию», лимитки) — "
+            "у него ещё нет статуса «Проверенный аккаунт».",
+            details={"rule": "trade_not_verified_partner"},
+        )
+
+    ratio = config.trade_min_value_ratio_pct
+    if ratio <= 0:
+        return
+    sent = cv.side_value(offered_cards, sender_coins, config)
+    got = cv.side_value(requested_cards, receiver_coins, config)
+    high, low = max(sent, got), min(sent, got)
+    if high < config.trade_value_check_min or low * 100 >= high * ratio:
+        return
+    mine, theirs = (sent, got) if actor_is_sender else (got, sent)
+    raise ConflictError(
+        f"Неравноценный обмен: ты отдаёшь карточки на {_coins(mine)} монет, а получаешь на {_coins(theirs)}. "
+        f"Ценность одной стороны должна быть не меньше {ratio}% другой.",
+        details={"rule": "trade_unequal_value", "give": mine, "get": theirs, "min_ratio_pct": ratio},
+    )
+
+
+async def counts_for_progress(db: AsyncSession, config: GameConfig, a_id: int, b_id: int) -> bool:
+    """Whether a trade accepted now counts for tasks / bingo: at most
+    trade_progress_pair_daily counted trades per pair per local day."""
+    from sqlalchemy import and_, or_
+
+    from app.models.enums import TradeStatus
+    from app.models.trade import TradeOffer
+
+    limit = config.trade_progress_pair_daily
+    if limit <= 0:
+        return True
+    counted = int((await db.execute(
+        select(func.count()).select_from(TradeOffer).where(
+            TradeOffer.status == TradeStatus.accepted, TradeOffer.counts_for_progress.is_(True),
+            TradeOffer.resolved_at >= _today_start_utc(),
+            or_(and_(TradeOffer.sender_id == a_id, TradeOffer.receiver_id == b_id),
+                and_(TradeOffer.sender_id == b_id, TradeOffer.receiver_id == a_id)),
+        )
+    )).scalar_one())
+    return counted < limit

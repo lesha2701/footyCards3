@@ -3,6 +3,7 @@
 import type { CareerCollectionCard, CareerSquadCard } from "@/api/career";
 import { staticUrl } from "@/lib/api";
 import { CATEGORY_POSITIONS } from "@/lib/formation";
+import { personKey } from "@/lib/person";
 import type { Rarity } from "@/types";
 
 const PLACEHOLDER = "players/placeholder/player_placeholder.webp";
@@ -10,6 +11,8 @@ const PLACEHOLDER = "players/placeholder/player_placeholder.webp";
 export type Line = "GK" | "DEF" | "MID" | "FWD";
 
 export interface PlayerInfo {
+  /** The footballer behind the card (one per XI, lib/person). */
+  person: string;
   name: string;
   short: string;
   position: string;
@@ -36,13 +39,13 @@ export function playerInfo(entry: Pick<CareerSquadCard | CareerCollectionCard, "
   if (entry.card) {
     const p = entry.card.player;
     return {
-      name: p.display_name, short: shortName(p.display_name, p.last_name, p.first_name), position: p.position, rating: p.rating,
+      person: personKey(p), name: p.display_name, short: shortName(p.display_name, p.last_name, p.first_name), position: p.position, rating: p.rating,
       club: p.club, country: p.country, image: staticUrl(p.image_path ?? PLACEHOLDER), rarity: p.rarity, mine: false,
     };
   }
   if (entry.my_player) {
     const m = entry.my_player;
-    return { name: m.name, short: shortName(m.name), position: m.position, rating: m.rating,
+    return { person: personKey({ display_name: m.name }), name: m.name, short: shortName(m.name), position: m.position, rating: m.rating,
       club: m.club ?? "", country: m.country ?? "", image: staticUrl(PLACEHOLDER), rarity: "epic", mine: true };
   }
   return null;

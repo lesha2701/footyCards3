@@ -22,6 +22,7 @@ from app.models.enums import (
     TransactionType,
 )
 from app.models.game_config import GameConfig
+from app.services.player_identity import card_person
 from app.models.player import Player
 from app.models.tactico import TacticoMatch, TacticoQueueEntry, TacticoSquad, TacticoSquadCard
 from app.models.user import User
@@ -166,6 +167,9 @@ async def set_squad(
             raise ConflictError(f"Card #{card.serial_number} is locked and cannot be used")
         if card.is_locked_in_trade:
             raise ConflictError(f"Card #{card.serial_number} is locked in an active trade and cannot be used")
+    # One footballer once: two copies (or versions) of the same player can't both play.
+    if len({card_person(c) for c in cards_by_id.values()}) != len(cards_by_id):
+        raise ConflictError("Один футболист не может быть в составе дважды")
 
     legendary_count = sum(1 for c in cards_by_id.values() if c.player.rarity == Rarity.legendary)
     epic_count = sum(1 for c in cards_by_id.values() if c.player.rarity == Rarity.epic)

@@ -1,5 +1,15 @@
 import { api } from "@/lib/api";
+import type { QuantizedDive, QuantizedSwipe } from "@/lib/freeKick3d/trajectory";
 import type {
+  FreeKick3DRefill,
+  FreeKickChallenge,
+  FreeKickChallengeShot,
+  FreeKickChallengeStart,
+  Penalty3DResult,
+  Penalty3DStartResult,
+  StarsInvoiceCreate,
+  FreeKick3DShotResult,
+  FreeKick3DStartResult,
   FreeKickClaimResult,
   FreeKickKickResult,
   FreeKickStartResult,
@@ -122,6 +132,85 @@ export async function startFreeKick(userCardId: number): Promise<FreeKickStartRe
 
 export async function kickFreeKick(sessionId: number, elapsedMs: number): Promise<FreeKickKickResult> {
   const { data } = await api.post<FreeKickKickResult>(`/games/free-kick/${sessionId}/kick`, { elapsed_ms: elapsedMs });
+  return data;
+}
+
+/** «Испытание дня»: today's board, the player's attempt (start or pick up)
+ * and a swipe of it — replayed on the server like the series'. */
+export async function fetchFreeKickChallenge(): Promise<FreeKickChallenge> {
+  const { data } = await api.get<FreeKickChallenge>("/games/free-kick-3d/challenge");
+  return data;
+}
+
+export async function startFreeKickChallenge(): Promise<FreeKickChallengeStart> {
+  const { data } = await api.post<FreeKickChallengeStart>("/games/free-kick-3d/challenge/start");
+  return data;
+}
+
+export async function shootFreeKickChallenge(sessionId: number, swipe: QuantizedSwipe): Promise<FreeKickChallengeShot> {
+  const { data } = await api.post<FreeKickChallengeShot>(`/games/free-kick-3d/challenge/${sessionId}/shot`, {
+    dx: swipe.dx,
+    dy: swipe.dy,
+    curve: swipe.curve,
+    duration_ms: swipe.durationMs,
+  });
+  return data;
+}
+
+export async function startFreeKick3D(userCardId: number): Promise<FreeKick3DStartResult> {
+  const { data } = await api.post<FreeKick3DStartResult>("/games/free-kick-3d/start", { user_card_id: userCardId });
+  return data;
+}
+
+/** The swipe exactly as quantized for the engine — the server replays it. */
+export async function shootFreeKick3D(sessionId: number, swipe: QuantizedSwipe): Promise<FreeKick3DShotResult> {
+  const { data } = await api.post<FreeKick3DShotResult>(`/games/free-kick-3d/${sessionId}/shot`, {
+    dx: swipe.dx,
+    dy: swipe.dy,
+    curve: swipe.curve,
+    duration_ms: swipe.durationMs,
+  });
+  return data;
+}
+
+export async function fetchFreeKickRefill(): Promise<FreeKick3DRefill> {
+  const { data } = await api.get<FreeKick3DRefill>("/games/free-kick-3d/refill");
+  return data;
+}
+
+/** The day's first refill, paid in coins. */
+export async function refillFreeKickWithCoins(): Promise<FreeKick3DRefill> {
+  const { data } = await api.post<FreeKick3DRefill>("/games/free-kick-3d/refill");
+  return data;
+}
+
+/** The following refills: a Telegram Stars invoice (pay via payShopWithStars). */
+export async function createFreeKickRefillInvoice(): Promise<StarsInvoiceCreate> {
+  const { data } = await api.post<StarsInvoiceCreate>("/games/free-kick-3d/refill/stars-invoice");
+  return data;
+}
+
+export async function startPenalty3D(userCardId: number): Promise<Penalty3DStartResult> {
+  const { data } = await api.post<Penalty3DStartResult>("/games/penalty-3d/start", { user_card_id: userCardId });
+  return data;
+}
+
+/** The player's penalty: the swipe exactly as quantized for the engine. */
+export async function shootPenalty3D(sessionId: number, swipe: QuantizedSwipe): Promise<Penalty3DResult> {
+  const { data } = await api.post<Penalty3DResult>(`/games/penalty-3d/${sessionId}/shot`, {
+    dx: swipe.dx,
+    dy: swipe.dy,
+    curve: swipe.curve,
+    duration_ms: swipe.durationMs,
+  });
+  return data;
+}
+
+/** The bot's penalty: the player's dive (mm, ms from the strike), or none. */
+export async function savePenalty3D(sessionId: number, dive: QuantizedDive | null): Promise<Penalty3DResult> {
+  const { data } = await api.post<Penalty3DResult>(`/games/penalty-3d/${sessionId}/save`, {
+    dive: dive ? { x: dive.x, y: dive.y, reaction_ms: dive.reactionMs } : null,
+  });
   return data;
 }
 

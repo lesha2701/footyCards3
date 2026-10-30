@@ -45,9 +45,7 @@ function PitchCard({ slot, entry, chemPoints, chemMax, onClick, target = false, 
       {info ? (
         <PlayerTile info={info} entry={entry} width="w-[42px] min-[400px]:w-[47px]" offPosition={!!off}>
           {chemPoints && <ChemistryDiamonds points={chemPoints.points} max={chemMax} onPosition={chemPoints.on_position} />}
-          {entry && (
-            <EnergyBar fatigue={entry.fatigue} thin />
-          )}
+          {entry && <EnergyBar fatigue={entry.fatigue} card />}
         </PlayerTile>
       ) : (
         <div className="flex w-[42px] flex-col items-center gap-1 rounded-xl border border-dashed border-white/25 bg-black/30 p-2 min-[400px]:w-[47px]">
@@ -59,7 +57,11 @@ function PitchCard({ slot, entry, chemPoints, chemMax, onClick, target = false, 
   );
 }
 
-function BenchCard({ entry, onClick, gain, selected }: { entry: CareerSquadCard; onClick?: () => void; gain?: number | null; selected?: boolean }) {
+function BenchCard({ entry, onClick, gain, selected, onPitch = false }: {
+  entry: CareerSquadCard; onClick?: () => void; gain?: number | null; selected?: boolean;
+  /** Already playing in another slot: picking swaps the two. */
+  onPitch?: boolean;
+}) {
   const info = playerInfo(entry);
   if (!info) return null;
   const out = isOut(entry);
@@ -67,8 +69,13 @@ function BenchCard({ entry, onClick, gain, selected }: { entry: CareerSquadCard;
     <button onClick={onClick} disabled={!onClick || out}
       className={`relative flex min-w-0 flex-col items-center ${out ? "opacity-45 grayscale" : "active:scale-95"} ${selected ? "rounded-[12px] ring-2 ring-accent-lime" : ""}`}
     >
+      {onPitch && !selected && (
+        <span className="absolute -top-1.5 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-accent-cyan px-1 text-[9px] font-bold leading-tight text-bg-base">
+          на поле
+        </span>
+      )}
       <PlayerTile info={info} entry={entry}>
-        <EnergyBar fatigue={entry.fatigue} thin />
+        <EnergyBar fatigue={entry.fatigue} card />
         {gain != null && gain !== 0 && (
           <span className={`font-mono text-micro font-bold leading-tight ${gain > 0 ? "text-accent-green" : "text-red-400"}`}>
             {gain > 0 ? `+${gain}` : gain} хим.
@@ -95,7 +102,7 @@ function BenchTile({ entry, onClick, selected }: { entry: CareerSquadCard; onCli
       }`}
     >
       <PlayerTile info={info} entry={entry}>
-        <EnergyBar fatigue={entry.fatigue} thin />
+        <EnergyBar fatigue={entry.fatigue} card />
       </PlayerTile>
     </button>
   );
@@ -120,6 +127,31 @@ function TacticLegend({ tactic, catalog }: { tactic: NonNullable<CareerSeason["t
         </li>
       ))}
     </ul>
+  );
+}
+
+/** What the bar under each card means — tap to read. */
+function EnergyLegend() {
+  const [open, setOpen] = useState(false);
+  return (
+    <button onClick={() => setOpen((v) => !v)} className="-mt-1 flex flex-col gap-1 rounded-xl bg-white/5 px-3 py-2 text-left">
+      <span className="flex items-center justify-between gap-2 text-micro">
+        <span className="font-semibold text-ink-chalk">🔋 Батарейка под карточкой — энергия игрока</span>
+        <span className="text-ink-mist-dim">{open ? "▲" : "что это?"}</span>
+      </span>
+      <span className="flex items-center gap-3 text-micro text-ink-mist">
+        <span className="flex items-center gap-1"><span className="h-1.5 w-4 rounded-full bg-accent-lime" />60–100% свежий</span>
+        <span className="flex items-center gap-1"><span className="h-1.5 w-4 rounded-full bg-amber-400" />30–59% устал</span>
+        <span className="flex items-center gap-1"><span className="h-1.5 w-4 rounded-full bg-red-400" />&lt;30% выжат</span>
+      </span>
+      {open && (
+        <span className="text-micro leading-snug text-ink-mist">
+          Энергия тратится в матчах (больше — при прессинге и полном матче) и восстанавливается между турами.
+          Чем меньше энергии, тем слабее игрок играет. Уставших (жёлтых и красных) лучше подменять из запаса — свежие
+          ждут там. ▲ — хорошая форма после прошлого матча, ✚ — травма, 🟥 — дисквалификация (число — сколько туров).
+        </span>
+      )}
+    </button>
   );
 }
 
@@ -175,18 +207,27 @@ export default function CareerSquad({ season, catalog = null, onView, onError }:
   });
 
   const inLineup = new Set(Object.values(slots));
-  const bench = season.squad.filter((s) => !inLineup.has(s.card_id) && s.owned);
+  const pitchPersons = new Set([...inLineup].map((id) => playerInfo(byId.get(id))?.person).filter(Boolean));
+  const bench = season.squad.filter((s) => !inLineup.has(s.card_id) && s.owned && !pitchPersons.has(playerInfo(s)?.person));
   const benchByLine = LINES.map((line) => ({
     ...line,
     entries: bench
       .filter((e) => lineOf(playerInfo(e)?.position ?? "") === line.category)
       .sort((a, b) => Number(isOut(a)) - Number(isOut(b)) || (playerInfo(b)?.rating ?? 0) - (playerInfo(a)?.rating ?? 0)),
   })).filter((line) => line.entries.length > 0);
+  // Picker: the line's squad players, best first; another copy of a
+  // footballer already on the pitch (in another slot) can't come in.
+  const personsElsewhere = new Set(
+    Object.entries(slots).filter(([code]) => code !== picking?.code).map(([, id]) => playerInfo(byId.get(id))?.person).filter(Boolean),
+  );
   const candidates = picking
-    ? season.squad.filter((s) => {
-      const pos = playerInfo(s)?.position;
-      return s.owned && !!pos && CATEGORY_POSITIONS[picking.category].includes(pos);
-    })
+    ? season.squad
+      .filter((s) => {
+        const info = playerInfo(s);
+        if (!s.owned || !info || !CATEGORY_POSITIONS[picking.category].includes(info.position)) return false;
+        return inLineup.has(s.card_id) || !personsElsewhere.has(info.person);
+      })
+      .sort((a, b) => Number(isOut(a)) - Number(isOut(b)) || (playerInfo(b)?.rating ?? 0) - (playerInfo(a)?.rating ?? 0))
     : [];
   const rows = pitchRows(season.formation, season.slots.map((s) => s.code));
 
@@ -201,6 +242,26 @@ export default function CareerSquad({ season, catalog = null, onView, onError }:
     setPicking(null);
     setBenchPick(null);
     haptic("light");
+  };
+  // «Лучший состав»: the strongest fit XI, energy counted (a tired star
+  // plays weaker), one footballer once; slots without a candidate keep theirs.
+  const bestEleven = () => {
+    const next: Record<string, number> = {};
+    const used = new Set<string>();
+    const score = (e: CareerSquadCard) => (playerInfo(e)?.rating ?? 0) * (1 - (100 - energyOf(e)) / 400);
+    const order = [...season.slots].sort((a, b) => Number(b.category === "GK") - Number(a.category === "GK"));
+    for (const slot of order) {
+      const pick = season.squad
+        .filter((e) => e.owned && !isOut(e) && fitsSlot(slot, e) && !used.has(playerInfo(e)!.person))
+        .sort((a, b) => Number(onIdealPosition(playerInfo(b)!.position, slot.ideal_position)) - Number(onIdealPosition(playerInfo(a)!.position, slot.ideal_position))
+          || score(b) - score(a))[0];
+      if (pick) {
+        next[slot.code] = pick.card_id;
+        used.add(playerInfo(pick)!.person);
+      } else if (slots[slot.code] !== undefined) next[slot.code] = slots[slot.code];
+    }
+    setSlots(next);
+    haptic("medium");
   };
   const fitsSlot = (slot: CareerSlot, entry: CareerSquadCard) =>
     CATEGORY_POSITIONS[slot.category as keyof typeof CATEGORY_POSITIONS]?.includes(playerInfo(entry)?.position ?? "") ?? false;
@@ -227,7 +288,11 @@ export default function CareerSquad({ season, catalog = null, onView, onError }:
       {squadEditable && (
         <p className="-mt-1 text-micro text-ink-mist-dim">Заявку можно менять до первого тура, состав — перед каждым туром.</p>
       )}
+      <EnergyLegend />
       {chemistry?.enabled && <ChemistrySummary chemistry={chemistry} />}
+      <button onClick={bestEleven} className="-mt-1 self-start rounded-full bg-accent-cyan/15 px-3 py-1 text-caption font-semibold text-accent-cyan active:scale-95">
+        ⚡ Лучший состав с учётом энергии
+      </button>
 
 
       <div
@@ -292,7 +357,7 @@ export default function CareerSquad({ season, catalog = null, onView, onError }:
             <button onClick={() => setBenchPick(null)} className="font-semibold text-ink-mist">Отмена</button>
           </p>
         ) : (
-          <p className="text-micro text-ink-mist-dim">Нажми на игрока запаса, потом на позицию на поле · полоска — усталость</p>
+          <p className="text-micro text-ink-mist-dim">Нажми на игрока запаса, потом на позицию на поле · 🔋 — энергия</p>
         )}
         <div className="-mx-1 flex snap-x gap-1.5 overflow-x-auto px-1 pb-1">
           {benchShown.map((entry) => (
@@ -308,16 +373,30 @@ export default function CareerSquad({ season, catalog = null, onView, onError }:
       </div>
 
       <p className="text-micro leading-snug text-ink-mist-dim">
-        Нажми на игрока на поле, чтобы заменить. Линии — химия соседей: зелёная — один клуб и страна, жёлтая — что-то
-        одно, красная — ничего общего.
+        Нажми на игрока на поле, чтобы заменить. Линии между игроками — химия соседей: зелёная — один клуб и страна,
+        жёлтая — что-то одно, красная — ничего общего.
       </p>
-      <button
-        onClick={() => save.mutate()}
-        disabled={!dirty || save.isPending}
-        className="rounded-2xl bg-floodlight py-3 text-sm font-bold text-bg-base active:scale-95 disabled:opacity-40"
-      >
-        {save.isPending ? "Сохраняем..." : dirty ? "Сохранить состав" : "Состав сохранён"}
-      </button>
+      {dirty ? (
+        // Unsaved changes stay in view until saved or undone — a change
+        // that was never saved is what plays otherwise.
+        <div className="sticky bottom-20 z-20 -mx-1 flex items-center gap-2 rounded-2xl bg-bg-raised/95 p-2 shadow-xl ring-1 ring-accent-lime/40 backdrop-blur">
+          <p className="min-w-0 flex-1 pl-1 text-caption font-semibold text-accent-lime">Состав изменён — сохрани, чтобы он сыграл</p>
+          <button onClick={() => setSlots(JSON.parse(savedKey))} className="rounded-xl bg-white/10 px-3 py-2 text-caption font-semibold text-ink-chalk active:scale-95">
+            Отмена
+          </button>
+          <button
+            onClick={() => save.mutate()}
+            disabled={save.isPending}
+            className="rounded-xl bg-floodlight px-4 py-2 text-caption font-bold text-bg-base active:scale-95 disabled:opacity-50"
+          >
+            {save.isPending ? "..." : "Сохранить"}
+          </button>
+        </div>
+      ) : (
+        <p className="flex items-center justify-center gap-1 rounded-2xl bg-white/5 py-2.5 text-caption font-semibold text-ink-mist">
+          ✓ Состав сохранён — он сыграет в туре {season.rounds_played + 1}
+        </p>
+      )}
 
       {building && <SquadBuilder onClose={() => setBuilding(false)} onView={onView} onError={onError} />}
 
@@ -329,7 +408,9 @@ export default function CareerSquad({ season, catalog = null, onView, onError }:
           >
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/20" />
             <p className="font-display text-base font-bold text-ink-chalk">Позиция {picking.ideal_position}</p>
-            <p className="mb-3 text-caption text-ink-mist">Цифра под карточкой — как изменится химия состава</p>
+            <p className="mb-3 text-caption text-ink-mist">
+              Под карточкой — энергия и как изменится химия. «На поле» — поменяются местами.
+            </p>
             <div className="grid grid-cols-5 gap-1.5">
               {candidates.map((entry) => {
                 const info = playerInfo(entry)!;
@@ -338,7 +419,7 @@ export default function CareerSquad({ season, catalog = null, onView, onError }:
                   : null;
                 return (
                   <BenchCard key={entry.card_id} entry={entry} gain={gain} selected={slots[picking.code] === entry.card_id}
-                    onClick={() => put(picking, entry)} />
+                    onPitch={inLineup.has(entry.card_id)} onClick={() => put(picking, entry)} />
                 );
               })}
             </div>

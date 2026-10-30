@@ -19,7 +19,11 @@ Main features:
   docs/club-base.md);
 - game currency, daily rewards and a free periodic pack;
 - mini-games: Memory Sequence, Card Arena, Саботёр (Saboteur), Пенальти,
-  Штрафной удар (Free Kick), Футбольные буквы (a football-themed word-guessing
+  Штрафной удар (Free Kick — 3D, swipe-driven; the shot is a pure function,
+  `frontend/src/lib/freeKick3d/trajectory.ts`, and the server replays every
+  rewarded swipe with its bit-exact Python port `free_kick_3d_engine.py` —
+  change both in lockstep, a shared fixture checks them; the classic scale
+  game stays at `/play/free-kick-classic`, unlinked), Футбольные буквы (a football-themed word-guessing
   game), Тактико (Tactico — turn-based squad-vs-squad, bot or friend),
   Футбольное Стратего (hidden-information board game on cards, bot or
   friend — `stratego_engine.py` holds the pure rules, `stratego_service.py`
@@ -64,6 +68,11 @@ Main features:
   The style shop / merchandise / «Менеджер Pro» are cosmetics and
   convenience only (Stars via my_player_service, key "manager:<code>");
 - player-to-player card exchanges;
+- «Трансферный рынок» — player-to-player auction of specific card copies
+  (`auction_service.py`): bids are escrowed off the balance and refunded
+  when outbid, the market fee is burnt, the listed card is held with
+  `is_locked_in_trade`; expired lots close lazily on reads and via the bot
+  (`POST /internal/auction/sweep`, SKIP LOCKED like «Футбольный магнат»);
 - tasks/achievements, referrals, leaderboards and profile;
 - Telegram bot (notifications/reminders) and a React-based administrative panel.
 

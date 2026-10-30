@@ -120,6 +120,7 @@ class TransactionType(str, enum.Enum):
     mordoboi_legend_reward = "mordoboi_legend_reward"
     kontra_reward = "kontra_reward"
     kontra_chest_purchase = "kontra_chest_purchase"
+    free_kick_refill = "free_kick_refill"
     weekly_top_reward = "weekly_top_reward"
     newbie_reward = "newbie_reward"
     blackjack_consolation = "blackjack_consolation"
@@ -157,6 +158,13 @@ class TransactionType(str, enum.Enum):
     club_reward = "club_reward"
     weekly_cup_prize = "weekly_cup_prize"
     match_day_reward = "match_day_reward"
+    # «Трансферный рынок» (services/auction_service.py): a bid's coins are
+    # held off the balance (escrow) and come back when outbid / the lot is
+    # removed; the seller gets the final price minus the burnt market fee.
+    auction_bid = "auction_bid"
+    auction_refund = "auction_refund"
+    auction_buy_now = "auction_buy_now"
+    auction_sale = "auction_sale"
 
 
 class GiftKind(str, enum.Enum):
@@ -460,6 +468,11 @@ class NotificationType(str, enum.Enum):
     manager_event = "manager_event"
     weekly_cup_result = "weekly_cup_result"
     match_day_result = "match_day_result"
+    auction_outbid = "auction_outbid"
+    auction_won = "auction_won"
+    auction_sold = "auction_sold"
+    auction_expired = "auction_expired"
+    auction_removed = "auction_removed"
 
 
 class TradeCardSide(str, enum.Enum):

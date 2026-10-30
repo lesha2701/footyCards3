@@ -10,6 +10,7 @@ import { CardGridSkeleton } from "@/components/common/Skeleton";
 import EmptyState from "@/components/common/EmptyState";
 import { IconCollection } from "@/components/icons";
 import { formatGameError } from "@/lib/errors";
+import { collapseCopies, personKey } from "@/lib/person";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import type { UserCard } from "@/types";
 
@@ -87,6 +88,8 @@ export default function TacticoSquadPage() {
   const isPlainDiamond = (c?: UserCard) => c?.player.rarity === "diamond" && !c.player.path_talent_code;
   const diamondCount = selectedIds.filter((id) => isPlainDiamond(cardsById.get(id))).length;
   const pathCount = selectedIds.filter((id) => !!cardsById.get(id)?.player.path_talent_code).length;
+  // One footballer once: another copy / version of a picked player is blocked.
+  const selectedPersons = new Set(selectedIds.map((id) => cardsById.get(id)).filter(Boolean).map((c) => personKey(c!.player)));
 
   const toggle = (card: UserCard) => {
     const id = card.id;
@@ -97,6 +100,11 @@ export default function TacticoSquadPage() {
     }
     if (selectedIds.length >= SQUAD_SIZE) {
       haptic("medium");
+      return;
+    }
+    if (selectedPersons.has(personKey(card.player))) {
+      haptic("medium");
+      setError(`${card.player.display_name} уже в составе — один футболист может быть в нём только раз`);
       return;
     }
     if (card.player.rarity === "legendary" && legendaryCount >= maxLegendary) {
@@ -221,17 +229,23 @@ export default function TacticoSquadPage() {
       )}
 
       <div className="grid grid-cols-3 gap-2.5">
-        {cards.map((card) => {
+        {collapseCopies(cards, selectedIds).map(({ card, count }) => {
           const selected = selectedIds.includes(card.id);
           const rarityBlocked =
             !selected &&
+            (selectedPersons.has(personKey(card.player)) ||
             ((card.player.rarity === "legendary" && legendaryCount >= maxLegendary) ||
               (card.player.rarity === "epic" && epicCount >= maxEpic) ||
               (isPlainDiamond(card) && diamondCount >= maxDiamond) ||
-              (!!card.player.path_talent_code && pathCount >= maxPath));
+              (!!card.player.path_talent_code && pathCount >= maxPath)));
           return (
+            <div key={card.id} className="relative">
+            {count > 1 && (
+              <span className="absolute right-1 top-1 z-10 rounded-full bg-black/80 px-1.5 font-mono text-micro font-bold text-ink-chalk ring-1 ring-white/20">
+                ×{count}
+              </span>
+            )}
             <PlayerCard
-              key={card.id}
               player={card.player}
               pathStage={card.path_stage} prestige={card.prestige} talentOverride={card.talent_override}
               size="sm"
@@ -239,6 +253,7 @@ export default function TacticoSquadPage() {
               dimmed={!selected && (selectedIds.length >= SQUAD_SIZE || rarityBlocked)}
               onClick={() => toggle(card)}
             />
+            </div>
           );
         })}
       </div>

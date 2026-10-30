@@ -4,6 +4,8 @@ import ErrorScreen from "@/components/common/ErrorScreen";
 
 interface Props {
   children: ReactNode;
+  /** Custom fallback (default: the full-screen ErrorScreen). */
+  fallback?: (error: Error, retry: () => void) => ReactNode;
 }
 
 interface State {
@@ -23,6 +25,7 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.error) {
+      if (this.props.fallback) return this.props.fallback(this.state.error, () => this.setState({ error: null }));
       return (
         <ErrorScreen
           message={this.state.error.message || "Произошла непредвиденная ошибка"}

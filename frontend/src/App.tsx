@@ -35,6 +35,7 @@ const AdminTournamentsPage = lazy(() => import("@/admin/pages/AdminTournamentsPa
 const AdminCardCollectionsPage = lazy(() => import("@/admin/pages/AdminCardCollectionsPage"));
 const AdminTasksPage = lazy(() => import("@/admin/pages/AdminTasksPage"));
 const AdminTradesPage = lazy(() => import("@/admin/pages/AdminTradesPage"));
+const AdminAuctionPage = lazy(() => import("@/admin/pages/AdminAuctionPage"));
 const AdminTrophiesPage = lazy(() => import("@/admin/pages/AdminTrophiesPage"));
 const AdminLeaguesPage = lazy(() => import("@/admin/pages/AdminLeaguesPage"));
 const AdminGiftsPage = lazy(() => import("@/admin/pages/AdminGiftsPage"));
@@ -97,11 +98,15 @@ const MagnateRoomPage = lazy(() => import("@/pages/MagnateRoomPage"));
 const StrategoOpenChallengePage = lazy(() => import("@/pages/StrategoOpenChallengePage"));
 const SaboteurGamePage = lazy(() => import("@/pages/SaboteurGamePage"));
 const PenaltyGamePage = lazy(() => import("@/pages/PenaltyGamePage"));
+const Penalty3DPage = lazy(() => import("@/pages/Penalty3DPage"));
 const PenaltyMatchesPage = lazy(() => import("@/pages/PenaltyMatchesPage"));
 const PenaltyMatchPage = lazy(() => import("@/pages/PenaltyMatchPage"));
 const PenaltyOpenChallengePage = lazy(() => import("@/pages/PenaltyOpenChallengePage"));
 const PenaltySearchPage = lazy(() => import("@/pages/PenaltySearchPage"));
 const FreeKickGamePage = lazy(() => import("@/pages/FreeKickGamePage"));
+// 3D prototype (three.js + Rapier): its own lazy chunk, full screen.
+const FreeKick3DPage = lazy(() => import("@/pages/FreeKick3DPage"));
+const FreeKickChallengePage = lazy(() => import("@/pages/FreeKickChallengePage"));
 const HangmanGamePage = lazy(() => import("@/pages/HangmanGamePage"));
 const PairsGamePage = lazy(() => import("@/pages/PairsGamePage"));
 const FutDraftGamePage = lazy(() => import("@/pages/FutDraftGamePage"));
@@ -135,6 +140,10 @@ const TradesPage = lazy(() => import("@/pages/TradesPage"));
 const NewTradePage = lazy(() => import("@/pages/NewTradePage"));
 const TradeFinderPage = lazy(() => import("@/pages/TradeFinderPage"));
 const TradeDetailPage = lazy(() => import("@/pages/TradeDetailPage"));
+const MarketPage = lazy(() => import("@/pages/MarketPage"));
+const NewAuctionLotPage = lazy(() => import("@/pages/NewAuctionLotPage"));
+const AuctionLotPage = lazy(() => import("@/pages/AuctionLotPage"));
+const AgentLicensePage = lazy(() => import("@/pages/AgentLicensePage"));
 const TasksPage = lazy(() => import("@/pages/TasksPage"));
 const UpgradePage = lazy(() => import("@/pages/UpgradePage"));
 const BingoPage = lazy(() => import("@/pages/BingoPage"));
@@ -251,6 +260,7 @@ export default function App() {
         <Route path="card-collections" element={<AdminCardCollectionsPage />} />
         <Route path="tasks" element={<AdminTasksPage />} />
         <Route path="trades" element={<AdminTradesPage />} />
+        <Route path="auction" element={<AdminAuctionPage />} />
         <Route path="trophies" element={<AdminTrophiesPage />} />
         <Route path="leagues" element={<AdminLeaguesPage />} />
         <Route path="gifts" element={<AdminGiftsPage />} />
@@ -318,11 +328,16 @@ export default function App() {
         <Route path="/play/stratego/open/:matchId" element={<StrategoOpenChallengePage />} />
         <Route path="/play/saboteur" element={<SaboteurGamePage />} />
         <Route path="/play/penalty" element={<PenaltyGamePage />} />
+        {/* The bot shootout in 3D (PvP stays on the classic pages). */}
+        <Route path="/play/penalty/3d" element={<Penalty3DPage />} />
         <Route path="/play/penalty/matches" element={<PenaltyMatchesPage />} />
         <Route path="/play/penalty/matches/search" element={<PenaltySearchRoute />} />
         <Route path="/play/penalty/matches/:matchId" element={<PenaltyMatchPage />} />
         <Route path="/play/penalty/open/:matchId" element={<PenaltyOpenChallengePage />} />
-        <Route path="/play/free-kick" element={<FreeKickGamePage />} />
+        {/* «Штрафной удар» is the 3D game now; the classic one is kept, unlinked. */}
+        <Route path="/play/free-kick" element={<FreeKick3DPage />} />
+        <Route path="/play/free-kick/challenge" element={<FreeKickChallengePage />} />
+        <Route path="/play/free-kick-classic" element={<FreeKickGamePage />} />
         <Route path="/play/hangman" element={<HangmanGamePage />} />
         <Route path="/play/blackjack" element={<BlackjackPage />} />
         <Route path="/play/pairs" element={<PairsGamePage />} />
@@ -332,6 +347,10 @@ export default function App() {
         <Route path="/trades/new" element={<NewTradePage />} />
         <Route path="/trades/finder" element={<TradeFinderPage />} />
         <Route path="/trades/:id" element={<TradeDetailPage />} />
+        <Route path="/market" element={<MarketPage />} />
+        <Route path="/market/new" element={<NewAuctionLotPage />} />
+        <Route path="/market/license" element={<AgentLicensePage />} />
+        <Route path="/market/:id" element={<AuctionLotPage />} />
         <Route path="/clubs" element={<ClubsPage />} />
         <Route path="/clubs/create" element={<ClubCreatePage />} />
         <Route path="/clubs/squad" element={<ClubSquadPage />} />
@@ -380,6 +399,7 @@ export default function App() {
         <Route path="/gifts" element={<GiftsPage />} />
         <Route path="/users/:userId" element={<PublicProfilePage />} />
       </Route>
+      <Route path="/play/free-kick-3d" element={<Navigate to="/play/free-kick" replace />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
