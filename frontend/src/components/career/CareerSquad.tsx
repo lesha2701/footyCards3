@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { setCareerLineup, type CareerSeason, type CareerSlot, type CareerSquadCard, type CareerView, type TacticsCatalog } from "@/api/career";
 import { ChemistryDiamonds, ChemistryLinksOverlay, ChemistrySummary } from "@/components/squad/Chemistry";
 import { SquadBuilder } from "@/components/career/Offseason";
-import PitchBackground from "@/components/squad/PitchBackground";
 import { EnergyBar } from "@/components/career/EnergyBar";
 import { PlayerTile } from "@/components/career/PlayerTile";
 import { SquadTacticLayer } from "@/components/career/SquadTacticLayer";
@@ -13,7 +12,7 @@ import { isOut, lineOf, playerInfo } from "@/lib/careerPlayer";
 import { axisValueLabel } from "@/lib/careerTactics";
 import { chemistryGain, computeChemistry } from "@/lib/chemistry";
 import { CATEGORY_POSITIONS, onIdealPosition } from "@/lib/formation";
-import { formationLabel, inRow, pitchRows, PITCH_STYLE } from "@/lib/formationLayout";
+import { formationLabel, inRow, pitchRows } from "@/lib/formationLayout";
 import { haptic } from "@/lib/telegram";
 import type { ChemistryOut } from "@/types";
 
@@ -233,17 +232,13 @@ export default function CareerSquad({ season, catalog = null, onView, onError }:
 
       <div
         ref={pitchRef}
-        className="relative overflow-hidden rounded-[22px] px-1 pb-3 pt-5 ring-1 ring-white/10"
-        style={PITCH_STYLE}
+        className="relative overflow-hidden rounded-[22px] bg-gradient-to-b from-[#17633a] via-[#12512f] to-[#0e4026] px-1 pb-3 pt-7 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
       >
-        <PitchBackground />
-        {season.tactic && (
-          <SquadTacticLayer containerRef={pitchRef} tactic={season.tactic} layoutKey={season.formation}
-            lineLabel={catalog ? axisValueLabel(catalog, "block", season.tactic.block).toLowerCase() : undefined} />
-        )}
+        <SquadTacticLayer containerRef={pitchRef} tactic={season.tactic} layoutKey={season.formation}
+          lineLabel={catalog && season.tactic ? axisValueLabel(catalog, "block", season.tactic.block).toLowerCase() : undefined} />
         <ChemistryLinksOverlay containerRef={pitchRef} chemistry={chemistry} />
         {/* Room between the lines for the tactic drawn under them. */}
-        <div className="relative flex flex-col gap-4">
+        <div className="relative flex flex-col gap-6">
           {rows.map((row) => (
             <div key={row.key} data-row={row.category} className="flex justify-evenly gap-0.5">
               {inRow(row, season.slots).map((slot) => {
