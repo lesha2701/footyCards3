@@ -462,3 +462,118 @@ export async function buyManagerMerch(clubId: number, code: string): Promise<Man
   const { data } = await api.post<ManagerClubCard>(`/manager/clubs/${clubId}/merch/${code}`);
   return data;
 }
+
+// --- «Кабинет президента» (manager_finance) -----------------------------------------------------
+
+export type ManagerDealKind = "sponsor" | "naming" | "tour" | "tv" | "deposit" | "venture" | "farm";
+
+export interface ManagerReportLine {
+  kind: string;
+  label: string;
+  group: "income" | "expense" | "finance";
+  amount: number;
+}
+
+/** One season of the club's money (key = ISO week, "2026-W45"). */
+export interface ManagerReportSeason {
+  key: string;
+  income: number;
+  /** Negative. */
+  expense: number;
+  /** Loans, deposits, the venture fund — money in and out, not profit. */
+  finance: number;
+  profit: number;
+  lines: ManagerReportLine[];
+}
+
+export interface ManagerSponsorOffer {
+  code: string;
+  name: string;
+  emoji: string;
+  brand: string;
+  upfront: number;
+  per_win: number;
+  /** By place, index 0 = champion. */
+  places: number[];
+  rest: number;
+  relegated: number;
+}
+
+export interface ManagerTourOption {
+  code: string;
+  name: string;
+  emoji: string;
+  revenue: number;
+  cost: number;
+  fans: number;
+  fatigue_pct: number;
+  fatigue_rounds: number;
+}
+
+export interface ManagerDeal {
+  id: number;
+  kind: ManagerDealKind;
+  season_key: string;
+  seasons: number;
+  option: string | null;
+  amount: number;
+  result: number;
+  status: "active" | "done" | "lost";
+  data: Record<string, unknown>;
+}
+
+export interface ManagerOffice {
+  enabled: boolean;
+  club_id: number;
+  name: string;
+  division: number;
+  budget: number;
+  grant: number;
+  /** Deals are signed while the club does not play (for `season_key`). */
+  window_open: boolean;
+  season_key: string;
+  current_key: string;
+  value: { total: number; parts: Record<"squad" | "budget" | "invested" | "base" | "fans" | "titles" | "debt", number> };
+  fans: number;
+  levels: Record<"stadium" | "hotel" | "media" | "marketing" | "accounting" | "training" | "shop", number>;
+  report: ManagerReportSeason[];
+  sponsors: { taken: boolean; offers: ManagerSponsorOffer[]; marketing_pct: number };
+  loan: {
+    open: { id: number; principal: number; debt: number; rate_pct: number; seasons_total: number; seasons_left: number; status: "active" | "overdue" } | null;
+    limit: number;
+    min: number;
+    rate_pct: number;
+    base_rate_pct: number;
+    seasons_max: number;
+    penalty_pct: number;
+  };
+  offers: {
+    naming: { taken: boolean; stadium: number; brands: string[]; prices: number[] };
+    tour: { taken: boolean; options: ManagerTourOption[]; hotel_cut_pct: number; media_fans_pct: number };
+    tv: { taken: boolean; estimate: number; discount_pct: number; advance: number };
+    deposit: { taken: boolean; rate_pct: number; min: number; max: number; blocked: boolean };
+    venture: { taken: boolean; win_pct: number; multiplier: number; min: number; max: number; max_pct: number };
+    farm: { taken: boolean; fee: number; loan_cut_pct: number; kid_bonus: number };
+  };
+  deals: ManagerDeal[];
+}
+
+export async function fetchManagerOffice(): Promise<ManagerOffice> {
+  const { data } = await api.get<ManagerOffice>("/manager/office");
+  return data;
+}
+
+export async function signManagerDeal(kind: ManagerDealKind, body: { option?: string; seasons?: number; amount?: number } = {}): Promise<ManagerOffice> {
+  const { data } = await api.post<ManagerOffice>(`/manager/office/deals/${kind}`, body);
+  return data;
+}
+
+export async function takeManagerLoan(amount: number, seasons: number): Promise<ManagerOffice> {
+  const { data } = await api.post<ManagerOffice>("/manager/office/loan", { amount, seasons });
+  return data;
+}
+
+export async function repayManagerLoan(amount?: number): Promise<ManagerOffice> {
+  const { data } = await api.post<ManagerOffice>("/manager/office/loan/repay", amount == null ? {} : { amount });
+  return data;
+}

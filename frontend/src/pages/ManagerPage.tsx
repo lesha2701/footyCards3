@@ -36,6 +36,7 @@ import { IconCoin, IconProfile, IconSearch, IconTrophy } from "@/components/icon
 import ClubCardSheet from "@/components/manager/ClubCardSheet";
 import Emblem, { KitShirt } from "@/components/manager/Emblem";
 import ManagerPitch from "@/components/manager/ManagerPitch";
+import PresidentTab from "@/components/manager/PresidentTab";
 import StyleTab from "@/components/manager/StyleTab";
 import TacticsPanel from "@/components/manager/TacticsPanel";
 import GameHero from "@/components/common/GameHero";
@@ -62,7 +63,7 @@ function Trend({ pct }: { pct: number | null | undefined }) {
   return <span className={`text-micro font-bold ${pct >= 0 ? "text-emerald-400" : "text-red-400"}`}>{trend(pct)}</span>;
 }
 
-type Tab = "club" | "transfers" | "league" | "me" | "style";
+type Tab = "club" | "office" | "transfers" | "league" | "me" | "style";
 
 /** «Менеджер»: your own club — your «Мой игрок» and an academy card always
  * start, other users' players (transfers, loans, contracts for seasons) and
@@ -94,6 +95,7 @@ export default function ManagerPage() {
   const club = data.club;
   const tabs: [Tab, string, boolean][] = [
     ["club", "Мой клуб", !!club && club.incoming.length > 0],
+    ...(club ? [["office", "💼 Кабинет", false] as [Tab, string, boolean]] : []),
     ["transfers", "Трансферы", false],
     ["league", "Лига", false],
     ["me", "Я игрок", data.offers.length > 0],
@@ -124,6 +126,7 @@ export default function ManagerPage() {
       {tab === "league" && <LeagueTab view={data} onError={onError} />}
       {tab === "me" && <MeTab {...props} />}
       {tab === "style" && club && <StyleTab {...props} club={club} />}
+      {tab === "office" && club && <PresidentTab onError={onError} />}
     </div>
   );
 }

@@ -565,6 +565,15 @@ class GameConfigOut(BaseModel):
     manager_place_rewards: list[int] = []
     manager_place_budget: list[int] = []
     manager_slots: list[str] = []
+    # Effective «Кабинет президента» numbers: the stored overrides over manager_finance.DEFAULTS.
+    manager_finance: dict = {}
+
+    @field_validator("manager_finance", mode="after")
+    @classmethod
+    def _finance_with_defaults(cls, value: dict) -> dict:
+        from app.services.manager_finance import DEFAULTS
+
+        return {**DEFAULTS, **{k: v for k, v in (value or {}).items() if k in DEFAULTS}}
     manager_cosmetics: list[dict] = []
     manager_merch: list[dict] = []
     player_career_objective_coins: int = 150
@@ -1361,6 +1370,7 @@ class GameConfigUpdate(BaseModel):
     manager_place_rewards: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
     manager_place_budget: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
     manager_slots: Optional[list[str]] = Field(default=None, min_length=1, max_length=8)
+    manager_finance: Optional[dict] = None
     manager_cosmetics: Optional[list[dict]] = Field(default=None, max_length=200)
     manager_merch: Optional[list[dict]] = Field(default=None, max_length=20)
     player_career_objective_coins: Optional[int] = Field(default=None, ge=0)

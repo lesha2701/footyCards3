@@ -4,6 +4,7 @@ import AdminCareerClubs from "@/admin/pages/AdminCareerClubs";
 
 import { fetchGameConfig, fetchNewbieFunnel, fetchSuspiciousMatches, fetchSuspiciousMemorySessions, updateGameConfig } from "@/admin/api";
 import AdminMagnateBoardEditor from "@/admin/pages/AdminMagnateBoardEditor";
+import ManagerFinanceFields from "@/admin/components/ManagerFinanceFields";
 import RewardBundleEditor from "@/admin/components/RewardBundleEditor";
 import { EMPTY_BUNDLE, type GameConfig } from "@/admin/types";
 
@@ -900,6 +901,7 @@ export default function AdminGamesPage() {
           {jsonField("manager_slots", "Время туров (местное), по порядку")}
           {jsonField("manager_cosmetics", "Магазин стиля клуба: kind = shape | symbol | kit | frame | theme | stadium_name; coins / stars 0 = не продаётся за них, оба 0 = бесплатно")}
           {jsonField("manager_merch", "Мерч для болельщиков: coins сгорают, eur идут в бюджет клуба")}
+          <ManagerFinanceFields value={form.manager_finance} onChange={(next) => setForm({ ...form, manager_finance: next })} />
         </div>
       </section>
 

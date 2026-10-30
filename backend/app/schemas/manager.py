@@ -53,3 +53,18 @@ class ManagerLookIn(BaseModel):
 
 class ManagerStadiumNameIn(BaseModel):
     name: Optional[str] = Field(default=None, max_length=64)
+
+
+class ManagerDealIn(BaseModel):
+    option: Optional[str] = Field(default=None, max_length=32)
+    seasons: int = Field(default=1, ge=1, le=10)
+    amount: Optional[int] = Field(default=None, ge=0)
+
+
+class ManagerLoanIn(BaseModel):
+    amount: int = Field(ge=0)
+    seasons: int = Field(default=1, ge=1, le=10)
+
+
+class ManagerRepayIn(BaseModel):
+    amount: Optional[int] = Field(default=None, ge=0)

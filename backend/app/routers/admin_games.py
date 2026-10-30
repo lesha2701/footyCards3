@@ -48,6 +48,13 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
             updates["club_base_cosmetics"] = club_base_service.validate_cosmetics(updates["club_base_cosmetics"])
         except (ValueError, TypeError) as exc:
             raise ConflictError(f"Клубная база, магазин стадиона: {exc}")
+    if updates.get("manager_finance") is not None:
+        from app.services import manager_finance
+
+        try:
+            updates["manager_finance"] = manager_finance.validate(updates["manager_finance"])
+        except (ValueError, TypeError) as exc:
+            raise ConflictError(f"Кабинет президента: {exc}")
     if updates.get("club_base_caps") is not None:
         if any(v < 0 for v in updates["club_base_caps"].values()):
             raise ConflictError("Клубная база: потолки не могут быть отрицательными")

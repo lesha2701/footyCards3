@@ -70,7 +70,15 @@ Main features:
   /player-tournaments/tactics` shows the next opponent's style); its old
   mentality / playstyle columns are kept but no longer played.
   The style shop / merchandise / «Менеджер Pro» are cosmetics and
-  convenience only (Stars via my_player_service, key "manager:<code>");
+  convenience only (Stars via my_player_service, key "manager:<code>").
+  «💼 Кабинет президента» (`manager_finance.py`, docs/president-office.md):
+  every budget change goes through `manager_finance.book` into
+  `manager_ledger` (report by seasons; `ref` = pay once); the club value;
+  season sponsors, a bank loan (overdue → no transfers) and season deals
+  (naming rights, tour, TV rights, deposit, venture fund, farm club) in
+  `manager_deals` / `manager_loans`, frozen into the league team at the
+  season start and settled in `_settle`. Numbers: GameConfig.manager_finance
+  over `manager_finance.DEFAULTS`;
 - «Мой игрок» extras (`my_player_extras.py`): a weekly «Спонсор» (one of
   three brands of `my_player_sponsors`, goals counted by hooks in the
   training, duels, `player_career_cups.record_match` and the rewarded-game

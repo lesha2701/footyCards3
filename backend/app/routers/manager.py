@@ -9,15 +9,18 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.manager import (
     ManagerClubUpdateIn,
+    ManagerDealIn,
     ManagerFoundIn,
+    ManagerLoanIn,
     ManagerLookIn,
     ManagerMarketIn,
     ManagerNpcIn,
     ManagerOfferIn,
+    ManagerRepayIn,
     ManagerRespondIn,
     ManagerStadiumNameIn,
 )
-from app.services import manager_service, manager_shop
+from app.services import manager_finance, manager_service, manager_shop
 
 router = APIRouter(prefix="/manager", tags=["manager"])
 
@@ -159,3 +162,32 @@ async def get_popular(db: AsyncSession = Depends(get_db), user: User = Depends(g
 async def get_scout(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     """«Менеджер Pro»: the market's biggest value risers."""
     return await manager_shop.scout(db, user)
+
+
+# --- «Кабинет президента» (manager_finance) -------------------------------------------------------
+
+@router.get("/office")
+async def get_office(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """The club's finances: value, the report by seasons, sponsors, the bank,
+    deals for the coming season."""
+    return await manager_finance.view(db, user)
+
+
+@router.post("/office/deals/{kind}")
+async def sign_deal(kind: str, payload: ManagerDealIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """A sponsor, naming rights, a tour, TV rights, a deposit, the venture fund or a farm club
+    for the coming season (one of each kind a season)."""
+    await check_rate_limit(f"manager_office:{user.id}", max_calls=20, window_seconds=60)
+    return await manager_finance.sign(db, user, kind, payload.option, payload.seasons, payload.amount)
+
+
+@router.post("/office/loan")
+async def take_loan(payload: ManagerLoanIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_office:{user.id}", max_calls=20, window_seconds=60)
+    return await manager_finance.take_loan(db, user, payload.amount, payload.seasons)
+
+
+@router.post("/office/loan/repay")
+async def repay_loan(payload: ManagerRepayIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_office:{user.id}", max_calls=20, window_seconds=60)
+    return await manager_finance.repay_loan(db, user, payload.amount)
