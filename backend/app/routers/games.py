@@ -13,6 +13,9 @@ from app.schemas.game import (
     FreeKick3DShotOut,
     FreeKick3DShotRequest,
     FreeKick3DStartOut,
+    FreeKickChallengeOut,
+    FreeKickChallengeShotOut,
+    FreeKickChallengeStartOut,
     FreeKickClaimOut,
     FreeKickKickOut,
     FreeKickKickRequest,
@@ -63,6 +66,7 @@ from app.schemas.fut_draft import (
 )
 from app.schemas.stars import StarsInvoiceCreateOut
 from app.services import (
+    free_kick_challenge_service,
     free_kick_service,
     fut_draft_service,
     game_limits_service,
@@ -220,6 +224,27 @@ async def free_kick_3d_start(payload: FreeKickStartRequest, db: AsyncSession = D
 async def free_kick_3d_shot(session_id: int, payload: FreeKick3DShotRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     await check_rate_limit(f"free_kick_3d_shot:{user.id}", max_calls=30, window_seconds=60)
     return await free_kick_service.shoot_3d(db, user, session_id, payload)
+
+
+# «Испытание дня»: one attempt a day, the same positions for everyone.
+
+@router.get("/free-kick-3d/challenge", response_model=FreeKickChallengeOut)
+async def free_kick_challenge(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await free_kick_challenge_service.overview(db, user)
+
+
+@router.post("/free-kick-3d/challenge/start", response_model=FreeKickChallengeStartOut)
+async def free_kick_challenge_start(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"free_kick_start:{user.id}", max_calls=20, window_seconds=60)
+    return await free_kick_challenge_service.start(db, user)
+
+
+@router.post("/free-kick-3d/challenge/{session_id}/shot", response_model=FreeKickChallengeShotOut)
+async def free_kick_challenge_shot(
+    session_id: int, payload: FreeKick3DShotRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    await check_rate_limit(f"free_kick_3d_shot:{user.id}", max_calls=30, window_seconds=60)
+    return await free_kick_challenge_service.shoot(db, user, session_id, payload)
 
 
 @router.get("/free-kick-3d/refill", response_model=FreeKick3DRefillOut)

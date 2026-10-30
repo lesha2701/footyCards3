@@ -59,6 +59,7 @@ from app.models.club_pack_opening import ClubPackOpening, ClubPackOpeningCard
 from app.models.coach import Coach, CoachBoost
 from app.models.coin_package import CoinPackage
 from app.models.daily_reward import DailyReward
+from app.models.free_kick_challenge import FreeKickChallengeEntry
 from app.models.game import GameSession, MemoryGameRound
 from app.models.game_config import GameConfig
 from app.models.gift import Gift, GiftSet
@@ -199,6 +200,7 @@ __all__ = [
     "CoachBoost",
     "CoinPackage",
     "DailyReward",
+    "FreeKickChallengeEntry",
     "GameSession",
     "MemoryGameRound",
     "GameConfig",

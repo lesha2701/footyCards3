@@ -2,6 +2,9 @@ import { api } from "@/lib/api";
 import type { QuantizedDive, QuantizedSwipe } from "@/lib/freeKick3d/trajectory";
 import type {
   FreeKick3DRefill,
+  FreeKickChallenge,
+  FreeKickChallengeShot,
+  FreeKickChallengeStart,
   Penalty3DResult,
   Penalty3DStartResult,
   StarsInvoiceCreate,
@@ -129,6 +132,28 @@ export async function startFreeKick(userCardId: number): Promise<FreeKickStartRe
 
 export async function kickFreeKick(sessionId: number, elapsedMs: number): Promise<FreeKickKickResult> {
   const { data } = await api.post<FreeKickKickResult>(`/games/free-kick/${sessionId}/kick`, { elapsed_ms: elapsedMs });
+  return data;
+}
+
+/** «Испытание дня»: today's board, the player's attempt (start or pick up)
+ * and a swipe of it — replayed on the server like the series'. */
+export async function fetchFreeKickChallenge(): Promise<FreeKickChallenge> {
+  const { data } = await api.get<FreeKickChallenge>("/games/free-kick-3d/challenge");
+  return data;
+}
+
+export async function startFreeKickChallenge(): Promise<FreeKickChallengeStart> {
+  const { data } = await api.post<FreeKickChallengeStart>("/games/free-kick-3d/challenge/start");
+  return data;
+}
+
+export async function shootFreeKickChallenge(sessionId: number, swipe: QuantizedSwipe): Promise<FreeKickChallengeShot> {
+  const { data } = await api.post<FreeKickChallengeShot>(`/games/free-kick-3d/challenge/${sessionId}/shot`, {
+    dx: swipe.dx,
+    dy: swipe.dy,
+    curve: swipe.curve,
+    duration_ms: swipe.durationMs,
+  });
   return data;
 }
 

@@ -277,6 +277,13 @@ class GameConfig(TimestampMixin, Base):
     free_kick_streak_3_bonus: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     free_kick_streak_5_bonus: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
     free_kick_streak_10_bonus: Mapped[int] = mapped_column(Integer, default=120, nullable=False)
+    # «Испытание дня» (free_kick_challenge_service): kicks, the card rating
+    # every player shoots with (a fair leaderboard), coins per target hit
+    # and the bonus for hitting them all.
+    free_kick_challenge_kicks: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    free_kick_challenge_rating: Mapped[int] = mapped_column(Integer, default=80, nullable=False)
+    free_kick_challenge_coins_per_hit: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    free_kick_challenge_perfect_bonus: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
 
     hourly_game_limit: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
 

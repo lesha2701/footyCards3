@@ -160,6 +160,10 @@ export default function PlayPage() {
       description: "Серия штрафных в 3D: свайпом через стенку и в угол", limitKey: "free_kick",
     },
     {
+      path: "/play/free-kick/challenge", art: artOf("free-kick"), Icon: IconTarget, tint: "bg-sky-500", title: "Испытание дня", group: "quick", time: "2 мин",
+      description: "5 штрафных по мишеням — одна попытка, таблица лидеров дня", noLimit: true,
+    },
+    {
       path: "/play/memory", art: artOf("memory"), Icon: IconBrain, tint: "bg-teal-500", title: "Memory", group: "quick", time: "1 мин",
       description: "Запомни и повтори последовательность",
       stat: `Рекорд ${user?.memory_best_score ?? 0}`, limitKey: "memory",

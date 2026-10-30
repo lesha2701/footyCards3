@@ -1267,6 +1267,10 @@ export default function AdminGamesPage() {
           {field("free_kick_streak_3_bonus", "Серия: 3 гола подряд, монет")}
           {field("free_kick_streak_5_bonus", "Серия: 5 голов подряд, монет")}
           {field("free_kick_streak_10_bonus", "Серия: 10 голов (и каждые 10), монет")}
+          {field("free_kick_challenge_kicks", "Испытание дня: ударов")}
+          {field("free_kick_challenge_rating", "Испытание дня: рейтинг бьющего")}
+          {field("free_kick_challenge_coins_per_hit", "Испытание дня: монет за мишень")}
+          {field("free_kick_challenge_perfect_bonus", "Испытание дня: бонус за все мишени")}
         </div>
         <p className="mb-2 mt-4 text-xs text-slate-500">Классическая версия (шкала) — сохранена, в меню не показывается</p>
         <div className="grid grid-cols-2 gap-3">

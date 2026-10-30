@@ -26,6 +26,7 @@ export function Stadium({ quality, hype }: { quality: Quality; hype: Hype }) {
   return (
     <>
       <Sky />
+      <StandsBase />
       <Suspense fallback={<PlainPitch quality={quality} />}>
         <Pitch quality={quality} />
         <PitchLines quality={quality} />
@@ -34,6 +35,18 @@ export function Stadium({ quality, hype }: { quality: Quality; hype: Hype }) {
         <LedBoards hype={hype} />
       </Suspense>
     </>
+  );
+}
+
+/** The ground beyond the pitch, out to the stands: dark concrete. Without
+ * it a ball flying high (the camera climbing after it) showed the empty
+ * gap between the boards and the panorama as a grey band. */
+function StandsBase() {
+  return (
+    <mesh rotation-x={-Math.PI / 2} position={[0, -0.03, BACKDROP_CENTER_Z]}>
+      <circleGeometry args={[BACKDROP_RADIUS + 4, 64]} />
+      <meshBasicMaterial color="#0a100c" />
+    </mesh>
   );
 }
 

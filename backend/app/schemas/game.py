@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -243,6 +243,70 @@ class FreeKick3DShotOut(BaseModel):
     # Goals in a row after this kick, and the bonus it paid (in coins_this_kick).
     streak: int = 0
     streak_bonus: int = 0
+
+
+class FreeKickChallengeTarget(BaseModel):
+    """A ring on the goal plane (m): centre and radius."""
+    x: float
+    y: float
+    r: float
+
+
+class FreeKickChallengeStartOut(BaseModel):
+    """Today's attempt (new, or picked up mid-way): the positions are
+    `seed` + `rating` as in the series; one target per kick."""
+    session_id: int
+    rating: int
+    total_kicks: int
+    kick: FreeKick3DKickOut
+    targets: list[FreeKickChallengeTarget]
+    score: int
+    hits: int
+    celebration: Optional[str] = None
+    ball: Optional[str] = None
+    boots: Optional[str] = None
+    gloves: Optional[str] = None
+
+
+class FreeKickChallengeShotOut(BaseModel):
+    outcome: str  # goal | save | miss | wall
+    hit: bool
+    points: int
+    score: int
+    hits: int
+    is_finished: bool
+    next_kick: Optional[FreeKick3DKickOut] = None
+    # On the last kick: the coins paid, the balance and the day's place.
+    reward_coins: int = 0
+    new_balance: Optional[int] = None
+    rank: Optional[int] = None
+
+
+class FreeKickChallengeMine(BaseModel):
+    score: int
+    hits: int
+    rank: int
+    finished: bool
+    reward_coins: int
+
+
+class FreeKickChallengeRow(BaseModel):
+    rank: int
+    name: str
+    score: int
+    hits: int
+    finished: bool
+    is_me: bool
+
+
+class FreeKickChallengeOut(BaseModel):
+    day: date
+    total_kicks: int
+    coins_per_hit: int
+    perfect_bonus: int
+    players: int
+    my: Optional[FreeKickChallengeMine] = None
+    top: list[FreeKickChallengeRow]
 
 
 class FreeKick3DRefillOut(BaseModel):

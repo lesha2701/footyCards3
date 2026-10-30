@@ -172,7 +172,7 @@ async def resolve_kick(db: AsyncSession, user: User, session_id: int, elapsed_ms
         raise ConflictError("This game session has already finished")
 
     state = dict(session.server_state)
-    if state.get("mode") == MODE_3D:
+    if state.get("mode") is not None:
         raise ConflictError("This is a 3D free kick session")
     kicks = list(state["kicks"])
     index = state["current_kick_index"]

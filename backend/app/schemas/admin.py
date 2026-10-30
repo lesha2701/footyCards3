@@ -345,6 +345,10 @@ class GameConfigOut(BaseModel):
     free_kick_streak_3_bonus: int
     free_kick_streak_5_bonus: int
     free_kick_streak_10_bonus: int
+    free_kick_challenge_kicks: int
+    free_kick_challenge_rating: int
+    free_kick_challenge_coins_per_hit: int
+    free_kick_challenge_perfect_bonus: int
     hourly_game_limit: int
     matchmaking_enabled: bool
     wheel_enabled: bool
@@ -1102,6 +1106,10 @@ class GameConfigUpdate(BaseModel):
     free_kick_streak_3_bonus: Optional[int] = Field(default=None, ge=0)
     free_kick_streak_5_bonus: Optional[int] = Field(default=None, ge=0)
     free_kick_streak_10_bonus: Optional[int] = Field(default=None, ge=0)
+    free_kick_challenge_kicks: Optional[int] = Field(default=None, ge=1, le=10)
+    free_kick_challenge_rating: Optional[int] = Field(default=None, ge=40, le=99)
+    free_kick_challenge_coins_per_hit: Optional[int] = Field(default=None, ge=0)
+    free_kick_challenge_perfect_bonus: Optional[int] = Field(default=None, ge=0)
     hourly_game_limit: Optional[int] = Field(default=None, ge=1)
     matchmaking_enabled: Optional[bool] = None
     wheel_enabled: Optional[bool] = None

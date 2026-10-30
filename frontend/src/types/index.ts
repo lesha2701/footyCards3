@@ -1690,6 +1690,50 @@ export interface FreeKick3DShotResult {
   streak_bonus: number;
 }
 
+/** «Испытание дня»: a ring on the goal plane (m). */
+export interface FreeKickTarget {
+  x: number;
+  y: number;
+  r: number;
+}
+
+export interface FreeKickChallengeStart {
+  session_id: number;
+  rating: number;
+  total_kicks: number;
+  kick: FreeKick3DKick;
+  targets: FreeKickTarget[];
+  score: number;
+  hits: number;
+  celebration?: string | null;
+  ball?: string | null;
+  boots?: string | null;
+  gloves?: string | null;
+}
+
+export interface FreeKickChallengeShot {
+  outcome: "goal" | "save" | "miss" | "wall";
+  hit: boolean;
+  points: number;
+  score: number;
+  hits: number;
+  is_finished: boolean;
+  next_kick: FreeKick3DKick | null;
+  reward_coins: number;
+  new_balance: number | null;
+  rank: number | null;
+}
+
+export interface FreeKickChallenge {
+  day: string;
+  total_kicks: number;
+  coins_per_hit: number;
+  perfect_bonus: number;
+  players: number;
+  my: { score: number; hits: number; rank: number; finished: boolean; reward_coins: number } | null;
+  top: { rank: number; name: string; score: number; hits: number; finished: boolean; is_me: boolean }[];
+}
+
 /** Buying another series without waiting for the hour: the day's first
  * refill costs coins, the following ones Telegram Stars. */
 export interface FreeKick3DRefill {

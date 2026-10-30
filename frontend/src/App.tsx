@@ -104,6 +104,7 @@ const PenaltySearchPage = lazy(() => import("@/pages/PenaltySearchPage"));
 const FreeKickGamePage = lazy(() => import("@/pages/FreeKickGamePage"));
 // 3D prototype (three.js + Rapier): its own lazy chunk, full screen.
 const FreeKick3DPage = lazy(() => import("@/pages/FreeKick3DPage"));
+const FreeKickChallengePage = lazy(() => import("@/pages/FreeKickChallengePage"));
 const HangmanGamePage = lazy(() => import("@/pages/HangmanGamePage"));
 const PairsGamePage = lazy(() => import("@/pages/PairsGamePage"));
 const FutDraftGamePage = lazy(() => import("@/pages/FutDraftGamePage"));
@@ -325,6 +326,7 @@ export default function App() {
         <Route path="/play/penalty/open/:matchId" element={<PenaltyOpenChallengePage />} />
         {/* «Штрафной удар» is the 3D game now; the classic one is kept, unlinked. */}
         <Route path="/play/free-kick" element={<FreeKick3DPage />} />
+        <Route path="/play/free-kick/challenge" element={<FreeKickChallengePage />} />
         <Route path="/play/free-kick-classic" element={<FreeKickGamePage />} />
         <Route path="/play/hangman" element={<HangmanGamePage />} />
         <Route path="/play/blackjack" element={<BlackjackPage />} />

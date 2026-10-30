@@ -22,6 +22,7 @@ import {
   type ShotSetup,
   type ShotTrajectory,
 } from "@/lib/freeKick3d/trajectory";
+import type { FreeKickTarget } from "@/types";
 
 import Confetti from "./Confetti";
 import { KICK } from "./kickStyles";
@@ -55,6 +56,10 @@ type Props = {
   /** The player's «Мой игрок» gear (lib/gameGear.ts codes): the ball, the
    * kicker's boots, the keeper's gloves — null/absent for the defaults. */
   gear?: SceneGear;
+  /** «Испытание дня»: the ring to aim for on the goal plane, and whether
+   * the shot went in it (null until the server says). */
+  target?: FreeKickTarget | null;
+  targetHit?: boolean | null;
   /** Current shot time, written every frame (−1 while waiting): the page
    * times the player's dive against the strike with it. */
   shotClockRef?: MutableRefObject<number>;
@@ -87,6 +92,8 @@ export default function FreeKickScene3D({
   kickerKit = "home",
   kickerCelebration = "celebrate",
   gear = NO_GEAR,
+  target = null,
+  targetHit = null,
   shotClockRef,
 }: Props) {
   // Start pretty; the first sustained frame drop switches to the light
@@ -124,6 +131,8 @@ export default function FreeKickScene3D({
         kickerKit={kickerKit}
         kickerCelebration={kickerCelebration}
         gear={gear}
+        target={target}
+        targetHit={targetHit}
         shotClockRef={shotClockRef}
       />
       <FpsMeter fpsRef={fpsRef} />
@@ -181,6 +190,8 @@ function ShotWorld({
   kickerKit = "home",
   kickerCelebration = "celebrate",
   gear = NO_GEAR,
+  target = null,
+  targetHit = null,
   shotClockRef,
 }: Omit<Props, "fpsRef"> & { quality: Quality; hype: Hype }) {
   const stage = useRef<Stage>({
@@ -279,9 +290,45 @@ function ShotWorld({
         />
       </Suspense>
       <Ball setup={setup} shot={shot} stage={stage} quality={quality} skin={gear.ball} />
+      {target && <TargetRing target={target} hit={targetHit} />}
       <CameraRig setup={setup} shot={shot} stage={stage} />
       <Confetti burstId={confetti} />
     </>
+  );
+}
+
+/** «Испытание дня»: a glowing ring on the goal plane (just in front of
+ * the line) that pulses while you aim — it's small from 25 m — gold once
+ * the shot has gone in it. */
+function TargetRing({ target, hit }: { target: FreeKickTarget; hit: boolean | null }) {
+  const color = hit ? "#facc15" : hit === false ? "#94a3b8" : "#c6e63a";
+  const pulse = useRef<THREE.Mesh>(null);
+  useFrame((state) => {
+    const m = pulse.current;
+    if (!m) return;
+    const k = (state.clock.getElapsedTime() % 1.2) / 1.2;
+    m.scale.setScalar(1 + k * 0.6);
+    (m.material as THREE.MeshBasicMaterial).opacity = hit === null ? 0.7 * (1 - k) : 0;
+  });
+  return (
+    <group position={[target.x, target.y, 0.02]}>
+      <mesh ref={pulse}>
+        <ringGeometry args={[target.r - 0.06, target.r, 48]} />
+        <meshBasicMaterial color={color} transparent opacity={0.7} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh>
+        <ringGeometry args={[target.r - 0.14, target.r, 48]} />
+        <meshBasicMaterial color={color} transparent opacity={0.95} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh>
+        <ringGeometry args={[target.r * 0.45 - 0.05, target.r * 0.45, 32]} />
+        <meshBasicMaterial color={color} transparent opacity={0.8} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh>
+        <circleGeometry args={[target.r, 48]} />
+        <meshBasicMaterial color={color} transparent opacity={0.14} depthWrite={false} toneMapped={false} />
+      </mesh>
+    </group>
   );
 }
 
