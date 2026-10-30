@@ -198,7 +198,10 @@ describe("CareerPage", () => {
     expect(screen.getByRole("tab", { name: "Подготовка" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("1 место")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Календарь" }));
+    // «Календарь»: table, rounds and (with a cup) the cup, one at a time.
+    expect(screen.getByRole("tab", { name: "Таблица" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getAllByText("Бот 2").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("tab", { name: "Кубок" })).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "Профиль" }));
     expect(screen.getByText("Покинуть сезон")).toBeInTheDocument();
   });
@@ -207,6 +210,7 @@ describe("CareerPage", () => {
     fetchCareer.mockResolvedValue({ ...baseView, season: activeSeason });
     renderPage();
     fireEvent.click(await screen.findByRole("tab", { name: "Календарь" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Расписание" }));
     expect(screen.getByText("жёлтые: Иванов")).toBeInTheDocument();
   });
 

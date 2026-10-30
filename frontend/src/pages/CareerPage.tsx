@@ -30,7 +30,7 @@ import { OffseasonPanel, SeasonSummaryView } from "@/components/career/Offseason
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import {
-  IconCalendar, IconChevronRight, IconClock, IconCoin, IconProfile, IconShirt, IconTactics, IconTarget, IconTrophy, IconUsers, IconWhistle,
+  IconCalendar, IconChart, IconChevronRight, IconClock, IconCoin, IconProfile, IconShirt, IconTactics, IconTarget, IconTrophy, IconUsers, IconWhistle,
 } from "@/components/icons";
 import GameHero from "@/components/common/GameHero";
 import { EnergyBar } from "@/components/career/EnergyBar";
@@ -41,6 +41,7 @@ import { haptic } from "@/lib/telegram";
 
 type Tab = "prep" | "calendar" | "profile";
 type PrepTab = "tactic" | "squad" | "training";
+type CalendarTab = "table" | "rounds" | "cup";
 
 /** Round times in the viewer's own time zone (the server schedules them in
  * its own one, e.g. 12:00/19:00 Moscow). */
@@ -302,6 +303,7 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
   const hasTactics = (season.tactics_version ?? 0) > 0;
   const [tab, setTab] = useState<Tab>("prep");
   const [prep, setPrep] = useState<PrepTab>(season.scouting && hasTactics ? "tactic" : "squad");
+  const [cal, setCal] = useState<CalendarTab>("table");
   const [confirmLeave, setConfirmLeave] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -429,9 +431,25 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
 
       {tab === "calendar" && (
         <>
-          <section className="rounded-3xl bg-bg-surface p-4"><StandingsTable season={season} /></section>
-          <Calendar season={season} />
-          {season.cup && <CupCard season={season} onView={onView} onError={onError} />}
+          <div className={`grid ${season.cup ? "grid-cols-3" : "grid-cols-2"} gap-1 rounded-2xl bg-bg-base/40 p-1`} role="tablist" aria-label="Календарь">
+            {([
+              ["table", "Таблица", IconChart], ["rounds", "Расписание", IconCalendar],
+              ...(season.cup ? [["cup", "Кубок", IconTrophy] as const] : []),
+            ] as const).map(([id, label, Icon]) => (
+              <button
+                key={id}
+                role="tab"
+                aria-selected={cal === id}
+                onClick={() => setCal(id)}
+                className={`flex items-center justify-center gap-1 rounded-xl py-1.5 text-caption font-semibold ${cal === id ? "bg-bg-raised text-ink-chalk" : "text-ink-mist"}`}
+              >
+                <Icon size={14} aria-hidden="true" />{label}
+              </button>
+            ))}
+          </div>
+          {cal === "table" && <section className="rounded-3xl bg-bg-surface p-4"><StandingsTable season={season} /></section>}
+          {cal === "rounds" && <Calendar season={season} />}
+          {cal === "cup" && season.cup && <CupCard season={season} onView={onView} onError={onError} />}
         </>
       )}
 
