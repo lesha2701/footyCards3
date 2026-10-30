@@ -15,6 +15,7 @@ import { useUiStore } from "@/store/uiStore";
 import { getTelegramWebApp, initTelegramApp } from "@/lib/telegram";
 import { ApiRequestError } from "@/lib/api";
 import { hasSeenOnboarding, markOnboardingSeen } from "@/lib/onboarding";
+import { startSession } from "@/lib/startSession";
 import { useTelegramBackButton } from "@/lib/useTelegramBackButton";
 
 // Every screen except the landing page is split into its own chunk and
@@ -168,6 +169,8 @@ export default function App() {
   const syncTheme = useUiStore((s) => s.syncTheme);
   const [error, setError] = useState<string | null>(null);
   const [onboardingSeen, setOnboardingSeen] = useState(true);
+  // Bumped by «Повторить» on the error screen: starts the session again.
+  const [attempt, setAttempt] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -182,7 +185,8 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     const referralCode = new URLSearchParams(window.location.search).get("ref") ?? undefined;
-    createSession(referralCode)
+    setError(null);
+    startSession((timeoutMs) => createSession(referralCode, timeoutMs))
       .then((res) => {
         if (cancelled) return;
         setUser(res.user);
@@ -198,7 +202,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [setUser, setAdminToken, setReady]);
+  }, [setUser, setAdminToken, setReady, attempt]);
 
   useEffect(() => {
     if (!isReady || !user) return;
@@ -214,7 +218,7 @@ export default function App() {
       });
   }, [isReady, user, navigate]);
 
-  if (error) return <ErrorScreen message={error} />;
+  if (error) return <ErrorScreen message={error} onRetry={() => setAttempt((n) => n + 1)} />;
   if (!isReady) return <LoadingScreen />;
 
   if (user && !onboardingSeen) {

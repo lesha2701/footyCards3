@@ -1,3 +1,5 @@
+import asyncio
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI
@@ -10,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.database import get_db
 from app.core.exceptions import register_exception_handlers
+from app.core.slow_log import SlowRequestMiddleware, watch_event_loop
 from app.routers import (
     admin_badges,
     admin_bingo,
@@ -120,6 +123,16 @@ for rarity in ("common", "rare", "epic", "legendary", "placeholder", "packs"):
 
 _docs_enabled = settings.environment != "production"
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    watcher = asyncio.create_task(watch_event_loop())
+    try:
+        yield
+    finally:
+        watcher.cancel()
+
+
 app = FastAPI(
     title="VICTOR FC API",
     version="1.0.0",
@@ -127,6 +140,7 @@ app = FastAPI(
     docs_url="/api/docs" if _docs_enabled else None,
     redoc_url="/api/redoc" if _docs_enabled else None,
     openapi_url="/api/openapi.json" if _docs_enabled else None,
+    lifespan=lifespan,
 )
 
 register_exception_handlers(app)
@@ -138,6 +152,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(SlowRequestMiddleware)
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
