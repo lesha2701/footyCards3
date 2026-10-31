@@ -6,9 +6,10 @@ coins. A human sleeps; a script doesn't. Two rules (GameConfig):
   anti_bot_max_streak_hours in one stretch, games stop paying coins and
   moving rating (User.game_rewards_blocked) until the player has rested
   anti_bot_rest_hours. A human who plays all day and sleeps never hits it.
-- ranked_daily_limit: Card Arena / Тактико matches a day that move points /
-  rating; later ones still play and pay, they just don't rank — the top is
-  about skill, not hours online.
+- ranked_daily_limit: matches a day, per rating mode (Card Arena, Тактико,
+  Мордобой, Стратего, Контратака, Пенальти), that move points / rating; later
+  ones still play and pay, they just don't rank — the top is about skill,
+  not hours online.
 
 Tracking is written at most every TRACK_EVERY so a burst of requests costs
 one UPDATE.
@@ -16,11 +17,11 @@ one UPDATE.
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
-from app.core.timeutil import app_timezone, ensure_aware, local_today
+from app.core.timeutil import ensure_aware, local_today
 from app.models.game_config import GameConfig
 from app.models.user import User
 
@@ -47,20 +48,25 @@ def next_state(user: User, config: GameConfig, now: datetime) -> Optional[dict]:
     last = ensure_aware(user.last_play_at) if user.last_play_at else None
     started = ensure_aware(user.play_streak_started_at) if user.play_streak_started_at else None
     resting = user.rest_required_until is not None and ensure_aware(user.rest_required_until) > now
-    if last is not None and now - last < TRACK_EVERY and not resting:
+    from app.services import presence_service
+
+    if last is not None and now - last < TRACK_EVERY and not resting and not presence_service.due(user, config, now):
         return None
-    if started is None or last is None or now - last >= rest:
+    new_stretch = started is None or last is None or now - last >= rest
+    if new_stretch:
         started = now  # rested long enough: a new stretch
     until = user.rest_required_until
-    if now - started >= max_streak:
+    if config.anti_bot_enabled and now - started >= max_streak:
         until = now + rest  # still at it: the rest starts from the last action
-    return {"play_streak_started_at": started, "last_play_at": now, "rest_required_until": until}
+    values = {"play_streak_started_at": started, "last_play_at": now, "rest_required_until": until}
+    values.update(presence_service.next_values(user, config, now, new_stretch))
+    return values
 
 
 async def track_play(db: AsyncSession, user: User) -> None:
     """Called for every game action (core/dependencies.get_current_user)."""
     config = await db.get(GameConfig, 1)  # identity map; never creates the row
-    if config is None or not config.anti_bot_enabled:
+    if config is None or not (config.anti_bot_enabled or config.presence_check_enabled):
         return
     values = next_state(user, config, datetime.now(timezone.utc))
     if values is None:
@@ -71,38 +77,25 @@ async def track_play(db: AsyncSession, user: User) -> None:
         set_committed_value(user, key, value)
 
 
-def _today_start_utc() -> datetime:
-    return datetime.combine(local_today(), datetime.min.time(), tzinfo=app_timezone()).astimezone(timezone.utc)
+RANKED_MODES = ("arena", "tactico", "mordoboi", "stratego", "kontra", "penalty")
 
 
-async def ranked_allowed(db: AsyncSession, user: User, config: GameConfig, mode: str) -> bool:
-    """Whether a match finished now may move this player's points / rating:
-    not resting / blocked, and under ranked_daily_limit matches today in
-    `mode` ("arena" counts today's Card Arena matches including this one,
-    "tactico" today's finished Тактико matches before this one)."""
+def take_ranked_slot(user: User, config: GameConfig, mode: str) -> bool:
+    """Whether a match this (row-locked) player finishes now may move their
+    rating in `mode`; uses up one of today's ranked_daily_limit slots if so.
+    Never while resting / blocked. The caller commits."""
     if user.game_rewards_blocked:
         return False
-    limit = config.ranked_daily_limit
-    if limit <= 0:
-        return True
-    since = _today_start_utc()
-    if mode == "arena":
-        from app.models.match import Match
-
-        played = (await db.execute(
-            select(func.count(Match.id)).where(Match.user_id == user.id, Match.created_at >= since)
-        )).scalar_one()
-        return played <= limit
-    from app.models.enums import TacticoMatchStatus
-    from app.models.tactico import TacticoMatch
-
-    played = (await db.execute(
-        select(func.count(TacticoMatch.id)).where(
-            or_(TacticoMatch.user_id == user.id, TacticoMatch.opponent_user_id == user.id),
-            TacticoMatch.status == TacticoMatchStatus.finished, TacticoMatch.resolved_at >= since,
-        )
-    )).scalar_one()
-    return played < limit
+    today = local_today().isoformat()
+    data = dict(user.ranked_today or {})
+    if data.get("day") != today:
+        data = {"day": today}
+    used = int(data.get(mode, 0))
+    if config.ranked_daily_limit > 0 and used >= config.ranked_daily_limit:
+        return False
+    data[mode] = used + 1
+    user.ranked_today = data
+    return True
 
 
 def status(user: User, config: GameConfig) -> dict:

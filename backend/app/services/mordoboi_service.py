@@ -59,6 +59,7 @@ from app.schemas.mordoboi import (
     MordoboiStatsOut,
 )
 from app.schemas.ranking import RankingMetric
+from app.services import anti_bot_service
 from app.services import mordoboi_brutality as brutality
 from app.services import mordoboi_legends as legends
 from app.services import mordoboi_look as look_service
@@ -836,6 +837,8 @@ async def _finish_match(
             delta = _BASE_RATING_DELTA[side_result[side]] * multiplier
             if easy and delta > 1:
                 delta = 1  # the easy bot is no rating farm (same rule as Stratego)
+        if not anti_bot_service.take_ranked_slot(locked[uid], config, "mordoboi"):
+            delta = 0  # daily ranked limit / resting (anti_bot_service)
         locked[uid].mordoboi_rating = max(0, locked[uid].mordoboi_rating + delta)
         db.add(locked[uid])
         if side == "user":

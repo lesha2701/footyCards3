@@ -34,12 +34,20 @@ class User(TimestampMixin, Base):
     play_streak_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_play_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     rest_required_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Ranked matches played today per rating mode, {"day": iso date, mode: n}
+    # (anti_bot_service.take_ranked_slot, GameConfig.ranked_daily_limit).
+    ranked_today: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # «Ты здесь?» (services/presence_service.py): when the next check is due
+    # and the open one ({token, answer, options, wrong}; answer never sent out).
+    presence_due_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    presence_challenge: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     @hybrid_property
     def game_rewards_blocked(self) -> bool:
-        """No game rewards / rating: the admin flag, or resting after a too
-        long stretch of play (a script that never sleeps)."""
-        if self.game_rewards_blocked_flag:
+        """No game rewards / rating: the admin flag, an unanswered «Ты здесь?»
+        check, or resting after a too long stretch of play (a script that
+        never sleeps)."""
+        if self.game_rewards_blocked_flag or self.presence_challenge:
             return True
         until = self.rest_required_until
         if until is None:

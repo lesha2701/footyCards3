@@ -57,6 +57,7 @@ from app.schemas.stratego import (
     StrategoSquadSlotOut,
     StrategoStatsOut,
 )
+from app.services import anti_bot_service
 from app.services import my_player_service, ranking_service, stake_guard_service
 from app.services import stratego_engine as engine
 from app.services import stratego_puzzles
@@ -1107,6 +1108,8 @@ async def _finish_match(
         delta = _BASE_RATING_DELTA[side_result[side]] * multiplier
         if state.get("difficulty") == "easy" and delta > 1:
             delta = 1  # the easy bot is no rating farm (same rule as Tactico)
+        if not anti_bot_service.take_ranked_slot(locked[uid], config, "stratego"):
+            delta = 0  # daily ranked limit / resting (anti_bot_service)
         locked[uid].stratego_rating = max(0, locked[uid].stratego_rating + delta)
         db.add(locked[uid])
         if side == "user":

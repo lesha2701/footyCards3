@@ -1254,6 +1254,12 @@ class GameConfig(TimestampMixin, Base):
     anti_bot_max_streak_hours: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
     anti_bot_rest_hours: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
     ranked_daily_limit: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
+    # «Ты здесь?» (services/presence_service.py): every N minutes of continuous
+    # play; max wrong answers in a row before rewards pause for lock_minutes.
+    presence_check_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    presence_check_minutes: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    presence_check_max_wrong: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    presence_check_lock_minutes: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
     # Valuable cards (legendary, diamond, «Академия», limited —
     # card_value_service) may be given in a trade only by a «проверенный
     # аккаунт»: this old, active on this many days, and with at least this

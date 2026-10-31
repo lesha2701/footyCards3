@@ -915,10 +915,10 @@ async def _finish_match(
 
     # Daily ranked limit / resting (anti_bot_service): the match still counts
     # as played, it just doesn't move the rating.
-    if not await anti_bot_service.ranked_allowed(db, locked_user, config, "tactico"):
+    if not anti_bot_service.take_ranked_slot(locked_user, config, "tactico"):
         user_delta = 0
         match.rating_delta = 0
-    if locked_opponent is not None and not await anti_bot_service.ranked_allowed(db, locked_opponent, config, "tactico"):
+    if locked_opponent is not None and not anti_bot_service.take_ranked_slot(locked_opponent, config, "tactico"):
         opponent_delta = 0
         state["opponent_rating_delta"] = 0
     locked_user.tactics_rating = max(0, locked_user.tactics_rating + user_delta)

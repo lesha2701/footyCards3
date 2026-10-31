@@ -864,6 +864,10 @@ export interface GameConfig {
   anti_bot_max_streak_hours: number;
   anti_bot_rest_hours: number;
   ranked_daily_limit: number;
+  presence_check_enabled: boolean;
+  presence_check_minutes: number;
+  presence_check_max_wrong: number;
+  presence_check_lock_minutes: number;
   trade_verified_min_age_days: number;
   trade_verified_min_active_days: number;
   trade_verified_min_stars: number;

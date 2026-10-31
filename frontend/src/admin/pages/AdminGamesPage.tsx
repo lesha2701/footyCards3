@@ -207,6 +207,7 @@ export default function AdminGamesPage() {
       | "arena_cup_enabled"
       | "trade_coins_enabled"
       | "anti_bot_enabled"
+      | "presence_check_enabled"
       | "trade_cards_both_sides"
       | "club_war_enabled"
       | "blackjack_enabled"
@@ -1080,7 +1081,17 @@ export default function AdminGamesPage() {
         <div className="grid grid-cols-2 gap-3">
           {field("anti_bot_max_streak_hours", "Часов игры без перерыва до «усталости»")}
           {field("anti_bot_rest_hours", "Нужный отдых, часов")}
-          {field("ranked_daily_limit", "Рейтинговых матчей в день (Арена, Тактико)")}
+          {field("ranked_daily_limit", "Рейтинговых матчей в день на режим (Арена, Тактико, Мордобой, Стратего, Контратака, Пенальти)")}
+        </div>
+        <p className="mb-2 mt-4 text-xs text-slate-500">
+          «Ты здесь?»: после каждых N минут непрерывной игры игрок нажимает число с картинки. Пока не ответит, игры не
+          приносят монеты и рейтинг. После стольких ошибок подряд награды встают на паузу.
+        </p>
+        <div className="mb-3">{toggle("presence_check_enabled", "Включить проверку «Ты здесь?»")}</div>
+        <div className="grid grid-cols-2 gap-3">
+          {field("presence_check_minutes", "Каждые N минут игры")}
+          {field("presence_check_max_wrong", "Ошибок подряд до паузы")}
+          {field("presence_check_lock_minutes", "Пауза наград после ошибок, мин")}
         </div>
       </section>
 

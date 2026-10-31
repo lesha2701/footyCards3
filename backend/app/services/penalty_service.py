@@ -25,6 +25,7 @@ from app.schemas.game import (
     PenaltyStatsOut,
 )
 from app.schemas.ranking import RankingMetric
+from app.services import anti_bot_service
 from app.services import free_kick_3d_engine as engine
 from app.services import league_service, my_player_service, ranking_service, task_service
 from app.services.game_config_service import get_config
@@ -149,6 +150,8 @@ async def _apply_finish(db: AsyncSession, user: User, session: GameSession, stat
     }[result]
     rating_delta = 3 if result == "win" else -1
     locked_user = await lock_user_for_update(db, user.id)
+    if not anti_bot_service.take_ranked_slot(locked_user, config, "penalty"):
+        rating_delta = 0  # daily ranked limit / resting (anti_bot_service)
     locked_user.penalty_rating = max(0, locked_user.penalty_rating + rating_delta)
     db.add(locked_user)
     await league_service.sync_league_rewards_for_user(db, locked_user)

@@ -7,14 +7,15 @@ import pytest
 
 import app.core.rate_limit as rate_limit_module
 from app.models.game import GameSession
-from app.models.enums import GameSessionStatus, GameType, MatchDifficulty
+from app.models.enums import GameSessionStatus, GameType
 from app.models.user import User
 from app.services import admin_antifraud_service, anti_bot_service
 from app.services.game_config_service import get_config
 from tests.factories import get_user_by_telegram_id
 from tests.utils import telegram_headers
 
-CONFIG = SimpleNamespace(anti_bot_enabled=True, anti_bot_max_streak_hours=20, anti_bot_rest_hours=4, ranked_daily_limit=40)
+CONFIG = SimpleNamespace(anti_bot_enabled=True, anti_bot_max_streak_hours=20, anti_bot_rest_hours=4, ranked_daily_limit=40,
+                         presence_check_enabled=False)
 T0 = datetime(2026, 10, 30, 8, 0, tzinfo=timezone.utc)
 
 
@@ -100,24 +101,20 @@ async def test_game_post_tracks_play_and_limits_show_the_rest(client, db_session
     assert limits["rest_until"] is not None and limits["rest_hours"] == 4
 
 
-async def test_ranked_limit_for_arena(db_session):
-    from app.models.match import Match
-
+async def test_ranked_limit_per_mode(db_session):
     user = User(telegram_id=990101, username="r", balance=0)
     db_session.add(user)
     await db_session.commit()
     config = await get_config(db_session)
     config.ranked_daily_limit = 2
-    await db_session.commit()
-    for _ in range(2):
-        db_session.add(Match(user_id=user.id, opponent_name="bot", difficulty=MatchDifficulty.easy, user_team_strength=70,
-                     opponent_team_strength=70, user_score=1, opponent_score=0))
-    await db_session.commit()
-    assert await anti_bot_service.ranked_allowed(db_session, user, config, "arena") is True  # 2 of 2 (the current one included)
-    db_session.add(Match(user_id=user.id, opponent_name="bot", difficulty=MatchDifficulty.easy, user_team_strength=70,
-                     opponent_team_strength=70, user_score=1, opponent_score=0))
-    await db_session.commit()
-    assert await anti_bot_service.ranked_allowed(db_session, user, config, "arena") is False
+    assert anti_bot_service.take_ranked_slot(user, config, "arena") is True
+    assert anti_bot_service.take_ranked_slot(user, config, "arena") is True
+    assert anti_bot_service.take_ranked_slot(user, config, "arena") is False  # the 3rd today doesn't rank
+    assert anti_bot_service.take_ranked_slot(user, config, "mordoboi") is True  # every mode counts on its own
+    user.ranked_today = {"day": "2000-01-01", "arena": 99}  # yesterday's count is forgotten
+    assert anti_bot_service.take_ranked_slot(user, config, "arena") is True
+    user.rest_required_until = datetime.now(timezone.utc) + timedelta(hours=1)
+    assert anti_bot_service.take_ranked_slot(user, config, "kontra") is False  # resting
 
 
 async def test_bot_suspects_list(db_session):
@@ -146,3 +143,56 @@ async def test_bot_suspects_list(db_session):
     await db_session.commit()
     await db_session.refresh(bot)
     assert changed == [bot.id] and bot.game_rewards_blocked_flag is True
+
+
+# --- «Ты здесь?» -------------------------------------------------------------------------------
+
+
+async def _presence_user(client, db_session, bot_token, telegram_id):
+    headers = telegram_headers(telegram_id, bot_token)
+    assert (await client.post("/api/v1/auth/session", headers=headers)).status_code == 200
+    await get_config(db_session)
+    return await get_user_by_telegram_id(db_session, telegram_id), headers
+
+
+async def test_presence_check_after_an_hour_of_play_and_a_right_answer(client, db_session, bot_token):
+    user, headers = await _presence_user(client, db_session, bot_token, 990301)
+    await client.post("/api/v1/games/memory/start", headers=headers, json={})
+    await db_session.refresh(user)
+    assert user.presence_due_at is not None and user.presence_challenge is None
+
+    # An hour later (and past the 5-minute write throttle) the check appears.
+    user.presence_due_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+    user.last_play_at = datetime.now(timezone.utc) - timedelta(minutes=10)
+    await db_session.commit()
+    await client.post("/api/v1/games/memory/start", headers=headers, json={})
+    challenge = (await client.get("/api/v1/presence", headers=headers)).json()
+    assert challenge and len(challenge["options"]) == 4 and "answer" not in challenge
+    await db_session.refresh(user)
+    assert user.game_rewards_blocked is True
+
+    image = await client.get(challenge["image_url"].removeprefix("http://test"), headers=headers)
+    assert image.status_code == 200 and image.headers["content-type"] == "image/png"
+
+    right = user.presence_challenge["answer"]
+    resp = (await client.post("/api/v1/presence/answer", headers=headers, json={"token": challenge["token"], "value": right})).json()
+    assert resp["ok"] is True
+    await db_session.refresh(user)
+    assert user.presence_challenge is None and user.game_rewards_blocked is False
+
+
+async def test_three_wrong_answers_pause_rewards(client, db_session, bot_token):
+    user, headers = await _presence_user(client, db_session, bot_token, 990311)
+    from app.services.presence_service import _new_challenge
+
+    user.presence_challenge = _new_challenge()
+    await db_session.commit()
+    for attempt in range(3):
+        await db_session.refresh(user)
+        c = user.presence_challenge
+        wrong = next(v for v in c["options"] if v != c["answer"])
+        resp = (await client.post("/api/v1/presence/answer", headers=headers, json={"token": c["token"], "value": wrong})).json()
+        assert resp["ok"] is False
+    assert resp.get("locked_until")
+    await db_session.refresh(user)
+    assert user.presence_challenge is None and user.game_rewards_blocked is True  # resting
