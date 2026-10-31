@@ -20,6 +20,7 @@ also pings `/internal/clubs/league/settle` at its career slots. The
 `club_league_weeks` primary key makes a second, concurrent settlement of the
 same week roll back instead of paying twice.
 """
+import time as _time
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
@@ -166,6 +167,30 @@ async def compute_table(
         club.points += points
         club.members[uid] = points
     return sorted((c for c in clubs.values() if c.points > 0), key=lambda c: (-c.points, c.club_id))
+
+
+# The screen's table of the running week, per (week, division, scoring):
+# every open of «Лига клубов» recomputed the whole week's activity of every
+# club (a heavy union over all game tables) — a minute-old table is fine to
+# show. Settlement never reads it (it computes the closed week directly).
+TABLE_CACHE_S = 60.0
+_table_cache: dict[tuple, tuple[float, list[_ClubTally]]] = {}
+
+
+async def _shown_table(db: AsyncSession, week_start: date, config, division: int) -> list[_ClubTally]:
+    key = (
+        week_start, division, config.club_league_points_game, config.club_league_points_pack,
+        config.club_league_points_task, config.club_league_member_weekly_cap,
+    )
+    hit = _table_cache.get(key)
+    now = _time.monotonic()
+    if hit and now - hit[0] < TABLE_CACHE_S:
+        return hit[1]
+    table = await compute_table(db, week_start, config, division=division)
+    if len(_table_cache) > 64:
+        _table_cache.clear()
+    _table_cache[key] = (now, table)
+    return table
 
 
 def _reward_for(rank: int, config, division: int = 0) -> int:
@@ -362,7 +387,7 @@ async def get_league(db: AsyncSession, user: User) -> ClubLeagueOut:
     my_club = await db.get(Club, my_club_id) if my_club_id else None
     division = my_club.league_division if my_club else 0
 
-    table = await compute_table(db, week, config, division=division) if config.club_league_enabled else []
+    table = await _shown_table(db, week, config, division) if config.club_league_enabled else []
     ranked = [(rank, row) for rank, row in enumerate(table, start=1)]
     shown = [(rank, row.club_id, row.points, _reward_for(rank, config, division)) for rank, row in ranked[:TABLE_SIZE]]
     mine = next(((rank, row) for rank, row in ranked if row.club_id == my_club_id), None)

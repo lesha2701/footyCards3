@@ -154,3 +154,27 @@ async def test_league_disabled_does_not_settle(db_session):
 async def test_internal_settle_endpoint_requires_secret(client):
     resp = await client.post("/api/v1/internal/clubs/league/settle")
     assert resp.status_code in (401, 403)
+
+
+async def test_shown_table_is_cached_for_a_minute(db_session, monkeypatch):
+    """The «Лига клубов» screen reuses the running week's table for
+    TABLE_CACHE_S instead of recomputing every club's activity per open."""
+    from app.services import club_league_service as svc
+    from app.services.game_config_service import get_config
+
+    calls = []
+
+    async def fake(db, week, config, division=None):
+        calls.append(division)
+        return []
+
+    monkeypatch.setattr(svc, "compute_table", fake)
+    config = await get_config(db_session)
+    week = svc.week_start_for()
+    await svc._shown_table(db_session, week, config, 0)
+    await svc._shown_table(db_session, week, config, 0)
+    await svc._shown_table(db_session, week, config, 1)
+    assert calls == [0, 1]
+    monkeypatch.setattr(svc, "TABLE_CACHE_S", 0.0)
+    await svc._shown_table(db_session, week, config, 0)
+    assert calls == [0, 1, 0]

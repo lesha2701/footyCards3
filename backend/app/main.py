@@ -1,4 +1,5 @@
 import asyncio
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.database import get_db
 from app.core.exceptions import register_exception_handlers
-from app.core.slow_log import SlowRequestMiddleware, watch_event_loop
+from app.core.slow_log import SlowRequestMiddleware, StallSampler, watch_event_loop
 from app.routers import (
     admin_badges,
     admin_bingo,
@@ -128,11 +129,13 @@ _docs_enabled = settings.environment != "production"
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    watcher = asyncio.create_task(watch_event_loop())
+    sampler = StallSampler(threading.get_ident()).start()
+    watcher = asyncio.create_task(watch_event_loop(sampler=sampler))
     try:
         yield
     finally:
         watcher.cancel()
+        sampler.stop()
 
 
 app = FastAPI(
