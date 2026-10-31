@@ -175,7 +175,7 @@ async def get_office(db: AsyncSession = Depends(get_db), user: User = Depends(ge
 
 @router.post("/office/deals/{kind}")
 async def sign_deal(kind: str, payload: ManagerDealIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    """A sponsor, naming rights, a tour, TV rights, a deposit, the venture fund or a farm club
+    """A sponsor, a shirt sponsor, a tour, TV rights, a deposit, the venture fund or a farm club
     for the coming season (one of each kind a season)."""
     await check_rate_limit(f"manager_office:{user.id}", max_calls=20, window_seconds=60)
     return await manager_finance.sign(db, user, kind, payload.option, payload.seasons, payload.amount)

@@ -1,6 +1,6 @@
 """«Менеджер» → «Кабинет президента» (manager_finance): the club money ledger
 and the report by seasons, the club value, sponsors, the bank loan (interest,
-collection, overdue → no transfers), and the season deals: naming rights,
+collection, overdue → no transfers), and the season deals: shirt sponsor,
 tours (fans, tired legs), TV rights, deposit, venture fund, farm club."""
 from datetime import timedelta
 
@@ -222,27 +222,31 @@ async def test_loan_is_collected_when_the_budget_has_it(client, db_session, bot_
     assert loan.status == "repaid" and (await _club_row(db_session, club_id)).budget == budget - debt
 
 
-async def test_naming_rights_need_a_stadium_and_pay_each_season_once(client, db_session, bot_token):
+async def test_shirt_sponsor_grows_with_the_shop_and_pays_each_season_once(client, db_session, bot_token):
     config = await get_config(db_session)
     start = _next_season_start(config)
     pre = start - timedelta(hours=2)
-    uid, _headers, club_id = await _setup(client, db_session, bot_token, 895007)
+    uid, _headers, club_id = await _setup(client, db_session, bot_token, 895007, {"hq": 6, "shop": 5})
     user = await _user(db_session, uid)
-    brand = finance.cfg(config)["naming_brands"][0]
-    with pytest.raises(ConflictError):  # no stadium yet
-        await finance.sign(db_session, user, "naming", brand, seasons=2, now=pre)
-    db_session.add(UserClubBase(user_id=uid, levels={"hq": 6, "stadium": 6}, total_level=12, appearance={}))
-    await db_session.commit()
+    f = finance.cfg(config)
+    brand = f["kit_brands"][0]
+    with pytest.raises(Exception):
+        await finance.sign(db_session, user, "kit", "Нет такого", seasons=2, now=pre)
     budget = (await _club_row(db_session, club_id)).budget
-    view = await finance.sign(db_session, user, "naming", brand, seasons=2, now=pre)
-    price = view["offers"]["naming"]["prices"][1]
+    view = await finance.sign(db_session, user, "kit", brand, seasons=2, now=pre)
+    price = view["offers"]["kit"]["prices"][1]
+    division = (await _club_row(db_session, club_id)).division
+    base = (f["kit_base_eur"] + f["kit_eur_per_level"] * 5) * manager_service._pct(config.manager_division_income_pct, division) // 100
+    assert price == manager_service._nice(base * 110 / 100)  # «Клубный магазин» ур. 5, +10 % for the second season
     club = await _club_row(db_session, club_id)
-    assert club.budget == budget + price and view["offers"]["naming"]["taken"]
+    assert club.budget == budget + price and view["offers"]["kit"]["taken"] and view["offers"]["kit"]["worn"] == brand
+    with pytest.raises(ConflictError):  # one shirt sponsor a season
+        await finance.sign(db_session, user, "kit", f["kit_brands"][1], now=pre)
     key = manager_service.season_key(start)
     for k in (key, key, finance.shift_key(key, 1), finance.shift_key(key, 2)):
         await finance.season_start(db_session, club, k, {}, config)
     await db_session.commit()
-    assert await _ledger_sum(db_session, club_id, "naming") == 2 * price  # this season and the next, once each
+    assert await _ledger_sum(db_session, club_id, "kit") == 2 * price  # this season and the next, once each
 
 
 async def test_tour_brings_money_fans_and_tired_legs(client, db_session, bot_token):

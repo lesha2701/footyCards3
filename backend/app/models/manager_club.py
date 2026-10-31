@@ -214,7 +214,7 @@ class ManagerLedger(Base):
 
 class ManagerDeal(Base):
     """A financial deal of the club for one season (manager_finance):
-    sponsor, naming (1-3 seasons, `seasons`), tour, tv, deposit, venture,
+    sponsor, kit (shirt sponsor, 1-3 seasons, `seasons`), tour, tv, deposit, venture,
     farm. One of a kind per club and first season (unique row = the
     idempotency). `option` = the sponsor type / tour / brand; `amount` = the
     stake or price; `data` = terms frozen when signed (keys of the seasons

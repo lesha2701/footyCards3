@@ -1831,6 +1831,12 @@ async def pyramid(db: AsyncSession, config) -> list[dict]:
     ]
 
 
+async def _kit_sponsor(db: AsyncSession, club: ManagerClub, now: Optional[datetime] = None) -> Optional[str]:
+    """The brand on the club's shirt («Кабинет президента»): this season's, else the coming one's."""
+    deal = await finance.kit_covering(db, club.id, await finance.club_key(db, club, now))
+    return deal.option if deal else None
+
+
 async def get_view(db: AsyncSession, user: User, now: Optional[datetime] = None) -> dict:
     from app.services import manager_shop
 
@@ -1910,6 +1916,7 @@ async def get_view(db: AsyncSession, user: User, now: Optional[datetime] = None)
             "squad_value": sum(p.get("value", 0) for p in (*squad["xi"], *squad["bench"])), "next_match": None,
             "live_count": sum(1 for c in club_contracts if c.status in ("active", "offered") and c.user_id != club.owner_id),
             "academy_card_id": club.academy_card_id,
+            "kit_sponsor": await _kit_sponsor(db, club, now),
             "academy_options": [
                 {"card_id": c.id, "name": c.player.display_name, "position": c.player.position.value, "rating": _card_rating(c, config)}
                 for c in academy

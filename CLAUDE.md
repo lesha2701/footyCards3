@@ -75,7 +75,7 @@ Main features:
   every budget change goes through `manager_finance.book` into
   `manager_ledger` (report by seasons; `ref` = pay once); the club value;
   season sponsors, a bank loan (overdue → no transfers) and season deals
-  (naming rights, tour, TV rights, deposit, venture fund, farm club) in
+  (shirt sponsor, tour, TV rights, deposit, venture fund, farm club) in
   `manager_deals` / `manager_loans`, frozen into the league team at the
   season start and settled in `_settle`. Numbers: GameConfig.manager_finance
   over `manager_finance.DEFAULTS`;

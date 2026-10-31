@@ -253,7 +253,7 @@ async def buy_merch(db: AsyncSession, user: User, club_id: int, code: str) -> di
 async def club_card(db: AsyncSession, user: User, club_id: int) -> dict:
     """A club's public card (from the league table): style, division,
     trophies, fans and what the viewer already bought."""
-    from app.services.manager_service import _name, division_name, squad_view
+    from app.services.manager_service import _kit_sponsor, _name, division_name, squad_view
 
     config = await get_config(db)
     club = await db.get(ManagerClub, club_id)
@@ -270,6 +270,7 @@ async def club_card(db: AsyncSession, user: User, club_id: int) -> dict:
         "id": club.id, "name": club.name, "owner_name": _name(owner), "division": club.division,
         "division_name": division_name(club.division), "titles": club.titles, "seasons_played": club.seasons_played,
         "look": resolve_look(club), "stadium_name": club.stadium_name, "pro": is_pro(club),
+        "kit_sponsor": await _kit_sponsor(db, club),
         "rating": squad["rating"], "fans": fans, "is_mine": club.owner_id == user.id,
         "xi": [{k: p[k] for k in ("slot", "kind", "name", "position", "rating")} for p in squad["xi"]],
         "merch": [{**i, "bought": i["code"] in bought} for i in merch_items(config)],

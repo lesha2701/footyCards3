@@ -731,7 +731,7 @@ class GameConfig(TimestampMixin, Base):
     manager_pro_stars: Mapped[int] = mapped_column(Integer, default=299, nullable=False)
     manager_pro_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     # «Кабинет президента» (manager_finance): sponsors, the bank loan, deals
-    # (naming rights, tours, TV rights, deposit, venture fund, farm club), the
+    # (shirt sponsor, tours, TV rights, deposit, venture fund, farm club), the
     # club value. Only the overridden numbers are stored; manager_finance.DEFAULTS
     # fills the rest.
     manager_finance: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)

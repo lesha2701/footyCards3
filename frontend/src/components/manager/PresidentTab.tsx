@@ -13,6 +13,7 @@ import {
 } from "@/api/manager";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
+import { KitShirt } from "@/components/manager/Emblem";
 import { eur } from "@/lib/managerMoney";
 import { hapticNotify } from "@/lib/telegram";
 
@@ -378,7 +379,7 @@ function Bank({ office, onDone, onError, ask }: {
 // --- deals --------------------------------------------------------------------------------------
 
 const DEALS: { kind: Exclude<ManagerDealKind, "sponsor">; emoji: string; title: string; tone: string; line: string }[] = [
-  { kind: "naming", emoji: "🏟️", title: "Имя стадиона", tone: "from-amber-400/40 to-orange-700/30", line: "Бренд на арене за деньги каждый сезон" },
+  { kind: "kit", emoji: "👕", title: "Спонсор на форме", tone: "from-amber-400/40 to-orange-700/30", line: "Бренд на футболке за деньги каждый сезон" },
   { kind: "tour", emoji: "✈️", title: "Предсезонное турне", tone: "from-sky-400/40 to-indigo-700/30", line: "Деньги и фанаты, но усталость на старте" },
   { kind: "tv", emoji: "📺", title: "ТВ-права вперёд", tone: "from-rose-400/40 to-red-800/30", line: "Деньги за матчи сезона — сейчас, со скидкой" },
   { kind: "deposit", emoji: "🔐", title: "Депозит", tone: "from-emerald-400/40 to-teal-800/30", line: "Надёжный процент к концу сезона" },
@@ -449,35 +450,35 @@ function DealPanel({ kind, office, busy, ask, sign }: {
   );
   const boost = (icon: string, text: string) => <p className="mt-2 rounded-xl bg-black/25 px-3 py-2 text-caption text-ink-mist">{icon} {text}</p>;
 
-  if (kind === "naming") {
-    const n = o.naming;
+  if (kind === "kit") {
+    const k = o.kit;
+    const brand = choice ?? k.worn;
     return (
-      <Card title="🏟️ Имя стадиона">
-        {n.stadium <= 0 ? <p className="text-caption text-ink-mist">Сначала построй «Стадион» в «Клубной базе» — цена прав зависит от его уровня.</p> : (
-          <>
-            <div className="flex flex-wrap gap-1.5">
-              {n.brands.map((b) => (
-                <button key={b} onClick={() => setChoice(b)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-bold ${choice === b ? "bg-amber-300 text-bg-base" : "bg-bg-raised text-ink-chalk"}`}>{b}</button>
-              ))}
-            </div>
-            <p className="mt-3 rounded-2xl bg-gradient-to-r from-amber-500/20 to-transparent px-3 py-3 text-center font-display text-base font-black text-amber-100">
-              «{choice ?? "Бренд"} Арена»
-            </p>
-            <div className="mt-3 grid grid-cols-3 gap-1.5">
-              {n.prices.map((price, i) => (
-                <button key={i} onClick={() => setSeasons(i + 1)}
-                  className={`rounded-xl py-2 text-center ${seasons === i + 1 ? "bg-amber-300 text-bg-base" : "bg-bg-raised text-ink-chalk"}`}>
-                  <span className="block text-xs font-black">{i + 1} сез.</span>
-                  <span className="block text-micro">{eur(price)}/сез.</span>
-                </button>
-              ))}
-            </div>
-            {boost("🏟", `Стадион ур. ${n.stadium}: цена растёт с уровнем. Длинный контракт дороже за сезон, но цена заморожена.`)}
-            {button(`Продать имя за ${eur(n.prices[seasons - 1])}/сезон`, !choice, `«${choice} Арена» на ${seasons} сез.?`,
-              `Первый сезон оплачивается сразу, следующие — в начале каждого сезона. Расторгнуть нельзя.`, { option: choice ?? undefined, seasons })}
-          </>
-        )}
+      <Card title="👕 Спонсор на форме">
+        <div className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-amber-500/20 to-transparent p-3">
+          <KitShirt look={office.look} size={72} sponsor={brand} />
+          <p className="text-caption text-ink-mist">
+            {k.worn ? <>На форме — <b className="text-amber-200">{k.worn}</b>.</> : "Бренд будет на футболке клуба: в «Моём клубе», в карточке для соперников и в «Стиле»."}
+          </p>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {k.brands.map((b) => (
+            <button key={b} onClick={() => setChoice(b)} disabled={k.taken}
+              className={`rounded-full px-3 py-1.5 text-xs font-bold disabled:opacity-50 ${choice === b ? "bg-amber-300 text-bg-base" : "bg-bg-raised text-ink-chalk"}`}>{b}</button>
+          ))}
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-1.5">
+          {k.prices.map((price, i) => (
+            <button key={i} onClick={() => setSeasons(i + 1)}
+              className={`rounded-xl py-2 text-center ${seasons === i + 1 ? "bg-amber-300 text-bg-base" : "bg-bg-raised text-ink-chalk"}`}>
+              <span className="block text-xs font-black">{i + 1} сез.</span>
+              <span className="block text-micro">{eur(price)}/сез.</span>
+            </button>
+          ))}
+        </div>
+        {boost("👕", k.shop > 0 ? `Клубный магазин ур. ${k.shop} поднимает цену. Длинный контракт дороже за сезон, цена заморожена.` : "Клубный магазин в «Клубной базе» поднимет цену")}
+        {button(`Подписать за ${eur(k.prices[seasons - 1])}/сезон`, !choice, `${choice} на форме на ${seasons} сез.?`,
+          "Первый сезон оплачивается сразу, следующие — в начале каждого сезона. Расторгнуть нельзя.", { option: choice ?? undefined, seasons })}
       </Card>
     );
   }

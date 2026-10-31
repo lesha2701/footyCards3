@@ -1,5 +1,5 @@
 /** Admin fields of «Кабинет президента» (GameConfig.manager_finance): every
- * number with a label, sponsors / tours / naming brands as JSON. The backend
+ * number with a label, sponsors / tours / shirt brands as JSON. The backend
  * returns the effective values (stored overrides over its defaults). */
 const LABELS: [string, string][] = [
   ["sponsor_marketing_pct_per_level", "Спонсоры: +% за уровень «Отдела маркетинга»"],
@@ -15,9 +15,10 @@ const LABELS: [string, string][] = [
   ["value_per_fan", "Стоимость клуба: € за фаната"],
   ["value_per_title", "Стоимость клуба: € за чемпионство"],
   ["fan_ticket_eur", "Фанаты с турне: € за фаната за домашний матч (× % дивизиона)"],
-  ["naming_eur_per_level", "Имя стадиона: € за сезон за уровень стадиона (× % дивизиона)"],
-  ["naming_long_bonus_pct", "Имя стадиона: +% за каждый сезон контракта сверх первого"],
-  ["naming_seasons_max", "Имя стадиона: сезонов максимум"],
+  ["kit_base_eur", "Спонсор на форме: € за сезон, база (× % дивизиона)"],
+  ["kit_eur_per_level", "Спонсор на форме: +€ за сезон за уровень «Клубного магазина»"],
+  ["kit_long_bonus_pct", "Спонсор на форме: +% за каждый сезон контракта сверх первого"],
+  ["kit_seasons_max", "Спонсор на форме: сезонов максимум"],
   ["tour_hotel_cut_per_level", "Турне: −% расходов за уровень «Клубного отеля»"],
   ["tour_media_fans_pct_per_level", "Турне: +% фанатов за уровень «Медиацентра»"],
   ["tv_discount_pct", "ТВ-права: скидка, %"],
@@ -40,7 +41,7 @@ const LABELS: [string, string][] = [
 const JSON_KEYS: [string, string][] = [
   ["sponsors", "Спонсоры (суммы — % гранта): upfront_pct сразу, win_pct за победу, place_pct по местам (0 = чемпион), rest_pct другие места, relegated_pct при вылете"],
   ["tours", "Турне: revenue_pct / cost_pct (% гранта), fans, fatigue_pct (−% ко всем линиям) в первых fatigue_rounds турах"],
-  ["naming_brands", "Имя стадиона: бренды на выбор"],
+  ["kit_brands", "Спонсор на форме: бренды на выбор"],
 ];
 
 export default function ManagerFinanceFields({ value, onChange }: {
@@ -68,8 +69,8 @@ export default function ManagerFinanceFields({ value, onChange }: {
         <label key={key} className="col-span-2 flex flex-col gap-1">
           <span className="text-xs text-slate-400">{label}</span>
           <textarea
-            rows={key === "naming_brands" ? 2 : 6}
-            defaultValue={JSON.stringify(data[key] ?? [], null, key === "naming_brands" ? 0 : 1)}
+            rows={key === "kit_brands" ? 2 : 6}
+            defaultValue={JSON.stringify(data[key] ?? [], null, key === "kit_brands" ? 0 : 1)}
             onBlur={(e) => {
               try {
                 onChange({ ...data, [key]: JSON.parse(e.target.value || "[]") });

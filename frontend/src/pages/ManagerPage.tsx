@@ -226,7 +226,7 @@ function ClubTab({ view, club, onView, onError }: TabProps & { club: ManagerClub
             </span>
             {club.stadium_name && <span className="block truncate text-xs text-ink-mist">🏟 {club.stadium_name}</span>}
           </span>
-          <KitShirt look={club.look} size={36} />
+          <KitShirt look={club.look} size={44} sponsor={club.kit_sponsor} />
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2 text-center">
           <Stat label="бюджет" value={<span className="text-accent-lime">{eur(club.budget)}</span>} />

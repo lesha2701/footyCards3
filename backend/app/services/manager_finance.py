@@ -16,8 +16,9 @@ a % of the club's division grant (`G`), so they grow with the division.
   the debt at every season start while it is outstanding, collected at the
   first season start after its term; not enough budget → overdue: a
   penalty and no transfers until it is repaid. «Бухгалтерия» cuts the rate.
-- Deals (not buildings — the campus levels are their multipliers): stadium
-  naming rights for 1-3 seasons (stadium level), a preseason tour (income
+- Deals (not buildings — the campus levels are their multipliers): a
+  shirt sponsor for 1-3 seasons («Клубный магазин» raises the price; the
+  stadium name stays the owner's — it is a Stars cosmetic), a preseason tour (income
   and fans, tired legs in the first rounds; «Клубный отель» cuts its costs,
   «Медиацентр» brings more fans), TV rights sold forward at a discount
   (the season's match income goes to the buyer; «Медиацентр» cuts the
@@ -67,10 +68,10 @@ DEFAULTS: dict = {
     "value_per_base_level": 300_000, "value_per_fan": 20_000, "value_per_title": 5_000_000,
     # Fans won on tours buy tickets: € per fan per home match (× % of the division).
     "fan_ticket_eur": 100,
-    # Stadium naming rights: € per season per stadium level (× % of the division),
-    # +% per season beyond the first.
-    "naming_eur_per_level": 150_000, "naming_long_bonus_pct": 10, "naming_seasons_max": 3,
-    "naming_brands": ["Volt Energy", "Northbay Bank", "Pulse Mobile", "Golazo Pizza", "Tempo Watches", "Strike Boots"],
+    # Shirt sponsor: € per season = base + per «Клубный магазин» level (× % of the
+    # division), +% per season beyond the first.
+    "kit_base_eur": 300_000, "kit_eur_per_level": 60_000, "kit_long_bonus_pct": 10, "kit_seasons_max": 3,
+    "kit_brands": ["Volt Energy", "Northbay Bank", "Pulse Mobile", "Golazo Pizza", "Tempo Watches", "Strike Boots"],
     # Preseason tours: revenue / costs in % of G; tired legs: −fatigue_pct to
     # every line in the first fatigue_rounds rounds.
     "tours": [
@@ -92,7 +93,7 @@ DEFAULTS: dict = {
     "farm_fee_pct": 6, "farm_loan_cut_pct": 30, "farm_kid_rating": 3, "farm_kid_per_training_level": 0.2,
 }
 
-DEAL_KINDS = ("sponsor", "naming", "tour", "tv", "deposit", "venture", "farm")
+DEAL_KINDS = ("sponsor", "kit", "tour", "tv", "deposit", "venture", "farm")
 
 # Report lines: kind → (group, label). Groups: income, expense, finance.
 KINDS: dict[str, tuple[str, str]] = {
@@ -106,7 +107,7 @@ KINDS: dict[str, tuple[str, str]] = {
     "transfer_in": ("income", "Продажа игроков"),
     "npc_sale": ("income", "Продажа футболистов"),
     "sponsor": ("income", "Спонсор"),
-    "naming": ("income", "Имя стадиона"),
+    "kit": ("income", "Спонсор на форме"),
     "tour": ("income", "Турне"),
     "tv": ("income", "ТВ-права"),
     "wages": ("expense", "Зарплаты"),
@@ -156,9 +157,9 @@ def validate(raw: dict) -> dict:
             if not isinstance(value, list) or not 1 <= len(value) <= 6 or not all(isinstance(x, dict) and x.get("code") for x in value):
                 raise ValueError(f"{key}: нужен список из 1–6 объектов с code")
             out[key] = value
-        elif key == "naming_brands":
+        elif key == "kit_brands":
             if not isinstance(value, list) or not value:
-                raise ValueError("naming_brands: нужен список названий")
+                raise ValueError("kit_brands: нужен список названий")
             out[key] = [str(x)[:24] for x in value]
     return out
 
@@ -283,13 +284,13 @@ def tv_estimate(division: int, config) -> int:
     return ms.rounds_of(config) * config.manager_income_draw * _division_pct(division, config) // 100
 
 
-def naming_price(division: int, snap: dict, seasons: int, config) -> int:
+def kit_price(division: int, snap: dict, seasons: int, config) -> int:
     """€ per season, frozen when signed."""
     from app.services import manager_service as ms
 
     f = cfg(config)
-    base = int(_num(f["naming_eur_per_level"])) * _lvl(snap, "stadium") * _division_pct(division, config) // 100
-    return ms._nice(base * (100 + _num(f["naming_long_bonus_pct"]) * (seasons - 1)) / 100)
+    base = (int(_num(f["kit_base_eur"])) + int(_num(f["kit_eur_per_level"])) * _lvl(snap, "shop")) * _division_pct(division, config) // 100
+    return ms._nice(base * (100 + _num(f["kit_long_bonus_pct"]) * (seasons - 1)) / 100)
 
 
 def tour_terms(division: int, snap: dict, config) -> list[dict]:
@@ -427,14 +428,14 @@ async def _process_loan(db: AsyncSession, club: ManagerClub, key: str, config) -
 
 
 async def season_start(db: AsyncSession, club: ManagerClub, key: str, snap: dict, config) -> dict:
-    """At the club's season start (after the grant, before wages): naming
-    rights of this season, the loan; returns the season's frozen finance
+    """At the club's season start (after the grant, before wages): the
+    shirt sponsor's money of this season, the loan; returns the season's frozen finance
     effects (stored in the league team)."""
     out: dict = {"notes": []}
     for deal in await _deals(db, club.id):
         keys = (deal.data or {}).get("keys") or [deal.season_key]
-        if deal.kind == "naming" and key in keys:
-            await book(db, club, "naming", deal.amount, key, ref=f"naming:{deal.id}:{key}", note=deal.option)
+        if deal.kind == "kit" and key in keys:
+            await book(db, club, "kit", deal.amount, key, ref=f"kit:{deal.id}:{key}", note=deal.option)
         if deal.season_key != key:
             continue
         data = deal.data or {}
@@ -483,7 +484,7 @@ async def season_end(db: AsyncSession, club: ManagerClub, key: str, place: Optio
     for deal in await _deals(db, club.id):
         data = deal.data or {}
         keys = data.get("keys") or [deal.season_key]
-        if deal.kind == "naming":
+        if deal.kind == "kit":
             if keys[-1] == key:
                 deal.status, deal.settled_at = "done", now
             continue
@@ -559,9 +560,10 @@ async def _taken(db: AsyncSession, club_id: int, kind: str, key: str) -> bool:
     )).first() is not None
 
 
-async def _naming_covering(db: AsyncSession, club_id: int, key: str) -> Optional[ManagerDeal]:
+async def kit_covering(db: AsyncSession, club_id: int, key: str) -> Optional[ManagerDeal]:
+    """The shirt sponsor whose contract covers this season."""
     for deal in await _deals(db, club_id):
-        if deal.kind == "naming" and key in ((deal.data or {}).get("keys") or [deal.season_key]):
+        if deal.kind == "kit" and key in ((deal.data or {}).get("keys") or [deal.season_key]):
             return deal
     return None
 
@@ -605,22 +607,20 @@ async def sign(db: AsyncSession, user: User, kind: str, option: Optional[str] = 
                      "places": terms["places"], "rest": terms["rest"], "relegated": terms["relegated"]}
         await _add_deal(db, deal)
         await book(db, club, "sponsor", terms["upfront"], key, ref=f"sponsor_up:{deal.id}", note=terms["brand"])
-    elif kind == "naming":
+    elif kind == "kit":
         seasons = int(seasons or 1)
-        if not 1 <= seasons <= int(_num(f["naming_seasons_max"], 3)):
-            raise ConflictError(f"Контракт — на 1–{int(_num(f['naming_seasons_max'], 3))} сезона")
-        if _lvl(snap, "stadium") <= 0:
-            raise ConflictError("Сначала построй «Стадион» в «Клубной базе»")
-        brands = [str(b) for b in f["naming_brands"]]
+        if not 1 <= seasons <= int(_num(f["kit_seasons_max"], 3)):
+            raise ConflictError(f"Контракт — на 1–{int(_num(f['kit_seasons_max'], 3))} сезона")
+        brands = [str(b) for b in f["kit_brands"]]
         if option not in brands:
-            raise NotFoundError("Такого спонсора стадиона нет")
-        if await _naming_covering(db, club.id, key):
-            raise ConflictError("Имя стадиона уже продано на этот сезон")
-        price = naming_price(club.division, snap, seasons, config)
+            raise NotFoundError("Такого спонсора нет")
+        if await kit_covering(db, club.id, key):
+            raise ConflictError("Спонсор на форме уже есть на этот сезон")
+        price = kit_price(club.division, snap, seasons, config)
         deal.seasons, deal.amount = seasons, price
-        deal.data = {"keys": keys_from(key, seasons), "stadium": _lvl(snap, "stadium")}
+        deal.data = {"keys": keys_from(key, seasons), "shop": _lvl(snap, "shop")}
         await _add_deal(db, deal)
-        await book(db, club, "naming", price, key, ref=f"naming:{deal.id}:{key}", note=option)
+        await book(db, club, "kit", price, key, ref=f"kit:{deal.id}:{key}", note=option)
     elif kind == "tour":
         terms = next((t for t in tour_terms(club.division, snap, config) if t["code"] == option), None)
         if terms is None:
@@ -751,7 +751,7 @@ def _deal_out(deal: ManagerDeal) -> dict:
 
 
 async def view(db: AsyncSession, user: User, now: Optional[datetime] = None) -> dict:
-    from app.services import manager_service as ms
+    from app.services import manager_service as ms, manager_shop
 
     now = now or datetime.now(timezone.utc)
     config = await get_config(db)
@@ -768,7 +768,8 @@ async def view(db: AsyncSession, user: User, now: Optional[datetime] = None) -> 
         select(ManagerDeal).where(ManagerDeal.club_id == club.id).order_by(ManagerDeal.id.desc()).limit(40)
     )).scalars().all())
     taken = {d.kind for d in deals if d.season_key == key}
-    naming_now = await _naming_covering(db, club.id, key)
+    kit_now = await kit_covering(db, club.id, key)
+    kit_worn = await kit_covering(db, club.id, current)
     loan = await open_loan(db, club.id)
     division = club.division
     grant = grant_of(division, config)
@@ -776,7 +777,7 @@ async def view(db: AsyncSession, user: User, now: Optional[datetime] = None) -> 
     discount = tv_discount_pct(snap, config)
     return {
         "enabled": bool(f["enabled"]),
-        "club_id": club.id, "name": club.name, "division": division, "budget": club.budget, "grant": grant,
+        "club_id": club.id, "name": club.name, "look": manager_shop.resolve_look(club), "division": division, "budget": club.budget, "grant": grant,
         "window_open": not playing, "season_key": key, "current_key": current,
         "value": value, "fans": await fans_of(db, club),
         "levels": {code: _lvl(snap, code) for code in ("stadium", "hotel", "media", "marketing", "accounting", "training", "shop")},
@@ -791,8 +792,9 @@ async def view(db: AsyncSession, user: User, now: Optional[datetime] = None) -> 
             "seasons_max": int(_num(f["loan_seasons_max"], 3)), "penalty_pct": _num(f["loan_penalty_pct"]),
         },
         "offers": {
-            "naming": {"taken": naming_now is not None, "stadium": _lvl(snap, "stadium"), "brands": [str(b) for b in f["naming_brands"]],
-                       "prices": [naming_price(division, snap, n, config) for n in range(1, int(_num(f["naming_seasons_max"], 3)) + 1)]},
+            "kit": {"taken": kit_now is not None, "shop": _lvl(snap, "shop"), "brands": [str(b) for b in f["kit_brands"]],
+                    "worn": (kit_worn or kit_now).option if (kit_worn or kit_now) else None,
+                    "prices": [kit_price(division, snap, n, config) for n in range(1, int(_num(f["kit_seasons_max"], 3)) + 1)]},
             "tour": {"taken": "tour" in taken, "options": tour_terms(division, snap, config),
                      "hotel_cut_pct": min(90.0, _num(f["tour_hotel_cut_per_level"]) * _lvl(snap, "hotel")),
                      "media_fans_pct": _num(f["tour_media_fans_pct_per_level"]) * _lvl(snap, "media")},

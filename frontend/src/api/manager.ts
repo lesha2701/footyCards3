@@ -129,6 +129,8 @@ export interface ManagerClub {
   next_match: ManagerNextMatch | null;
   live_count: number;
   academy_card_id: number | null;
+  /** The brand on the shirt («Кабинет президента», this or the coming season). */
+  kit_sponsor: string | null;
   academy_options: { card_id: number; name: string; position: string; rating: number }[];
   look: ManagerLook;
   owned_cosmetics: string[];
@@ -302,6 +304,7 @@ export interface ManagerClubCard {
   seasons_played: number;
   look: ManagerLook;
   stadium_name: string | null;
+  kit_sponsor: string | null;
   pro: boolean;
   rating: number;
   fans: number;
@@ -465,7 +468,7 @@ export async function buyManagerMerch(clubId: number, code: string): Promise<Man
 
 // --- «Кабинет президента» (manager_finance) -----------------------------------------------------
 
-export type ManagerDealKind = "sponsor" | "naming" | "tour" | "tv" | "deposit" | "venture" | "farm";
+export type ManagerDealKind = "sponsor" | "kit" | "tour" | "tv" | "deposit" | "venture" | "farm";
 
 export interface ManagerReportLine {
   kind: string;
@@ -526,6 +529,7 @@ export interface ManagerOffice {
   enabled: boolean;
   club_id: number;
   name: string;
+  look: ManagerLook;
   division: number;
   budget: number;
   grant: number;
@@ -548,7 +552,8 @@ export interface ManagerOffice {
     penalty_pct: number;
   };
   offers: {
-    naming: { taken: boolean; stadium: number; brands: string[]; prices: number[] };
+    /** Shirt sponsor: `worn` = the brand on the shirt now (this or the coming season). */
+    kit: { taken: boolean; shop: number; brands: string[]; worn: string | null; prices: number[] };
     tour: { taken: boolean; options: ManagerTourOption[]; hotel_cut_pct: number; media_fans_pct: number };
     tv: { taken: boolean; estimate: number; discount_pct: number; advance: number };
     deposit: { taken: boolean; rate_pct: number; min: number; max: number; blocked: boolean };

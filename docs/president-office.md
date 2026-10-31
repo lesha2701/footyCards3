@@ -22,7 +22,7 @@ Every budget change in `manager_service` / `manager_shop` goes through
 `manager_finance.book(db, club, kind, amount, season_key, ref=None)` under
 the club row lock: it changes the budget and writes a `manager_ledger` row.
 `ref` (unique per club) makes a payout happen once (grants, sponsor results,
-deposits, naming seasons). Money of the transfer window belongs to the coming
+deposits, shirt sponsor seasons). Money of the transfer window belongs to the coming
 season (`upcoming_key`), money of a running league to its season. The report
 groups the last 6 seasons into income, expenses and financing (loans,
 deposits, the venture fund). The ledger starts empty at 0230.
@@ -36,12 +36,15 @@ levels × `value_per_base_level` + fans × `value_per_fan` + titles ×
 
 ## Deals (one of each kind per club and season — unique row)
 
+Not stadium naming rights: the stadium name is a Stars cosmetic of the style
+shop (`manager_shop`, `stadium_name`), so the club sells its shirt instead.
+
 Signed only while the club does not play, for the coming season.
 
 | Kind | Now | During the season | At its end | Campus multiplier |
 |---|---|---|---|---|
 | sponsor | upfront | bonus per win | by place / title / relegation | «Отдел маркетинга» +% to all sums |
-| naming (1–3 seasons) | the first season's price | next seasons at their start | — | price ∝ «Стадион» level |
+| kit — shirt sponsor (1–3 seasons) | the first season's price | next seasons at their start | — | price = base + «Клубный магазин» level |
 | tour | revenue − costs, fans | −fatigue_pct to every line in the first rounds | — | «Клубный отель» cuts costs, «Медиацентр» adds fans |
 | tv | expected match income − discount | the club gets no match income | — | «Медиацентр» cuts the discount |
 | deposit | stake leaves the budget | — | stake + rate | «Бухгалтерия» raises the rate |
