@@ -8,8 +8,8 @@ current stretch of play (gaps shorter than anti_bot_rest_hours don't break
 it); after anti_bot_max_streak_hours rewards and rating stop until the player
 rests anti_bot_rest_hours (users.rest_required_until).
 
-Revision ID: 0222
-Revises: 0221
+Revision ID: 0227
+Revises: 0226
 Create Date: 2026-10-30
 """
 from typing import Sequence, Union
@@ -17,8 +17,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0222"
-down_revision: Union[str, None] = "0221"
+revision: str = "0227"
+down_revision: Union[str, None] = "0226"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
