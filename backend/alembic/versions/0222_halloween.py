@@ -11,6 +11,8 @@ Revises: 0221
 Create Date: 2026-10-31
 """
 import json
+from decimal import Decimal
+from datetime import datetime, timedelta, timezone
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -21,13 +23,15 @@ down_revision: Union[str, None] = "0221"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-# 31.10 00:00 – 05.11 00:00 Moscow (the event runs through 04.11).
-STARTS_AT = "2026-10-31 00:00:00+03"
-ENDS_AT = "2026-11-05 00:00:00+03"
+# 31.10 00:00 – 05.11 00:00 Moscow (the event runs through 04.11). Real
+# datetimes: asyncpg refuses a string for a timestamptz parameter.
+_MSK = timezone(timedelta(hours=3))
+STARTS_AT = datetime(2026, 10, 31, tzinfo=_MSK)
+ENDS_AT = datetime(2026, 11, 5, tzinfo=_MSK)
 PACK_SLUG = "halloween-legends-2026"
 COLLECTION = "Ночь живых Легенд"
 BADGE = "Тыква 2026"
-PACK_ODDS = (("rare", 0.55), ("epic", 0.35), ("legendary", 0.10))
+PACK_ODDS = (("rare", Decimal("0.55")), ("epic", Decimal("0.35")), ("legendary", Decimal("0.10")))
 SELL_PRICE = {"rare": 35, "epic": 120, "legendary": 400}
 # display name, art slug, position, country, the most successful club of the career, rating, rarity
 LEGENDS = (
