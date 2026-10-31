@@ -69,6 +69,7 @@ class CoachOut(BaseModel):
     is_active: bool
     is_pack_droppable: bool
     boosts: list[CoachBoostOut]
+    collection_id: Optional[int] = None
 
 
 class CoachCreate(BaseModel):
@@ -79,6 +80,7 @@ class CoachCreate(BaseModel):
     is_active: bool = True
     is_pack_droppable: bool = True
     boosts: list[CoachBoostCreate]
+    collection_id: Optional[int] = None
 
     _country = field_validator("country")(_blank_to_none)
 
@@ -97,6 +99,7 @@ class CoachUpdate(BaseModel):
     is_active: Optional[bool] = None
     is_pack_droppable: Optional[bool] = None
     boosts: Optional[list[CoachBoostCreate]] = None
+    collection_id: Optional[int] = None
 
     _country = field_validator("country")(_blank_to_none)
 

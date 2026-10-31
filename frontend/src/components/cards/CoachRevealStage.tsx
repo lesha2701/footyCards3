@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 
 import { staticUrl } from "@/lib/api";
-import { BOOST_TYPE_LABELS } from "@/lib/coaches";
+import { boostText } from "@/lib/coaches";
 import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
 import type { EquippedCoach } from "@/types";
 import { COACH_STAGES, type CoachStage } from "@/components/cards/revealStages";
@@ -83,7 +83,7 @@ export function CoachRevealStage({
             <p className="font-display text-lg font-bold text-ink-chalk">{coach.display_name}</p>
             {coach.boosts.length > 0 && (
               <p className="font-mono text-xs text-ink-mist">
-                {coach.boosts.map((b) => `${BOOST_TYPE_LABELS[b.boost_type]} +${b.magnitude}`).join(" · ")}
+                {coach.boosts.map((b) => boostText(b)).join(" · ")}
               </p>
             )}
             {opened.is_new && (

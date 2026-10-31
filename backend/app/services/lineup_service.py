@@ -21,7 +21,7 @@ from app.schemas.lineup import (
 )
 from app.services import arena_tactics, chemistry_service
 from app.services.chemistry_service import ChemistryResult
-from app.services.coach_boost_service import arena_rarity_team_strength_bonus
+from app.services.coach_boost_service import arena_opponent_malus, arena_rarity_team_strength_bonus, arena_team_rating_bonus
 from app.services.game_config_service import get_config
 from app.services.player_stats_service import card_rating_bonus, effective_card_stats
 from app.services.player_identity import card_person
@@ -260,6 +260,7 @@ def calculate_base_strength(
     # single lower-rarity card could shrink the entire team's total even
     # though that card's own rating went up, which read as a bug to players.
     total = 0.0
+    team_rating = arena_team_rating_bonus(coach)
     for card, slot in cards_with_slots:
         player = card.player
         fit = slot_fit(player.position, slot)
@@ -269,6 +270,7 @@ def calculate_base_strength(
         # keeps this function correct for both instead of forcing an
         # unrelated column onto ClubCard.
         rating, _, _ = effective_card_stats(player, card_rating_bonus(card))
+        rating += team_rating  # coach TEAM_RATING
         if chemistry is not None:
             rating = chemistry_service.boosted_rating(rating, chemistry.rating_bonus(slot.code))
         category_mult = category_multipliers.get(slot.category, 1.0)
@@ -354,9 +356,10 @@ async def _serialize_lineup(db: AsyncSession, lineup: Lineup) -> LineupOut:
     stadium = None
     if lineup.user_stadium_card is not None:
         s = lineup.user_stadium_card.stadium
-        stadium = EquippedStadiumOut(id=s.id, display_name=s.display_name, rarity=s.rarity.value, image_path=s.image_path, boost_pct=float(s.boost_pct), club=s.club)
+        stadium = EquippedStadiumOut(id=s.id, display_name=s.display_name, rarity=s.rarity.value, image_path=s.image_path, boost_pct=float(s.boost_pct), club=s.club, opp_malus=s.opp_malus or 0)
 
     return LineupOut(
+        opponent_malus=arena_opponent_malus(coach, lineup.user_stadium_card.stadium.opp_malus if lineup.user_stadium_card else 0),
         id=lineup.id, template_index=lineup.template_index, name=lineup.name, is_active=lineup.is_active,
         formation=formation, tactic=arena_tactics.resolve_style(lineup.tactic), is_complete=is_complete,
         team_strength=strength, max_diamond=config.match_max_diamond_cards, max_path=config.match_max_path_cards,

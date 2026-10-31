@@ -19,7 +19,7 @@ import {
   setClubStadiumTemplate, setClubTacticsTemplate,
 } from "@/api/clubSquad";
 import { staticUrl } from "@/lib/api";
-import { BOOST_TYPE_LABELS } from "@/lib/coaches";
+import { boostText } from "@/lib/coaches";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, type FormationSlot } from "@/lib/formation";
 import { inRow, pitchRows, PITCH_STYLE } from "@/lib/formationLayout";
 import PitchBackground from "@/components/squad/PitchBackground";
@@ -387,7 +387,7 @@ export default function ClubSquadPage() {
           <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
             <p className="text-xs font-semibold text-ink-chalk">{lineup.coach.display_name}</p>
             <p className="mt-0.5 text-caption text-ink-mist">
-              {lineup.coach.boosts.map((b) => `${BOOST_TYPE_LABELS[b.boost_type]} +${b.magnitude}`).join(" · ")}
+              {lineup.coach.boosts.map((b) => boostText(b)).join(" · ")}
             </p>
           </div>
         )}

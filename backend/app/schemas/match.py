@@ -120,6 +120,10 @@ class ArenaPreviewOut(BaseModel):
     # Arena points for a win / draw / loss.
     points_at_stake: dict[str, int]
     division: ArenaDivisionOut
+    # What coaches / stadiums take off each side's lines (already applied
+    # to the strengths and lines above): {"FWD": 4, …}.
+    opponent_malus: dict[str, int] = {}
+    user_malus: dict[str, int] = {}
 
 
 class ArenaLeaderboardEntry(BaseModel):

@@ -1,6 +1,6 @@
 from typing import Optional
 
-from sqlalchemy import Boolean, CheckConstraint, Enum, Integer, Numeric, String
+from sqlalchemy import Boolean, CheckConstraint, Enum, ForeignKey, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -26,6 +26,13 @@ class Stadium(TimestampMixin, Base):
     # Fraction of squad strength this stadium adds when equipped, e.g. 0.05 = +5%.
     # A single flat number — unlike Coach, there is no per-zone/typed boost here.
     boost_pct: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False, default=0.0)
+    # «Проклятый стадион»: −N rating to every opponent player in Card Arena
+    # (coach_boost_service.arena_opponent_malus); 0 = none.
+    opp_malus: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # A themed card collection it belongs to (counted with the footballers).
+    collection_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("card_collections.id", ondelete="SET NULL"), nullable=True, index=True,
+    )
 
     __table_args__ = (
         CheckConstraint("rarity != 'diamond'", name="ck_stadiums_rarity_not_diamond"),

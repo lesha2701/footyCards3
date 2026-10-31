@@ -688,7 +688,10 @@ async def open_pack(
     )
     await track_pack_opened_tasks(db, locked_user, dup_counts)
     collection_rewards = await collection_service.grant_collection_rewards_for_new_cards(
-        db, locked_user, [item.card.player.id for item in opened_items]
+        db, locked_user, [item.card.player.id for item in opened_items],
+        collection_ids=await collection_service.staff_collection_ids(
+            db, [i.card.coach.id for i in opened_coach_items], [i.card.stadium.id for i in opened_stadium_items],
+        ),
     )
 
     # Referral rewards come from the friend's activity now (referral_service), not packs.
@@ -870,7 +873,10 @@ async def open_pack_bulk(
 
     await track_pack_opened_tasks(db, locked_user, dup_counts)
     collection_rewards = await collection_service.grant_collection_rewards_for_new_cards(
-        db, locked_user, [item.card.player.id for item in all_opened_items]
+        db, locked_user, [item.card.player.id for item in all_opened_items],
+        collection_ids=await collection_service.staff_collection_ids(
+            db, [i.card.coach.id for i in all_opened_coach_items], [i.card.stadium.id for i in all_opened_stadium_items],
+        ),
     )
 
     # Referral rewards come from the friend's activity now (referral_service), not packs.

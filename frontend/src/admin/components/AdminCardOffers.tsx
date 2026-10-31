@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { fetchAdminPlayers } from "@/admin/api";
+import { fetchAdminCoaches, fetchAdminMuses, fetchAdminPlayers, fetchAdminStadiums } from "@/admin/api";
 import { announceAdminCardOffer, deleteAdminCardOffer, fetchAdminCardOffers, saveAdminCardOffer } from "@/api/cardOffers";
 import { formatGameError } from "@/lib/errors";
 import type { CardOfferAdmin, CardOfferAdminInput, Player } from "@/types";
@@ -16,10 +16,17 @@ const toLocal = (iso: string | null) => {
 };
 const fromLocal = (v: string) => (v ? new Date(v).toISOString() : null);
 
-type Draft = CardOfferAdminInput & { id?: number; player?: Player };
+type Kind = "player" | "coach" | "stadium" | "muse";
+const KIND_LABELS: Record<Kind, string> = { player: "Футболист", coach: "Тренер", stadium: "Стадион", muse: "Муза" };
+const KIND_ID: Record<Kind, "player_id" | "coach_id" | "stadium_id" | "muse_id"> = {
+  player: "player_id", coach: "coach_id", stadium: "stadium_id", muse: "muse_id",
+};
+
+/** The form: one kind, one chosen card (`label` is what the admin sees). */
+type Draft = CardOfferAdminInput & { id?: number; kind: Kind; label?: string; player?: Player };
 
 const EMPTY: Draft = {
-  player_id: 0, stars_price: 100, title: null, starts_at: null, ends_at: null, stock: null,
+  kind: "player", stars_price: 100, title: null, starts_at: null, ends_at: null, stock: null,
   per_user_limit: 1, is_active: true, sort_order: 0,
 };
 
@@ -34,8 +41,9 @@ export default function AdminCardOffers() {
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["admin-card-offers"] });
   const save = useMutation({
     mutationFn: (d: Draft) => {
-      const { id, player: _player, ...body } = d;
-      return saveAdminCardOffer(body, id);
+      const { id, kind, label: _label, player: _player, ...body } = d;
+      const ids = { player_id: null, coach_id: null, stadium_id: null, muse_id: null, [KIND_ID[kind]]: d[KIND_ID[kind]] };
+      return saveAdminCardOffer({ ...body, ...ids }, id);
     },
     onSuccess: () => { setDraft(null); setError(null); refresh(); },
     onError: (e) => setError(formatGameError(e, "Не сохранилось")),
@@ -53,9 +61,15 @@ export default function AdminCardOffers() {
     onError: (e) => setError(formatGameError(e, "Не разослалось")),
   });
   const askAnnounce = (o: CardOfferAdmin) =>
-    confirm(`Отправить всем игрокам сообщение от бота про «${o.player.display_name}»? Это можно сделать один раз.`) && announce.mutate(o.id);
+    confirm(`Отправить всем игрокам сообщение от бота про «${offerName(o)}»? Это можно сделать один раз.`) && announce.mutate(o.id);
 
-  const edit = (o: CardOfferAdmin) => setDraft({ ...o, player_id: o.player.id });
+  const edit = (o: CardOfferAdmin) => {
+    const kind = (o.kind ?? "player") as Kind;
+    setDraft({
+      ...o, kind, label: offerName(o), player: o.player ?? undefined,
+      [KIND_ID[kind]]: o.player ? o.player.id : o.item?.id,
+    });
+  };
 
   return (
     <section className="flex flex-col gap-3 rounded-2xl border border-white/5 bg-bg-surface p-4">
@@ -79,7 +93,9 @@ export default function AdminCardOffers() {
           <div key={o.id} className="flex items-center gap-3 rounded-xl bg-bg-base px-3 py-2 text-sm">
             <span className={`h-2 w-2 shrink-0 rounded-full ${o.live ? "bg-accent-lime" : "bg-slate-600"}`} title={o.live ? "В продаже" : "Не в продаже"} />
             <span className="min-w-0 flex-1">
-              <span className="block truncate font-semibold">{o.player.display_name} · {o.player.rating}{o.title ? ` · ${o.title}` : ""}</span>
+              <span className="block truncate font-semibold">
+                {o.kind && o.kind !== "player" ? `${KIND_LABELS[o.kind]}: ` : ""}{offerName(o)}{o.title ? ` · ${o.title}` : ""}
+              </span>
               <span className="block text-xs text-slate-500">
                 {o.stars_price} ⭐ · продано {o.sold_count}{o.stock ? `/${o.stock}` : ""}
                 {o.ends_at ? ` · до ${new Date(o.ends_at).toLocaleString("ru-RU")}` : ""}
@@ -106,34 +122,79 @@ export default function AdminCardOffers() {
   );
 }
 
+function offerName(o: CardOfferAdmin): string {
+  return o.player ? `${o.player.display_name} · ${o.player.rating}` : o.item?.name ?? "—";
+}
+
+/** Search results of the chosen kind, as {id, label}. */
+function useCandidates(kind: Kind, search: string) {
+  const enabled = search.length >= 2;
+  const players = useQuery({
+    queryKey: ["admin-players-search", search], queryFn: () => fetchAdminPlayers(search, 1), enabled: enabled && kind === "player",
+  });
+  const coaches = useQuery({
+    queryKey: ["admin-coaches-search", search], queryFn: () => fetchAdminCoaches(search, 1), enabled: enabled && kind === "coach",
+  });
+  const stadiums = useQuery({
+    queryKey: ["admin-stadiums-search", search], queryFn: () => fetchAdminStadiums(search, 1), enabled: enabled && kind === "stadium",
+  });
+  const muses = useQuery({ queryKey: ["admin-muses"], queryFn: fetchAdminMuses, enabled: kind === "muse" });
+  if (kind === "player") {
+    return (players.data?.items ?? []).map((p) => ({
+      id: p.id, player: p,
+      label: `${p.display_name} · ${p.rating} · ${p.position} · ${p.rarity}${p.is_pack_droppable === false ? " · лимитка" : ""}${p.is_active === false ? " · выключена" : ""}`,
+    }));
+  }
+  if (kind === "coach") return (coaches.data?.items ?? []).map((c) => ({ id: c.id, player: undefined, label: `${c.display_name} · ${c.rarity}` }));
+  if (kind === "stadium") return (stadiums.data?.items ?? []).map((s) => ({ id: s.id, player: undefined, label: `${s.display_name} · ${s.rarity}` }));
+  const q = search.toLowerCase();
+  return (muses.data?.muses ?? [])
+    .filter((m) => m.id && (!q || m.name.toLowerCase().includes(q)))
+    .map((m) => ({ id: m.id!, player: undefined, label: `${m.icon} ${m.name} · ${m.rarity}` }));
+}
+
 function OfferForm({ draft, onChange, onSave, onCancel, busy }: {
   draft: Draft; onChange: (d: Draft) => void; onSave: () => void; onCancel: () => void; busy: boolean;
 }) {
   const [search, setSearch] = useState("");
-  const { data: found } = useQuery({
-    queryKey: ["admin-players-search", search], queryFn: () => fetchAdminPlayers(search, 1), enabled: search.length >= 2,
-  });
+  const found = useCandidates(draft.kind, search);
+  const chosenId = draft[KIND_ID[draft.kind]];
   const set = (patch: Partial<Draft>) => onChange({ ...draft, ...patch });
   const numOrNull = (v: string) => (v ? Number(v) : null);
 
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-accent-lime/20 bg-bg-base p-3">
-      {draft.player ? (
+      {!draft.id && (
+        <div className="flex gap-1">
+          {(Object.keys(KIND_LABELS) as Kind[]).map((k) => (
+            <button
+              key={k}
+              onClick={() => onChange({ ...draft, kind: k, label: undefined, player: undefined, [KIND_ID[draft.kind]]: null })}
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${draft.kind === k ? "bg-accent-lime text-bg-base" : "bg-white/5 text-slate-400"}`}
+            >
+              {KIND_LABELS[k]}
+            </button>
+          ))}
+        </div>
+      )}
+      {chosenId ? (
         <div className="flex items-center justify-between text-sm">
-          <span>
-            <b>{draft.player.display_name}</b> · {draft.player.rating} · {draft.player.rarity}
-            {draft.player.is_pack_droppable === false && <span className="ml-1 text-amber-300">(лимитка)</span>}
-          </span>
-          <button onClick={() => set({ player: undefined, player_id: 0 })} className="text-xs text-slate-400 underline">сменить</button>
+          <span><b>{KIND_LABELS[draft.kind]}:</b> {draft.label ?? `#${chosenId}`}</span>
+          <button onClick={() => set({ label: undefined, player: undefined, [KIND_ID[draft.kind]]: null })} className="text-xs text-slate-400 underline">
+            сменить
+          </button>
         </div>
       ) : (
         <div className="flex flex-col gap-1">
-          <input placeholder="Найти карточку по имени (от 2 букв)" value={search} onChange={(e) => setSearch(e.target.value)} className={input} />
+          <input
+            placeholder={draft.kind === "muse" ? "Имя музы (можно пусто — все)" : "Найти по имени (от 2 букв)"}
+            value={search} onChange={(e) => setSearch(e.target.value)} className={input}
+          />
           <div className="flex max-h-48 flex-col overflow-y-auto">
-            {found?.items.map((p) => (
-              <button key={p.id} onClick={() => set({ player: p, player_id: p.id })} className="rounded px-2 py-1 text-left text-xs hover:bg-white/5">
-                {p.display_name} · {p.rating} · {p.position} · {p.rarity}
-                {p.is_pack_droppable === false ? " · лимитка" : ""}{p.is_active === false ? " · выключена" : ""}
+            {found.map((c) => (
+              <button key={c.id} onClick={() => set({ label: c.label, player: c.player, [KIND_ID[draft.kind]]: c.id })}
+                className="rounded px-2 py-1 text-left text-xs hover:bg-white/5">
+                {c.label}
               </button>
             ))}
           </div>
@@ -159,7 +220,7 @@ function OfferForm({ draft, onChange, onSave, onCancel, busy }: {
         <input type="checkbox" checked={draft.is_active} onChange={(e) => set({ is_active: e.target.checked })} /> Включено
       </label>
       <div className="flex gap-2">
-        <button onClick={onSave} disabled={busy || !draft.player_id} className="rounded-lg bg-accent-lime px-4 py-2 text-sm font-bold text-bg-base disabled:opacity-40">
+        <button onClick={onSave} disabled={busy || !chosenId} className="rounded-lg bg-accent-lime px-4 py-2 text-sm font-bold text-bg-base disabled:opacity-40">
           Сохранить
         </button>
         <button onClick={onCancel} className="rounded-lg px-4 py-2 text-sm text-slate-400">Отмена</button>

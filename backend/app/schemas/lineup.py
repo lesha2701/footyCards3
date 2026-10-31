@@ -42,6 +42,8 @@ class EquippedStadiumOut(BaseModel):
     image_path: str | None
     club: Optional[str] = None
     boost_pct: float
+    # −N rating to every opponent player (Card Arena).
+    opp_malus: int = 0
 
 
 class LineupOut(BaseModel):
@@ -60,6 +62,9 @@ class LineupOut(BaseModel):
     stadium: Optional[EquippedStadiumOut] = None
     slots: list[LineupSlotOut]
     chemistry: ChemistryOut = ChemistryOut()
+    # Card Arena: what my coach and stadium take off the opponent's lines
+    # ({"FWD": 4, "DEF": 2, …}; coach_boost_service.arena_opponent_malus).
+    opponent_malus: dict[str, int] = {}
 
 
 class LineupSlotIn(BaseModel):

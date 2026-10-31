@@ -20,7 +20,7 @@ import {
   renamePersonalSquad, setPersonalSquadCards, setPersonalSquadCoach, setPersonalSquadStadium, setPersonalSquadTactics,
 } from "@/api/personalTournament";
 import { staticUrl } from "@/lib/api";
-import { BOOST_TYPE_LABELS } from "@/lib/coaches";
+import { boostText } from "@/lib/coaches";
 import type { ManagerStyle } from "@/api/manager";
 import TacticsPanel from "@/components/manager/TacticsPanel";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, type FormationSlot } from "@/lib/formation";
@@ -428,7 +428,7 @@ export default function PlayerTournamentSquadPage() {
           <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
             <p className="text-xs font-semibold text-ink-chalk">{squad.coach.display_name}</p>
             <p className="mt-0.5 text-caption text-ink-mist">
-              {squad.coach.boosts.map((b) => `${BOOST_TYPE_LABELS[b.boost_type]} +${b.magnitude}`).join(" · ")}
+              {squad.coach.boosts.map((b) => boostText(b)).join(" · ")}
             </p>
           </div>
         )}

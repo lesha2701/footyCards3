@@ -24,6 +24,14 @@ class CoachBoostType(str, enum.Enum):
     DEFENSIVE_DISCIPLINE = "defensive_discipline"
     COUNTER_MASTERY = "counter_mastery"
     SQUAD_STABILITY = "squad_stability"
+    # Card Arena: +N rating to every player of the own XI.
+    TEAM_RATING = "team_rating"
+    # Card Arena, against the opponent: −N rating to their attack / defence /
+    # keeper / every player (coach_boost_service.arena_opponent_malus).
+    OPP_ATTACK = "opp_attack"
+    OPP_DEFENCE = "opp_defence"
+    OPP_GOALKEEPING = "opp_goalkeeping"
+    OPP_TEAM = "opp_team"
 
 
 class Position(str, enum.Enum):

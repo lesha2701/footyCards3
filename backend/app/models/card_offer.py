@@ -9,8 +9,9 @@ from app.models.mixins import TimestampMixin, utcnow
 
 
 class CardOffer(TimestampMixin, Base):
-    """«Карты за звёзды»: one footballer card sold in the shop for Telegram
-    Stars, set up by the admin — e.g. a retired / limited card
+    """«Карты за звёзды»: one card sold in the shop for Telegram Stars — a
+    footballer, a coach, a stadium or a Muse (exactly one of the four ids),
+    set up by the admin — e.g. a retired / limited card
     (Player.is_pack_droppable = False) back for a short window. Optional
     window (starts_at / ends_at), stock (copies in total) and a per-player
     limit; sold_count grows on delivery (card_offer_service)."""
@@ -18,7 +19,10 @@ class CardOffer(TimestampMixin, Base):
     __tablename__ = "card_offers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), nullable=False, index=True)
+    player_id: Mapped[Optional[int]] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), nullable=True, index=True)
+    coach_id: Mapped[Optional[int]] = mapped_column(ForeignKey("coaches.id", ondelete="CASCADE"), nullable=True)
+    stadium_id: Mapped[Optional[int]] = mapped_column(ForeignKey("stadiums.id", ondelete="CASCADE"), nullable=True)
+    muse_id: Mapped[Optional[int]] = mapped_column(ForeignKey("muses.id", ondelete="CASCADE"), nullable=True)
     stars_price: Mapped[int] = mapped_column(Integer, nullable=False)
     # Shown on the tile, e.g. «Переиздание легенды» (optional).
     title: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
@@ -35,6 +39,9 @@ class CardOffer(TimestampMixin, Base):
     reminded_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     player = relationship("Player", lazy="joined")
+    coach = relationship("Coach", lazy="joined")
+    stadium = relationship("Stadium", lazy="joined")
+    muse = relationship("Muse", lazy="joined")
 
 
 class CardOfferView(Base):

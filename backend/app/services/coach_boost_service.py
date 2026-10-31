@@ -134,6 +134,39 @@ _ARENA_RARITY_TEAM_STRENGTH_BONUS: dict[Rarity, int] = {
 }
 
 
+def arena_team_rating_bonus(coach: "Coach | None") -> int:
+    """Card Arena: TEAM_RATING — +N to every player of the own XI."""
+    return round(resolve_active_boosts(coach).by_type.get(CoachBoostType.TEAM_RATING, 0.0))
+
+
+def arena_opponent_malus(coach: "Coach | None", stadium_opp_malus: int = 0) -> dict[str, int]:
+    """Card Arena: rating points the opponent's lines lose to my coach
+    (OPP_ATTACK / OPP_DEFENCE / OPP_GOALKEEPING, OPP_TEAM for everyone)
+    and my stadium («Проклятый стадион», Stadium.opp_malus, everyone).
+    Empty when nothing weakens the opponent."""
+    by_type = resolve_active_boosts(coach).by_type
+    team = round(by_type.get(CoachBoostType.OPP_TEAM, 0.0)) + max(0, int(stadium_opp_malus or 0))
+    malus = {
+        "FWD": team + round(by_type.get(CoachBoostType.OPP_ATTACK, 0.0)),
+        "MID": team,
+        "DEF": team + round(by_type.get(CoachBoostType.OPP_DEFENCE, 0.0)),
+        "GK": team + round(by_type.get(CoachBoostType.OPP_GOALKEEPING, 0.0)),
+    }
+    return {line: points for line, points in malus.items() if points > 0}
+
+
+def apply_opponent_malus(strength: int, lines: dict[str, int], malus: dict[str, int]) -> tuple[int, dict[str, int]]:
+    """Lowers a side's line ratings by `malus` and its strength by the same
+    share as its average rating drops (a side never goes below 1)."""
+    if not malus:
+        return strength, lines
+    new_lines = {line: max(1, value - malus.get(line, 0)) for line, value in lines.items()}
+    before = sum(lines.values()) / max(1, len(lines))
+    after = sum(new_lines.values()) / max(1, len(new_lines))
+    scaled = round(strength * (after / before)) if before > 0 else strength
+    return max(1, scaled), new_lines
+
+
 def arena_rarity_team_strength_bonus(coach: "Coach | None") -> int:
     """A simple, universal Card Arena squad-power bonus scaled only by the
     equipped coach's own rarity — independent of which specific boosts it

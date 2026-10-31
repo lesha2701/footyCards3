@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import {
   createCoach, deleteCoach, deleteCoachImage, fetchAdminCoaches,
   toggleCoachActive, toggleCoachPackDroppable, updateCoach, uploadCoachImage,
+  fetchAdminCardCollections,
 } from "@/admin/api";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { BOOST_TYPES, BOOST_TYPE_LABELS } from "@/lib/coaches";
@@ -21,6 +22,7 @@ type BoostFormRow = { boost_type: CoachBoostType };
 const emptyForm = {
   display_name: "", rarity: "common" as Rarity, country: "", quick_sell_price: 10, is_active: true, is_pack_droppable: true,
   boosts: [{ boost_type: "attack_central" as CoachBoostType }] as BoostFormRow[],
+  collection_id: null as number | null,
 };
 
 export default function AdminCoachesPage() {
@@ -30,6 +32,7 @@ export default function AdminCoachesPage() {
   const [editing, setEditing] = useState<Coach | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const { data: collections } = useQuery({ queryKey: ["admin-card-collections"], queryFn: fetchAdminCardCollections });
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -64,6 +67,7 @@ export default function AdminCoachesPage() {
       display_name: c.display_name, rarity: c.rarity, country: c.country ?? "", quick_sell_price: c.quick_sell_price,
       is_active: c.is_active, is_pack_droppable: c.is_pack_droppable,
       boosts: c.boosts.map((b) => ({ boost_type: b.boost_type })),
+      collection_id: c.collection_id ?? null,
     });
   };
 
@@ -170,6 +174,17 @@ export default function AdminCoachesPage() {
                   onChange={(e) => setForm({ ...form, country: e.target.value })}
                   className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
                 />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-slate-400">Коллекция (считается в ней вместе с футболистами)</span>
+                <select
+                  value={form.collection_id ?? ""}
+                  onChange={(e) => setForm({ ...form, collection_id: e.target.value ? Number(e.target.value) : null })}
+                  className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                >
+                  <option value="">Без коллекции</option>
+                  {collections?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
               </label>
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-slate-400">Цена продажи</span>

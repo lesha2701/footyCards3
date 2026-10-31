@@ -30,8 +30,13 @@ class Coach(TimestampMixin, Base):
     # atomic-per-template-serial pattern (services/card_creation.py).
     next_serial_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     next_club_serial_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # A themed card collection it belongs to (counted with the footballers).
+    collection_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("card_collections.id", ondelete="SET NULL"), nullable=True, index=True,
+    )
 
-    boosts: Mapped[list["CoachBoost"]] = relationship(back_populates="coach", cascade="all, delete-orphan")
+    # selectin: a coach shows its effects wherever it is loaded (offers, album, …).
+    boosts: Mapped[list["CoachBoost"]] = relationship(back_populates="coach", cascade="all, delete-orphan", lazy="selectin")
 
     __table_args__ = (
         CheckConstraint("rarity != 'diamond'", name="ck_coaches_rarity_not_diamond"),

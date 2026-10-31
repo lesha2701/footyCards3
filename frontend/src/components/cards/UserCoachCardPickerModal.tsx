@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import EmptyState from "@/components/common/EmptyState";
 import { IconCollection } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
-import { BOOST_TYPE_LABELS } from "@/lib/coaches";
+import { boostText } from "@/lib/coaches";
 import { RARITY_LABELS } from "@/lib/rarity";
 import type { UserCoachCard } from "@/types";
 
@@ -79,7 +79,7 @@ export default function UserCoachCardPickerModal({ open, cards, onSelect, onClos
                       <p className="truncate text-sm font-semibold text-ink-chalk">{c.coach.display_name}</p>
                       <p className="text-micro text-ink-mist-dim">{RARITY_LABELS[c.coach.rarity]}</p>
                       <p className="mt-0.5 truncate text-micro text-ink-mist">
-                        {c.coach.boosts.map((b) => `${BOOST_TYPE_LABELS[b.boost_type]} +${b.magnitude}`).join(" · ")}
+                        {c.coach.boosts.map((b) => boostText(b)).join(" · ")}
                       </p>
                     </div>
                   </button>

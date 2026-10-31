@@ -9,6 +9,10 @@ from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.core.pagination import Page, PageParams
 from app.models.card import UserCard
 from app.models.card_collection import CardCollection, UserCollectionReward
+from app.models.coach import Coach
+from app.models.stadium import Stadium
+from app.models.user_coach_card import UserCoachCard
+from app.models.user_stadium_card import UserStadiumCard
 from app.models.enums import RARITY_ORDER, CardSource, NotificationType, Rarity, TransactionType
 from app.models.pack import Pack
 from app.models.player import Player
@@ -16,6 +20,7 @@ from app.models.user import User
 from app.schemas.collection import (
     AlbumCollectionDetailOut,
     AlbumCollectionSummaryOut,
+    AlbumStaffOut,
     AlbumOverviewOut,
     AlbumPlayerOut,
     CollectionFilterParams,
@@ -413,7 +418,39 @@ async def _collection_progress(db: AsyncSession, user_id: int, collection_id: Op
             .where(UserCard.owner_id == user_id, condition, Player.is_active.is_(True))
         )
     ).scalar_one()
+    if collection_id is not None:
+        # Coaches and stadiums of the collection count like its footballers.
+        staff_total, staff_owned = await _staff_progress(db, user_id, collection_id)
+        total += staff_total
+        owned += staff_owned
     return owned, total
+
+
+async def _staff_progress(db: AsyncSession, user_id: int, collection_id: int) -> tuple[int, int]:
+    total = 0
+    owned = 0
+    for model, card_model, key in ((Coach, UserCoachCard, "coach_id"), (Stadium, UserStadiumCard, "stadium_id")):
+        total += (await db.execute(
+            select(func.count(model.id)).where(model.collection_id == collection_id, model.is_active.is_(True))
+        )).scalar_one()
+        owned += (await db.execute(
+            select(func.count(func.distinct(getattr(card_model, key))))
+            .join(model, model.id == getattr(card_model, key))
+            .where(card_model.user_id == user_id, model.collection_id == collection_id, model.is_active.is_(True))
+        )).scalar_one()
+    return total, owned
+
+
+async def staff_collection_ids(db: AsyncSession, coach_ids: Iterable[int] = (), stadium_ids: Iterable[int] = ()) -> list[int]:
+    """Active collections these coaches / stadiums belong to — pass them to
+    grant_collection_rewards_for_new_cards(collection_ids=…) after a grant."""
+    ids: set[int] = set()
+    for model, wanted in ((Coach, set(coach_ids)), (Stadium, set(stadium_ids))):
+        if wanted:
+            ids.update(c for c in (await db.execute(
+                select(model.collection_id).where(model.id.in_(wanted), model.collection_id.is_not(None))
+            )).scalars().all() if c)
+    return sorted(ids)
 
 
 async def _reward_claimed(db: AsyncSession, user_id: int, collection_id: int) -> bool:
@@ -434,7 +471,7 @@ async def _pack_name(db: AsyncSession, pack_id: Optional[int]) -> Optional[str]:
 
 
 async def grant_collection_rewards_for_new_cards(
-    db: AsyncSession, user: User, player_ids: Iterable[int]
+    db: AsyncSession, user: User, player_ids: Iterable[int], collection_ids: Iterable[int] = (),
 ) -> List[CollectionRewardGrantOut]:
     """Call after any operation that changes which players `user` owns —
     both new-card creation (pack opens, daily reward, card upgrade) and
@@ -449,17 +486,26 @@ async def grant_collection_rewards_for_new_cards(
     function does not lock it itself.
     """
     player_ids = set(player_ids)
-    if not player_ids:
+    extra = set(collection_ids)  # collections of granted coaches / stadiums (staff_collection_ids)
+    if not player_ids and not extra:
         return []
 
-    candidate_ids = (
-        await db.execute(
-            select(Player.collection_id)
-            .distinct()
-            .join(CardCollection, CardCollection.id == Player.collection_id)
-            .where(Player.id.in_(player_ids), CardCollection.is_active.is_(True))
-        )
-    ).scalars().all()
+    candidate_ids = list(
+        (
+            await db.execute(
+                select(Player.collection_id)
+                .distinct()
+                .join(CardCollection, CardCollection.id == Player.collection_id)
+                .where(Player.id.in_(player_ids or {0}), CardCollection.is_active.is_(True))
+            )
+        ).scalars().all()
+    )
+    if extra:
+        candidate_ids += [
+            c for c in (await db.execute(
+                select(CardCollection.id).where(CardCollection.id.in_(extra), CardCollection.is_active.is_(True))
+            )).scalars().all() if c not in candidate_ids
+        ]
     # Players with collection_id IS NULL (the synthetic "Other players"
     # bucket) are deliberately excluded — there's no CardCollection row to
     # hang a reward off, by design.
@@ -531,6 +577,17 @@ async def grant_collection_rewards_for_new_cards(
         )
 
     return grants
+
+
+def stadium_effect_lines(stadium) -> list[str]:
+    lines = []
+    if float(stadium.boost_pct or 0) > 0:
+        lines.append(f"+{round(float(stadium.boost_pct) * 100)}% к силе состава")
+    if getattr(stadium, "opp_malus", 0):
+        lines.append(f"−{stadium.opp_malus} к рейтингу соперника")
+    if stadium.club:
+        lines.append(f"химия игрокам «{stadium.club}»")
+    return lines
 
 
 async def get_album_overview(db: AsyncSession, user_id: int, search: Optional[str] = None) -> AlbumOverviewOut:
@@ -666,7 +723,33 @@ async def get_album_collection_detail(
             )
         )
 
+    staff: List[AlbumStaffOut] = []
+    if collection_id != OTHER_COLLECTION_ID:
+        from app.services.coach_service import coach_effect_lines
+
+        owned_coaches = set((await db.execute(
+            select(UserCoachCard.coach_id).where(UserCoachCard.user_id == user_id)
+        )).scalars().all())
+        owned_stadiums = set((await db.execute(
+            select(UserStadiumCard.stadium_id).where(UserStadiumCard.user_id == user_id)
+        )).scalars().all())
+        for coach in (await db.execute(
+            select(Coach).where(Coach.collection_id == collection_id, Coach.is_active.is_(True)).order_by(Coach.display_name)
+        )).scalars().all():
+            staff.append(AlbumStaffOut(
+                kind="coach", id=coach.id, name=coach.display_name, rarity=coach.rarity.value, image_path=coach.image_path,
+                owned=coach.id in owned_coaches, effects=coach_effect_lines(coach),
+            ))
+        for stadium in (await db.execute(
+            select(Stadium).where(Stadium.collection_id == collection_id, Stadium.is_active.is_(True)).order_by(Stadium.display_name)
+        )).scalars().all():
+            staff.append(AlbumStaffOut(
+                kind="stadium", id=stadium.id, name=stadium.display_name, rarity=stadium.rarity.value,
+                image_path=stadium.image_path, owned=stadium.id in owned_stadiums, effects=stadium_effect_lines(stadium),
+            ))
+
     return AlbumCollectionDetailOut(
+        staff=staff,
         id=collection_id, name=name, description=description, image_path=image_path,
         reward_coins=reward_coins, reward_pack_name=reward_pack_name,
         owned_count=owned, total_count=total, is_complete=owned >= total,

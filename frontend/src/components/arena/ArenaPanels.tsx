@@ -185,6 +185,9 @@ export function ArenaOpponentCard({
           {preview.matchup_text}
           {preview.matchup_bonus_pct > 0 && ` (${preview.matchup === "win" ? "+" : "−"}${preview.matchup_bonus_pct}% к силе)`}
         </p>
+        {/* Already counted in the strengths and lines above. */}
+        <OpponentMalusNote malus={preview.opponent_malus} who="Твой тренер и стадион отнимают у соперника" />
+        <OpponentMalusNote malus={preview.user_malus} who="Тренер и стадион соперника отнимают у тебя" />
       </div>
 
       <div className="mt-4">
@@ -275,5 +278,20 @@ export function ArenaMatchReport({ match }: { match: Match }) {
         </div>
       )}
     </div>
+  );
+}
+
+const MALUS_LINES: [("FWD" | "MID" | "DEF" | "GK"), string][] = [["FWD", "атака"], ["MID", "центр"], ["DEF", "защита"], ["GK", "вратарь"]];
+
+/** «☠ Сопернику: атака −11, защита −7…» — what my coach and stadium take off him. */
+export function OpponentMalusNote({ malus, who = "Сопернику" }: {
+  malus?: Partial<Record<"FWD" | "MID" | "DEF" | "GK", number>>; who?: string;
+}) {
+  const parts = MALUS_LINES.filter(([key]) => (malus?.[key] ?? 0) > 0).map(([key, label]) => `${label} −${malus![key]}`);
+  if (!parts.length) return null;
+  return (
+    <p className="mt-2 rounded-xl bg-red-500/10 px-3 py-2 text-caption font-semibold text-red-300">
+      ☠ {who}: {parts.join(" · ")}
+    </p>
   );
 }

@@ -18,8 +18,8 @@ import { IconChevronLeft, IconChevronRight, IconCoin, IconCollection, IconParty,
 import { fetchAlbumCollectionDetail, fetchAlbumOverview } from "@/api/album";
 import { addTradeWish, fetchTradeWishes, removeTradeWish } from "@/api/trades";
 import { ApiRequestError, staticUrl } from "@/lib/api";
-import { POSITION_LABELS, RARITY_ORDER } from "@/lib/rarity";
-import type { AlbumCollectionSummary, AlbumPlayer } from "@/types";
+import { POSITION_LABELS, RARITY_GRADIENTS, RARITY_ORDER } from "@/lib/rarity";
+import type { AlbumCollectionSummary, AlbumPlayer, AlbumStaff } from "@/types";
 
 export default function AlbumTab() {
   const [openCollectionId, setOpenCollectionId] = useState<number | null>(null);
@@ -237,7 +237,7 @@ function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: (
 
       {want.error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{want.error}</p>}
       {isLoading && <CardGridSkeleton count={9} />}
-      {!isLoading && !visible.length && (
+      {!isLoading && !visible.length && !(data?.staff?.length && !search && !activeCount(filter)) && (
         <EmptyState
           icon={IconCollection}
           title="Никого не найдено"
@@ -257,6 +257,15 @@ function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: (
           </div>
         ))}
       </div>
+
+      {!!data?.staff?.length && (
+        <section className="flex flex-col gap-2">
+          <p className="text-micro font-bold uppercase tracking-[0.12em] text-accent-cyan">Тренеры и стадионы коллекции</p>
+          <div className="grid grid-cols-3 gap-2">
+            {data.staff.map((s) => <StaffSlot key={`${s.kind}-${s.id}`} staff={s} />)}
+          </div>
+        </section>
+      )}
 
       {detailCard && (
         <CardDetailModal
@@ -379,5 +388,31 @@ function AlbumSlot({
         ) : undefined
       }
     />
+  );
+}
+
+
+/** A coach or stadium of the collection: art in its rarity frame, its
+ * effects, greyed out until owned. */
+function StaffSlot({ staff }: { staff: AlbumStaff }) {
+  return (
+    <div className={`rounded-xl bg-gradient-to-b p-[1.5px] ${RARITY_GRADIENTS[staff.rarity]} ${staff.owned ? "" : "opacity-45 grayscale"}`}>
+      <div className="flex flex-col gap-0.5 rounded-[10px] bg-bg-surface p-1">
+        <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-black/40">
+          {staff.image_path ? (
+            <img decoding="async" loading="lazy" src={staticUrl(staff.image_path) ?? undefined} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center text-3xl">{staff.kind === "stadium" ? "🏟️" : "🧥"}</span>
+          )}
+          <span className="absolute left-0.5 top-0.5 rounded bg-black/75 px-1 text-micro font-bold text-ink-chalk">
+            {staff.kind === "stadium" ? "Стадион" : "Тренер"}
+          </span>
+        </div>
+        <p className="truncate text-center text-micro font-bold text-ink-chalk">{staff.name}</p>
+        {staff.effects.slice(0, 2).map((e) => (
+          <p key={e} className={`truncate text-center text-[10px] font-semibold leading-tight ${e.startsWith("−") ? "text-red-300" : "text-accent-lime"}`}>{e}</p>
+        ))}
+      </div>
+    </div>
   );
 }

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
 import {
-  createStadium, deleteStadium, deleteStadiumImage, fetchAdminStadiums,
+  createStadium, deleteStadium, deleteStadiumImage, fetchAdminCardCollections, fetchAdminStadiums,
   toggleStadiumActive, toggleStadiumPackDroppable, updateStadium, uploadStadiumImage,
 } from "@/admin/api";
 import { ApiRequestError, staticUrl } from "@/lib/api";
@@ -13,7 +13,7 @@ const RARITIES: Rarity[] = ["common", "rare", "epic", "legendary"];
 
 const emptyForm = {
   display_name: "", rarity: "common" as Rarity, club: "", quick_sell_price: 10, is_active: true, is_pack_droppable: true,
-  boost_pct: 0,
+  boost_pct: 0, opp_malus: 0, collection_id: null as number | null,
 };
 
 export default function AdminStadiumsPage() {
@@ -27,6 +27,7 @@ export default function AdminStadiumsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading } = useQuery({ queryKey: ["admin-stadiums", search, page], queryFn: () => fetchAdminStadiums(search, page) });
+  const { data: collections } = useQuery({ queryKey: ["admin-card-collections"], queryFn: fetchAdminCardCollections });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-stadiums"] });
 
@@ -56,7 +57,7 @@ export default function AdminStadiumsPage() {
     setForm({
       display_name: s.display_name, rarity: s.rarity, club: s.club ?? "", quick_sell_price: s.quick_sell_price,
       is_active: s.is_active, is_pack_droppable: s.is_pack_droppable,
-      boost_pct: s.boost_pct,
+      boost_pct: s.boost_pct, opp_malus: s.opp_malus ?? 0, collection_id: s.collection_id ?? null,
     });
   };
 
@@ -97,7 +98,9 @@ export default function AdminStadiumsPage() {
                 </td>
                 <td className="px-3 py-2">{s.display_name}</td>
                 <td className="px-3 py-2">{RARITY_LABELS[s.rarity]}</td>
-                <td className="px-3 py-2 text-xs text-slate-400">+{Math.round(s.boost_pct * 100)}%</td>
+                <td className="px-3 py-2 text-xs text-slate-400">
+                  +{Math.round(s.boost_pct * 100)}%{s.opp_malus ? <span className="ml-1 text-red-300">☠ −{s.opp_malus}</span> : null}
+                </td>
                 <td className="px-3 py-2">{s.is_active ? "✅" : "🚫"}</td>
                 <td className="px-3 py-2">{s.is_pack_droppable ? "✅" : "🚫"}</td>
                 <td className="px-3 py-2">
@@ -166,6 +169,25 @@ export default function AdminStadiumsPage() {
                   onChange={(e) => setForm({ ...form, boost_pct: Number(e.target.value) })}
                   className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
                 />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-slate-400">☠ Минус к рейтингу соперника (Card Arena, 0 — нет), напр. 5</span>
+                <input
+                  type="number" min={0} max={20} value={form.opp_malus}
+                  onChange={(e) => setForm({ ...form, opp_malus: Number(e.target.value) || 0 })}
+                  className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-slate-400">Коллекция (считается в ней вместе с футболистами)</span>
+                <select
+                  value={form.collection_id ?? ""}
+                  onChange={(e) => setForm({ ...form, collection_id: e.target.value ? Number(e.target.value) : null })}
+                  className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                >
+                  <option value="">Без коллекции</option>
+                  {collections?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
               </label>
 
               <label className="flex items-center gap-2 text-xs text-slate-300">
