@@ -79,6 +79,7 @@ from app.models.player_tournament import (
 from app.models.player import Player
 from app.models.stratego import StrategoMatch, StrategoQueueEntry
 from app.models.mordoboi import MordoboiMatch, MordoboiQueueEntry
+from app.models.fan_battle import FanBattleLedger, FanBattleMember
 from app.models.halloween import HalloweenLedger, HalloweenWallet
 from app.models.kontra import KontraBattle, KontraGear
 from app.models.weekly_top import WeeklyTopAward, WeeklyTopRun
@@ -121,6 +122,8 @@ from app.models.user_stadium_card import UserStadiumCard
 from app.models.club_stadium_card import ClubStadiumCard
 
 __all__ = [
+    "FanBattleLedger",
+    "FanBattleMember",
     "HalloweenLedger",
     "HalloweenWallet",
     "ManagerClub",

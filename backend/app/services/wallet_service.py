@@ -72,6 +72,10 @@ async def credit_coins(
     from app.services import halloween_service
 
     await halloween_service.grant_game_pumpkins(db, user, tx_type, amount)
+    # «⚔️ Битва фанатов»: and points for the player's side.
+    from app.services import fan_battle_service
+
+    await fan_battle_service.grant_game_points(db, user, tx_type, amount)
     return tx
 
 

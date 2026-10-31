@@ -177,6 +177,9 @@ class TransactionType(str, enum.Enum):
     # «🎃 Ночь тыкв» (services/halloween_service.py): coins from the pumpkin
     # shop and the «Кошелёк или жизнь» doors.
     halloween_reward = "halloween_reward"
+    # «⚔️ Битва фанатов» (services/fan_battle_service.py): daily battles,
+    # milestones and the final.
+    fan_battle_reward = "fan_battle_reward"
 
 
 class GiftKind(str, enum.Enum):

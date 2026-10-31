@@ -934,6 +934,13 @@ class GameConfig(TimestampMixin, Base):
     halloween_starts_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     halloween_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     halloween_settings: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # «⚔️ Битва фанатов» (services/fan_battle_service.py): the same shape —
+    # one switch, the dates and every number (points, daily battles, final,
+    # milestones, sides, boss) in fan_battle_settings.
+    fan_battle_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    fan_battle_starts_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    fan_battle_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    fan_battle_settings: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
 
     # «Топ недели» (weekly_top_service.py): every Monday the top places of
     # each ranking get the reward of their place. weekly_top_rewards is one

@@ -364,3 +364,29 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .hw-float, .hw-flap, .hw-glow, .hw-flicker { animation: none; }
 }
+
+/* «⚔️ Битва фанатов»: the two sides' colours come in as --fan-a / --fan-b
+   (inline style); the «Капитаны» frame takes the viewer's side as --fan. */
+.fans-sky {
+  background:
+    radial-gradient(110% 120% at 0% 0%, color-mix(in srgb, var(--fan-a, #f97316) 60%, transparent) 0%, transparent 55%),
+    radial-gradient(110% 120% at 100% 100%, color-mix(in srgb, var(--fan-b, #38bdf8) 60%, transparent) 0%, transparent 55%),
+    linear-gradient(120deg, #140b06 0%, #0b0f1a 100%);
+}
+.fans-frame {
+  background-image: linear-gradient(180deg, var(--fan, #fbbf24) 0%, color-mix(in srgb, var(--fan, #fbbf24) 45%, #000) 55%, #0b0b0f 100%) !important;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--fan, #fbbf24) 55%, transparent);
+}
+@keyframes fansSpark {
+  0%, 100% { box-shadow: 0 0 6px 2px rgb(255 255 255 / 0.7); }
+  50% { box-shadow: 0 0 14px 5px rgb(255 255 255 / 0.95); }
+}
+@keyframes fansPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+.fans-spark { animation: fansSpark 1.6s ease-in-out infinite; }
+.fans-pulse { animation: fansPulse 1.8s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .fans-spark, .fans-pulse { animation: none; }
+}

@@ -521,10 +521,11 @@ async def get_boss(db: AsyncSession, user: User) -> KontraBossOut:
 
 
 def _current_boss(config: GameConfig, today) -> dict:
-    """The weekly rotation, or the «🎃 Ночь тыкв» boss while that event runs."""
-    from app.services import halloween_service
+    """The weekly rotation, or an event's boss while it runs («🎃 Ночь тыкв»
+    first, then «⚔️ Битва фанатов»)."""
+    from app.services import fan_battle_service, halloween_service
 
-    return halloween_service.kontra_boss(config) or catalog.boss_for(today)
+    return halloween_service.kontra_boss(config) or fan_battle_service.kontra_boss(config) or catalog.boss_for(today)
 
 
 def _phase(total: int, config: GameConfig) -> int:
@@ -688,6 +689,9 @@ async def _finish(db: AsyncSession, battle: KontraBattle, state: dict, config: G
         from app.services import halloween_service
 
         await halloween_service.grant_boss_bonus(db, user, battle.id, state)
+        from app.services import fan_battle_service
+
+        await fan_battle_service.grant_boss_bonus(db, user, battle.id, state)
     else:
         won = state["winner"] == "me"
         battle.result = "win" if won else "loss"

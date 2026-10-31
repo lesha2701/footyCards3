@@ -1528,3 +1528,28 @@ export async function updateAdminHalloween(payload: {
   const { data } = await api.put<AdminHalloween>("/admin/halloween", payload);
   return data;
 }
+
+// «⚔️ Битва фанатов» (backend/app/routers/admin_fan_battle.py)
+export interface AdminFanBattle {
+  enabled: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  settings: Record<string, unknown>;
+  defaults: Record<string, unknown>;
+  stats: { members?: Record<string, number>; points?: Record<string, number>; points_total?: number; claims?: number };
+}
+
+export async function fetchAdminFanBattle(): Promise<AdminFanBattle> {
+  const { data } = await api.get<AdminFanBattle>("/admin/fan-battle");
+  return data;
+}
+
+export async function updateAdminFanBattle(payload: {
+  enabled?: boolean;
+  starts_at?: string;
+  ends_at?: string;
+  settings?: Record<string, unknown>;
+}): Promise<AdminFanBattle> {
+  const { data } = await api.put<AdminFanBattle>("/admin/fan-battle", payload);
+  return data;
+}

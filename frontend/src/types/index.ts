@@ -4025,3 +4025,102 @@ export interface HalloweenBuyResult {
   skill_tokens: number;
   badge: Badge | null;
 }
+
+// «⚔️ Битва фанатов» (backend/app/services/fan_battle_service.py)
+export interface FanSide {
+  code: string;
+  name: string;
+  emoji: string;
+  color: string;
+  members: number;
+  points: number;
+  today_points: number;
+  underdog_bonus_pct: number;
+}
+
+export interface FanTop {
+  user_id: number;
+  name: string;
+  points: number;
+}
+
+export interface FanDay {
+  day: string;
+  finished: boolean;
+  points: Record<string, number>;
+  winner: string | null; // side code, "draw", or null while the day runs
+  my_points: number;
+  reward_coins: number;
+  claimed: boolean;
+}
+
+export interface FanMilestone {
+  points: number;
+  kind: "coins" | "skill_tokens" | "pack" | "badge";
+  amount: number;
+  title: string;
+  reached: boolean;
+  claimed: boolean;
+  badge: Badge | null;
+  pack_name: string | null;
+}
+
+export interface FanFinal {
+  winner: string | null;
+  my_rank: number | null;
+  eligible: boolean;
+  coins: number;
+  pack_name: string | null;
+  badge: Badge | null;
+  claimed: boolean;
+}
+
+export interface FanBattleState {
+  enabled: boolean;
+  active: boolean;
+  finished: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  claim_until: string | null;
+  can_join: boolean;
+  teaser_days: number;
+  sides: FanSide[];
+  my_side: string | null;
+  my_points: number;
+  my_today_points: number;
+  my_rank: number | null;
+  points_per_game: number;
+  games_points_today: number;
+  games_daily_cap: number;
+  points_per_task: number;
+  points_per_daily_chest: number;
+  points_per_weekly_chest: number;
+  boss_name: string | null;
+  boss_multiplier: number;
+  daily_min_points: number;
+  daily_win_coins: number;
+  daily_lose_coins: number;
+  day_resets_at: string | null;
+  days: FanDay[];
+  milestones: FanMilestone[];
+  final: FanFinal | null;
+  final_win_coins: number;
+  final_lose_coins: number;
+  final_min_points: number;
+  top_n: number;
+  top_bonus_coins: number;
+  top: Record<string, FanTop[]>;
+  claimable: number;
+  collection: HalloweenState["collection"];
+}
+
+export interface FanClaimResult {
+  claimed: number;
+  coins: number;
+  skill_tokens: { code: string; amount: number }[];
+  badges: Badge[];
+  pack_names: string[];
+  cards: UserCard[];
+  titles: string[];
+  new_balance: number;
+}

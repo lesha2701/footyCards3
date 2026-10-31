@@ -52,7 +52,9 @@ from app.routers import (
     admin_trophies,
     admin_users,
     admin_wheel,
+    admin_fan_battle,
     admin_halloween,
+    fan_battle,
     halloween,
     announcement,
     auth,
@@ -245,6 +247,8 @@ app.include_router(admin_lifestyle.router, prefix=API_PREFIX)
 app.include_router(admin_club_base.router, prefix=API_PREFIX)
 app.include_router(admin_wheel.router, prefix=API_PREFIX)
 app.include_router(admin_halloween.router, prefix=API_PREFIX)
+app.include_router(admin_fan_battle.router, prefix=API_PREFIX)
+app.include_router(fan_battle.router, prefix=API_PREFIX)
 app.include_router(halloween.router, prefix=API_PREFIX)
 app.include_router(admin_games.router, prefix=API_PREFIX)
 app.include_router(admin_career.router, prefix=API_PREFIX)

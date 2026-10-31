@@ -1,6 +1,7 @@
 import { Suspense, useEffect } from "react";
 import { Outlet } from "react-router-dom";
 
+import { FanColorProvider } from "@/components/fans/FanColorProvider";
 import { HalloweenZombieProvider } from "@/components/halloween/HalloweenZombieProvider";
 
 import LeaveConfirmDialog from "@/components/common/LeaveConfirmDialog";
@@ -68,7 +69,9 @@ export default function AppLayout() {
             navigation stay put while a screen's chunk downloads. */}
         <Suspense fallback={<ListSkeleton count={4} />}>
           <HalloweenZombieProvider>
-            <Outlet />
+            <FanColorProvider>
+              <Outlet />
+            </FanColorProvider>
           </HalloweenZombieProvider>
         </Suspense>
       </main>

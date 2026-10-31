@@ -91,6 +91,15 @@ HALLOWEEN_BOSS = {
 }
 
 
+# «⚔️ Битва фанатов» (fan_battle_service.kontra_boss): the same, while that
+# event runs.
+FAN_BATTLE_BOSS = {
+    "code": "turncoat", "name": "Перебежчик",
+    "tagline": "Сменил шарф и знает все схемы твоей стороны — выстой до свистка, и очки твоей стороне умножатся",
+    "atk": 270, "def": 260, "spd": 125, "abilities": ("boss_card", "boss_chant"),
+}
+
+
 def boss_for(day: date) -> dict:
     week = day.isocalendar()
     code, name, tagline, atk, defense, spd, abilities = BOSSES[(week[0] * 53 + week[1]) % len(BOSSES)]

@@ -428,6 +428,9 @@ async def claim_chest(db: AsyncSession, user: User, period: str, index: int) -> 
     from app.services import halloween_service
 
     await halloween_service.grant_chest_pumpkins(db, locked_user, period, key, index)
+    from app.services import fan_battle_service
+
+    await fan_battle_service.grant_chest_points(db, locked_user, period, key, index)
     await db.commit()
     await db.refresh(locked_user)
     rewards.new_balance = locked_user.balance
@@ -694,6 +697,9 @@ async def claim_task_reward(db: AsyncSession, user: User, user_task_id: int) -> 
         from app.services import halloween_service
 
         await halloween_service.grant_task_pumpkins(db, locked_user, user_task.id, user_task.period_key)
+        from app.services import fan_battle_service
+
+        await fan_battle_service.grant_task_points(db, locked_user, user_task.id, user_task.period_key)
 
     granted_badge: Optional[BadgeOut] = None
     if definition.category == TaskCategory.premium and definition.is_required and not locked_user.game_rewards_blocked:

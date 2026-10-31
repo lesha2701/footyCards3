@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 384">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f97316"/>
+      <stop offset=".5" stop-color="#1f1330"/>
+      <stop offset="1" stop-color="#38bdf8"/>
+    </linearGradient>
+    <linearGradient id="kit" x1="0" y1="0" x2="1" y2="0">
+      <stop offset=".5" stop-color="#ea580c"/>
+      <stop offset=".5" stop-color="#0284c7"/>
+    </linearGradient>
+  </defs>
+  <rect width="384" height="384" fill="url(#sky)"/>
+  <rect width="384" height="384" fill="#0b0b0f" opacity=".45"/>
+  <!-- stands -->
+  <path d="M0 250q192-60 384 0v134H0z" fill="#0b0b0f" opacity=".6"/>
+  <!-- the turncoat: a half-and-half kit, a scarf of both sides -->
+  <path d="M146 196h92l28 74-22 10-14-38v94h-76v-94l-14 38-22-10z" fill="url(#kit)"/>
+  <circle cx="192" cy="150" r="34" fill="#f1c7a0"/>
+  <path d="M160 140q32-34 64 0q-8-28-32-28t-32 28z" fill="#1f1307"/>
+  <rect x="166" y="146" width="52" height="12" rx="6" fill="#0b0b0f"/>
+  <path d="M176 172q16 10 32 0" stroke="#7c2d12" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M150 190q42 22 84 0l6 14q-48 26-96 0z" fill="#f97316"/>
+  <path d="M192 201l40-11 6 14-46 13z" fill="#38bdf8"/>
+  <path d="M222 204l8 52-14 2-6-50z" fill="#38bdf8"/>
+  <text x="192" y="364" text-anchor="middle" font-family="sans-serif" font-size="26" font-weight="900" fill="#fff" opacity=".9">ПЕРЕБЕЖЧИК</text>
+</svg>
