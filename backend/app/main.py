@@ -52,6 +52,8 @@ from app.routers import (
     admin_trophies,
     admin_users,
     admin_wheel,
+    admin_halloween,
+    halloween,
     announcement,
     auth,
     bingo,
@@ -242,6 +244,8 @@ app.include_router(admin_leagues.router, prefix=API_PREFIX)
 app.include_router(admin_lifestyle.router, prefix=API_PREFIX)
 app.include_router(admin_club_base.router, prefix=API_PREFIX)
 app.include_router(admin_wheel.router, prefix=API_PREFIX)
+app.include_router(admin_halloween.router, prefix=API_PREFIX)
+app.include_router(halloween.router, prefix=API_PREFIX)
 app.include_router(admin_games.router, prefix=API_PREFIX)
 app.include_router(admin_career.router, prefix=API_PREFIX)
 app.include_router(admin_log.router, prefix=API_PREFIX)

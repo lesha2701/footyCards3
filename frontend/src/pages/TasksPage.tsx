@@ -18,6 +18,8 @@ import { GrantedRewardModal } from "@/components/rewards/RewardBundleView";
 import { ApiRequestError } from "@/lib/api";
 import { skillByCode, useSkillCatalog } from "@/lib/cardSkills";
 import { chestArt, type ChestArtKind } from "@/lib/chestArt";
+import { HalloweenDecor } from "@/components/halloween/HalloweenBanner";
+import { useHalloween } from "@/lib/halloween";
 import { artOf } from "@/lib/gameArt";
 import { RARITY_LABELS, RARITY_TEXT } from "@/lib/rarity";
 import { haptic, hapticNotify, openTelegramLink } from "@/lib/telegram";
@@ -335,6 +337,12 @@ const CHEST_LOOK: Record<ChestKind, { frame: string; text: string; bar: string; 
   },
 };
 
+const SPOOKY_CHEST_TITLES: Record<ChestKind, string> = {
+  emerald: "Склеп с сокровищем",
+  gold: "Проклятый сундук",
+  legend: "Гроб Легенды",
+};
+
 /** The big banner: the next chest the player is heading for. */
 function ChestHero({
   track, period, pending, onOpen,
@@ -354,11 +362,16 @@ function ChestHero({
   const kind = chestKind(period, next?.index ?? total - 1, total);
   const look = CHEST_LOOK[kind];
   const max = Math.max(1, track.max_points);
-  const title = kind === "legend" ? "Легендарный сундук" : kind === "gold" ? "Золотой сундук" : period === "daily" ? "Сундук дня" : "Сундук недели";
+  const { live: spooky, data: hw } = useHalloween();
+  const plainTitle = kind === "legend" ? "Легендарный сундук" : kind === "gold" ? "Золотой сундук" : period === "daily" ? "Сундук дня" : "Сундук недели";
+  // «🎃 Ночь тыкв»: the chests turn creepy while the event runs.
+  const title = spooky ? SPOOKY_CHEST_TITLES[kind] : plainTitle;
+  const chestPumpkins = spooky ? (period === "weekly" ? hw?.pumpkins_per_weekly_chest : hw?.pumpkins_per_daily_chest) ?? 0 : 0;
 
   return (
-    <section className={`relative overflow-hidden rounded-3xl border-2 p-4 ${look.frame}`}>
-      <div className="flex items-center gap-3">
+    <section className={`relative overflow-hidden rounded-3xl border-2 p-4 ${look.frame}${spooky ? " hw-sky" : ""}`}>
+      {spooky && <HalloweenDecor dense />}
+      <div className="relative flex items-center gap-3">
         <motion.img
           src={chestArt(kind, !next)}
           alt=""
@@ -367,9 +380,12 @@ function ChestHero({
           className={`h-28 w-28 shrink-0 object-contain ${look.glow}`}
         />
         <div className="min-w-0 flex-1">
-          <p className="font-display text-lg font-bold leading-tight text-ink-chalk">{next ? title : "Все сундуки открыты"}</p>
-          <p className={`text-xs font-semibold ${look.text}`}>
-            {next ? chestRewardText(next) : "Возвращайся за новыми заданиями"}
+          <p className="font-display text-lg font-bold leading-tight text-ink-chalk">
+            {next ? title : spooky ? "Все склепы вскрыты" : "Все сундуки открыты"}
+          </p>
+          <p className={`text-xs font-semibold ${spooky ? "text-orange-300" : look.text}`}>
+            {next ? chestRewardText(next) : spooky ? "Духи вернутся с новыми заданиями" : "Возвращайся за новыми заданиями"}
+            {next && chestPumpkins > 0 && ` + ${chestPumpkins} 🎃`}
           </p>
           <div className="mt-2 h-3 overflow-hidden rounded-full border border-white/10 bg-black/40">
             <div
@@ -389,12 +405,13 @@ function ChestHero({
           disabled={pending}
           className="mt-3 w-full rounded-2xl bg-amber-400 py-3 font-display text-base font-bold text-bg-base shadow-glow-legendary active:scale-95 disabled:opacity-60"
         >
-          {pending ? "Открываем..." : "Открыть сундук"}
+          {pending ? (spooky ? "Скрипит крышка..." : "Открываем...") : spooky ? "Вскрыть, если не страшно" : "Открыть сундук"}
         </button>
       )}
       {next && !next.is_available && (
-        <p className="mt-2 text-caption text-ink-mist">
-          Ещё <b className="text-ink-chalk">{next.points - track.points}</b> очков — выполняй задания ниже
+        <p className="relative mt-2 pr-8 text-caption text-ink-mist">
+          Ещё <b className="text-ink-chalk">{next.points - track.points}</b> очков —{" "}
+          {spooky ? "успей до рассвета" : "выполняй задания ниже"}
         </p>
       )}
     </section>

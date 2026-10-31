@@ -5,6 +5,7 @@ import { IconLock } from "@/components/icons";
 import PathCardMark from "@/components/path/PathCardMark";
 import { staticUrl } from "@/lib/api";
 import { cardSkinClass } from "@/lib/cosmetics";
+import { cardHalloweenSkin, halloweenArt, useZombiePlayerId } from "@/lib/halloween";
 import { pathFrameClass } from "@/lib/pathCards";
 import { prestigeMarks, prestigeStyle } from "@/lib/prestige";
 import { RARITY_GLOW_STATIC, RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
@@ -97,6 +98,10 @@ function PlayerCard({
     : `${RARITY_GRADIENTS[player.rarity]} ${RARITY_GLOW_STATIC[player.rarity]}${
         (animated || selected) && (player.rarity === "diamond" || player.rarity === "legendary") ? " card-shine" : ""
       }`;
+  // «Ночь живых Легенд» (collection frame) or the door trick's zombie frame.
+  const zombiePlayerId = useZombiePlayerId();
+  const hwSkin = isPath ? null : cardHalloweenSkin(player, zombiePlayerId);
+  const hwFrameArt = hwSkin ? halloweenArt(`frame-${hwSkin}`) : undefined;
   const imageUrl = staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp");
 
   return (
@@ -110,7 +115,7 @@ function PlayerCard({
       }${inSquad ? ", в составе" : ""}${userLocked ? ", под замком" : ""}`}
       className={`group relative flex select-none [-webkit-touch-callout:none] aspect-[3/4] w-full flex-col overflow-hidden rounded-2xl bg-gradient-to-b ${frame} ${
         isPath ? "p-[3px]" : "p-[2px]"
-      } transition-transform active:scale-[0.97] ${
+      }${hwSkin ? ` hw-frame-${hwSkin}` : ""} transition-transform active:scale-[0.97] ${
         selected ? (player.rarity === "diamond" ? "ring-4 ring-rarity-diamond" : "ring-4 ring-accent-lime") : ""
       } ${dimmed ? "opacity-40 grayscale" : ""} ${onClick ? "cursor-pointer" : "cursor-default"}${
         skin && !selected ? ` ${skin}` : ""
@@ -155,6 +160,11 @@ function PlayerCard({
             </div>
           )}
           {badge && <div className="absolute bottom-1 left-1">{badge}</div>}
+          {hwSkin && (
+            <span className="absolute bottom-1 right-1 rounded-md bg-black/70 px-1 text-caption leading-tight" aria-label={hwSkin === "zombie" ? "Зомби-рамка" : "Вампир-рамка"}>
+              {hwSkin === "zombie" ? "🧟" : "🧛"}
+            </span>
+          )}
           {isPath && (
             <div className="absolute bottom-1 right-1">
               <PathCardMark talentCode={talentOverride || player.path_talent_code!} stage={pathStage} size={size} />
@@ -171,6 +181,9 @@ function PlayerCard({
         </div>
         {footer}
       </div>
+      {hwFrameArt && (
+        <img src={hwFrameArt} alt="" aria-hidden draggable={false} className="pointer-events-none absolute inset-0 h-full w-full object-fill" />
+      )}
     </button>
   );
 }

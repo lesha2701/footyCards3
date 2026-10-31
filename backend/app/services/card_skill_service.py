@@ -58,7 +58,7 @@ from app.services.card_skill_effects import is_position_compatible, level_bonus_
 from app.services.game_config_service import get_config
 from app.services.wallet_service import debit_coins, lock_user_for_update
 
-GRANT_KINDS = {"grant_task", "grant_tournament", "grant_pack", "grant_admin", "revoke_admin", "grant_prestige"}
+GRANT_KINDS = {"grant_task", "grant_tournament", "grant_pack", "grant_admin", "revoke_admin", "grant_prestige", "grant_event"}
 
 
 # --- Catalog -----------------------------------------------------------------

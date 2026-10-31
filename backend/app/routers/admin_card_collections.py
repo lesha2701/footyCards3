@@ -50,6 +50,8 @@ async def update_collection(collection_id: int, payload: CardCollectionUpdate, r
     old_value = CardCollectionOut.model_validate(collection).model_dump(mode="json")
 
     updates = payload.model_dump(exclude_unset=True)
+    if updates.get("card_skin") == "":
+        updates["card_skin"] = None  # "" from the admin form = the regular frame
     for key, value in updates.items():
         setattr(collection, key, value)
 

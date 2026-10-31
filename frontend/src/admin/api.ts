@@ -1503,3 +1503,28 @@ export async function revokeAdminAgent(userId: number, reason: string): Promise<
   const { data } = await api.post<AdminAgent>(`/admin/auction/agents/${userId}/revoke`, { reason });
   return data;
 }
+
+// «🎃 Ночь тыкв» (backend/app/routers/admin_halloween.py)
+export interface AdminHalloween {
+  enabled: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  settings: Record<string, unknown>;
+  defaults: Record<string, unknown>;
+  stats: Record<string, number>;
+}
+
+export async function fetchAdminHalloween(): Promise<AdminHalloween> {
+  const { data } = await api.get<AdminHalloween>("/admin/halloween");
+  return data;
+}
+
+export async function updateAdminHalloween(payload: {
+  enabled?: boolean;
+  starts_at?: string;
+  ends_at?: string;
+  settings?: Record<string, unknown>;
+}): Promise<AdminHalloween> {
+  const { data } = await api.put<AdminHalloween>("/admin/halloween", payload);
+  return data;
+}

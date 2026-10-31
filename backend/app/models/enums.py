@@ -166,6 +166,9 @@ class TransactionType(str, enum.Enum):
     auction_refund = "auction_refund"
     auction_buy_now = "auction_buy_now"
     auction_sale = "auction_sale"
+    # «🎃 Ночь тыкв» (services/halloween_service.py): coins from the pumpkin
+    # shop and the «Кошелёк или жизнь» doors.
+    halloween_reward = "halloween_reward"
 
 
 class GiftKind(str, enum.Enum):

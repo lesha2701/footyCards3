@@ -1,6 +1,8 @@
 import { Suspense, useEffect } from "react";
 import { Outlet } from "react-router-dom";
 
+import { HalloweenZombieProvider } from "@/components/halloween/HalloweenZombieProvider";
+
 import LeaveConfirmDialog from "@/components/common/LeaveConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import AnnouncementBanner from "@/components/layout/AnnouncementBanner";
@@ -65,7 +67,9 @@ export default function AppLayout() {
         {/* Lazy pages load inside the layout, so the top bar and bottom
             navigation stay put while a screen's chunk downloads. */}
         <Suspense fallback={<ListSkeleton count={4} />}>
-          <Outlet />
+          <HalloweenZombieProvider>
+            <Outlet />
+          </HalloweenZombieProvider>
         </Suspense>
       </main>
       <BottomNav />

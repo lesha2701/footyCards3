@@ -82,6 +82,15 @@ BOSSES = (
 )
 
 
+# «🎃 Ночь тыкв» (halloween_service.kontra_boss): replaces the weekly boss
+# while the event runs. Same shape as boss_for().
+HALLOWEEN_BOSS = {
+    "code": "headless", "name": "Безголовый вратарь",
+    "tagline": "Ловит мячи без головы и пугает защитников — выстой до свистка, тыквы ×2",
+    "atk": 250, "def": 300, "spd": 115, "abilities": ("boss_chant", "boss_slam"),
+}
+
+
 def boss_for(day: date) -> dict:
     week = day.isocalendar()
     code, name, tagline, atk, defense, spd, abilities = BOSSES[(week[0] * 53 + week[1]) % len(BOSSES)]

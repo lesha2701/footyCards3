@@ -5,6 +5,7 @@ import { fetchFeatureFlags } from "@/api/featureFlags";
 import { fetchLeagueStatus } from "@/api/leagues";
 import { fetchMyProfile } from "@/api/profile";
 import { fetchWheelStatus } from "@/api/wheel";
+import HalloweenBanner from "@/components/halloween/HalloweenBanner";
 import HomeHero from "@/components/home/HomeHero";
 import ModesGrid from "@/components/home/ModesGrid";
 import ShowcaseCard from "@/components/home/ShowcaseCard";
@@ -24,6 +25,8 @@ export default function HomePage() {
   return (
     <div className="flex flex-col gap-5">
       <HomeHero profile={profile} league={leagueStatus} leaguesEnabled={flags?.leagues_enabled !== false} />
+
+      <HalloweenBanner />
 
       <NewbieCard />
 

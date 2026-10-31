@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -14,6 +14,7 @@ class CardCollectionOut(BaseModel):
     image_path: Optional[str]
     reward_coins: int
     reward_pack_id: Optional[int]
+    card_skin: Optional[str] = None
 
 
 class CardCollectionCreate(BaseModel):
@@ -24,6 +25,7 @@ class CardCollectionCreate(BaseModel):
     image_path: Optional[str] = None
     reward_coins: int = 0
     reward_pack_id: Optional[int] = None
+    card_skin: Optional[Literal["zombie", "vampire"]] = None
 
 
 class CardCollectionUpdate(BaseModel):
@@ -34,6 +36,7 @@ class CardCollectionUpdate(BaseModel):
     image_path: Optional[str] = None
     reward_coins: Optional[int] = None
     reward_pack_id: Optional[int] = None
+    card_skin: Optional[Literal["zombie", "vampire", ""]] = None
 
 
 class CardCollectionPublicOut(BaseModel):

@@ -7,6 +7,7 @@ import { useStackedTables } from "@/admin/useStackedTables";
 import { fetchStarsReceiptProblemCount } from "@/admin/api";
 import {
   IconBall,
+  IconFire,
   IconBan,
   IconBrain,
   IconCard,
@@ -64,6 +65,7 @@ const SECTIONS: Section[] = [
   { group: "Паки и магазин", to: "/admin/daily-rewards", label: "Календарь наград", Icon: IconClock },
   { group: "Игры и события", to: "/admin/games", label: "Игры", Icon: IconPlay },
   { group: "Игры и события", to: "/admin/match-day", label: "Матч дня", Icon: IconPlay },
+  { group: "Игры и события", to: "/admin/halloween", label: "🎃 Ночь тыкв", Icon: IconFire },
   { group: "Карточки", to: "/admin/upgrades", label: "Апгрейд", Icon: IconUpgrade },
   { group: "Карточки", to: "/admin/diamond-upgrades", label: "Диамант", Icon: IconCard },
   { group: "Карточки", to: "/admin/card-skills", label: "Навыки карточек", Icon: IconBrain },

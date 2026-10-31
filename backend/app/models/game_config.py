@@ -927,6 +927,13 @@ class GameConfig(TimestampMixin, Base):
     kontra_gear_drop_arena_pct: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     kontra_chest_coins: Mapped[int] = mapped_column(Integer, default=1500, nullable=False)
     kontra_chest_stars: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
+    # «🎃 Ночь тыкв» (services/halloween_service.py): one switch, the dates and
+    # every number of the event (pumpkin drops, shop, doors, boss) in
+    # halloween_settings — halloween_service.DEFAULT_SETTINGS fills missing keys.
+    halloween_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    halloween_starts_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    halloween_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    halloween_settings: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
 
     # «Топ недели» (weekly_top_service.py): every Monday the top places of
     # each ranking get the reward of their place. weekly_top_rewards is one

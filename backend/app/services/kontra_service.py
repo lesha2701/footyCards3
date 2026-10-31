@@ -363,7 +363,7 @@ async def get_hub(db: AsyncSession, user: User) -> KontraHubOut:
     gear_count = (await db.execute(select(func.count(KontraGear.id)).where(KontraGear.user_id == user.id))).scalar_one()
     return KontraHubOut(
         enabled=config.kontra_enabled, squad_ready=squad_ready, rating=user.kontra_rating,
-        active_battle_id=await _active_battle(db, user.id), boss_name=catalog.boss_for(local_today())["name"],
+        active_battle_id=await _active_battle(db, user.id), boss_name=_current_boss(config, local_today())["name"],
         boss_attempts_left=_boss_attempts_left(user, config), gear_count=gear_count,
     )
 
@@ -491,7 +491,7 @@ async def get_boss(db: AsyncSession, user: User) -> KontraBossOut:
 
     config = await get_config(db)
     today = local_today()
-    boss = catalog.boss_for(today)
+    boss = _current_boss(config, today)
     week = catalog.week_start(today)
     total = await _week_damage(db, week)
     mine = await _week_damage(db, week, [user.id])
@@ -520,6 +520,13 @@ async def get_boss(db: AsyncSession, user: User) -> KontraBossOut:
     )
 
 
+def _current_boss(config: GameConfig, today) -> dict:
+    """The weekly rotation, or the «🎃 Ночь тыкв» boss while that event runs."""
+    from app.services import halloween_service
+
+    return halloween_service.kontra_boss(config) or catalog.boss_for(today)
+
+
 def _phase(total: int, config: GameConfig) -> int:
     if config.kontra_boss_week_hp <= 0:
         return 1
@@ -544,7 +551,7 @@ async def start_boss(db: AsyncSession, user: User, manual: bool) -> KontraBattle
     db.add(locked)
     today = local_today()
     week = catalog.week_start(today)
-    info = catalog.boss_for(today)
+    info = _current_boss(config, today)
     phase = _phase(await _week_damage(db, week), config)
     atk = info["atk"] * (100 + 15 * (phase - 1)) // 100
     boss = engine.make_boss("boss", name=info["name"], max_hp=config.kontra_boss_week_hp, atk=atk,
@@ -678,6 +685,9 @@ async def _finish(db: AsyncSession, battle: KontraBattle, state: dict, config: G
         battle.reward_coins = reward
         if not state.get("forfeit"):
             await _drop_gear(db, battle, user, config.kontra_gear_drop_boss_pct, "boss")
+        from app.services import halloween_service
+
+        await halloween_service.grant_boss_bonus(db, user, battle.id, state)
     else:
         won = state["winner"] == "me"
         battle.result = "win" if won else "loss"

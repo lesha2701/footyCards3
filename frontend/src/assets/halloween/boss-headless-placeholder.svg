@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 384">
+  <defs>
+    <radialGradient id="sky" cx="70%" cy="20%" r="90%">
+      <stop offset="0" stop-color="#f97316" stop-opacity=".55"/>
+      <stop offset=".45" stop-color="#3b0764"/>
+      <stop offset="1" stop-color="#0b0613"/>
+    </radialGradient>
+    <linearGradient id="kit" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#84cc16"/>
+      <stop offset="1" stop-color="#365314"/>
+    </linearGradient>
+  </defs>
+  <rect width="384" height="384" fill="url(#sky)"/>
+  <circle cx="300" cy="70" r="38" fill="#fde68a" opacity=".85"/>
+  <!-- goal -->
+  <path d="M40 330V170h304v160" fill="none" stroke="#e5e7eb" stroke-width="8" opacity=".7"/>
+  <path d="M40 170l40 30h224l40-30M80 200v130M304 200v130" fill="none" stroke="#e5e7eb" stroke-width="2" opacity=".35"/>
+  <!-- keeper: no head, a floating pumpkin instead -->
+  <path d="M150 200h84l26 70-22 10-14-40v90h-64v-90l-14 40-22-10z" fill="url(#kit)"/>
+  <rect x="160" y="196" width="64" height="12" rx="6" fill="#1a2e05"/>
+  <circle cx="122" cy="282" r="16" fill="#fafafa"/><circle cx="262" cy="282" r="16" fill="#fafafa"/>
+  <g transform="translate(192 140)">
+    <ellipse rx="40" ry="32" fill="#f97316"/>
+    <path d="M-14-4l8-10 8 10zM6-4l8-10 8 10zM-20 10q20 16 40 0q-8 6-12 0q-4 6-8 0q-4 6-8 0q-4 6-12 0z" fill="#1f0a00"/>
+    <rect x="-4" y="-40" width="8" height="12" rx="3" fill="#4d7c0f"/>
+  </g>
+  <text x="192" y="372" text-anchor="middle" font-family="sans-serif" font-size="20" font-weight="900" fill="#fed7aa">БЕЗГОЛОВЫЙ ВРАТАРЬ</text>
+</svg>

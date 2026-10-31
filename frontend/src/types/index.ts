@@ -63,6 +63,8 @@ export interface Player {
   is_pack_droppable: boolean;
   collection_id: number | null;
   collection_name: string | null;
+  /** The collection's special frame («Ночь живых Легенд»: "zombie" / "vampire"). */
+  collection_skin?: string | null;
   /** «Академия»: set = a path card with this talent. */
   path_talent_code?: string | null;
   /** «Один футболист» key; null = by the display name. */
@@ -3911,4 +3913,71 @@ export interface NewbieFunnel {
   started: number;
   completed: number;
   steps: { code: string; label: string; players: number }[];
+}
+
+// «🎃 Ночь тыкв» (backend/app/services/halloween_service.py)
+export interface HalloweenShopItem {
+  code: string;
+  kind: "pack" | "coins" | "skill_tokens" | "badge";
+  title: string;
+  price: number;
+  amount: number;
+  limit: number;
+  bought: number;
+  available: boolean;
+  pack_id: number | null;
+  pack_name: string | null;
+  badge: Badge | null;
+}
+
+export interface HalloweenDoorResult {
+  door: number;
+  outcome: "treat" | "trick";
+  kind: "coins" | "pumpkins" | "pack" | "zombie_frame" | "joke";
+  amount: number;
+  title: string;
+  text: string;
+  pack_name: string | null;
+  cards: UserCard[];
+  zombie_player_name: string | null;
+  zombie_until: string | null;
+}
+
+export interface HalloweenState {
+  enabled: boolean;
+  active: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  pumpkins: number;
+  earned_total: number;
+  pumpkins_per_game: number;
+  games_pumpkins_today: number;
+  games_daily_cap: number;
+  pumpkins_per_task: number;
+  pumpkins_per_daily_chest: number;
+  pumpkins_per_weekly_chest: number;
+  boss_multiplier: number;
+  boss_name: string | null;
+  shop: HalloweenShopItem[];
+  door_today: HalloweenDoorResult | null;
+  door_resets_at: string | null;
+  zombie_player_id: number | null;
+  zombie_until: string | null;
+  pack_id: number | null;
+  collection: {
+    id: number; name: string; owned: number; total: number; reward_coins: number;
+    reward_pack_name: string | null; completed: boolean;
+  } | null;
+}
+
+export interface HalloweenBuyResult {
+  item_code: string;
+  pumpkins: number;
+  new_balance: number;
+  coins: number;
+  pack_name: string | null;
+  cards: UserCard[];
+  skill_code: string | null;
+  skill_tokens: number;
+  badge: Badge | null;
 }

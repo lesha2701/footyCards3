@@ -318,3 +318,49 @@ body {
 @keyframes newbieSpot {
   50% { box-shadow: 0 0 0 3px rgb(190 242 100 / 0.5), 0 0 12px 2px rgb(190 242 100 / 0.2); }
 }
+
+/* «🎃 Ночь тыкв»: floating decor, the event banner and the card frames.
+   Everything here is rendered only while the event runs. */
+@keyframes hwFloat {
+  0%, 100% { transform: translateY(0) rotate(-6deg); }
+  50% { transform: translateY(-8px) rotate(6deg); }
+}
+@keyframes hwFlap {
+  0%, 100% { transform: translate(0, 0) scaleX(1); }
+  25% { transform: translate(6px, -4px) scaleX(0.8); }
+  50% { transform: translate(12px, 2px) scaleX(1); }
+  75% { transform: translate(4px, 5px) scaleX(0.8); }
+}
+@keyframes hwGlow {
+  0%, 100% { box-shadow: 0 0 0 1px rgb(249 115 22 / 0.45), 0 10px 30px -10px rgb(124 58 237 / 0.7); }
+  50% { box-shadow: 0 0 0 1px rgb(249 115 22 / 0.8), 0 10px 36px -8px rgb(249 115 22 / 0.55); }
+}
+@keyframes hwFlicker {
+  0%, 100% { opacity: 1; }
+  45% { opacity: 0.85; }
+  50% { opacity: 0.55; }
+  55% { opacity: 0.9; }
+}
+.hw-float { animation: hwFloat 5s ease-in-out infinite; }
+.hw-flap { animation: hwFlap 3.4s ease-in-out infinite; }
+.hw-glow { animation: hwGlow 3s ease-in-out infinite; }
+.hw-flicker { animation: hwFlicker 2.6s linear infinite; }
+.hw-sky {
+  background:
+    radial-gradient(120% 90% at 85% 0%, rgb(249 115 22 / 0.35) 0%, transparent 55%),
+    radial-gradient(100% 80% at 0% 100%, rgb(124 58 237 / 0.55) 0%, transparent 60%),
+    linear-gradient(160deg, #1b0b2e 0%, #2a0f3d 55%, #3b1407 100%);
+}
+/* Card frames (PlayerCard): zombie = toxic green over purple, vampire =
+   blood red over black. The art in assets/halloween/frame-*.webp goes on top. */
+.hw-frame-zombie {
+  background-image: linear-gradient(180deg, #84cc16 0%, #4d7c0f 35%, #6d28d9 100%) !important;
+  box-shadow: 0 0 14px rgb(132 204 22 / 0.55), 0 0 26px rgb(109 40 217 / 0.45);
+}
+.hw-frame-vampire {
+  background-image: linear-gradient(180deg, #ef4444 0%, #7f1d1d 45%, #0b0b0f 100%) !important;
+  box-shadow: 0 0 14px rgb(239 68 68 / 0.55), 0 0 26px rgb(0 0 0 / 0.6);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hw-float, .hw-flap, .hw-glow, .hw-flicker { animation: none; }
+}
