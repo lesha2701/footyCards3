@@ -151,7 +151,9 @@ async def run_webhook() -> None:
 
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", settings.bot_webhook_port)
+    # Every address, IPv4 and IPv6: nginx reaches `bot` by either on the
+    # prod network (0.0.0.0 refused the IPv6 one).
+    site = web.TCPSite(runner, None, settings.bot_webhook_port)
     logger.info("Starting bot in webhook mode on port %s", settings.bot_webhook_port)
     await site.start()
 
