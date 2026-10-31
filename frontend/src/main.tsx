@@ -39,6 +39,9 @@ const queryClient = new QueryClient({
   }),
 });
 
+// index.html's start-up guard: from here on, failures are the app's own to show.
+(window as Window & { __appStarted?: boolean }).__appStarted = true;
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>

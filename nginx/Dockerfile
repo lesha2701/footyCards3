@@ -1,8 +1,10 @@
 # Build context: repository root (see docker-compose.prod.yml)
 FROM node:20-alpine AS frontend-build
 WORKDIR /app
-COPY frontend/package.json ./
-RUN npm install
+# The lockfile, not the newest versions the ranges allow: production builds
+# exactly what was tested.
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
 COPY frontend/ .
 ARG VITE_API_URL=/api/v1
 ARG VITE_STATIC_URL=/static

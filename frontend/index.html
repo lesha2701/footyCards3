@@ -18,11 +18,53 @@
       #boot img { width: 48px; height: 48px; border-radius: 50%; animation: boot 1.2s ease-in-out infinite alternate; }
       #boot b { color: #c6f432; }
       @keyframes boot { from { opacity: .45 } to { opacity: 1 } }
+      #boot .err { max-width: 300px; margin: 0; padding: 0 16px; font: 400 12px/1.4 system-ui, sans-serif;
+        color: #fca5a5; text-align: center; letter-spacing: 0; word-break: break-word; }
+      #boot button { padding: 10px 22px; border: 0; border-radius: 999px; background: #c6f432; color: #07090a;
+        font: 700 14px system-ui, sans-serif; }
     </style>
   </head>
   <body>
     <!-- Shown by the HTML itself while the app's JS downloads; React replaces it. -->
     <div id="root"><div id="boot"><img src="/brand/victor-fc-crest.jpg" alt="" /><span>VICTOR <b>FC</b></span></div></div>
+    <script>
+      // Before the game's own JS: tell Telegram we're here, so its grey
+      // placeholder gives way to the splash above at once (it otherwise
+      // waits for ready() from the app — forever, if the app fails to start).
+      // If the app hasn't started in time or its JS fails, the splash says
+      // why and offers a reload, so a player's screenshot names the cause.
+      (function () {
+        try { window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.ready(); } catch (e) {}
+        var shown = false;
+        function show(reason) {
+          if (shown || window.__appStarted) return;
+          var boot = document.getElementById("boot");
+          if (!boot) return;
+          shown = true;
+          var p = document.createElement("p");
+          p.className = "err";
+          p.textContent = "Игра не запустилась. " + reason;
+          var b = document.createElement("button");
+          b.textContent = "Перезагрузить";
+          b.onclick = function () { location.reload(); };
+          boot.appendChild(p);
+          boot.appendChild(b);
+        }
+        window.addEventListener("error", function (e) {
+          var t = e.target;
+          if (t && t !== window && (t.src || t.href)) {
+            show("Не загрузился файл " + String(t.src || t.href).split("/").pop());
+          } else {
+            show((e.message || "Ошибка") + (e.filename ? " (" + e.filename.split("/").pop() + ":" + e.lineno + ")" : ""));
+          }
+        }, true);
+        window.addEventListener("unhandledrejection", function (e) {
+          var r = e.reason;
+          show(String((r && r.message) || r));
+        });
+        setTimeout(function () { show("Загрузка длится больше 25 секунд — проверьте интернет."); }, 25000);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
