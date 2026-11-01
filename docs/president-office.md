@@ -27,6 +27,12 @@ season (`upcoming_key`), money of a running league to its season. The report
 groups the last 6 seasons into income, expenses and financing (loans,
 deposits, the venture fund). The ledger starts empty at 0230.
 
+The office keeps the common transfer window (`manager_finance.window_open` =
+the club doesn't play and `manager_service.window_open`): deals, the loan,
+the ticket price, IPO, buyback and bonds are shut for every club — one
+founded too late included — from this week's season start until it is
+settled. Buying and reselling shares stays open all season.
+
 ## Club value
 
 Squad value + budget + money in deposits / the venture fund + «Клубная база»

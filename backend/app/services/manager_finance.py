@@ -553,7 +553,7 @@ async def set_tickets(db: AsyncSession, user: User, pct: int, now: Optional[date
     config = await get_config(db)
     f = cfg(config)
     club = await _locked_club(db, user, config)
-    await _window(db, club)
+    await _window(db, club, now)
     low, high = int(_num(f["ticket_min_pct"])), int(_num(f["ticket_max_pct"]))
     pct = int(pct)
     if not low <= pct <= high:
@@ -705,10 +705,16 @@ async def _locked_club(db: AsyncSession, user: User, config) -> ManagerClub:
     return club
 
 
-async def _window(db: AsyncSession, club: ManagerClub) -> None:
+async def window_open(db: AsyncSession, club: ManagerClub, now: Optional[datetime] = None) -> bool:
+    """The office keeps the transfer window: shut while the club plays and
+    while this week's season runs for anybody (a club founded too late too)."""
     from app.services import manager_service as ms
 
-    if await ms.is_playing(db, club):
+    return not await ms.is_playing(db, club) and await ms.window_open(db, now)
+
+
+async def _window(db: AsyncSession, club: ManagerClub, now: Optional[datetime] = None) -> None:
+    if not await window_open(db, club, now):
         raise ConflictError("Идёт сезон — сделки заключаются в межсезонье")
 
 
@@ -755,7 +761,7 @@ async def sign(db: AsyncSession, user: User, kind: str, option: Optional[str] = 
     if kind not in DEAL_KINDS:
         raise NotFoundError("Такой сделки нет")
     club = await _locked_club(db, user, config)
-    await _window(db, club)
+    await _window(db, club, now)
     key = await upcoming_key(db, now)
     if await _taken(db, club.id, kind, key):
         raise ConflictError("На этот сезон такая сделка уже заключена")
@@ -852,7 +858,7 @@ async def take_loan(db: AsyncSession, user: User, amount: int, seasons: int, now
     now = now or datetime.now(timezone.utc)
     config = await get_config(db)
     club = await _locked_club(db, user, config)
-    await _window(db, club)
+    await _window(db, club, now)
     f = cfg(config)
     seasons = int(seasons or 1)
     if not 1 <= seasons <= int(_num(f["loan_seasons_max"], 3)):
@@ -938,7 +944,7 @@ async def view(db: AsyncSession, user: User, now: Optional[datetime] = None) -> 
     snap = await ms.base_snapshot(db, club.owner_id, config)
     value = await club_value(db, club, config, snap=snap)
     key = await upcoming_key(db, now)
-    playing = await ms.is_playing(db, club)
+    playing = not await window_open(db, club, now)
     current = await club_key(db, club, now)
     deals = list((await db.execute(
         select(ManagerDeal).where(ManagerDeal.club_id == club.id).order_by(ManagerDeal.id.desc()).limit(40)

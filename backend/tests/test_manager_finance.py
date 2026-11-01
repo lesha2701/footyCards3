@@ -338,6 +338,33 @@ async def test_farm_club_cheaper_loans_and_stronger_kids(client, db_session, bot
     assert team["filler"] == manager_service._division_rating(club.division, config) - (manager_service.FILLER_GAP - 5)
 
 
+async def test_office_keeps_the_common_transfer_window(client, db_session, bot_token):
+    """A club out of this season's leagues (founded too late) signs no deals
+    and floats no shares while the others play — the office opens with the
+    transfer window for everybody."""
+    from datetime import datetime, timezone
+
+    from app.models.manager_club import ManagerSeason
+    from app.services import manager_exchange as exchange
+
+    uid, headers, _ = await _setup(client, db_session, bot_token, 895021)
+    season = ManagerSeason(key=manager_service.season_key(datetime.now(timezone.utc)), depth=1)
+    db_session.add(season)
+    await db_session.commit()
+
+    office = (await client.get(f"{API}/manager/office", headers=headers)).json()
+    assert office["window_open"] is False
+    with pytest.raises(ConflictError):
+        await finance.sign(db_session, await _user(db_session, uid), "tv")
+    with pytest.raises(ConflictError):
+        await exchange.ipo(db_session, await _user(db_session, uid), 100)
+
+    season.settled_at = datetime.now(timezone.utc)
+    await db_session.commit()
+    assert (await client.get(f"{API}/manager/office", headers=headers)).json()["window_open"] is True
+    await finance.sign(db_session, await _user(db_session, uid), "tv")
+
+
 async def test_deals_only_in_the_window_and_admin_numbers(client, db_session, bot_token):
     config = await get_config(db_session)
     await _squad(db_session, config.manager_division_rating[-1])

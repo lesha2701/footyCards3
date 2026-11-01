@@ -9,7 +9,7 @@ from app.core.exceptions import ConflictError
 from app.models.manager_club import ManagerLeague, ManagerLedger
 from app.services import manager_finance as finance, manager_service
 from app.services.game_config_service import get_config
-from tests.test_manager import API, M, _next_season_start, _reset_rate_limits  # noqa: F401
+from tests.test_manager import API, M, _next_season_start, _no_season_at_the_real_clock, _reset_rate_limits  # noqa: F401
 from tests.test_manager_finance import _club_row, _keep_loaded, _setup, _squad, _user  # noqa: F401
 
 pytestmark = pytest.mark.usefixtures("trade_guards_off")
@@ -87,10 +87,11 @@ async def test_injuries_cost_treatment_keep_players_out_and_insurance_pays(clien
     view = (await client.get(f"{API}/manager/office", headers=a_headers)).json()
     premium = view["offers"]["insurance"]["premium"]
     assert premium > 0 and view["offers"]["insurance"]["chance_pct"] == 100
-    resp = await client.post(f"{API}/manager/office/deals/insurance", headers=a_headers, json={})
-    assert resp.status_code == 200, resp.text
+    # Insured for the test's own season (next week's), in its preseason.
+    await finance.sign(db_session, await _user(db_session, a_uid), "insurance", now=start - timedelta(hours=1))
     assert await _sum(db_session, a_id, "insurance") == -premium
-    assert (await client.post(f"{API}/manager/office/deals/insurance", headers=a_headers, json={})).status_code == 409
+    with pytest.raises(ConflictError):
+        await finance.sign(db_session, await _user(db_session, a_uid), "insurance", now=start - timedelta(hours=1))
 
     assert await manager_service.ensure_season(db_session, start)
     league_id = (await _club_row(db_session, a_id)).league_id

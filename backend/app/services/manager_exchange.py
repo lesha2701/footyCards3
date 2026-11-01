@@ -350,7 +350,7 @@ async def ipo(db: AsyncSession, user: User, shares: int, now: Optional[datetime]
     now = now or datetime.now(timezone.utc)
     config = await get_config(db)
     club = await _me(db, user, config)
-    await finance._window(db, club)
+    await finance._window(db, club, now)
     stock = await _stock(db, club.id, lock=True)
     if stock is None:
         try:
@@ -553,7 +553,7 @@ async def buyback(db: AsyncSession, user: User, shares: int, now: Optional[datet
     now = now or datetime.now(timezone.utc)
     config = await get_config(db)
     me = await _me(db, user, config)
-    await finance._window(db, me)
+    await finance._window(db, me, now)
     stock = await _stock(db, me.id, lock=True)
     shares = int(shares)
     if stock is None or stock.floated <= 0 or shares <= 0 or shares > stock.floated:
@@ -626,7 +626,7 @@ async def issue_bond(db: AsyncSession, user: User, units: int, rate_pct: float, 
     now = now or datetime.now(timezone.utc)
     config = await get_config(db)
     me = await _me(db, user, config)
-    await finance._window(db, me)
+    await finance._window(db, me, now)
     await finance.ensure_can_transfer(db, me)
     f = _f(config)
     rate = finance._num(rate_pct, -1)
@@ -802,7 +802,7 @@ async def view(db: AsyncSession, user: User, now: Optional[datetime] = None) -> 
     total = mine_stock.shares_total if mine_stock else _int(config, "shares_total")
     return {
         "enabled": bool(f["exchange_enabled"]),
-        "club_id": me.id, "window_open": not await ms.is_playing(db, me),
+        "club_id": me.id, "window_open": await finance.window_open(db, me, now),
         "budget": me.budget, "free_budget": await _free(db, me, config),
         "rules": {k: finance._num(f[k]) for k in (
             "shares_total", "ipo_max_pct", "holder_max_pct", "exchange_fee_pct", "buyback_premium_pct", "ipo_season_cap_pct",
