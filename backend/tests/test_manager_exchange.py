@@ -11,7 +11,7 @@ from app.core.exceptions import ConflictError, ForbiddenError
 from app.models.manager_club import ManagerBond, ManagerClub, ManagerLedger, ManagerShare, ManagerStock
 from app.services import manager_exchange as exchange, manager_finance as finance, manager_service
 from app.services.game_config_service import get_config
-from tests.test_manager import API, M, _next_season_start, _reset_rate_limits  # noqa: F401
+from tests.test_manager import API, M, _next_season_start, _no_season_at_the_real_clock, _reset_rate_limits  # noqa: F401
 from tests.test_manager_finance import _club_row, _keep_loaded, _setup, _squad, _user  # noqa: F401
 
 pytestmark = pytest.mark.usefixtures("trade_guards_off")

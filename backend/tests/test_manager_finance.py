@@ -15,7 +15,7 @@ from app.models.user import User
 from app.services import manager_finance as finance, manager_service
 from app.services.game_config_service import get_config
 from tests.factories import create_player
-from tests.test_manager import API, M, _club, _next_season_start, _player, _reset_rate_limits  # noqa: F401
+from tests.test_manager import API, M, _club, _next_season_start, _player, _no_season_at_the_real_clock, _reset_rate_limits  # noqa: F401
 
 pytestmark = pytest.mark.usefixtures("trade_guards_off")
 
