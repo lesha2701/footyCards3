@@ -7,6 +7,7 @@ import {
   fetchManagerExchange,
   floatManagerShares,
   issueManagerBond,
+  listManagerShares,
   repayManagerBond,
   tradeManagerShares,
   type ManagerBondRow,
@@ -175,47 +176,114 @@ function Market({ x, busy, ask, act }: { x: ManagerExchange; busy: boolean; ask:
   );
 }
 
+/** What `n` shares cost walking the offers cheapest first, and how much goes to the issuing club. */
+function fill(offers: ManagerStockRow["offers"], n: number) {
+  let left = n, cost = 0, toClub = 0, toHolders = 0;
+  for (const o of offers) {
+    const take = Math.min(left, o.shares);
+    if (take <= 0) break;
+    cost += take * o.price;
+    if (o.kind === "ipo") toClub += take * o.price;
+    if (o.kind === "ask") toHolders += take * o.price;
+    left -= take;
+  }
+  return { cost, toClub, toHolders };
+}
+
+const OFFER_KIND: Record<ManagerStockRow["offers"][number]["kind"], string> = {
+  ask: "👤 продаёт клуб", ipo: "🔔 IPO — деньги клубу", pool: "🏦 биржа",
+};
+
 function TradeForm({ s, x, busy, ask, act }: { s: ManagerStockRow; x: ManagerExchange; busy: boolean; ask: Ask; act: (fn: () => Promise<ManagerExchange>) => void }) {
   const fee = x.rules.exchange_fee_pct;
-  const affordable = Math.floor(x.free_budget / (s.price * (1 + fee / 100)));
-  const canBuy = Math.max(0, Math.min(s.available, s.holder_cap - s.held, affordable));
+  const room = Math.max(0, Math.min(s.available, s.holder_cap - s.held));
+  let canBuy = 0;
+  while (canBuy < room && fill(s.offers, canBuy + 1).cost * (1 + fee / 100) <= x.free_budget) canBuy++;
   const [n, setN] = useState(Math.min(10, canBuy) || 1);
   const [m, setM] = useState(Math.min(10, s.held) || 1);
-  const cost = Math.round(n * s.price * (1 + fee / 100));
-  const gets = Math.round(m * s.price * (1 - fee / 100));
+  const [mode, setMode] = useState<"now" | "ask">("ask");
+  const [price, setPrice] = useState(s.ask || s.price);
+  const f = fill(s.offers, n);
+  const cost = Math.round(f.cost * (1 + fee / 100));
+  const gets = Math.round(m * s.bid * (1 - fee / 100));
+  const step = Math.max(1, Math.round(s.price / 100));
   return (
     <div className="mt-3 flex flex-col gap-2.5 rounded-xl bg-bg-raised p-3">
       <p className="text-micro text-ink-mist">
         Капитализация {eur(s.cap)} · выпущено {s.floated} из 1000 · дивиденды за всё время {eur(s.dividends_paid)}.
         В одних руках — до {s.holder_cap} акций, комиссия {pct(fee)}.
       </p>
+      {s.offers.length > 0 && (
+        <ul className="flex flex-col gap-1 rounded-lg bg-bg-base/40 p-2 text-micro" data-testid="offers">
+          {s.offers.slice(0, 4).map((o, i) => (
+            <li key={i} className="flex justify-between text-ink-mist">
+              <span>{OFFER_KIND[o.kind]}</span><span><b className="text-ink-chalk">{o.shares}</b> × {eur(o.price)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       {canBuy > 0 ? (
         <>
           <Slider label="Купить акций" value={n} min={1} max={canBuy} onChange={setN} show={`${n} · ${eur(cost)}`} />
           <button disabled={busy} className={`${btn} bg-gradient-to-r from-emerald-300 to-lime-300 text-bg-base`}
-            onClick={() => ask(`Купить ${n} акций «${s.name}»?`, `${eur(cost)} с комиссией. Цена ${eur(s.price)} за акцию — до следующего тура.`,
+            onClick={() => ask(`Купить ${n} акций «${s.name}»?`,
+              `${eur(cost)} с комиссией. Самые дешёвые предложения — первыми.`
+              + (f.toClub ? ` Клубу «${s.name}» достанется ${eur(f.toClub)}.` : "")
+              + (f.toHolders ? ` Продавцам-клубам — ${eur(f.toHolders)}.` : ""),
               () => act(() => tradeManagerShares(s.club_id, "buy", n)), "Купить")}>
             Купить · {eur(cost)}
           </button>
         </>
       ) : (
         <p className="text-micro text-amber-200">
-          {s.available === 0 ? "Свободных акций нет." : s.held >= s.holder_cap ? "У тебя максимум акций этого клуба." : "Не хватает свободного бюджета."}
+          {s.available === 0 ? "Сейчас никто не продаёт." : s.held >= s.holder_cap ? "У тебя максимум акций этого клуба." : "Не хватает свободного бюджета."}
         </p>
       )}
       {s.held > 0 && (
         <>
-          <Slider label="Продать акций" value={m} min={1} max={s.held} onChange={setM} show={`${m} · +${eur(gets)}`} />
-          <button disabled={busy} className={`${btn} bg-bg-surface text-red-200 ring-1 ring-red-300/30`}
-            onClick={() => ask(`Продать ${m} акций «${s.name}»?`, `Бирже по ${eur(s.price)}, минус комиссия: +${eur(gets)}.`,
-              () => act(() => tradeManagerShares(s.club_id, "sell", m)), "Продать")}>
-            Продать · +{eur(gets)}
-          </button>
+          <div className="grid grid-cols-2 gap-1 rounded-xl bg-bg-base/40 p-1">
+            {([["ask", "📋 Заявка"], ["now", "⚡ Бирже сразу"]] as const).map(([id, label]) => (
+              <button key={id} onClick={() => setMode(id)}
+                className={`rounded-lg py-1.5 text-xs font-bold ${mode === id ? "bg-bg-surface text-ink-chalk" : "text-ink-mist"}`}>{label}</button>
+            ))}
+          </div>
+          <Slider label="Продать акций" value={m} min={1} max={s.held} onChange={setM}
+            show={mode === "now" ? `${m} · +${eur(gets)}` : `${m} · ≈+${eur(Math.round(m * price * (1 - fee / 100)))}`} />
+          {mode === "ask" ? (
+            <>
+              <Slider label="Цена за акцию" value={price} min={s.band[0]} max={s.band[1]} step={step} onChange={setPrice}
+                show={`${eur(price)} (${price >= s.price ? "+" : ""}${(((price - s.price) / s.price) * 100).toFixed(0)}%)`} />
+              <p className="text-micro text-ink-mist">
+                Деньги придут, когда другой клуб купит. Чем ближе к цене биржи ({eur(s.price)}), тем быстрее.
+                {s.listed > 0 && <b className="text-cyan-200"> Сейчас в заявке: {s.listed} по {eur(s.ask)}.</b>}
+              </p>
+              <div className="flex gap-2">
+                <button disabled={busy} className={`${btn} flex-1 bg-gradient-to-r from-cyan-300 to-sky-400 text-bg-base`}
+                  onClick={() => act(() => listManagerShares(s.club_id, m, price))}>
+                  {s.listed > 0 ? "Обновить заявку" : "Выставить"}
+                </button>
+                {s.listed > 0 && (
+                  <button disabled={busy} className={`${btn} bg-bg-surface px-3 text-ink-mist`} onClick={() => act(() => listManagerShares(s.club_id, 0, 0))}>
+                    Снять
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
+            <button disabled={busy} className={`${btn} bg-bg-surface text-red-200 ring-1 ring-red-300/30`}
+              onClick={() => ask(`Продать ${m} акций «${s.name}» бирже?`,
+                `Сразу по ${eur(s.bid)} (на ${pct(x.rules.exchange_spread_pct)} ниже цены), минус комиссия: +${eur(gets)}.`,
+                () => act(() => tradeManagerShares(s.club_id, "sell", m)), "Продать")}>
+              Продать сейчас · +{eur(gets)}
+            </button>
+          )}
         </>
       )}
     </div>
   );
 }
+
+// --- tape ---------------------------------------------------------------------------------------
 
 const SIDE: Record<ManagerExchange["tape"][number]["side"], [string, string]> = {
   ipo: ["🔔", "IPO"], buy: ["🟢", "куплено"], sell: ["🔴", "продано"], buyback: ["↩️", "выкуп"],

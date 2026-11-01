@@ -95,7 +95,7 @@ DEFAULTS: dict = {
     # holder up to holder_max_pct of a club, fee burnt on every trade, IPO
     # money per season up to ipo_season_cap_pct of G.
     "exchange_enabled": True, "shares_total": 1000, "ipo_max_pct": 49, "holder_max_pct": 25, "exchange_fee_pct": 2,
-    "buyback_premium_pct": 10, "ipo_season_cap_pct": 50,
+    "buyback_premium_pct": 10, "ipo_season_cap_pct": 50, "exchange_spread_pct": 5, "ask_band_pct": 15,
     # Price = the club value without its budget / shares × the form: +price_ppg_pct
     # per point a game above 1.4 (the season), +price_form_pct per point above
     # 1.4 (the last 5 games), within price_min_pct..price_max_pct.

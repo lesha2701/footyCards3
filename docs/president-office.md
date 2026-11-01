@@ -73,13 +73,20 @@ rows, unique club + holder), `manager_trades` (the tape), `manager_bonds`,
 frontend `components/manager/ExchangePanel.tsx` («📈 Биржа» section).
 
 - **Shares.** `shares_total` per club; the owner floats up to `ipo_max_pct`
-  (always keeps control). Unfloated-but-offered shares are `unsold` (buying
-  them pays the issuer, at most `ipo_season_cap_pct` of G per season);
-  shares sold back to the exchange go to `pool` (reselling them pays
-  nobody). Trades go only through the exchange at the published price; a
-  burnt `exchange_fee_pct` on each side; one holder owns at most
-  `holder_max_pct`; buyers pass `trade_guard_service.ensure_can_give`
-  (no fresh multi-accounts pumping a club).
+  (always keeps control). Two markets, like a real exchange:
+  - *primary* — unsold IPO shares (`unsold`): the buyer pays the issuing
+    club, at most `ipo_season_cap_pct` of G per season;
+  - *secondary* — a holder lists shares at an ask within ±`ask_band_pct` of
+    the price (`manager_shares.listed/ask`, `POST /exchange/{id}/list`): the
+    buyer pays the seller, the issuer gets nothing; or sells at once to the
+    exchange at the price − `exchange_spread_pct` (`pool`; reselling pool
+    shares pays nobody).
+  A buy walks the offers cheapest first (at one price: holders' asks, the
+  IPO, the pool). A burnt `exchange_fee_pct` on each side; one holder owns
+  at most `holder_max_pct`; buyers pass `trade_guard_service.ensure_can_give`
+  (no fresh multi-accounts pumping a club). What the owner gets from a high
+  price: the next IPO raises more and the capitalization shows the club's
+  worth; the secondary market is between investors.
 - **Price.** base = club value without budget/invested money ÷ shares, ×
   form % = 100 + (ppg − 1.4)·`price_ppg_pct` + (last-5 ppg − 1.4)·
   `price_form_pct`, clamped to `price_min_pct..price_max_pct`. Set at

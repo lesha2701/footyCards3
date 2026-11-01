@@ -3,12 +3,17 @@ only (`ManagerClub.budget`), never coins; every move goes through
 manager_finance.book (the ledger) under the club row locks.
 
 Shares: every club has `shares_total` (1000). Its president may float up to
-`ipo_max_pct` of them (IPO): the unsold ones sit on the exchange and their
-buyers pay the club (up to `ipo_season_cap_pct` of G a season). Holders sell
-back to the exchange (the `pool`); a pool share bought again pays nobody —
-the exchange is the counterparty, `exchange_fee_pct` of every trade is
-burnt. One club holds at most `holder_max_pct` of another; nobody trades
-his own club except the buyback.
+`ipo_max_pct` of them (IPO). Like a real exchange there are two markets:
+- primary — the unsold IPO shares: their buyers pay the issuing club (up to
+  `ipo_season_cap_pct` of G a season);
+- secondary — a holder either lists shares at an ask within ±`ask_band_pct`
+  of the price (a buyer pays the seller, the issuer gets nothing), or sells
+  at once to the exchange at the price − `exchange_spread_pct` (the `pool`;
+  a pool share bought again pays nobody, the spread is burnt).
+A buy fills from the cheapest offers first (holders' asks, then IPO, then
+the pool at the same price); `exchange_fee_pct` of every side is burnt. One
+club holds at most `holder_max_pct` of another; nobody trades his own club
+except the buyback.
 
 The price is not a market price: it is the club value without its budget
 (squad, «Клубная база», fans, titles, minus the debt) per share, set at the
@@ -369,7 +374,48 @@ async def ipo(db: AsyncSession, user: User, shares: int, now: Optional[datetime]
     return await view(db, user, now)
 
 
+def band(price: int, config) -> tuple[int, int]:
+    """The asks a holder may set: ±ask_band_pct of the price."""
+    pct = _int(config, "ask_band_pct")
+    return max(1, price * (100 - pct) // 100), max(1, price * (100 + pct) // 100)
+
+
+def bid(price: int, config) -> int:
+    """What the exchange pays at once for a share: the price − the spread."""
+    return max(1, price * (100 - _int(config, "exchange_spread_pct")) // 100)
+
+
+def _ask_of(h: ManagerShare, price: int, config) -> int:
+    low, high = band(price, config)
+    return min(high, max(low, int(h.ask or price)))
+
+
+def ladder(stock: ManagerStock, asks: list[ManagerShare], config, skip_holder: Optional[int] = None) -> list[tuple[int, int, str, Optional[ManagerShare]]]:
+    """Offers of a club's shares, cheapest first: (price, shares, kind, ask
+    row); at one price holders' asks go first, then the IPO, then the pool."""
+    rows: list[tuple[int, int, int, str, Optional[ManagerShare]]] = []
+    for h in asks:
+        n = min(h.listed, h.shares)
+        if n > 0 and h.holder_club_id != skip_holder:
+            rows.append((_ask_of(h, stock.price, config), 0, n, "ask", h))
+    if stock.unsold:
+        rows.append((stock.price, 1, stock.unsold, "ipo", None))
+    if stock.pool:
+        rows.append((stock.price, 2, stock.pool, "pool", None))
+    rows.sort(key=lambda r: (r[0], r[1], r[4].id if r[4] else 0))
+    return [(p, n, kind, h) for p, _o, n, kind, h in rows]
+
+
+async def _asks(db: AsyncSession, club_id: int, lock: bool = False) -> list[ManagerShare]:
+    stmt = select(ManagerShare).where(ManagerShare.club_id == club_id, ManagerShare.listed > 0, ManagerShare.shares > 0)
+    if lock:
+        stmt = stmt.order_by(ManagerShare.id).with_for_update().execution_options(populate_existing=True)
+    return list((await db.execute(stmt)).scalars().all())
+
+
 async def buy(db: AsyncSession, user: User, club_id: int, shares: int, now: Optional[datetime] = None) -> dict:
+    from app.services import manager_service as ms
+
     now = now or datetime.now(timezone.utc)
     config = await get_config(db)
     me = await _me(db, user, config)
@@ -380,43 +426,91 @@ async def buy(db: AsyncSession, user: User, club_id: int, shares: int, now: Opti
     if issuer is None:
         raise NotFoundError("Клуб не найден")
     await _fresh(db, issuer, now)
-    clubs = await _lock_pair(db, me.id, club_id)
+    sellers = {h.holder_club_id for h in await _asks(db, club_id)} - {me.id}
+    clubs = await ms._lock_clubs(db, [me.id, club_id, *sellers])
     me, issuer = clubs[me.id], clubs[club_id]
     stock = await _stock(db, club_id, lock=True)
     shares = int(shares)
     if stock is None or stock.floated <= 0:
         raise NotFoundError("Этот клуб не на бирже")
-    if shares <= 0 or shares > stock.unsold + stock.pool:
-        raise ConflictError(f"На бирже {stock.unsold + stock.pool} акций «{issuer.name}»")
+    offers = [o for o in ladder(stock, await _asks(db, club_id, lock=True), config, me.id)
+              if o[2] != "ask" or o[3].holder_club_id in clubs]
+    on_sale = sum(n for _p, n, _k, _h in offers)
+    if shares <= 0 or shares > on_sale:
+        raise ConflictError(f"На бирже {on_sale} акций «{issuer.name}»")
     holding = await _holding(db, club_id, me.id)
     cap = stock.shares_total * _int(config, "holder_max_pct") // 100
     if holding.shares + shares > cap:
         raise ConflictError(f"В одних руках — не больше {cap} акций клуба ({_int(config, 'holder_max_pct')}%), у тебя {holding.shares}")
-    from_pool = min(shares, stock.pool)
-    primary = shares - from_pool
+    fills, need = [], shares
+    for price, n, kind, h in offers:
+        if need <= 0:
+            break
+        take = min(need, n)
+        fills.append((price, take, kind, h))
+        need -= take
+    primary = sum(take * price for price, take, kind, _h in fills if kind == "ipo")
     key_me, key_issuer = await finance.club_key(db, me, now), await finance.club_key(db, issuer, now)
     if primary:
         cap_eur = finance.grant_of(issuer.division, config) * _int(config, "ipo_season_cap_pct") // 100
         raised = stock.raised_eur if stock.raised_season == key_issuer else 0
-        if raised + primary * stock.price > cap_eur:
+        if raised + primary > cap_eur:
             raise ConflictError(f"«{issuer.name}» уже привлёк максимум за сезон через IPO — попробуй в следующем сезоне")
-    cost = shares * stock.price
+    cost = sum(price * take for price, take, _k, _h in fills)
     fee = _fee(cost, config)
     free = await _free(db, me, config)
     if cost + fee > free:
-        from app.services import manager_service as ms
-
         raise ConflictError(f"Нужно {ms.money(cost + fee)} с комиссией, свободно {ms.money(free)}")
     await finance.book(db, me, "shares_buy", -(cost + fee), key_me, note=f"{shares} акц. «{issuer.name}»")
     if primary:
-        await finance.book(db, issuer, "ipo", primary * stock.price, key_issuer, note=f"{primary} акц. → «{me.name}»")
-        stock.raised_eur = (stock.raised_eur if stock.raised_season == key_issuer else 0) + primary * stock.price
+        ipo_shares = sum(take for _p, take, kind, _h in fills if kind == "ipo")
+        await finance.book(db, issuer, "ipo", primary, key_issuer, note=f"{ipo_shares} акц. → «{me.name}»")
+        stock.raised_eur = (stock.raised_eur if stock.raised_season == key_issuer else 0) + primary
         stock.raised_season = key_issuer
-    stock.pool -= from_pool
-    stock.unsold -= primary
+        stock.unsold -= ipo_shares
+    stock.pool -= sum(take for _p, take, kind, _h in fills if kind == "pool")
+    for price, take, kind, h in fills:
+        if kind != "ask":
+            continue
+        seller = clubs[h.holder_club_id]
+        gross = price * take
+        got = gross - _fee(gross, config)
+        await finance.book(db, seller, "shares_sell", got, await finance.club_key(db, seller, now),
+                           note=f"{take} акц. «{issuer.name}» → «{me.name}»")
+        h.cost -= h.cost * take // h.shares
+        h.shares -= take
+        h.listed = max(0, min(h.listed - take, h.shares))
+        _tape(db, club_id, seller.id, "sell", take, price, gross - got)
+        await notify(db, seller.owner_id, NotificationType.manager_event, "Акции проданы 📈",
+                     f"«{me.name}» купил {take} акц. «{issuer.name}» по {ms.money(price)} — {ms.money(got)} в бюджет",
+                     related_object_type=ms.RELATED, related_object_id=seller.id)
     holding.shares += shares
     holding.cost += cost + fee
-    _tape(db, club_id, me.id, "buy", shares, stock.price, fee)
+    _tape(db, club_id, me.id, "buy", shares, cost // shares, fee)
+    await db.commit()
+    return await view(db, user, now)
+
+
+async def list_shares(db: AsyncSession, user: User, club_id: int, shares: int, price: int, now: Optional[datetime] = None) -> dict:
+    """Offer `shares` of my holding at `price` a share (within the band);
+    0 shares withdraws the ask. No money moves until somebody buys."""
+    from app.services import manager_service as ms
+
+    now = now or datetime.now(timezone.utc)
+    config = await get_config(db)
+    me = await _me(db, user, config)
+    stock = await _stock(db, club_id, lock=True)
+    holding = await _holding(db, club_id, me.id)
+    shares, price = int(shares), int(price)
+    if stock is None or stock.floated <= 0:
+        raise NotFoundError("Этот клуб не на бирже")
+    if shares < 0 or shares > holding.shares:
+        raise ConflictError(f"У тебя {holding.shares} акций этого клуба")
+    if shares:
+        low, high = band(stock.price, config)
+        if not low <= price <= high:
+            raise ConflictError(f"Цена заявки — от {ms.money(low)} до {ms.money(high)} за акцию")
+    holding.listed, holding.ask = shares, price if shares else 0
     await db.commit()
     return await view(db, user, now)
 
@@ -436,13 +530,16 @@ async def sell(db: AsyncSession, user: User, club_id: int, shares: int, now: Opt
     shares = int(shares)
     if stock is None or shares <= 0 or shares > holding.shares:
         raise ConflictError(f"У тебя {holding.shares} акций этого клуба")
-    gross = shares * stock.price
+    each = bid(stock.price, config)
+    gross = shares * each
     fee = _fee(gross, config)
-    await finance.book(db, me, "shares_sell", gross - fee, await finance.club_key(db, me, now), note=f"{shares} акц. «{issuer.name}»")
+    await finance.book(db, me, "shares_sell", gross - fee, await finance.club_key(db, me, now),
+                       note=f"{shares} акц. «{issuer.name}» бирже")
     holding.cost -= holding.cost * shares // holding.shares
     holding.shares -= shares
+    holding.listed = min(holding.listed, holding.shares)
     stock.pool += shares
-    _tape(db, club_id, me.id, "sell", shares, stock.price, fee)
+    _tape(db, club_id, me.id, "sell", shares, each, fee)
     await db.commit()
     return await view(db, user, now)
 
@@ -504,6 +601,7 @@ async def buyback(db: AsyncSession, user: User, shares: int, now: Optional[datet
                            note=f"выкуп «{me.name}»: {take} акц.")
         h_row.cost -= h_row.cost * take // h_row.shares
         h_row.shares -= take
+        h_row.listed = min(h_row.listed, h_row.shares)
         await notify(db, holder.owner_id, NotificationType.manager_event, f"«{me.name}» выкупил акции 💼",
                      f"{take} акций по {ms.money(premium_price)} — {ms.money(amount)} в бюджет «{holder.name}»",
                      related_object_type=ms.RELATED, related_object_id=holder.id)
@@ -642,16 +740,26 @@ async def view(db: AsyncSession, user: User, now: Optional[datetime] = None) -> 
         select(ManagerShare).where(ManagerShare.holder_club_id == me.id, ManagerShare.shares > 0)
     )).scalars().all()}
     cap = (mine_stock.shares_total if mine_stock else _int(config, "shares_total")) * _int(config, "holder_max_pct") // 100
+    all_asks: dict[int, list[ManagerShare]] = {}
+    for h in (await db.execute(
+        select(ManagerShare).where(ManagerShare.listed > 0, ManagerShare.shares > 0).order_by(ManagerShare.id)
+    )).scalars().all():
+        all_asks.setdefault(h.club_id, []).append(h)
     market = []
     for s in sorted(stocks, key=lambda s: -s.price * s.shares_total):
         c = clubs.get(s.club_id)
         if c is None:
             continue
         h = holdings.get(s.club_id)
+        offers = ladder(s, all_asks.get(s.club_id, []), config, me.id)
+        low, high = band(s.price, config)
         market.append({
             "club_id": c.id, "name": c.name, "division": c.division, "division_name": ms.division_name(c.division),
             "look": c.look or {}, "price": s.price, "change_pct": _change(s), "cap": s.price * s.shares_total,
-            "available": s.unsold + s.pool, "floated": s.floated, "history": [h_["p"] for h_ in (s.history or [])][-20:],
+            "available": sum(n for _p, n, _k, _h in offers), "floated": s.floated,
+            "offers": [{"price": p, "shares": n, "kind": k} for p, n, k, _h in offers],
+            "bid": bid(s.price, config), "band": [low, high],
+            "listed": min(h.listed, h.shares) if h else 0, "ask": h.ask if h and h.listed else 0, "history": [h_["p"] for h_ in (s.history or [])][-20:],
             "mine": c.id == me.id, "held": h.shares if h else 0, "holder_cap": s.shares_total * _int(config, "holder_max_pct") // 100,
             "dividends_paid": s.dividends_paid,
         })
@@ -698,6 +806,7 @@ async def view(db: AsyncSession, user: User, now: Optional[datetime] = None) -> 
         "budget": me.budget, "free_budget": await _free(db, me, config),
         "rules": {k: finance._num(f[k]) for k in (
             "shares_total", "ipo_max_pct", "holder_max_pct", "exchange_fee_pct", "buyback_premium_pct", "ipo_season_cap_pct",
+            "exchange_spread_pct", "ask_band_pct",
             "dividend_pct", "bond_rate_min_pct", "bond_rate_max_pct", "bond_unit_eur", "bond_seasons_max", "bond_holder_max_pct",
         )},
         "my_stock": {

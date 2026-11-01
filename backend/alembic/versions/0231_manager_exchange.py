@@ -43,6 +43,8 @@ def upgrade() -> None:
         sa.Column("shares", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("cost", sa.BigInteger(), nullable=False, server_default="0"),
         sa.Column("dividends", sa.BigInteger(), nullable=False, server_default="0"),
+        sa.Column("listed", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("ask", sa.BigInteger(), nullable=False, server_default="0"),
         sa.UniqueConstraint("club_id", "holder_club_id", name="uq_manager_share_holder"),
     )
     op.create_index("ix_manager_shares_club_id", "manager_shares", ["club_id"])

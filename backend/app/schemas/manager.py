@@ -74,6 +74,11 @@ class ManagerSharesIn(BaseModel):
     shares: int = Field(ge=1, le=100_000)
 
 
+class ManagerShareListIn(BaseModel):
+    shares: int = Field(ge=0, le=100_000)
+    price: int = Field(ge=0, le=10_000_000_000)
+
+
 class ManagerBondIssueIn(BaseModel):
     units: int = Field(ge=1, le=10_000)
     rate_pct: float = Field(ge=0, le=100)

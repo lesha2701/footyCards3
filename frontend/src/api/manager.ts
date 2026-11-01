@@ -599,8 +599,17 @@ export interface ManagerStockRow {
   price: number;
   change_pct: number | null;
   cap: number;
-  /** Shares on the exchange now (unsold IPO + sold back). */
+  /** Shares I can buy now: holders' asks + unsold IPO + the exchange's pool. */
   available: number;
+  /** Offers, cheapest first: holders' asks pay the seller, the IPO pays the club, the pool pays nobody. */
+  offers: { price: number; shares: number; kind: "ask" | "ipo" | "pool" }[];
+  /** What the exchange pays at once for a share (price − spread). */
+  bid: number;
+  /** The asks allowed now: [min, max] € a share. */
+  band: [number, number];
+  /** My ask on this club: shares offered and € a share. */
+  listed: number;
+  ask: number;
   floated: number;
   history: number[];
   mine: boolean;
@@ -636,6 +645,7 @@ export interface ManagerExchange {
   free_budget: number;
   rules: Record<
     "shares_total" | "ipo_max_pct" | "holder_max_pct" | "exchange_fee_pct" | "buyback_premium_pct" | "ipo_season_cap_pct"
+    | "exchange_spread_pct" | "ask_band_pct"
     | "dividend_pct" | "bond_rate_min_pct" | "bond_rate_max_pct" | "bond_unit_eur" | "bond_seasons_max" | "bond_holder_max_pct",
     number
   >;
@@ -678,6 +688,11 @@ export async function buyBackManagerShares(shares: number): Promise<ManagerExcha
 
 export async function tradeManagerShares(clubId: number, side: "buy" | "sell", shares: number): Promise<ManagerExchange> {
   const { data } = await api.post<ManagerExchange>(`/manager/exchange/${clubId}/${side}`, { shares });
+  return data;
+}
+
+export async function listManagerShares(clubId: number, shares: number, price: number): Promise<ManagerExchange> {
+  const { data } = await api.post<ManagerExchange>(`/manager/exchange/${clubId}/list`, { shares, price });
   return data;
 }
 

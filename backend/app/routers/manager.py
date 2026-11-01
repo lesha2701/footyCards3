@@ -20,6 +20,7 @@ from app.schemas.manager import (
     ManagerOfferIn,
     ManagerRepayIn,
     ManagerRespondIn,
+    ManagerShareListIn,
     ManagerSharesIn,
     ManagerStadiumNameIn,
 )
@@ -224,6 +225,14 @@ async def buy_shares(club_id: int, payload: ManagerSharesIn, db: AsyncSession = 
 async def sell_shares(club_id: int, payload: ManagerSharesIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     await check_rate_limit(f"manager_exchange:{user.id}", max_calls=30, window_seconds=60)
     return await manager_exchange.sell(db, user, club_id, payload.shares)
+
+
+@router.post("/exchange/{club_id}/list")
+async def list_exchange_shares(club_id: int, payload: ManagerShareListIn, db: AsyncSession = Depends(get_db),
+                               user: User = Depends(get_current_user)):
+    """Offer `shares` of my holding to other clubs at `price` (0 shares = withdraw the ask)."""
+    await check_rate_limit(f"manager_exchange:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_exchange.list_shares(db, user, club_id, payload.shares, payload.price)
 
 
 @router.post("/bonds")

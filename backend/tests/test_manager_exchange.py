@@ -60,20 +60,69 @@ async def test_ipo_buy_sell_pool_fee_and_one_hands_cap(client, db_session, bot_t
     resp = await client.post(f"{API}/manager/exchange/{a_id}/buy", headers=b_headers, json={"shares": 51})
     assert resp.status_code == 409 and "одних руках" in resp.text
 
-    # B sells 50 back to the exchange; C buys them from the pool — the club gets nothing.
+    # B sells 50 to the exchange at once: the price − the spread, − the fee.
+    b_mid = (await _club_row(db_session, b_id)).budget
     resp = await client.post(f"{API}/manager/exchange/{a_id}/sell", headers=b_headers, json={"shares": 50})
     assert resp.status_code == 200
+    each = exchange.bid(price, config)
+    assert each < price
+    assert (await _club_row(db_session, b_id)).budget == b_mid + 50 * each - 50 * each * finance.cfg(config)["exchange_fee_pct"] // 100
     stock = await _stock(db_session, a_id)
     assert stock.pool == 50 and stock.unsold == 100
+    # C buys 120: the IPO first (pays the club), then the pool (pays nobody).
     a_mid = (await _club_row(db_session, a_id)).budget
-    await exchange.buy(db_session, await _user(db_session, c_uid), a_id, 60)
+    await exchange.buy(db_session, await _user(db_session, c_uid), a_id, 120)
     stock = await _stock(db_session, a_id)
-    assert stock.pool == 0 and stock.unsold == 90
-    assert (await _club_row(db_session, a_id)).budget == a_mid + 10 * price  # only the 10 IPO shares pay the club
+    assert stock.pool == 30 and stock.unsold == 0
+    assert (await _club_row(db_session, a_id)).budget == a_mid + 100 * price  # only the 100 IPO shares pay the club
     market = (await client.get(f"{API}/manager/exchange", headers=b_headers)).json()
     row = next(r for r in market["market"] if r["club_id"] == a_id)
-    assert row["held"] == 150 and row["available"] == 90
+    assert row["held"] == 150 and row["available"] == 30
     assert [p["shares"] for p in market["portfolio"]] == [150]
+
+
+async def test_holders_asks_pay_the_seller_not_the_club(client, db_session, bot_token):
+    config = await get_config(db_session)
+    fee_pct = finance.cfg(config)["exchange_fee_pct"]
+    a_uid, _a, a_id = await _setup(client, db_session, bot_token, 896041, name="Совы")
+    b_uid, b_headers, b_id = await _setup(client, db_session, bot_token, 896042, name="Ястребы")
+    c_uid, c_headers, c_id = await _setup(client, db_session, bot_token, 896043, name="Грачи")
+    for club_id in (b_id, c_id):
+        await _rich(db_session, club_id)
+    await exchange.ipo(db_session, await _user(db_session, a_uid), 200)
+    await exchange.buy(db_session, await _user(db_session, b_uid), a_id, 200)  # the IPO is sold out
+    price = (await _stock(db_session, a_id)).price
+    low, high = exchange.band(price, config)
+    # An ask out of the band, or of more shares than held, is refused.
+    resp = await client.post(f"{API}/manager/exchange/{a_id}/list", headers=b_headers, json={"shares": 100, "price": high + 1})
+    assert resp.status_code == 409
+    resp = await client.post(f"{API}/manager/exchange/{a_id}/list", headers=b_headers, json={"shares": 201, "price": price})
+    assert resp.status_code == 409
+    ask = price + (high - price) // 2
+    resp = await client.post(f"{API}/manager/exchange/{a_id}/list", headers=b_headers, json={"shares": 100, "price": ask})
+    assert resp.status_code == 200, resp.text
+    row = next(r for r in resp.json()["market"] if r["club_id"] == a_id)
+    assert row["listed"] == 100 and row["ask"] == ask
+    # Nobody sees his own ask as an offer.
+    assert row["available"] == 0
+    market = (await client.get(f"{API}/manager/exchange", headers=c_headers)).json()
+    row = next(r for r in market["market"] if r["club_id"] == a_id)
+    assert row["available"] == 100 and row["offers"] == [{"price": ask, "shares": 100, "kind": "ask"}]
+
+    a0, b0, c0 = [(await _club_row(db_session, i)).budget for i in (a_id, b_id, c_id)]
+    resp = await client.post(f"{API}/manager/exchange/{a_id}/buy", headers=c_headers, json={"shares": 30})
+    assert resp.status_code == 200, resp.text
+    gross = 30 * ask
+    assert (await _club_row(db_session, c_id)).budget == c0 - gross - gross * fee_pct // 100
+    assert (await _club_row(db_session, b_id)).budget == b0 + gross - gross * fee_pct // 100
+    assert (await _club_row(db_session, a_id)).budget == a0  # the issuer gets nothing on the secondary market
+    b_row = (await db_session.execute(select(ManagerShare).where(
+        ManagerShare.club_id == a_id, ManagerShare.holder_club_id == b_id).execution_options(populate_existing=True))).scalar_one()
+    assert (b_row.shares, b_row.listed) == (170, 70)
+    # Withdrawn ask: nothing left to buy.
+    await client.post(f"{API}/manager/exchange/{a_id}/list", headers=b_headers, json={"shares": 0, "price": 0})
+    resp = await client.post(f"{API}/manager/exchange/{a_id}/buy", headers=c_headers, json={"shares": 1})
+    assert resp.status_code == 409
 
 
 async def test_ipo_money_per_season_is_capped(client, db_session, bot_token):

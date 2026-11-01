@@ -78,7 +78,8 @@ Main features:
   (shirt sponsor, tour, TV rights, deposit, venture fund, farm club) in
   `manager_deals` / `manager_loans`, frozen into the league team at the
   season start and settled in `_settle`. «📈 Биржа» (`manager_exchange.py`):
-  IPO up to 49% of a club's shares, trading only through the exchange at a
+  IPO up to 49% of a club's shares (buyers of IPO shares pay the club,
+  holders resell to each other through asks or to the exchange at a spread) at a
   price set by club value × form after each round (trades never move it),
   25% holder cap, burnt fee, dividends and bond coupons at season end, bond
   default blocks transfers. Numbers: GameConfig.manager_finance

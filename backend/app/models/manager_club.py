@@ -314,7 +314,8 @@ class ManagerStock(Base):
 
 class ManagerShare(Base):
     """Shares of one club (`club_id`) held by another club (`holder_club_id`);
-    `cost` = euros paid for them (the P&L), `dividends` = euros received."""
+    `cost` = euros paid for them (the P&L), `dividends` = euros received;
+    `listed` of them are offered to other clubs at `ask` € a share."""
 
     __tablename__ = "manager_shares"
     __table_args__ = (UniqueConstraint("club_id", "holder_club_id", name="uq_manager_share_holder"),)
@@ -325,6 +326,8 @@ class ManagerShare(Base):
     shares: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     cost: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     dividends: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    listed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    ask: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
 
 
 class ManagerTrade(Base):
