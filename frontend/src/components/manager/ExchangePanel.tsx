@@ -74,7 +74,7 @@ function Ticker({ x }: { x: ManagerExchange }) {
   const top = x.market.slice(0, 6);
   return (
     <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#06281f] via-[#0b1f33] to-[#1c0f33] p-4 ring-1 ring-emerald-300/30">
-      <BullArt className="pointer-events-none absolute -right-2 -top-1 h-28 w-32 opacity-90" />
+      <BullArt className="pointer-events-none absolute -right-1 -top-2 h-20 w-24 opacity-90" />
       <p className="relative text-micro font-bold uppercase tracking-[0.2em] text-emerald-300">📈 Биржа клубов</p>
       <p className="relative mt-1 max-w-[65%] text-caption text-ink-mist">Цена акции — стоимость клуба × форма. Меняется после каждого тура.</p>
       <div className="relative mt-3 grid grid-cols-2 gap-2 text-center">
@@ -158,11 +158,12 @@ function Market({ x, busy, ask, act }: { x: ManagerExchange; busy: boolean; ask:
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-semibold text-ink-chalk">{s.name}</span>
               <span className="block truncate text-micro text-ink-mist">
-                {s.division_name} · на бирже {s.available}{s.held > 0 && <b className="text-cyan-200"> · у тебя {s.held}</b>}
+                {s.division_name} · на бирже {s.available}
               </span>
+              {s.held > 0 && <span className="mt-0.5 inline-block rounded-full bg-cyan-300/15 px-2 text-micro font-bold text-cyan-200">у тебя {s.held}</span>}
             </span>
             <Spark points={s.history} className="h-8 w-16" />
-            <span className="w-20 text-right">
+            <span className="shrink-0 whitespace-nowrap text-right">
               <b className="block font-display text-sm text-accent-lime">{eur(s.price)}</b>
               <span className="block text-micro"><Change pct={s.change_pct} /></span>
             </span>
@@ -217,7 +218,7 @@ function TradeForm({ s, x, busy, ask, act }: { s: ManagerStockRow; x: ManagerExc
 }
 
 const SIDE: Record<ManagerExchange["tape"][number]["side"], [string, string]> = {
-  ipo: ["🔔", "IPO"], buy: ["🟢", "купил"], sell: ["🔴", "продал"], buyback: ["↩️", "выкуп"],
+  ipo: ["🔔", "IPO"], buy: ["🟢", "куплено"], sell: ["🔴", "продано"], buyback: ["↩️", "выкуп"],
 };
 
 function Tape({ x }: { x: ManagerExchange }) {
