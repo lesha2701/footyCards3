@@ -417,6 +417,29 @@ def render_transfer(
     return _jpeg(img)
 
 
+def render_manager_news(*, league: str, date: str, headline: str, lines: list[str], bot_username: str) -> bytes:
+    """«Газета лиги»: a front page of the last match day."""
+    img, draw = _base("ГАЗЕТА ЛИГИ", bot_username)
+    _center(draw, 150, f"{league} · {date}", _font(FONT_BOLD, 24), MIST)
+    draw.line([(60, 196), (SIZE - 60, 196)], fill=LIME, width=3)
+    y = 216
+    font = _fit(draw, headline, FONT_HEAVY, 44, SIZE - 100, 30)
+    for row in _wrap(draw, headline, font, SIZE - 100, 3):
+        _center(draw, y, row, font, WHITE)
+        y += int(font.size * 1.25)
+    draw.line([(60, y + 12), (SIZE - 60, y + 12)], fill=(60, 72, 64), width=2)
+    y += 36
+    body = _font(FONT_BOLD, 24)
+    for line in lines[:6]:
+        for row in _wrap(draw, f"• {line}", body, SIZE - 120, 2):
+            draw.text((60, y), row, font=body, fill=WHITE if row.startswith("•") else MIST)
+            y += 34
+        y += 8
+        if y > SIZE - 140:
+            break
+    return _jpeg(img)
+
+
 # --- «Мордобой»: a knockout GIF -------------------------------------------------------
 
 GIF_SIZE = 480

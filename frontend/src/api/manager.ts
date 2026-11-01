@@ -418,6 +418,75 @@ export async function chooseManagerEvent(id: number, option: string): Promise<Ma
   return data;
 }
 
+export interface ManagerCupMatch {
+  a: string | null;
+  b: string | null;
+  hs: number | null;
+  as: number | null;
+  pens: [number, number] | null;
+  winner: string | null;
+  mine: boolean;
+  bye: boolean;
+}
+
+/** GET /manager/cup: «Кубок менеджеров». */
+export interface ManagerCupView {
+  enabled: boolean;
+  prizes: { stage: string; amount: number }[];
+  history: { season_key: string; winner: string | null }[];
+  cup: {
+    season_key: string; status: "active" | "finished"; clubs: number; total_rounds: number; played: number; next_at: string | null;
+    rounds: { index: number; name: string; at: string | null; matches: ManagerCupMatch[] }[];
+    mine: { alive: boolean | null; stage: string | null } | null;
+    winner: string | null;
+  } | null;
+}
+
+export async function fetchManagerCup(): Promise<ManagerCupView> {
+  const { data } = await api.get<ManagerCupView>("/manager/cup");
+  return data;
+}
+
+export interface ManagerH2H {
+  h2h: { wins: number; draws: number; losses: number; last: { home: boolean; hs: number; as: number }[] };
+  left_today: number;
+}
+
+export async function fetchManagerH2H(clubId: number): Promise<ManagerH2H> {
+  const { data } = await api.get<ManagerH2H>(`/manager/friendlies/${clubId}`);
+  return data;
+}
+
+export async function playManagerFriendly(clubId: number): Promise<ManagerH2H & {
+  match: { home: string; away: string; hs: number; as: number; goals: { minute: number | null; name: string; home: boolean }[] };
+}> {
+  const { data } = await api.post(`/manager/friendlies/${clubId}`);
+  return data;
+}
+
+/** GET /manager/news: «Газета лиги». */
+export interface ManagerNews {
+  league: string;
+  season_key: string;
+  date: string | null;
+  rounds: number[];
+  total_rounds: number;
+  headline: string;
+  my_place: number | null;
+  biggest: { home: string; away: string; hs: number; as: number };
+  matches: { round: number; home: string; away: string; hs: number; as: number; mine: boolean }[];
+  top: { place: number; name: string; points: number; mine: boolean }[];
+  leader: { name: string; points: number } | null;
+  scorer: { name: string; team: string; goals: number } | null;
+  transfer: { who: string; to: string; from: string | null; fee: number } | null;
+  cup: string | null;
+}
+
+export async function fetchManagerNews(): Promise<ManagerNews> {
+  const { data } = await api.get<ManagerNews>("/manager/news");
+  return data;
+}
+
 export async function fetchManagerMarket(): Promise<{ players: ManagerMarketPlayer[] }> {
   const { data } = await api.get<{ players: ManagerMarketPlayer[] }>("/manager/market");
   return data;

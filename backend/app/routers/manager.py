@@ -27,7 +27,7 @@ from app.schemas.manager import (
     ManagerTicketsIn,
     ManagerStadiumNameIn,
 )
-from app.services import manager_events, manager_exchange, manager_finance, manager_service, manager_shop, manager_today
+from app.services import manager_cup, manager_events, manager_exchange, manager_finance, manager_news, manager_service, manager_shop, manager_today
 
 router = APIRouter(prefix="/manager", tags=["manager"])
 
@@ -74,6 +74,31 @@ async def choose_event(event_id: int, payload: ManagerEventChoiceIn, db: AsyncSe
     """The decision on an event of the club (once)."""
     await check_rate_limit(f"manager_office:{user.id}", max_calls=20, window_seconds=60)
     return await manager_events.choose(db, user, event_id, payload.option)
+
+
+@router.get("/cup")
+async def get_cup(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """«Кубок менеджеров» of the season: my path, the last rounds, prizes, past winners."""
+    return await manager_cup.view(db, user)
+
+
+@router.post("/friendlies/{club_id}")
+async def play_friendly(club_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """A friendly against another club's current squad, played at once."""
+    await check_rate_limit(f"manager_friendly:{user.id}", max_calls=10, window_seconds=60)
+    return await manager_cup.friendly(db, user, club_id)
+
+
+@router.get("/friendlies/{club_id}")
+async def friendly_h2h(club_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """The head-to-head of friendlies with a club and how many are left today."""
+    return await manager_cup.h2h_view(db, user, club_id)
+
+
+@router.get("/news")
+async def get_news(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """«Газета лиги»: the last match day of my club's league."""
+    return await manager_news.front_page(db, user)
 
 
 @router.get("/market")

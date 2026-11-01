@@ -132,6 +132,14 @@ DEFAULTS: dict = {
         {"code": "rotate", "name": "Ротация", "emoji": "🔄", "about": "Бережём лидеров: чуть слабее, зато без травм",
          "mods": {"GK": -2, "DEF": -2, "MID": -2, "FWD": -2}, "injury_x": 0},
     ],
+    # «Кубок менеджеров» (manager_cup): rounds at these hours after the preseason end
+    # (Thu–Sun 19:00 and 22:00); prizes = % of the club's division grant by stage
+    # (winner, finalist, semi-finalists, quarter-finalists…).
+    "cup_enabled": True, "cup_min_clubs": 4,
+    "cup_round_hours": [43, 46, 67, 70, 91, 94, 115, 118],
+    "cup_prizes_pct": [40, 20, 10, 5],
+    # Friendlies (manager_cup.friendly): a club may call this many a day.
+    "friendly_per_day": 3,
     # «События клуба»: after these rounds of the season an event comes (one each).
     "event_rounds": [3, 7, 11],
     # Options: money_pct = % of the division grant (+ income, − expense), fans, form_pct for form_rounds next rounds.
@@ -209,6 +217,7 @@ KINDS: dict[str, tuple[str, str]] = {
     "bond_repay": ("finance", "Погашение своих облигаций"),
     "onboarding": ("income", "Бонус первого сезона"),
     "event_in": ("income", "События клуба"),
+    "cup": ("income", "Кубок менеджеров"),
     "event_out": ("expense", "События клуба"),
 }
 REPORT_SEASONS = 6
@@ -248,6 +257,10 @@ def validate(raw: dict) -> dict:
         elif key in ("match_plans", "events"):
             if not isinstance(value, list) or not value or not all(isinstance(x, dict) and x.get("code") for x in value):
                 raise ValueError(f"{key}: нужен список объектов с code")
+            out[key] = value
+        elif key in ("cup_round_hours", "cup_prizes_pct"):
+            if not isinstance(value, list) or not value or not all(isinstance(x, (int, float)) and x >= 0 for x in value):
+                raise ValueError(f"{key}: нужен список неотрицательных чисел")
             out[key] = value
         elif key == "event_rounds":
             if not isinstance(value, list) or not all(isinstance(x, int) and x > 0 for x in value):

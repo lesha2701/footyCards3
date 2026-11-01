@@ -76,7 +76,7 @@ from app.models.my_player import MyPlayer
 from app.models.player import Player
 from app.models.user import User
 from app.services import club_base_service, my_player_service, player_career_clubs as pcc, tournament_match_engine
-from app.services import manager_events as events, manager_exchange as exchange, manager_finance as finance, manager_tactics as tactics, trade_guard_service, wallet_service
+from app.services import manager_cup as cup, manager_events as events, manager_exchange as exchange, manager_finance as finance, manager_tactics as tactics, trade_guard_service, wallet_service
 from app.services.manager_tactics import DEFAULT_FORMATION
 from app.services.career_service import standings
 from app.services.club_formation_service import get_formation_slots
@@ -1417,6 +1417,7 @@ async def ensure_season(db: AsyncSession, now: Optional[datetime] = None) -> boo
                     + (f". {'; '.join(p['notes'])}" if p["notes"] else ""),
                     related_object_type=RELATED, related_object_id=club.id,
                 )
+    await cup.create(db, key, starts, [p["club"] for p in prepared], config)  # «Кубок менеджеров» of the season
     await _record_values(db, key, config)
     await db.commit()
     return True
@@ -1800,7 +1801,8 @@ async def resolve_all_due(db: AsyncSession, now: Optional[datetime] = None) -> i
     """The season start and every due round (the bot's manager sweep)."""
     await ensure_season(db, now)
     ids = (await db.execute(select(ManagerLeague.id).where(ManagerLeague.status == "active"))).scalars().all()
-    return sum([await resolve_league(db, league_id, now) for league_id in ids])
+    played = sum([await resolve_league(db, league_id, now) for league_id in ids])
+    return played + await cup.resolve(db, now)
 
 
 # --- view -----------------------------------------------------------------------------------

@@ -72,6 +72,8 @@ const LABELS: [string, string][] = [
   ["insurance_cover_pct", "Страховка: оплачивает, % лечения"],
   ["rating_size", "«Лучший президент»: клубов в рейтинге"],
   ["onboarding_bonus_eur", "«Первый сезон»: бонус за чек-лист, €"],
+  ["cup_min_clubs", "Кубок менеджеров: минимум клубов для розыгрыша"],
+  ["friendly_per_day", "Товарищеские матчи: в день на клуб"],
 ];
 
 const JSON_KEYS: [string, string][] = [
@@ -80,6 +82,8 @@ const JSON_KEYS: [string, string][] = [
   ["kit_brands", "Спонсор на форме: бренды на выбор"],
   ["match_plans", "Установки на матч: mods (% к линиям GK/DEF/MID/FWD на один матч), injury_x (× шанс травмы; 0 = без травм)"],
   ["event_rounds", "События клуба: после каких туров сезона приходит событие"],
+  ["cup_round_hours", "Кубок менеджеров: часы кругов от старта сезона"],
+  ["cup_prizes_pct", "Кубок менеджеров: призы, % гранта — победитель, финалист, полуфинал, …"],
   ["events", "События клуба: options — money_pct (% гранта, + доход / − расход), fans, form_pct на form_rounds следующих туров"],
 ];
 
@@ -97,6 +101,10 @@ export default function ManagerFinanceFields({ value, onChange }: {
       <label className="col-span-2 flex items-center gap-2 text-xs text-slate-300">
         <input type="checkbox" checked={data.exchange_enabled !== false} onChange={(e) => onChange({ ...data, exchange_enabled: e.target.checked })} />
         Биржа открыта (акции, IPO, облигации)
+      </label>
+      <label className="col-span-2 flex items-center gap-2 text-xs text-slate-300">
+        <input type="checkbox" checked={data.cup_enabled !== false} onChange={(e) => onChange({ ...data, cup_enabled: e.target.checked })} />
+        Кубок менеджеров разыгрывается
       </label>
       {LABELS.map(([key, label]) => (
         <label key={key} className="flex flex-col gap-1">

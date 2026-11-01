@@ -33,6 +33,7 @@ import {
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
 import ShareButton from "@/components/common/ShareButton";
+import { CupPanel, NewsPanel } from "@/components/manager/CupNewsPanel";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconCoin, IconProfile, IconSearch, IconTrophy } from "@/components/icons";
 import ClubCardSheet from "@/components/manager/ClubCardSheet";
@@ -800,6 +801,8 @@ function LeagueTab({ view, onError }: { view: ManagerView; onError: (e: unknown)
   const { data: popular } = useQuery({ queryKey: ["manager", "popular"], queryFn: fetchManagerPopular });
   return (
     <div className="flex flex-col gap-3">
+      <NewsPanel />
+      <CupPanel />
       {league ? <LeagueTable league={league} onClub={setClubId} /> : (
         <EmptyState icon={IconTrophy} title="Лиги пока нет" description="Лиги собираются, когда закрывается трансферное окно." />
       )}

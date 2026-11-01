@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 
-import { buyManagerMerch, fetchManagerClubCard, type ManagerClubCard } from "@/api/manager";
+import { buyManagerMerch, fetchManagerClubCard, fetchManagerH2H, playManagerFriendly, type ManagerClubCard } from "@/api/manager";
 import { IconCoin } from "@/components/icons";
 import { themeClass } from "@/lib/managerLook";
 import { eur } from "@/lib/managerMoney";
@@ -9,6 +9,46 @@ import { hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 
 import Emblem, { KitShirt } from "./Emblem";
+
+/** «Товарищеский матч» with another club: no money, no table — the score,
+ * the goals and the head-to-head; a few a day. */
+function Friendly({ clubId, onError }: { clubId: number; onError: (e: unknown) => void }) {
+  const queryClient = useQueryClient();
+  const { data } = useQuery({ queryKey: ["manager", "h2h", clubId], queryFn: () => fetchManagerH2H(clubId) });
+  const play = useMutation({
+    mutationFn: () => playManagerFriendly(clubId),
+    onSuccess: (v) => { hapticNotify("success"); queryClient.setQueryData(["manager", "h2h", clubId], { h2h: v.h2h, left_today: v.left_today }); },
+    onError,
+  });
+  const match = play.data?.match;
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl bg-black/25 p-3 ring-1 ring-white/10" data-testid="friendly">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-bold text-ink-chalk">⚔️ Товарищеский матч</p>
+        {data && <span className="text-micro text-ink-mist">личные встречи {data.h2h.wins}–{data.h2h.draws}–{data.h2h.losses}</span>}
+      </div>
+      {match && (
+        <div className="flex flex-col gap-1 rounded-xl bg-bg-raised p-2.5">
+          <p className="flex items-center gap-2 text-sm">
+            <span className="min-w-0 flex-1 truncate font-semibold text-ink-chalk">{match.home}</span>
+            <span className="font-mono text-base font-black text-ink-chalk">{match.hs}:{match.as}</span>
+            <span className="min-w-0 flex-1 truncate text-right font-semibold text-ink-chalk">{match.away}</span>
+          </p>
+          {match.goals.length > 0 && (
+            <p className="text-micro text-ink-mist">
+              {match.goals.map((g) => `${g.minute != null ? `${g.minute}′ ` : ""}${g.name}`).join(" · ")}
+            </p>
+          )}
+        </div>
+      )}
+      <button disabled={play.isPending || !data || data.left_today <= 0} onClick={() => play.mutate()}
+        className="rounded-xl bg-floodlight py-2.5 text-sm font-bold text-bg-base active:scale-[0.97] disabled:opacity-50">
+        {play.isPending ? "Играем…" : data && data.left_today <= 0 ? "На сегодня матчи закончились" : `Сыграть${data ? ` · осталось ${data.left_today}` : ""}`}
+      </button>
+      <p className="text-micro text-ink-mist">Без денег и очков: проверь состав и тактику против соперника.</p>
+    </div>
+  );
+}
 
 /** Another club's card (opened from the league table): style, division,
  * fans and its merchandise — buying it burns coins and brings that club
@@ -60,6 +100,7 @@ export default function ClubCardSheet({ clubId, onClose, onError }: { clubId: nu
                     </span>
                   ))}
                 </div>
+                {!data.is_mine && <Friendly clubId={data.id} onError={onError} />}
                 {!data.is_mine && (
                   <div className="flex flex-col gap-2">
                     <p className="text-xs font-bold text-ink-chalk">Стань болельщиком — купи мерч</p>

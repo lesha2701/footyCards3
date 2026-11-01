@@ -216,6 +216,21 @@ async def _manager_transfer(db: AsyncSession, user: User, contract_id: int) -> t
     return path, f"Here we go! {out['name']} → «{buyer.name}», {fee_text} ⚽ «Менеджер» в Victor FC"
 
 
+async def _manager_news(db: AsyncSession, user: User) -> tuple[str, str]:
+    """«Газета лиги» of my club's league (its last match day)."""
+    from app.services import manager_news, manager_service
+
+    page = await manager_news.front_page(db, user)
+    lines = manager_news.lines_of(page, manager_service.money)
+    image = share_card_service.render_manager_news(
+        league=page["league"], date=page["date"] or "", headline=page["headline"], lines=lines,
+        bot_username=settings.telegram_bot_username,
+    )
+    fingerprint = f"news|{page['season_key']}|{page['rounds']}|{page['headline']}|{lines}"
+    path = _store(image, "manager_news", user.id, fingerprint)
+    return path, f"{page['headline']} 📰 «Газета лиги» в «Менеджере» Victor FC"
+
+
 def mordoboi_link(user: User) -> str:
     """Opens the bot, which answers with «Выйти на ринг» → /play/mordoboi?vs=<id>."""
     return f"https://t.me/{settings.telegram_bot_username}?start=mordoboi_vs_{user.id}"
@@ -421,6 +436,8 @@ async def prepare_share(db: AsyncSession, user: User, kind: str, object_id: int)
         path, caption = await _manager_player(db, user)
     elif kind == "manager_transfer":
         path, caption = await _manager_transfer(db, user, object_id)
+    elif kind == "manager_news":
+        path, caption = await _manager_news(db, user)
     else:
         raise NotFoundError("Нечем поделиться")
 

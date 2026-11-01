@@ -409,3 +409,35 @@ class ManagerEvent(Base):
     data: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     decided_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ManagerCup(Base):
+    """«Кубок менеджеров» of a season (manager_cup): a knockout of every
+    club playing the season, a round on set evenings. `state` = {"rounds":
+    [[{"a", "b" (None = bye), "hs", "as", "pens", "w"}]], "schedule",
+    "names", "played", "winner"}; status active → finished."""
+
+    __tablename__ = "manager_cups"
+
+    season_key: Mapped[str] = mapped_column(String(10), primary_key=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    state: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ManagerFriendly(Base):
+    """A friendly between two clubs (manager_cup.friendly): played at once
+    against the other club's current squad; no table, no money — the
+    head-to-head. `data` = goals and both styles."""
+
+    __tablename__ = "manager_friendlies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    home_club_id: Mapped[int] = mapped_column(ForeignKey("manager_clubs.id", ondelete="CASCADE"), nullable=False, index=True)
+    away_club_id: Mapped[int] = mapped_column(ForeignKey("manager_clubs.id", ondelete="CASCADE"), nullable=False, index=True)
+    home_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    away_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    data: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
