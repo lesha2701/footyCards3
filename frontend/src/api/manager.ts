@@ -108,6 +108,8 @@ export interface ManagerClub {
   division_name: string;
   /** Its league is running — no transfers. */
   playing: boolean;
+  /** No deals now: its league runs, or the season is on for everybody. */
+  trade_locked: boolean;
   seasons_played: number;
   titles: number;
   best_division: number | null;
@@ -247,7 +249,7 @@ export interface ManagerView {
   my_rating: number | null;
   my_trend_pct: number | null;
   season: {
-    key: string; phase: "preseason" | "season"; preseason_ends_at: string; first_round_at: string; slots: string[]; rounds: number;
+    key: string; phase: "preseason" | "season" | "offseason"; transfers_open: boolean; preseason_ends_at: string; first_round_at: string; slots: string[]; rounds: number;
   };
   pyramid: { division: number; name: string; clubs: number; capacity: number | null; grant: number; rating: number }[];
   rules: ManagerRules;

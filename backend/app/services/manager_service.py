@@ -36,7 +36,9 @@ division above, config.manager_promote clubs per league go up and twice as
 many per league come down (the pyramid stays ×2); while the division above
 has room (at the start the upper divisions are empty), the best of each
 league (up to its top half) fill it — climbing is quicker early on. Promoted clubs get a
-bonus, relegated ones a parachute. A club whose league runs can't trade.
+bonus, relegated ones a parachute. One transfer window for every club: from
+the season's start until it is settled nobody trades — neither the clubs
+whose league runs nor the ones founded too late to join it (`window_open`).
 
 No scheduler of its own: the season start and the rounds run lazily on
 reads and from the bot's manager sweep (`resolve_all_due`). The owners get
@@ -344,9 +346,25 @@ async def is_playing(db: AsyncSession, club: ManagerClub) -> bool:
     return status == "active"
 
 
+async def window_open(db: AsyncSession, now: Optional[datetime] = None) -> bool:
+    """The transfer window is the same for every club: shut from the moment
+    this week's season starts until it is settled, and while any league
+    still plays (last week's season running into this week's preseason)."""
+    now = now or datetime.now(timezone.utc)
+    row = (await db.execute(
+        select(ManagerSeason.settled_at).where(ManagerSeason.key == season_key(now))
+    )).first()
+    if row is not None and row[0] is None:
+        return False
+    active = (await db.execute(select(ManagerLeague.id).where(ManagerLeague.status == "active").limit(1))).first()
+    return active is None
+
+
 async def _ensure_window(db: AsyncSession, club: ManagerClub, whose: str = "Твой клуб") -> None:
     if await is_playing(db, club):
         raise ConflictError(f"{whose} играет сезон — трансферы откроются в предсезонку")
+    if not await window_open(db):
+        raise ConflictError("Идёт сезон — трансферное окно у всех клубов откроется после последнего тура")
 
 
 async def _active_contract(db: AsyncSession, user_id: int) -> Optional[ManagerContract]:
@@ -1849,6 +1867,7 @@ async def get_view(db: AsyncSession, user: User, now: Optional[datetime] = None)
     club_out = None
     if club is not None:
         playing = await is_playing(db, club)
+        trade_locked = playing or not await window_open(db, now)
         squad = await squad_view(db, club, config)
         npcs = await _npcs(db, club.id)
         players = {p.id: p for p in (await db.execute(select(Player).where(Player.id.in_({n.player_id for n in npcs} or {0})))).scalars().all()}
@@ -1861,6 +1880,7 @@ async def get_view(db: AsyncSession, user: User, now: Optional[datetime] = None)
             "id": club.id, "name": club.name, "formation": tactics.clean_formation(club.formation),
             "style": tactics.clean_style(club.style), "budget": club.budget,
             "division": club.division, "division_name": division_name(club.division), "playing": playing,
+            "trade_locked": trade_locked,
             "seasons_played": club.seasons_played, "titles": club.titles, "best_division": club.best_division,
             "base": snap, "next_grant": grant, "ticket_per_home_match": ticket_income(club.division, snap, config),
             "squad": squad,
@@ -1896,6 +1916,10 @@ async def get_view(db: AsyncSession, user: User, now: Optional[datetime] = None)
                 club_out["next_match"] = await next_match(db, row, club, config)
     pre_end = preseason_end(now, config)
     started = await db.get(ManagerSeason, season_key(now)) is not None
+    transfers_open = await window_open(db, now)
+    # One calendar for everybody: preseason → season (no club trades) →
+    # offseason once every league is over (the window reopens for all).
+    phase = "preseason" if not started else "offseason" if transfers_open else "season"
     next_pre_end = pre_end if now < pre_end else preseason_end(week_start(now) + timedelta(days=7), config)
     my_rating = my_player_service.rating_of(mp, config) if mp else None
     my_value = live_value(my_rating, contract, config) if mp else None
@@ -1908,7 +1932,7 @@ async def get_view(db: AsyncSession, user: User, now: Optional[datetime] = None)
         "market_open": bool(mp and mp.market_open),
         "my_value": my_value, "my_rating": my_rating, "my_trend_pct": my_trend,
         "season": {
-            "key": season_key(now), "phase": "season" if started else "preseason",
+            "key": season_key(now), "phase": phase, "transfers_open": transfers_open,
             "preseason_ends_at": next_pre_end.astimezone(timezone.utc).isoformat(),
             "first_round_at": season_schedule(next_pre_end, config)[0],
             "slots": [f"{h:02d}:{m:02d}" for h, m in slots_of(config)], "rounds": rounds_of(config),

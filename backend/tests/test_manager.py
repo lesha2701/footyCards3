@@ -52,6 +52,21 @@ def _reset_rate_limits():
     yield
 
 
+@pytest.fixture(autouse=True)
+def _no_season_at_the_real_clock(monkeypatch):
+    """The suite runs on any weekday: the views would start the real current
+    week's season after Thursday and shut the common transfer window. Only
+    the seasons a test starts itself (next week, an explicit `now`) start."""
+    real = manager_service.ensure_season
+
+    async def ensure(db, now=None):
+        if now is None or abs(now - datetime.now(timezone.utc)) < timedelta(hours=1):
+            return False
+        return await real(db, now)
+
+    monkeypatch.setattr(manager_service, "ensure_season", ensure)
+
+
 def _next_season_start(config) -> datetime:
     """A moment just after next week's preseason closes."""
     now = datetime.now(timezone.utc)
@@ -605,3 +620,44 @@ async def test_window_reserves_the_squad_wages_and_logs_every_move(client, db_se
         select(ManagerMove).where(ManagerMove.club_id == club_id, ManagerMove.kind == "unpaid")
     )).scalars().all()
     assert len(moves) == 1 and moves[0].fee == terms["sell_back"] and moves[0].who == "Первый Форвард"
+
+
+async def test_one_transfer_window_for_every_club(client, db_session, bot_token):
+    """A club out of this season's leagues (founded too late) can't trade
+    while the others play: the window shuts and reopens for everybody."""
+    keeper = await create_player(db_session, rating=60, position=Position.GK, display_name="Общий Вратарь")
+    _, headers = await _player(client, db_session, bot_token, 894111)
+    await _club(client, headers, "Опоздавшие")
+    season = ManagerSeason(key=manager_service.season_key(datetime.now(timezone.utc)), depth=1)
+    db_session.add(season)
+    await db_session.commit()
+
+    view = (await client.get(f"{API}/manager", headers=headers)).json()
+    assert view["season"]["phase"] == "season" and view["season"]["transfers_open"] is False
+    assert view["club"]["playing"] is False and view["club"]["trade_locked"] is True
+    resp = await client.post(f"{API}/manager/npc", headers=headers, json={"player_id": keeper.id, "kind": "loan"})
+    assert resp.status_code == 409 and "у всех клубов" in resp.json()["error"]["message"]
+
+    season.settled_at = datetime.now(timezone.utc)
+    await db_session.commit()
+    view = (await client.get(f"{API}/manager", headers=headers)).json()
+    assert view["season"]["phase"] == "offseason" and view["club"]["trade_locked"] is False
+    resp = await client.post(f"{API}/manager/npc", headers=headers, json={"player_id": keeper.id, "kind": "loan"})
+    assert resp.status_code == 200, resp.text
+
+
+async def test_window_waits_for_last_weeks_leagues(client, db_session, bot_token):
+    """Last week's league still playing into this week's preseason keeps the
+    window shut for every club, not only for its own."""
+    keeper = await create_player(db_session, rating=60, position=Position.GK, display_name="Вратарь Понедельника")
+    _, headers = await _player(client, db_session, bot_token, 894112)
+    await _club(client, headers, "Новички")
+    league = ManagerLeague(season_key="2000-W01", division=1, status="active", state={})
+    db_session.add(league)
+    await db_session.commit()
+    resp = await client.post(f"{API}/manager/npc", headers=headers, json={"player_id": keeper.id, "kind": "loan"})
+    assert resp.status_code == 409
+    league.status = "finished"
+    await db_session.commit()
+    resp = await client.post(f"{API}/manager/npc", headers=headers, json={"player_id": keeper.id, "kind": "loan"})
+    assert resp.status_code == 200, resp.text

@@ -864,7 +864,7 @@ export default function AdminGamesPage() {
           {field("manager_league_size", "Клубов в лиге (чётное; туров = клубов − 1)")}
           {field("manager_divisions", "Дивизионов, максимум (пирамида ×2)")}
           {field("manager_promote", "Повышаются из лиги при заполненной пирамиде (вылетают вдвое больше)")}
-          {field("manager_preseason_hours", "Предсезонка (трансферное окно): часов от понедельника 00:00 (72 = старт в четверг)")}
+          {field("manager_preseason_hours", "Предсезонка (трансферное окно): часов от понедельника 00:00 (48 = окно пн–ср, сезон ср–вс)")}
           {field("manager_style_edge_pct", "Тактика: бонус к рейтингам стилю, который бьёт стиль соперника, %")}
           {field("manager_formation_effect_pct", "Тактика: сила крена схем в атаку/защиту, %")}
           {field("manager_wage_pct", "Зарплата футболиста за сезон, % стоимости (база)")}

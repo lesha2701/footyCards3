@@ -705,7 +705,7 @@ class GameConfig(TimestampMixin, Base):
     manager_league_size: Mapped[int] = mapped_column(Integer, default=16, nullable=False)
     manager_divisions: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     manager_promote: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
-    manager_preseason_hours: Mapped[int] = mapped_column(Integer, default=72, nullable=False)
+    manager_preseason_hours: Mapped[int] = mapped_column(Integer, default=48, nullable=False)
     manager_style_edge_pct: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
     manager_formation_effect_pct: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
     manager_wage_pct: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
