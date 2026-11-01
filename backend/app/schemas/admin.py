@@ -523,7 +523,7 @@ class GameConfigOut(BaseModel):
     manager_league_size: int = 16
     manager_divisions: int = 10
     manager_promote: int = 2
-    manager_preseason_hours: int = 72
+    manager_preseason_hours: int = 48
     manager_style_edge_pct: int = 4
     ptour_style_edge_pct: int = 4
     ptour_formation_effect_pct: int = 100

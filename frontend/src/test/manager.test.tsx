@@ -52,7 +52,7 @@ const TACTICS = {
 
 const base: ManagerView = {
   enabled: true, has_player: true, balance: 5000, level: 4, market_open: false, my_value: 3_500_000, my_rating: 70, my_trend_pct: 12,
-  season: { key: "2026-W43", phase: "preseason", preseason_ends_at: "2026-10-21T21:00:00Z", first_round_at: "2026-10-22T10:00:00Z", slots: ["13:00", "17:00", "21:00"], rounds: 15 },
+  season: { key: "2026-W43", phase: "preseason", transfers_open: true, preseason_ends_at: "2026-10-21T21:00:00Z", first_round_at: "2026-10-22T10:00:00Z", slots: ["13:00", "17:00", "21:00"], rounds: 15 },
   pyramid: [
     { division: 1, name: "Дивизион 1", clubs: 0, capacity: 16, grant: 120_000_000, rating: 80 },
     { division: 2, name: "Дивизион 2", clubs: 3, capacity: null, grant: 70_000_000, rating: 77 },
@@ -80,7 +80,7 @@ const contract: ManagerContract = {
 
 const club: ManagerClub = {
   id: 1, name: "Ночные Совы", formation: "4-3-3", style: "possession", budget: 2_500_000, division: 2, division_name: "Дивизион 2",
-  playing: false, seasons_played: 0, titles: 0, best_division: 2,
+  playing: false, trade_locked: false, seasons_played: 0, titles: 0, best_division: 2,
   base: { level: 5, stadium: 3, marketing: 2, shop: 0, matchday_pct: 4, discount_pct: 0, capacity: 9000 },
   next_grant: { grant: 2_000_000, bonus: 300_000, bonus_raw: 300_000, total: 2_300_000 }, ticket_per_home_match: 62_000,
   squad: {
@@ -158,6 +158,16 @@ describe("ManagerPage", () => {
     expect(pitch).toHaveTextContent("€9,8 млн");
     expect(screen.getByText(/8 мест пустует/)).toBeInTheDocument();
     expect(screen.getByText(/Бюджет на сезон: €2,3 млн/)).toBeInTheDocument();
+  });
+
+  it("a club out of this season's leagues still waits for the common window", async () => {
+    fetchManager.mockResolvedValue({
+      ...base, season: { ...base.season, phase: "season", transfers_open: false }, club: { ...club, playing: false, trade_locked: true },
+    });
+    renderPage();
+    expect(await screen.findByText(/Твой клуб сыграет со следующего сезона/)).toBeInTheDocument();
+    expect(screen.queryByText("Межсезонье")).toBeNull();
+    expect(screen.queryByText("Трансферное окно открыто")).toBeNull();
   });
 
   it("buys a player of another club with a transfer fee", async () => {

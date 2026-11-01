@@ -139,7 +139,8 @@ interface TabProps {
 
 function SeasonBanner({ view }: { view: ManagerView }) {
   const playing = view.club?.playing;
-  const pre = view.season.phase === "preseason" && !playing;
+  const { phase } = view.season;
+  const pre = phase === "preseason" && !playing;
   const slots = view.season.slots.join(", ");
   return (
     <section className={`flex items-center gap-3 rounded-2xl p-3 ${pre ? "bg-accent-lime/15 ring-1 ring-accent-lime/40" : "bg-bg-surface"}`} data-testid="season-banner">
@@ -149,6 +150,8 @@ function SeasonBanner({ view }: { view: ManagerView }) {
           <><b className="block text-sm text-ink-chalk">Трансферное окно открыто</b>Закрывается {when(view.season.preseason_ends_at)}, первый тур — {when(view.season.first_round_at)}. Успей собрать состав</>
         ) : playing ? (
           <><b className="block text-sm text-ink-chalk">Идёт сезон · {view.season.rounds} туров</b>По 3 тура в день ({slots}). Трансферы — в предсезонку</>
+        ) : phase === "season" ? (
+          <><b className="block text-sm text-ink-chalk">Идёт сезон · {view.season.rounds} туров</b>{view.club ? "Твой клуб сыграет со следующего сезона. " : ""}Трансферное окно у всех откроется после последнего тура, следующий сезон — с {when(view.season.first_round_at)}</>
         ) : (
           <><b className="block text-sm text-ink-chalk">Межсезонье</b>Трансферы открыты до {when(view.season.preseason_ends_at)}, первый тур — {when(view.season.first_round_at)}</>
         )}
@@ -208,7 +211,7 @@ function ClubTab({ view, club, onView, onError }: TabProps & { club: ManagerClub
     mutationFn: ({ id, accept }: { id: number; accept: boolean }) => respondManagerOffer(id, accept), onSuccess: onView, onError,
   });
   const sellNpc = useMutation({ mutationFn: (id: number) => releaseManagerNpc(id), onSuccess: onView, onError });
-  const locked = club.playing;
+  const locked = club.trade_locked;
   const rules = view.rules;
   const base = club.base;
   return (
@@ -434,7 +437,7 @@ function TransfersTab({ view, club, onView, onError }: TabProps & { club: Manage
         ))}
       </div>
       <BudgetBar club={club} />
-      {club.playing && <p className="rounded-xl bg-amber-400/10 px-3 py-2 text-caption text-amber-300">Идёт сезон — сделки откроются в предсезонку.</p>}
+      {club.trade_locked && <p className="rounded-xl bg-amber-400/10 px-3 py-2 text-caption text-amber-300">Идёт сезон — сделки откроются после последнего тура.</p>}
       {section === "users" && <UsersMarket view={view} club={club} onView={onView} onError={onError} />}
       {section === "catalog" && <Catalog club={club} onView={onView} onError={onError} />}
       {section === "scout" && <Scout club={club} />}
@@ -563,7 +566,7 @@ function UsersMarket({ view, club, onView, onError }: TabProps & { club: Manager
         <MarketRow key={p.user_id} p={p}>
           {p.offered ? (
             <p className="text-micro text-ink-mist">Предложение отправлено</p>
-          ) : !p.club?.on_loan && !club.playing && (
+          ) : !p.club?.on_loan && !club.trade_locked && (
             <button onClick={() => setOpen(open === p.user_id ? null : p.user_id)} className="rounded-lg bg-bg-raised py-1.5 text-xs font-semibold text-ink-chalk">
               {p.club ? "Купить или арендовать" : "Предложить контракт"}
             </button>
@@ -733,7 +736,7 @@ function CatalogRow({ p, club, open, seasons, busy, onToggle, onSeasons, onSign 
   const free = !p.taken_by;
   return (
     <div className={`flex flex-col gap-2 rounded-2xl p-3 ${free ? "bg-bg-surface" : "bg-bg-surface/50"}`}>
-      <button onClick={onToggle} disabled={!free || club.playing} className="flex items-center gap-2 text-left disabled:cursor-default">
+      <button onClick={onToggle} disabled={!free || club.trade_locked} className="flex items-center gap-2 text-left disabled:cursor-default">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/90 font-display text-sm font-black text-bg-base">{p.rating}</span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-semibold text-ink-chalk">{p.name} <span className="font-normal text-ink-mist">· {p.position}</span></span>
