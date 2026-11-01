@@ -120,7 +120,10 @@ export interface ManagerClub {
   /** Other clubs asking for my players. */
   incoming: ManagerContract[];
   npcs: ManagerNpc[];
+  /** Wages the next season start takes for the squad already signed — set aside. */
   wages_per_season: number;
+  /** The budget above those wages: what the window's deals may spend. */
+  free_budget: number;
   squad_value: number;
   /** The next league match (during a season). */
   next_match: ManagerNextMatch | null;
@@ -314,6 +317,38 @@ export async function fetchManager(): Promise<ManagerView> {
 
 export async function fetchManagerMarket(): Promise<{ players: ManagerMarketPlayer[] }> {
   const { data } = await api.get<{ players: ManagerMarketPlayer[] }>("/manager/market");
+  return data;
+}
+
+export type ManagerMoveKind =
+  | "sign" | "transfer" | "loan" | "buy" | "auto" | "loan_back"
+  | "sold" | "loaned_out" | "release" | "expired" | "unpaid";
+
+export interface ManagerMove {
+  id: number;
+  season_key: string;
+  direction: "in" | "out";
+  kind: ManagerMoveKind;
+  who: string;
+  position: string | null;
+  rating: number | null;
+  fee: number;
+  other_club: string | null;
+  at: string;
+}
+
+export interface ManagerMoves {
+  /** The season of the open window (or the running one). */
+  season_key: string;
+  spent: number;
+  earned: number;
+  came: number;
+  left: number;
+  moves: ManagerMove[];
+}
+
+export async function fetchManagerMoves(): Promise<ManagerMoves> {
+  const { data } = await api.get<ManagerMoves>("/manager/moves");
   return data;
 }
 

@@ -65,6 +65,7 @@ from app.models.manager_club import (
     ManagerClub,
     ManagerContract,
     ManagerLeague,
+    ManagerMove,
     ManagerNpc,
     ManagerSeason,
     ManagerValueHistory,
@@ -686,8 +687,9 @@ async def make_offer(
     if await _squad_size(db, club) >= config.manager_squad_max:
         raise ConflictError(f"В заявке не больше {config.manager_squad_max} игроков")
     need = fee + wage_eur(wage, config)
-    if need > club.budget:
-        raise ConflictError(f"Не хватает бюджета: нужно {money(need)} (сумма + зарплата за сезон), есть {money(club.budget)}")
+    reserved = await wage_bill(db, club, config)
+    if need > club.budget - reserved:
+        raise ConflictError(_short_of(need, club.budget, reserved))
     contract = ManagerContract(
         club_id=club.id, user_id=target_id, kind=kind, status="offered", fee=fee, wage=wage,
         seasons_total=seasons, seasons_left=seasons, club_agreed=current is None,
@@ -799,8 +801,10 @@ async def _execute(db, contract, buyer, seller, parent, player_user, player_name
         raise ConflictError("У игрока уже есть клуб")
     if player_user.is_trade_banned and contract.wage > 0:
         raise ConflictError("Этому игроку нельзя получать зарплату от других игроков")
-    if contract.fee > buyer.budget:
-        raise ConflictError(f"У «{buyer.name}» не хватает бюджета на сделку")
+    # Checked again now: the buyer may have spent since the offer.
+    need = contract.fee + wage_eur(min(contract.wage, config.manager_live_wage_max), config)
+    if need > buyer.budget - await wage_bill(db, buyer, config):
+        raise ConflictError(f"У «{buyer.name}» не хватает свободного бюджета на сделку (сумма + зарплата за сезон)")
     if contract.fee:
         buyer.budget -= contract.fee
         seller.budget += contract.fee
@@ -821,6 +825,11 @@ async def _execute(db, contract, buyer, seller, parent, player_user, player_name
     )).scalars().all():
         other.status = "declined"
         other.decided_at = now
+    who = await _live_who(db, contract.user_id)
+    await _move(db, buyer, "in", contract.kind, who, now, fee=contract.fee, other=seller.name if seller else None)
+    if seller is not None:
+        await _move(db, seller, "out", "sold" if contract.kind == "transfer" else "loaned_out", who, now,
+                    fee=contract.fee, other=buyer.name)
     what = {"sign": "подписал контракт с", "transfer": "перешёл в", "loan": "ушёл в аренду в"}[contract.kind]
     text = f"{player_name} {what} «{buyer.name}»" + (f" за {money(contract.fee)}" if contract.fee else "")
     for target in {buyer.owner_id, contract.user_id, *([seller.owner_id] if seller else [])}:
@@ -859,9 +868,14 @@ async def end_contract(db: AsyncSession, user: User, contract_id: int) -> dict:
     return await get_view(db, user)
 
 
-async def _close_contract(db: AsyncSession, contract: ManagerContract, now: datetime) -> None:
+async def _close_contract(db: AsyncSession, contract: ManagerContract, now: datetime, reason: str = "release",
+                          key: Optional[str] = None) -> None:
+    """`reason` goes to the transfer log: release | expired | unpaid."""
     contract.status = "ended"
     contract.decided_at = now
+    club = await db.get(ManagerClub, contract.club_id)
+    who = await _live_who(db, contract.user_id)
+    parent = None
     if contract.kind == "loan" and contract.from_contract_id:
         parent = (await db.execute(
             select(ManagerContract).where(ManagerContract.id == contract.from_contract_id).with_for_update()
@@ -870,6 +884,76 @@ async def _close_contract(db: AsyncSession, contract: ManagerContract, now: date
         if parent is not None and parent.status == "on_loan":
             parent.status = "active" if parent.seasons_left > 0 else "ended"
             parent.decided_at = now
+    home = await db.get(ManagerClub, parent.club_id) if parent is not None and parent.status == "active" else None
+    if club is not None and contract.user_id != club.owner_id:
+        await _move(db, club, "out", "loan_back" if home else reason, who, now, other=home.name if home else None, key=key)
+    if home is not None:
+        await _move(db, home, "in", "loan_back", who, now, other=club.name if club else None, key=key)
+
+
+async def _live_who(db: AsyncSession, user_id: int) -> dict:
+    """A user's player for the transfer log: name, position, rating."""
+    mp = await my_player_service.get_my_player(db, user_id)
+    if mp is None:
+        return {"who": _name(await db.get(User, user_id))}
+    config = await get_config(db)
+    return {"who": mp.name, "position": mp.position.value, "rating": my_player_service.rating_of(mp, config)}
+
+
+def _npc_who(player: Optional[Player]) -> dict:
+    if player is None:
+        return {"who": "Футболист"}
+    return {"who": player.display_name, "position": player.position.value, "rating": player.rating}
+
+
+async def _move_key(db: AsyncSession, club: ManagerClub, now: datetime) -> str:
+    """The season a move is for: the running league's, else the coming one."""
+    if club.league_id:
+        league = await db.get(ManagerLeague, club.league_id)
+        if league is not None and league.status == "active":
+            return league.season_key
+    key = season_key(now)
+    # This week's preseason is over (its season may not be drawn yet): the window is for the next one.
+    if now >= preseason_end(now, await get_config(db)) or await db.get(ManagerSeason, key) is not None:
+        key = season_key(week_start(now) + timedelta(days=7))
+    return key
+
+
+async def _move(db: AsyncSession, club: ManagerClub, direction: str, kind: str, who: dict, now: datetime,
+                fee: int = 0, other: Optional[str] = None, key: Optional[str] = None) -> None:
+    db.add(ManagerMove(
+        club_id=club.id, season_key=key or await _move_key(db, club, now), direction=direction, kind=kind,
+        who=str(who.get("who") or "Игрок")[:64], position=who.get("position"), rating=who.get("rating"),
+        fee=max(0, int(fee)), other_club=(other or None) and other[:32], created_at=now,
+    ))
+
+
+MOVES_SHOWN = 60
+
+
+async def moves(db: AsyncSession, user: User) -> dict:
+    """The club's transfer log, the newest first, with the window's totals."""
+    club = await _owned_club(db, user.id)
+    if club is None:
+        raise NotFoundError("Сначала основай клуб")
+    rows = (await db.execute(
+        select(ManagerMove).where(ManagerMove.club_id == club.id).order_by(ManagerMove.id.desc()).limit(MOVES_SHOWN)
+    )).scalars().all()
+    key = await _move_key(db, club, datetime.now(timezone.utc))
+    window = [m for m in rows if m.season_key == key]
+    return {
+        "season_key": key,
+        "spent": sum(m.fee for m in window if m.direction == "in"),
+        "earned": sum(m.fee for m in window if m.direction == "out"),
+        "came": sum(1 for m in window if m.direction == "in"),
+        "left": sum(1 for m in window if m.direction == "out"),
+        "moves": [
+            {"id": m.id, "season_key": m.season_key, "direction": m.direction, "kind": m.kind, "who": m.who,
+             "position": m.position, "rating": m.rating, "fee": m.fee, "other_club": m.other_club,
+             "at": ensure_aware(m.created_at).isoformat()}
+            for m in rows
+        ],
+    }
 
 
 async def set_market(db: AsyncSession, user: User, open_: bool) -> dict:
@@ -891,6 +975,24 @@ async def _taken_players(db: AsyncSession) -> dict[int, int]:
     return {pid: cid for pid, cid in (await db.execute(
         select(ManagerNpc.player_id, ManagerNpc.club_id).where(ManagerNpc.status == "active")
     )).all()}
+
+
+async def wage_bill(db: AsyncSession, club: ManagerClub, config, snap: Optional[dict] = None) -> int:
+    """What the next season start takes for wages of the squad already
+    signed (the same sums `_prepare_club` pays). Deals in the window spend
+    only the budget above it — otherwise the start can't pay and players leave."""
+    snap = snap or await base_snapshot(db, club.owner_id, config)
+    live = sum(wage_eur(min(c.wage, config.manager_live_wage_max), config)
+               for c in await _contracts(db, club.id) if c.seasons_left > 0)
+    wage_pct = _pct(config.manager_division_wage_pct, club.division)
+    npcs = sum(n.wage * wage_pct // 100 * (100 - snap["discount_pct"]) // 100
+               for n in await _npcs(db, club.id) if n.seasons_left > 0)
+    return live + npcs
+
+
+def _short_of(need: int, budget: int, reserved: int) -> str:
+    return (f"Не хватает бюджета: нужно {money(need)} (сумма + зарплата за сезон), свободно {money(max(0, budget - reserved))}"
+            + (f" — ещё {money(reserved)} уже отложено на зарплаты состава" if reserved else ""))
 
 
 CATALOG_PAGE = 40
@@ -926,7 +1028,7 @@ async def npc_catalog(
         stmt = stmt.where(Player.display_name.ilike(f"%{query.strip()[:40]}%"))
     max_rating = None
     if afford in ("loan", "buy") and mine:
-        max_rating = affordable_rating(mine.budget, afford, config, mine.division, discount)
+        max_rating = affordable_rating(mine.budget - await wage_bill(db, mine, config), afford, config, mine.division, discount)
         stmt = stmt.where(Player.rating <= max_rating)
     if free_only and taken:
         stmt = stmt.where(Player.id.notin_(list(taken)))
@@ -970,14 +1072,16 @@ async def sign_npc(db: AsyncSession, user: User, player_id: int, kind: str, seas
     snap = await base_snapshot(db, club.owner_id, config)
     terms = npc_terms(player.rating, config, club.division, snap["discount_pct"])
     fee = terms["value"] if kind == "buy" else terms["loan_fee"]
-    if fee + terms["wage_now"] > club.budget:
-        raise ConflictError(f"Не хватает бюджета: нужно {money(fee + terms['wage_now'])} (сумма + зарплата за сезон), есть {money(club.budget)}")
+    reserved = await wage_bill(db, club, config, snap)
+    if fee + terms["wage_now"] > club.budget - reserved:
+        raise ConflictError(_short_of(fee + terms["wage_now"], club.budget, reserved))
     club.budget -= fee
     try:
         async with db.begin_nested():
             db.add(ManagerNpc(club_id=club.id, player_id=player.id, kind=kind, fee=fee, wage=terms["wage"], seasons_left=seasons))
     except IntegrityError:
         raise ConflictError("Его только что забрал другой клуб")
+    await _move(db, club, "in", kind, _npc_who(player), datetime.now(timezone.utc), fee=fee)
     await db.commit()
     return await get_view(db, user)
 
@@ -996,6 +1100,7 @@ async def release_npc(db: AsyncSession, user: User, npc_id: int) -> dict:
     club.budget += refund
     npc.status = "ended"
     npc.ended_at = datetime.now(timezone.utc)
+    await _move(db, club, "out", "sold" if npc.kind == "buy" else "release", _npc_who(player), npc.ended_at, fee=refund)
     await db.commit()
     return await get_view(db, user)
 
@@ -1060,11 +1165,11 @@ async def market(db: AsyncSession, user: User) -> dict:
 
 # --- season start ------------------------------------------------------------------------
 
-async def _expire(db: AsyncSession, club: ManagerClub, now: datetime) -> None:
+async def _expire(db: AsyncSession, club: ManagerClub, now: datetime, key: Optional[str] = None) -> None:
     """Contracts and footballers whose seasons ran out leave (loans go back)."""
     for c in await _contracts(db, club.id):
         if c.seasons_left <= 0:
-            await _close_contract(db, c, now)
+            await _close_contract(db, c, now, "expired", key)
             await notify(
                 db, c.user_id, NotificationType.manager_event, f"Контракт с «{club.name}» закончился",
                 f"{c.matches_played} матчей, ⚽ {c.goals}, заработано {c.earned} монет. Ты снова свободен",
@@ -1078,12 +1183,13 @@ async def _expire(db: AsyncSession, club: ManagerClub, now: datetime) -> None:
         if n.seasons_left <= 0:
             n.status = "ended"
             n.ended_at = now
+            await _move(db, club, "out", "expired", _npc_who(await db.get(Player, n.player_id)), now, key=key)
 
 
 async def _prepare_club(db: AsyncSession, club: ManagerClub, key: str, now: datetime, taken: set[int], pool_by_line, config) -> dict:
     """Season start for one (locked) club: expiries, grant, wages,
     automatic signings, the frozen XI. Returns the team entry."""
-    await _expire(db, club, now)
+    await _expire(db, club, now, key)
     await _grant_budget(db, club, key, config)
     snap = await base_snapshot(db, club.owner_id, config)
     notes = []
@@ -1091,7 +1197,7 @@ async def _prepare_club(db: AsyncSession, club: ManagerClub, key: str, now: date
         wage = min(c.wage, config.manager_live_wage_max)
         cost = wage_eur(wage, config)
         if cost > club.budget:
-            await _close_contract(db, c, now)
+            await _close_contract(db, c, now, "unpaid", key)
             notes.append("не хватило бюджета на зарплату — контракт с игроком расторгнут")
             await notify(db, c.user_id, NotificationType.manager_event, f"«{club.name}» не смог платить",
                          "Клуб не выплатил зарплату — контракт расторгнут, ты свободен",
@@ -1112,9 +1218,15 @@ async def _prepare_club(db: AsyncSession, club: ManagerClub, key: str, now: date
     for n in await _npcs(db, club.id):
         pay = n.wage * wage_pct // 100 * (100 - snap["discount_pct"]) // 100
         if pay > club.budget:
+            # A bought one is sold back, not lost with the fee paid for him.
+            player = await db.get(Player, n.player_id)
+            refund = npc_terms(player.rating, config)["sell_back"] if n.kind == "buy" and player else 0
+            club.budget += refund
             n.status = "ended"
             n.ended_at = now
-            notes.append("одному футболисту не хватило на зарплату — он ушёл")
+            await _move(db, club, "out", "unpaid", _npc_who(player), now, fee=refund, key=key)
+            notes.append(f"{player.display_name if player else 'футболисту'}: не хватило на зарплату — ушёл"
+                         + (f", выкуп {money(refund)} в бюджет" if refund else ""))
             continue
         club.budget -= pay
         n.seasons_left -= 1
@@ -1143,6 +1255,7 @@ async def _prepare_club(db: AsyncSession, club: ManagerClub, key: str, now: date
                              seasons_left=0, auto=True)
             db.add(npc)
             await db.flush()
+            await _move(db, club, "in", "auto", _npc_who(pl), now, fee=terms["loan_fee"], key=key)
             xi[i] = {"slot": slot.code, "key": f"npc:{npc.id}", "kind": "npc", "ref": npc.id, "player_id": pl.id,
                      "name": pl.display_name, "position": pl.position.value, "rating": pl.rating, "loan": True, "auto": True}
             entries.append(xi[i])
@@ -1461,7 +1574,7 @@ async def _finish(db: AsyncSession, league: ManagerLeague, config) -> None:
         if place == 1:
             club.titles += 1
             champion = club.name
-        await _expire(db, club, now)
+        await _expire(db, club, now, league.season_key)
         prize = ", ".join(x for x in (f"+{coins} монет тебе" if coins else "", f"+{money(budget)} в бюджет" if budget else "") if x)
         await notify(
             db, club.owner_id, NotificationType.manager_event, f"Сезон окончен: {place} место",
@@ -1743,6 +1856,7 @@ async def get_view(db: AsyncSession, user: User, now: Optional[datetime] = None)
         academy = await academy_options(db, club.owner_id)
         grant = season_grant(club.division, snap, config)
         wage_pct = _pct(config.manager_division_wage_pct, club.division)
+        reserved = await wage_bill(db, club, config, snap)
         club_out = {
             "id": club.id, "name": club.name, "formation": tactics.clean_formation(club.formation),
             "style": tactics.clean_style(club.style), "budget": club.budget,
@@ -1760,8 +1874,9 @@ async def get_view(db: AsyncSession, user: User, now: Optional[datetime] = None)
                  **{k: v for k, v in npc_terms(players[n.player_id].rating, config).items() if k in ("value", "sell_back")}}
                 for n in npcs if n.player_id in players
             ],
-            "wages_per_season": sum(wage_eur(min(c.wage, config.manager_live_wage_max), config) for c in club_contracts if c.status == "active")
-            + sum(n.wage * wage_pct // 100 * (100 - snap["discount_pct"]) // 100 for n in npcs),
+            # What the next season start pays for the squad already signed:
+            # the window's deals spend only the budget above it.
+            "wages_per_season": reserved, "free_budget": max(0, club.budget - reserved),
             "squad_value": sum(p.get("value", 0) for p in (*squad["xi"], *squad["bench"])), "next_match": None,
             "live_count": sum(1 for c in club_contracts if c.status in ("active", "offered") and c.user_id != club.owner_id),
             "academy_card_id": club.academy_card_id,

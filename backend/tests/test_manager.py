@@ -24,6 +24,7 @@ from app.models.manager_club import (
     ManagerContract,
     ManagerCosmetic,
     ManagerLeague,
+    ManagerMove,
     ManagerNpc,
     ManagerSeason,
     ManagerValueHistory,
@@ -230,6 +231,23 @@ async def test_sign_transfer_and_loan_need_both_consents(client, db_session, bot
     await client.post(f"{API}/manager/offers/{incoming[0]['id']}/respond", headers=a_headers, json={"accept": True})
     rows = {c.kind: c for c in (await db_session.execute(select(ManagerContract).where(ManagerContract.user_id == q_id))).scalars().all()}
     assert rows["sign"].status == "on_loan" and rows["loan"].status == "active" and rows["loan"].seasons_left == 1
+    # The transfer log of both clubs: who came, who left, for how much.
+    a_log = (await client.get(f"{API}/manager/moves", headers=a_headers)).json()
+    b_log = (await client.get(f"{API}/manager/moves", headers=b_headers)).json()
+    assert [(m["direction"], m["kind"], m["fee"], m["other_club"]) for m in a_log["moves"]] == [
+        ("out", "loaned_out", 1000, "Ястребы"), ("in", "sign", 0, None), ("out", "sold", value, "Ястребы"), ("in", "sign", 0, None),
+    ]
+    assert a_log["earned"] == value + 1000 and a_log["left"] == 2
+    assert [(m["direction"], m["kind"], m["other_club"]) for m in b_log["moves"]] == [("in", "loan", "Совы"), ("in", "transfer", "Совы")]
+    assert b_log["spent"] == value + 1000
+    # The loan ends: back to his club, both logs say so.
+    loan = (await client.get(f"{API}/manager", headers=b_headers)).json()["club"]["contracts"]
+    loan_id = next(c["id"] for c in loan if c["user_id"] == q_id)
+    assert (await client.post(f"{API}/manager/contracts/{loan_id}/end", headers=b_headers)).status_code == 200
+    a_log = (await client.get(f"{API}/manager/moves", headers=a_headers)).json()
+    b_log = (await client.get(f"{API}/manager/moves", headers=b_headers)).json()
+    assert (a_log["moves"][0]["direction"], a_log["moves"][0]["kind"]) == ("in", "loan_back")
+    assert (b_log["moves"][0]["direction"], b_log["moves"][0]["kind"], b_log["moves"][0]["other_club"]) == ("out", "loan_back", "Совы")
 
 
 async def test_live_limit_and_trade_ban(client, db_session, bot_token):
@@ -526,3 +544,64 @@ async def test_catalog_refuses_a_second_version_of_one_footballer(client, db_ses
     assert (await client.post(f"{API}/manager/npc", headers=headers, json={"player_id": base.id, "kind": "loan"})).status_code == 200
     resp = await client.post(f"{API}/manager/npc", headers=headers, json={"player_id": other.id, "kind": "loan"})
     assert resp.status_code == 409 and "только раз" in resp.json()["error"]["message"]
+
+
+async def test_window_reserves_the_squad_wages_and_logs_every_move(client, db_session, bot_token):
+    """Deals in the window spend only the budget above the wages the season
+    start will take — so nobody bought is dropped at the start; the moves go
+    to the club's transfer log; a bought footballer the club still can't pay
+    is sold back, not lost with his fee."""
+    config = await get_config(db_session)
+    bottom = config.manager_divisions
+    first = await create_player(db_session, rating=70, position=Position.ST, display_name="Первый Форвард")
+    second = await create_player(db_session, rating=70, position=Position.LW, display_name="Второй Форвард")
+    a_id, a_headers = await _player(client, db_session, bot_token, 894101)
+    p_id, p_headers = await _player(client, db_session, bot_token, 894102, "CB")
+    await _club(client, a_headers, "Совы")
+    await client.post(f"{API}/manager/market", headers=p_headers, json={"open": True})
+    terms = manager_service.npc_terms(70, config, bottom)
+    assert terms["wage_now"] > 1000
+    club = (await db_session.execute(select(ManagerClub).where(ManagerClub.owner_id == a_id))).scalar_one()
+    # Enough for both fees and ONE wage: the old check let the second deal through.
+    club.budget = 2 * terms["value"] + terms["wage_now"] + 1000
+    club_id, first_id, second_id = club.id, first.id, second.id
+    await db_session.commit()
+
+    view = (await client.post(f"{API}/manager/npc", headers=a_headers, json={"player_id": first_id, "kind": "buy", "seasons": 2})).json()
+    assert view["club"]["wages_per_season"] == terms["wage_now"]
+    assert view["club"]["free_budget"] == view["club"]["budget"] - terms["wage_now"]
+    resp = await client.post(f"{API}/manager/npc", headers=a_headers, json={"player_id": second_id, "kind": "buy", "seasons": 1})
+    assert resp.status_code == 409 and "отложено на зарплаты" in resp.text
+    catalog = (await client.get(f"{API}/manager/npc", headers=a_headers, params={"afford": "buy"})).json()
+    assert catalog["max_rating"] < 70
+    wage = (view["club"]["free_budget"] // config.manager_wage_eur_per_coin) + 1
+    if wage <= config.manager_live_wage_max:
+        resp = await client.post(f"{API}/manager/offers", headers=a_headers, json={"user_id": p_id, "wage": wage, "seasons": 1})
+        assert resp.status_code == 409
+    log = (await client.get(f"{API}/manager/moves", headers=a_headers)).json()
+    assert [(m["direction"], m["kind"], m["who"]) for m in log["moves"]] == [("in", "buy", "Первый Форвард")]
+    assert log["spent"] == terms["value"] and log["came"] == 1
+
+    start = _next_season_start(config)
+    assert await manager_service.ensure_season(db_session, start) is True
+
+    async def fresh(model, pk):
+        return (await db_session.execute(
+            select(model).where(model.id == pk).execution_options(populate_existing=True))).scalar_one()
+
+    npc_id = (await db_session.execute(select(ManagerNpc.id).where(ManagerNpc.player_id == first_id))).scalar_one()
+    npc = await fresh(ManagerNpc, npc_id)
+    assert npc.status == "active" and npc.seasons_left == 1  # paid, not dropped
+
+    # Next window: the budget is gone (say, spent on something else) — the bought one is sold back.
+    club = await fresh(ManagerClub, club_id)
+    league = await fresh(ManagerLeague, club.league_id)
+    league.status = "finished"
+    club.budget = -100 * M
+    await db_session.commit()
+    assert await manager_service.ensure_season(db_session, start + timedelta(days=7)) is True
+    assert (await fresh(ManagerNpc, npc_id)).status == "ended"
+    moves = (await db_session.execute(
+        select(ManagerMove).where(ManagerMove.club_id == club_id, ManagerMove.kind == "unpaid")
+    )).scalars().all()
+    assert len(moves) == 1 and moves[0].fee == terms["sell_back"] and moves[0].who == "Первый Форвард"

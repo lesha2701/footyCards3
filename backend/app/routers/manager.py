@@ -36,6 +36,12 @@ async def get_market(db: AsyncSession = Depends(get_db), user: User = Depends(ge
     return await manager_service.market(db, user)
 
 
+@router.get("/moves")
+async def get_moves(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """My club's transfer log: who came, who left, fees, the window's totals."""
+    return await manager_service.moves(db, user)
+
+
 @router.get("/npc")
 async def get_npc_catalog(
     line: Optional[str] = Query(default=None, max_length=3),

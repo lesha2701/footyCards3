@@ -55,7 +55,11 @@ Main features:
   preseason transfer window, then `ensure_season` (once, `manager_seasons`
   PK) pays wages, auto-loans footballers into empty slots, freezes the XIs
   and draws leagues by strength; rounds at `manager_slots`, one evening
-  digest a day, `_settle` moves clubs when every league is over. Runs lazily
+  digest a day, `_settle` moves clubs when every league is over. Window
+  deals spend only the budget above `wage_bill` (the wages the next start
+  takes for the squad already signed — `free_budget` in the view); every
+  move in or out goes to the club's transfer log `manager_moves` (`_move`,
+  `GET /manager/moves`, «Трансферы» → «Сделки»). Runs lazily
   and from the bot's manager sweep (`/internal/manager/sweep`). A club whose
   league runs can't trade. Users' wages are coins, capped per season.
   Tactics (`manager_tactics.py`): a club formation plus one of four styles

@@ -185,3 +185,25 @@ class ManagerMerch(Base):
     coins: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     eur: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class ManagerMove(Base):
+    """The transfer log of a club: who came and who left, when, for how much
+    and why (`kind`). Append-only, written where the move happens; the
+    «Трансферы» tab shows it. `season_key` = the season the move is for
+    (a window's deals belong to the coming season)."""
+
+    __tablename__ = "manager_moves"
+    __table_args__ = (Index("ix_manager_moves_club", "club_id", "id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("manager_clubs.id", ondelete="CASCADE"), nullable=False)
+    season_key: Mapped[str] = mapped_column(String(10), nullable=False)
+    direction: Mapped[str] = mapped_column(String(4), nullable=False)  # in | out
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    who: Mapped[str] = mapped_column(String(64), nullable=False)
+    position: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
+    rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    fee: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    other_club: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
