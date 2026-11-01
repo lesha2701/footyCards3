@@ -62,6 +62,8 @@ export interface MatchDay {
   enabled: boolean;
   rewards: { exact: number; diff: number; outcome: number };
   current: MatchDayFixture | null;
+  /** Every match without a result: open for guesses and just started. */
+  matches: MatchDayFixture[];
   recent: MatchDayFixture[];
   unclaimed: number;
 }

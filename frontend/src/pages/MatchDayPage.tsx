@@ -48,8 +48,8 @@ export default function MatchDayPage() {
 
       {!data.enabled && <p className="rounded-xl bg-white/5 px-3 py-2 text-xs text-ink-mist">«Матч дня» сейчас выключен.</p>}
 
-      {data.current ? (
-        <CurrentMatch fixture={data.current} onError={setError} />
+      {data.matches.length > 0 ? (
+        data.matches.map((f) => <CurrentMatch key={f.id} fixture={f} onError={setError} />)
       ) : (
         <p className="rounded-2xl bg-bg-surface px-4 py-6 text-center text-sm text-ink-mist">Следующий матч скоро появится</p>
       )}

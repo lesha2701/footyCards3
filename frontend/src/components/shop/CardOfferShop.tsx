@@ -26,8 +26,8 @@ const ITEM_KIND: Record<CardOfferItem["kind"], string> = { coach: "Тренер"
 function ItemCard({ item, dimmed }: { item: CardOfferItem; dimmed: boolean }) {
   const negative = item.effects.some((e) => e.includes("соперник"));
   return (
-    <div className={`rounded-2xl bg-gradient-to-b p-[2px] ${RARITY_GRADIENTS[item.rarity]} ${dimmed ? "opacity-50" : ""}`}>
-      <div className="flex flex-col gap-1 rounded-[14px] bg-bg-surface p-1.5">
+    <div className={`h-full rounded-2xl bg-gradient-to-b p-[2px] ${RARITY_GRADIENTS[item.rarity]} ${dimmed ? "opacity-50" : ""}`}>
+      <div className="flex h-full flex-col gap-1 rounded-[14px] bg-bg-surface p-1.5">
         <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-black/40">
           {item.image_path ? (
             <img decoding="async" loading="lazy" src={staticUrl(item.image_path) ?? undefined} alt="" className="h-full w-full object-cover" />
@@ -39,9 +39,11 @@ function ItemCard({ item, dimmed }: { item: CardOfferItem; dimmed: boolean }) {
         </div>
         <p className="truncate text-center text-xs font-bold text-ink-chalk">{item.name}</p>
         <p className="text-center text-micro text-ink-mist">{RARITY_LABELS[item.rarity]}</p>
-        {item.effects.map((e) => (
-          <p key={e} className={`text-center text-micro font-semibold leading-tight ${e.startsWith("−") ? "text-red-300" : "text-accent-lime"}`}>{e}</p>
-        ))}
+        <div className="flex flex-1 flex-col justify-center gap-0.5 rounded-lg bg-black/25 px-1 py-1">
+          {item.effects.map((e) => (
+            <p key={e} className={`text-center text-micro font-semibold leading-tight ${e.startsWith("−") ? "text-red-300" : "text-accent-lime"}`}>{e}</p>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -100,21 +102,22 @@ function OfferTile({ offer, now }: { offer: CardOffer; now: number }) {
   const limitReached = offer.per_user_limit > 0 && offer.bought >= offer.per_user_limit;
 
   return (
-    <div className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-2.5">
-      {(offer.retired || offer.title) && (
-        <div className="flex min-w-0 flex-wrap items-center gap-1">
-          {offer.retired && (
-            <span className="rounded-full bg-amber-400 px-2 py-0.5 text-micro font-black uppercase text-bg-base">Лимитка</span>
-          )}
-          {offer.title && <span className="min-w-0 truncate text-micro font-semibold text-amber-200">{offer.title}</span>}
-        </div>
-      )}
-      {offer.player ? (
-        <PlayerCard player={offer.player} size="sm" dimmed={soldOut} />
-      ) : offer.item ? (
-        <ItemCard item={offer.item} dimmed={soldOut} />
-      ) : null}
-      <div className="flex flex-wrap items-center justify-between gap-1 text-micro">
+    <div className="flex h-full flex-col gap-2 rounded-2xl bg-bg-surface p-2.5">
+      {/* Every tile keeps the label row (even empty) so the cards line up across the grid. */}
+      <div className="flex h-5 min-w-0 items-center gap-1">
+        {offer.retired && (
+          <span className="shrink-0 rounded-full bg-amber-400 px-2 py-0.5 text-micro font-black uppercase text-bg-base">Лимитка</span>
+        )}
+        {offer.title && <span className="min-w-0 truncate text-micro font-semibold text-amber-200">{offer.title}</span>}
+      </div>
+      <div className="flex flex-1 flex-col justify-center">
+        {offer.player ? (
+          <PlayerCard player={offer.player} size="sm" dimmed={soldOut} />
+        ) : offer.item ? (
+          <ItemCard item={offer.item} dimmed={soldOut} />
+        ) : null}
+      </div>
+      <div className="flex h-4 items-center justify-between gap-1 text-micro">
         {left != null && left > 0 && <span className="font-mono text-amber-300">⏳ {timeLeft(left)}</span>}
         {offer.left != null && offer.stock != null && (
           <span className={soldOut ? "text-red-400" : "text-ink-mist"}>Осталось {offer.left}/{offer.stock}</span>
