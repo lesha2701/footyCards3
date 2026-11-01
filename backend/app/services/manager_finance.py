@@ -140,6 +140,12 @@ DEFAULTS: dict = {
     "cup_prizes_pct": [40, 20, 10, 5],
     # Friendlies (manager_cup.friendly): a club may call this many a day.
     "friendly_per_day": 3,
+    # Stars passes (manager_perks), 0 stars = not sold. «Помощник президента»: signs the
+    # best sponsor a forgetful club left out and reminds remind_hours before the window
+    # closes; «Аналитика Pro»: the next opponent's breakdown and share price alerts
+    # (a move of price_alert_pct % or more after a round).
+    "assistant_stars": 149, "assistant_days": 30, "remind_hours": 24,
+    "analytics_stars": 99, "analytics_days": 30, "price_alert_pct": 8,
     # «События клуба»: after these rounds of the season an event comes (one each).
     "event_rounds": [3, 7, 11],
     # Options: money_pct = % of the division grant (+ income, − expense), fans, form_pct for form_rounds next rounds.

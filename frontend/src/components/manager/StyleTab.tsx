@@ -1,8 +1,9 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import {
   buyManagerCosmetic,
+  fetchManagerChampion,
   setManagerLook,
   setManagerStadiumName,
   type ManagerClub,
@@ -10,12 +11,16 @@ import {
   type ManagerLook,
   type ManagerView,
 } from "@/api/manager";
+import ShareButton from "@/components/common/ShareButton";
 import { IconCoin } from "@/components/icons";
 import { FRAME_COLORS, themeClass } from "@/lib/managerLook";
 import { payMyPlayerWithStars } from "@/lib/myPlayerStars";
 import { hapticNotify } from "@/lib/telegram";
 
 import Emblem, { KitShirt } from "./Emblem";
+import Stadium from "./Stadium";
+
+const POSTER_COLORS: Record<string, [string, string]> = { classic: ["#3ed17e", "#c6e63a"], neon: ["#d946ef", "#22d3ee"], gold: ["#d4a017", "#fad65c"] };
 
 const SECTIONS: { kind: ManagerCosmetic["kind"]; field: keyof ManagerLook; title: string }[] = [
   { kind: "shape", field: "shape", title: "Форма эмблемы" },
@@ -25,7 +30,19 @@ const SECTIONS: { kind: ManagerCosmetic["kind"]; field: keyof ManagerLook; title
   { kind: "kit", field: "kit", title: "Рисунок формы" },
   { kind: "frame", field: "frame", title: "Рамка карточек «Поделиться»" },
   { kind: "theme", field: "theme", title: "Цветовая тема клуба" },
+  { kind: "stands", field: "stands", title: "🏟 Трибуны стадиона" },
+  { kind: "poster", field: "poster", title: "🏆 Постер чемпиона" },
 ];
+
+/** A poster style chip: the frame and the trophy colour. */
+function PosterChip({ value }: { value: string }) {
+  const [frame, accent] = POSTER_COLORS[value] ?? POSTER_COLORS.classic;
+  return (
+    <span className="flex h-12 w-10 items-center justify-center rounded-md border-[3px] bg-bg-base text-lg" style={{ borderColor: frame, color: accent }}>
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden><path d="M6 3h12v3h3v2a5 5 0 0 1-5 5h-.3A5 5 0 0 1 13 15.9V18h3v3H8v-3h3v-2.1A5 5 0 0 1 8.3 13H8a5 5 0 0 1-5-5V6h3V3Zm0 5H5a3 3 0 0 0 1 2.2V8Zm12 0v2.2A3 3 0 0 0 19 8h-1Z" /></svg>
+    </span>
+  );
+}
 
 /** «Стиль» of «Менеджер»: emblem, kit, share-card frame, stadium name and
  * «Менеджер Pro». Cosmetics only — nothing here makes the club stronger. */
@@ -74,13 +91,16 @@ export default function StyleTab({ view, club, onView, onError }: {
       {SECTIONS.map(({ kind, field, title }) => (
         <section key={kind} className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4">
           <h2 className="font-display text-sm font-bold text-ink-chalk">{title}</h2>
-          <div className="grid grid-cols-3 gap-2">
+          {kind === "poster" && <ChampionShare titles={club.titles} />}
+          <div className={`grid gap-2 ${kind === "stands" ? "grid-cols-2" : "grid-cols-3"}`}>
             {shop.cosmetics.filter((c) => c.kind === kind).map((c) => {
               const on = club.look[field] === c.value;
               return (
                 <div key={c.code} className={`flex flex-col items-center gap-1 rounded-xl p-2 ${on ? "bg-accent-lime/15 ring-2 ring-accent-lime" : "bg-bg-raised"}`}>
                   <button disabled={!c.usable || look.isPending} onClick={() => look.mutate({ [field]: c.value })}
-                    className="flex h-12 w-full items-center justify-center disabled:opacity-50" aria-label={c.name}>
+                    className={`flex w-full items-center justify-center disabled:opacity-50 ${kind === "stands" ? "h-16" : "h-12"}`} aria-label={c.name}>
+                    {kind === "stands" && <Stadium look={{ ...club.look, stands: c.value }} height={64} label={c.name} />}
+                    {kind === "poster" && <PosterChip value={c.value} />}
                     {kind === "shape" && <Emblem look={{ ...club.look, shape: c.value }} size={40} />}
                     {kind === "symbol" && <span className="text-3xl">{c.value}</span>}
                     {kind === "rim" && <Emblem look={{ ...club.look, rim: c.value }} size={40} />}
@@ -161,6 +181,25 @@ export default function StyleTab({ view, club, onView, onError }: {
         )}
       </section>
 
+      {(shop.passes ?? []).filter((p) => p.stars > 0).map((p) => (
+        <section key={p.code} className="flex flex-col gap-2 rounded-2xl bg-gradient-to-br from-sky-400/15 to-bg-surface p-4 ring-1 ring-sky-300/30" data-testid={`pass-${p.code}`}>
+          <h2 className="font-display text-base font-bold text-ink-chalk">{p.code === "assistant" ? "🤵" : "📊"} {p.name}</h2>
+          <ul className="flex flex-col gap-1 text-caption text-ink-mist">
+            {(p.code === "assistant"
+              ? ["Подпишет лучшего спонсора, если ты забыл до старта сезона", "Напомнит за сутки до закрытия окна, что осталось сделать"]
+              : ["Разбор следующего соперника: линии, форма, голы, травмы", "Уведомления о скачках курса твоих акций"]
+            ).map((t) => <li key={t}>• {t}</li>)}
+            <li className="text-micro">Без бонусов к силе — только удобство.</li>
+          </ul>
+          {p.active && p.until && (
+            <p className="text-xs text-accent-lime">Активен до {new Date(p.until).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}</p>
+          )}
+          <button disabled={busy === p.code} onClick={() => void stars(p.code)} className="rounded-xl bg-amber-400 py-2.5 text-sm font-bold text-bg-base">
+            {p.active ? "Продлить" : "Подключить"} на {p.days} дн. · {p.stars} ⭐
+          </button>
+        </section>
+      ))}
+
       {shop.my_merch.length > 0 && (
         <section className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4">
           <h2 className="font-display text-sm font-bold text-ink-chalk">Моя коллекция мерча</h2>
@@ -190,6 +229,23 @@ function Palette({ label, palette, a, b, onA, onB }: {
           ))}
         </div>
       ))}
+    </div>
+  );
+}
+
+/** «Постер чемпиона»: share the last title as a picture (champions only). */
+function ChampionShare({ titles }: { titles: number }) {
+  const { data } = useQuery({ queryKey: ["manager", "champion"], queryFn: fetchManagerChampion, enabled: titles > 0, retry: false });
+  if (!data) {
+    return <p className="-mt-1 text-micro text-ink-mist">Выиграй лигу — и поделись постером чемпиона. Стиль постера выбирается здесь.</p>;
+  }
+  return (
+    <div className="flex items-center gap-3 rounded-xl bg-amber-300/10 p-2.5 ring-1 ring-amber-300/30">
+      <span className="min-w-0 flex-1 text-xs text-ink-chalk">
+        🏆 Чемпион {data.league.toLowerCase()} · сезон {data.season_key}
+        <span className="block text-micro text-ink-mist">{data.won}–{data.drawn}–{data.lost} · {data.points} очк.</span>
+      </span>
+      <ShareButton kind="manager_champion" id={0} label="Постер" compact />
     </div>
   );
 }

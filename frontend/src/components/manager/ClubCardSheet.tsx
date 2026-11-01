@@ -1,14 +1,82 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
-import { buyManagerMerch, fetchManagerClubCard, fetchManagerH2H, playManagerFriendly, type ManagerClubCard } from "@/api/manager";
+import { buyManagerMerch, fetchManagerClubCard, fetchManagerGifts, fetchManagerH2H, playManagerFriendly, type ManagerClubCard } from "@/api/manager";
 import { IconCoin } from "@/components/icons";
-import { themeClass } from "@/lib/managerLook";
+import { FRAME_COLORS, themeClass } from "@/lib/managerLook";
 import { eur } from "@/lib/managerMoney";
+import { payMyPlayerWithStars } from "@/lib/myPlayerStars";
 import { hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 
 import Emblem, { KitShirt } from "./Emblem";
+import Stadium from "./Stadium";
+
+const KIND_NAME: Record<string, string> = {
+  shape: "эмблема", symbol: "символ", rim: "обводка", fx: "эффект", kit: "форма", frame: "рамка", theme: "тема", stands: "трибуны", poster: "постер",
+};
+
+/** «Подарить стиль»: a style item for Stars to this club — the owner is told who gave it. */
+function Gift({ clubId, onError }: { clubId: number; onError: (e: unknown) => void }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [sent, setSent] = useState<string | null>(null);
+  const { data } = useQuery({ queryKey: ["manager", "gifts", clubId], queryFn: () => fetchManagerGifts(clubId), enabled: open });
+  const give = async (code: string, name: string) => {
+    setBusy(code);
+    try {
+      if ((await payMyPlayerWithStars({ purchase: "manager", code: `gift:${clubId}:${code}` })) === "paid") {
+        hapticNotify("success");
+        setSent(name);
+        await queryClient.invalidateQueries({ queryKey: ["manager", "gifts", clubId] });
+        await queryClient.invalidateQueries({ queryKey: ["manager", "club", clubId] });
+      }
+    } catch (err) {
+      onError(err);
+    } finally {
+      setBusy(null);
+    }
+  };
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="rounded-xl bg-gradient-to-r from-fuchsia-500/30 to-amber-400/30 py-2.5 text-sm font-bold text-ink-chalk ring-1 ring-fuchsia-300/40"
+        data-testid="gift-open">
+        🎁 Подарить стиль клубу
+      </button>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl bg-black/25 p-3 ring-1 ring-fuchsia-300/30" data-testid="gift">
+      <p className="text-xs font-bold text-ink-chalk">🎁 Подарок клубу — владелец узнает, от кого</p>
+      {sent && <p className="text-micro text-accent-lime">«{sent}» подарен!</p>}
+      {!data ? <p className="text-micro text-ink-mist">Загрузка…</p> : data.items.length === 0 ? (
+        <p className="text-micro text-ink-mist">У клуба уже есть всё — щедрость оценили 🙌</p>
+      ) : (
+        <div className="grid max-h-56 grid-cols-3 gap-2 overflow-y-auto">
+          {data.items.map((i) => (
+            <button key={i.code} disabled={busy != null} onClick={() => void give(i.code, i.name)}
+              className="flex flex-col items-center gap-0.5 rounded-xl bg-bg-raised p-2 active:scale-[0.97] disabled:opacity-50">
+              <span className="flex h-9 w-full items-center justify-center">
+                {i.kind === "symbol" && <span className="text-2xl">{i.value}</span>}
+                {(i.kind === "shape" || i.kind === "rim" || i.kind === "fx") && <Emblem look={{ ...data.look, [i.kind]: i.value }} size={32} />}
+                {i.kind === "kit" && <KitShirt look={{ ...data.look, kit: i.value }} size={32} />}
+                {i.kind === "frame" && <span className="h-8 w-6 rounded border-[3px] bg-bg-base" style={{ borderColor: FRAME_COLORS[i.value] ?? "#fff" }} />}
+                {i.kind === "theme" && <span className={`h-8 w-full rounded-md bg-gradient-to-br ${themeClass(i.value)}`} />}
+                {i.kind === "stands" && <Stadium look={{ ...data.look, stands: i.value }} height={36} label={i.name} />}
+                {i.kind === "poster" && <span className="text-xl">🏆</span>}
+              </span>
+              <span className="text-center text-micro text-ink-chalk">{i.name}</span>
+              <span className="text-[9px] text-ink-mist">{KIND_NAME[i.kind] ?? i.kind}</span>
+              <span className="text-micro font-bold text-amber-300">{busy === i.code ? "…" : `${i.stars} ⭐`}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** «Товарищеский матч» with another club: no money, no table — the score,
  * the goals and the head-to-head; a few a day. */
@@ -100,7 +168,9 @@ export default function ClubCardSheet({ clubId, onClose, onError }: { clubId: nu
                     </span>
                   ))}
                 </div>
+                {data.look.stands && data.look.stands !== "classic" && <Stadium look={data.look} />}
                 {!data.is_mine && <Friendly clubId={data.id} onError={onError} />}
+                {!data.is_mine && <Gift clubId={data.id} onError={onError} />}
                 {!data.is_mine && (
                   <div className="flex flex-col gap-2">
                     <p className="text-xs font-bold text-ink-chalk">Стань болельщиком — купи мерч</p>

@@ -28,6 +28,9 @@ vi.mock("@/api/manager", async (orig) => ({
   fetchManagerNews: async () => { throw new Error("404"); },
   fetchManagerH2H: async () => ({ h2h: { wins: 0, draws: 0, losses: 0, last: [] }, left_today: 3 }),
   playManagerFriendly: vi.fn(),
+  fetchManagerAnalytics: async () => ({ opponent: null }),
+  fetchManagerGifts: async () => ({ club_id: 0, club_name: "", look: {}, items: [] }),
+  fetchManagerChampion: async () => { throw new Error("404"); },
   fetchManagerMarket: () => fetchManagerMarket(),
   fetchManagerCatalog: (...args: unknown[]) => fetchManagerCatalog(...args),
   fetchManagerPopular: () => fetchManagerPopular(),
@@ -74,7 +77,7 @@ const base: ManagerView = {
       { code: "symbol_ball", kind: "symbol", name: "Мяч", value: "⚽", coins: 0, stars: 0, owned: false, usable: true },
       { code: "symbol_lion", kind: "symbol", name: "Лев", value: "🦁", coins: 1500, stars: 20, owned: false, usable: false },
     ],
-    palette: ["#1f8a4c", "#c62828"], merch_items: [], my_merch: [], pro_stars: 149, pro_days: 30,
+    palette: ["#1f8a4c", "#c62828"], merch_items: [], my_merch: [], pro_stars: 149, pro_days: 30, passes: [],
   },
 };
 

@@ -27,7 +27,7 @@ from app.schemas.manager import (
     ManagerTicketsIn,
     ManagerStadiumNameIn,
 )
-from app.services import manager_cup, manager_events, manager_exchange, manager_finance, manager_news, manager_service, manager_shop, manager_today
+from app.services import manager_cup, manager_events, manager_exchange, manager_finance, manager_news, manager_perks, manager_service, manager_shop, manager_today
 
 router = APIRouter(prefix="/manager", tags=["manager"])
 
@@ -99,6 +99,24 @@ async def friendly_h2h(club_id: int, db: AsyncSession = Depends(get_db), user: U
 async def get_news(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     """«Газета лиги»: the last match day of my club's league."""
     return await manager_news.front_page(db, user)
+
+
+@router.get("/champion")
+async def get_champion(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """«Постер чемпиона»: my club's last league title (404 without one)."""
+    return await manager_news.champion(db, user)
+
+
+@router.get("/analytics")
+async def get_analytics(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """«Аналитика Pro»: the next opponent's breakdown."""
+    return await manager_perks.analytics(db, user)
+
+
+@router.get("/gifts/{club_id}")
+async def get_gifts(club_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Style items for Stars another club doesn't have — to gift."""
+    return await manager_perks.giftable(db, user, club_id)
 
 
 @router.get("/market")

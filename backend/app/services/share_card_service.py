@@ -440,6 +440,42 @@ def render_manager_news(*, league: str, date: str, headline: str, lines: list[st
     return _jpeg(img)
 
 
+POSTER_STYLES = {  # frame, accent: «Стиль» → «Постер чемпиона»
+    "classic": ((62, 209, 126), LIME),
+    "neon": ((217, 70, 239), (34, 211, 238)),
+    "gold": ((212, 160, 23), (250, 214, 92)),
+}
+
+
+def _trophy(draw: ImageDraw.ImageDraw, cx: int, top: int, color: tuple) -> None:
+    draw.pieslice([cx - 70, top - 40, cx + 70, top + 110], 0, 180, fill=color)
+    draw.rectangle([cx - 70, top - 4, cx + 70, top + 36], fill=color)
+    for side in (-1, 1):  # handles
+        x = cx + side * 70
+        draw.arc([x - 28, top, x + 28, top + 60], 90 if side > 0 else 270, 270 if side > 0 else 90, fill=color, width=10)
+    draw.rectangle([cx - 12, top + 108, cx + 12, top + 140], fill=color)
+    draw.rounded_rectangle([cx - 52, top + 138, cx + 52, top + 160], radius=6, fill=color)
+
+
+def render_manager_champion(*, club: str, league: str, season: str, record: str, lines: list[str], style: str,
+                            bot_username: str) -> bytes:
+    """«Постер чемпиона»: the club's league title; the frame by the poster style."""
+    frame, accent = POSTER_STYLES.get(style, POSTER_STYLES["classic"])
+    img, draw = _base("ЧЕМПИОН", bot_username)
+    draw.rounded_rectangle([18, 18, SIZE - 19, SIZE - 19], radius=28, outline=frame, width=10)
+    _trophy(draw, SIZE // 2, 170, accent)
+    font = _fit(draw, club, FONT_HEAVY, 64, SIZE - 100, 34)
+    _center(draw, 352, club, font, WHITE)
+    _center(draw, 430, f"{league} · сезон {season}", _font(FONT_BOLD, 26), MIST)
+    _center(draw, 476, record, _font(FONT_HEAVY, 34), accent)
+    y = 536
+    body = _font(FONT_BOLD, 26)
+    for line in lines[:4]:
+        _center(draw, y, line, body, WHITE)
+        y += 40
+    return _jpeg(img)
+
+
 # --- «Мордобой»: a knockout GIF -------------------------------------------------------
 
 GIF_SIZE = 480

@@ -899,7 +899,7 @@ export default function AdminGamesPage() {
           {listField("manager_place_rewards", "Монеты менеджеру за 1–3 места (× % дивизиона)")}
           {listField("manager_place_budget", "€ в бюджет за 1–3 места (× % дивизиона)")}
           {jsonField("manager_slots", "Время туров (местное), по порядку")}
-          {jsonField("manager_cosmetics", "Магазин стиля клуба: kind = shape | symbol | kit | frame | theme | stadium_name; coins / stars 0 = не продаётся за них, оба 0 = бесплатно")}
+          {jsonField("manager_cosmetics", "Магазин стиля клуба: kind = shape | symbol | rim | fx | kit | frame | theme | stadium_name | stands (трибуны) | poster (постер чемпиона); coins / stars 0 = не продаётся за них, оба 0 = бесплатно")}
           {jsonField("manager_merch", "Мерч для болельщиков: coins сгорают, eur идут в бюджет клуба")}
           <ManagerFinanceFields value={form.manager_finance} onChange={(next) => setForm({ ...form, manager_finance: next })} />
         </div>

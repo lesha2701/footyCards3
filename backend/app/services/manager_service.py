@@ -70,13 +70,14 @@ from app.models.manager_club import (
     ManagerMove,
     ManagerNpc,
     ManagerSeason,
+    ManagerStock,
     ManagerValueHistory,
 )
 from app.models.my_player import MyPlayer
 from app.models.player import Player
 from app.models.user import User
 from app.services import club_base_service, my_player_service, player_career_clubs as pcc, tournament_match_engine
-from app.services import manager_cup as cup, manager_events as events, manager_exchange as exchange, manager_finance as finance, manager_tactics as tactics, trade_guard_service, wallet_service
+from app.services import manager_cup as cup, manager_events as events, manager_perks as perks, manager_exchange as exchange, manager_finance as finance, manager_tactics as tactics, trade_guard_service, wallet_service
 from app.services.manager_tactics import DEFAULT_FORMATION
 from app.services.career_service import standings
 from app.services.club_formation_service import get_formation_slots
@@ -1232,10 +1233,11 @@ async def _prepare_club(db: AsyncSession, club: ManagerClub, key: str, now: date
     await _expire(db, club, now, key)
     await _grant_budget(db, club, key, config)
     snap = await base_snapshot(db, club.owner_id, config)
+    assistant_note = await perks.assistant_season_start(db, club, key, snap, config)  # «Помощник президента»
     money_state = await finance.season_start(db, club, key, snap, config)
     await exchange.bonds_start(db, club, key)
     await exchange.season_open(db, club, key, config)  # a listed club is re-valued
-    notes = list(money_state.pop("notes", []))
+    notes = list(money_state.pop("notes", [])) + ([assistant_note] if assistant_note else [])
     farm = await finance.farm_for(db, club.id, key) or {}
     for c in await _contracts(db, club.id):
         wage = min(c.wage, config.manager_live_wage_max)
@@ -1523,7 +1525,11 @@ async def _play_round(db: AsyncSession, league: ManagerLeague, round_index: int,
     league.state = state
     flag_modified(league, "state")
     league.rounds_played = round_index + 1
+    prices = dict((await db.execute(
+        select(ManagerStock.club_id, ManagerStock.price).where(ManagerStock.club_id.in_([t["club_id"] for t in state["teams"] if t.get("club_id")]))
+    )).all())
     await exchange.after_round(db, league, state)  # listed clubs' share prices follow the form
+    await perks.price_alerts(db, league, prices, config)  # «Аналитика Pro»
     for club in clubs.values():
         await events.after_round(db, club, league, config)  # «События клуба» after the set rounds
     if league.rounds_played >= len(state["fixtures"]):
@@ -1802,6 +1808,7 @@ async def resolve_all_due(db: AsyncSession, now: Optional[datetime] = None) -> i
     await ensure_season(db, now)
     ids = (await db.execute(select(ManagerLeague.id).where(ManagerLeague.status == "active"))).scalars().all()
     played = sum([await resolve_league(db, league_id, now) for league_id in ids])
+    await perks.remind(db, now)
     return played + await cup.resolve(db, now)
 
 

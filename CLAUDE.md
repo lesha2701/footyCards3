@@ -85,7 +85,13 @@ Main features:
   default blocks transfers. «🎟 Матчдей»: the ticket price (attendance ×
   price, the home crowd's %, fans), injuries after league matches
   (`state["injuries"]`, treatment cost) and a season insurance deal;
-  «🏆 Лучший президент» by season profit and capital. Numbers: GameConfig.manager_finance
+  «🏆 Лучший президент» by season profit and capital. Between rounds:
+  «Установка на матч» and «События клуба» (`manager_events.py`), the
+  seasonal knockout «Кубок менеджеров» and friendlies (`manager_cup.py`),
+  «Газета лиги» / «Постер чемпиона» shares (`manager_news.py`). Stars
+  passes «Помощник президента» / «Аналитика Pro», gifts of style items to
+  another club and the stadium skins (`manager_perks.py`, cosmetics kinds
+  "stands" / "poster") — convenience and style only. Numbers: GameConfig.manager_finance
   over `manager_finance.DEFAULTS`;
 - «Мой игрок» extras (`my_player_extras.py`): a weekly «Спонсор» (one of
   three brands of `my_player_sponsors`, goals counted by hooks in the

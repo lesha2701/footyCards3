@@ -129,3 +129,33 @@ def lines_of(page: dict, money) -> list[str]:
     if page.get("cup"):
         out.append(page["cup"])
     return out
+
+
+async def champion(db: AsyncSession, user: User) -> dict:
+    """The poster of my club's last league title (share kind "manager_champion"):
+    the season's record, points, top scorer and the poster style from «Стиль»."""
+    from app.services import manager_service as ms
+    from app.services.manager_shop import resolve_look
+
+    club = await ms._owned_club(db, user.id)
+    if club is None or not club.titles:
+        raise NotFoundError("Постер — у чемпионов: выиграй лигу")
+    leagues = (await db.execute(
+        select(ManagerLeague).where(ManagerLeague.status == "finished").order_by(ManagerLeague.id.desc()).limit(200)
+    )).scalars().all()
+    for league in leagues:
+        state = league.state or {}
+        me = next((t for t in state.get("teams") or [] if t.get("club_id") == club.id), None)
+        if me is None or state.get("champion") != me["name"]:
+            continue
+        row = next((r for r in standings(state) if r["team_index"] == me["index"]), {})
+        mine = [p for p in (state.get("players") or {}).values() if p.get("team_index") == me["index"] and p.get("goals")]
+        best = max(mine, key=lambda p: p["goals"], default=None)
+        return {
+            "club": club.name, "season_key": league.season_key, "league": ms.division_name(league.division),
+            "points": row.get("points", 0), "won": row.get("won", 0), "drawn": row.get("drawn", 0), "lost": row.get("lost", 0),
+            "gf": row.get("gf", 0), "ga": row.get("ga", 0), "titles": club.titles,
+            "scorer": {"name": best["name"], "goals": best["goals"]} if best else None,
+            "style": resolve_look(club).get("poster", "classic"), "color": resolve_look(club).get("color"),
+        }
+    raise NotFoundError("Постер — у чемпионов: выиграй лигу")

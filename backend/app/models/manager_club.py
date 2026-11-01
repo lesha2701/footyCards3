@@ -38,6 +38,8 @@ class ManagerClub(Base):
     look: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     stadium_name: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     pro_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Stars passes (manager_perks): {"assistant": iso, "analytics": iso, "reminded": season key}.
+    perks: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     # Euros fans brought this season through merchandise (capped per season).
     merch_season: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     merch_eur: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)

@@ -30,11 +30,11 @@ from app.core.timeutil import ensure_aware
 from app.models.enums import NotificationType, TransactionType
 from app.models.manager_club import ManagerClub, ManagerCosmetic, ManagerMerch
 from app.models.user import User
-from app.services import wallet_service
+from app.services import manager_perks, wallet_service
 from app.services.game_config_service import get_config
 from app.services.notification_service import notify
 
-KINDS = ("shape", "symbol", "rim", "fx", "kit", "frame", "theme", "stadium_name")
+KINDS = ("shape", "symbol", "rim", "fx", "kit", "frame", "theme", "stadium_name", "stands", "poster")
 PALETTE = (
     "#1f8a4c", "#0f5132", "#c62828", "#8e0000", "#1565c0", "#0d2b6b", "#6a1b9a", "#f9a825",
     "#ef6c00", "#212121", "#f5f5f5", "#00838f", "#ad1457", "#4e342e", "#9e9e9e", "#c6e63a",
@@ -42,6 +42,7 @@ PALETTE = (
 DEFAULT_LOOK = {
     "shape": "shield", "symbol": "⚽", "color": "#1f8a4c", "color2": "#f5f5f5",
     "kit": "plain", "kit_color": "#1f8a4c", "kit_color2": "#f5f5f5", "frame": "classic", "theme": "night", "rim": "none", "fx": "none",
+    "stands": "classic", "poster": "classic",
 }
 PRO_FRAME = "frame_gold"
 STADIUM_NAME_MAX = 32
@@ -137,6 +138,7 @@ async def shop_out(db: AsyncSession, user: User, club: Optional[ManagerClub], co
         "my_merch": [{"club_name": name, "code": m.code, "emoji": items.get(m.code, {}).get("emoji", "🧣"),
                       "name": items.get(m.code, {}).get("name", m.code)} for m, name in mine],
         "pro_stars": config.manager_pro_stars, "pro_days": config.manager_pro_days,
+        "passes": manager_perks.passes_out(club, config),
     }
 
 
@@ -171,7 +173,8 @@ async def set_look(db: AsyncSession, user: User, look: dict) -> dict:
     pro = is_pro(club)
     current = resolve_look(club)
     by_kind_value = {(i["kind"], i["value"]): i for i in catalog(config)}
-    for field, kind in (("shape", "shape"), ("symbol", "symbol"), ("rim", "rim"), ("fx", "fx"), ("kit", "kit"), ("frame", "frame"), ("theme", "theme")):
+    for field, kind in (("shape", "shape"), ("symbol", "symbol"), ("rim", "rim"), ("fx", "fx"), ("kit", "kit"), ("frame", "frame"), ("theme", "theme"),
+                        ("stands", "stands"), ("poster", "poster")):
         if field not in look:
             continue
         item = by_kind_value.get((kind, str(look[field])))
@@ -303,7 +306,14 @@ async def scout(db: AsyncSession, user: User) -> dict:
 # --- Telegram Stars (through my_player_service's invoice flow, key "manager:<code>") ---------------
 
 async def stars_order(db: AsyncSession, user_id: int, code: str, config) -> tuple[str, str, str, int]:
+    gift = manager_perks.parse_gift(code)
+    if gift is not None:
+        item = next((i for i in catalog(config) if i["code"] == gift[1]), None)
+        target = await manager_perks.gift_check(db, user_id, gift[0], item)
+        return f"manager:{code}", f"Подарок: {item['name']}", f"Стиль для клуба «{target.name}»: {item['name']}", item["stars"]
     club = await _owned_club(db, user_id)
+    if manager_perks.is_pass(code):
+        return manager_perks.pass_order(club, code, config)
     if code == "pro":
         if config.manager_pro_stars <= 0:
             raise ConflictError("«Менеджер Pro» сейчас не продаётся")
@@ -318,9 +328,20 @@ async def stars_order(db: AsyncSession, user_id: int, code: str, config) -> tupl
 
 async def validate_stars(db: AsyncSession, invoice, config) -> tuple[bool, str]:
     code = invoice.my_player_purchase.split(":", 1)[1]
+    gift = manager_perks.parse_gift(code)
+    if gift is not None:
+        item = next((i for i in catalog(config) if i["code"] == gift[1]), None)
+        try:
+            await manager_perks.gift_check(db, invoice.user_id, gift[0], item)
+        except (ConflictError, NotFoundError) as exc:
+            return False, exc.message
+        return (item["stars"] == invoice.stars_amount, "Цена изменилась — открой покупку заново")
     club = (await db.execute(select(ManagerClub).where(ManagerClub.owner_id == invoice.user_id))).scalar_one_or_none()
     if club is None:
         return False, "Клуб не найден"
+    if manager_perks.is_pass(code):
+        stars, _days = manager_perks._price(code, config)
+        return (stars > 0 and stars == invoice.stars_amount, "Цена изменилась — открой покупку заново")
     if code == "pro":
         return (config.manager_pro_stars == invoice.stars_amount, "Цена изменилась — открой покупку заново")
     item = next((i for i in catalog(config) if i["code"] == code), None)
@@ -334,11 +355,17 @@ async def validate_stars(db: AsyncSession, invoice, config) -> tuple[bool, str]:
 async def deliver_stars(db: AsyncSession, user: User, invoice, config) -> dict:
     """Paid already — never refuses (the caller holds the invoice lock and commits)."""
     code = invoice.my_player_purchase.split(":", 1)[1]
+    gift = manager_perks.parse_gift(code)
+    if gift is not None:
+        item = next((i for i in catalog(config) if i["code"] == gift[1]), {"code": gift[1], "name": gift[1]})
+        return await manager_perks.deliver_gift(db, user, gift[0], item)
     club = (await db.execute(
         select(ManagerClub).where(ManagerClub.owner_id == user.id).with_for_update().execution_options(populate_existing=True)
     )).scalar_one_or_none()
     if club is None:
         return {"kind": "manager", "name": "Клуб не найден"}
+    if manager_perks.is_pass(code):
+        return manager_perks.deliver_pass(club, code, config)
     if code == "pro":
         now = datetime.now(timezone.utc)
         start = max(now, ensure_aware(club.pro_until)) if club.pro_until else now

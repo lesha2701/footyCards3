@@ -37,7 +37,9 @@ import { CupPanel, NewsPanel } from "@/components/manager/CupNewsPanel";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconCoin, IconProfile, IconSearch, IconTrophy } from "@/components/icons";
 import ClubCardSheet from "@/components/manager/ClubCardSheet";
+import AnalyticsPanel from "@/components/manager/AnalyticsPanel";
 import MatchPlanPanel from "@/components/manager/MatchPlanPanel";
+import Stadium from "@/components/manager/Stadium";
 import TodayPanel, { Timeline } from "@/components/manager/TodayPanel";
 import Emblem, { KitShirt } from "@/components/manager/Emblem";
 import ManagerPitch from "@/components/manager/ManagerPitch";
@@ -246,6 +248,7 @@ function ClubTab({ view, club, onView, onError }: TabProps & { club: ManagerClub
           </span>
           <KitShirt look={club.look} size={44} sponsor={club.kit_sponsor} />
         </div>
+        <div className="mt-3"><Stadium look={club.look} label={club.stadium_name ?? "Стадион клуба"} /></div>
         <div className="mt-3 grid grid-cols-3 gap-2 text-center">
           <Stat label="бюджет" value={<span className="text-accent-lime">{eur(club.budget)}</span>} />
           <Stat label="рейтинг состава" value={club.squad.rating} />
@@ -304,6 +307,7 @@ function ClubTab({ view, club, onView, onError }: TabProps & { club: ManagerClub
         </section>
       )}
 
+      <AnalyticsPanel pass={view.shop.passes?.find((p) => p.code === "analytics")} onError={onError} />
       <MatchPlanPanel onError={onError} />
 
       <TacticsPanel

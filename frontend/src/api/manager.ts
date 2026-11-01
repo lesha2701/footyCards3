@@ -86,6 +86,9 @@ export interface ManagerLook {
   /** Emblem outline and effect from «Стиль» ("none" = without). */
   rim?: string;
   fx?: string;
+  /** Stadium skin and champion poster style from «Стиль» ("classic" = default). */
+  stands?: string;
+  poster?: string;
 }
 
 export interface ManagerBase {
@@ -216,7 +219,7 @@ export interface ManagerRules {
 
 export interface ManagerCosmetic {
   code: string;
-  kind: "shape" | "symbol" | "rim" | "fx" | "kit" | "frame" | "theme" | "stadium_name";
+  kind: "shape" | "symbol" | "rim" | "fx" | "kit" | "frame" | "theme" | "stadium_name" | "stands" | "poster";
   name: string;
   value: string;
   coins: number;
@@ -240,6 +243,18 @@ export interface ManagerShop {
   my_merch: { club_name: string; code: string; emoji: string; name: string }[];
   pro_stars: number;
   pro_days: number;
+  /** Stars passes: «Помощник президента», «Аналитика Pro». */
+  passes: ManagerPass[];
+}
+
+export interface ManagerPass {
+  code: "assistant" | "analytics";
+  name: string;
+  about: string;
+  stars: number;
+  days: number;
+  active: boolean;
+  until: string | null;
 }
 
 export interface ManagerView {
@@ -480,6 +495,47 @@ export interface ManagerNews {
   scorer: { name: string; team: string; goals: number } | null;
   transfer: { who: string; to: string; from: string | null; fee: number } | null;
   cup: string | null;
+}
+
+/** GET /manager/analytics: «Аналитика Pro» — the next opponent. */
+export interface ManagerAnalytics {
+  opponent: {
+    name: string; home: boolean; at: string | null; style: string; formation: string; edge: "win" | "lose" | "even";
+    rating: number | null; my_rating: number | null;
+    lines: { line: "GK" | "DEF" | "MID" | "FWD"; mine: number | null; theirs: number | null }[];
+    record: { form: ("W" | "D" | "L")[]; gf: number; ga: number; played: number };
+    my_record: { form: ("W" | "D" | "L")[]; gf: number; ga: number; played: number };
+    injuries: number;
+  } | null;
+}
+
+export async function fetchManagerAnalytics(): Promise<ManagerAnalytics> {
+  const { data } = await api.get<ManagerAnalytics>("/manager/analytics");
+  return data;
+}
+
+/** GET /manager/gifts/{club_id}: style items for Stars that club lacks. */
+export interface ManagerGifts {
+  club_id: number;
+  club_name: string;
+  look: ManagerLook;
+  items: Omit<ManagerCosmetic, "owned" | "usable">[];
+}
+
+export async function fetchManagerGifts(clubId: number): Promise<ManagerGifts> {
+  const { data } = await api.get<ManagerGifts>(`/manager/gifts/${clubId}`);
+  return data;
+}
+
+/** GET /manager/champion: «Постер чемпиона» (404 without a title). */
+export interface ManagerChampion {
+  club: string; season_key: string; league: string; points: number; won: number; drawn: number; lost: number;
+  gf: number; ga: number; titles: number; scorer: { name: string; goals: number } | null; style: string;
+}
+
+export async function fetchManagerChampion(): Promise<ManagerChampion> {
+  const { data } = await api.get<ManagerChampion>("/manager/champion");
+  return data;
 }
 
 export async function fetchManagerNews(): Promise<ManagerNews> {

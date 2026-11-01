@@ -231,6 +231,24 @@ async def _manager_news(db: AsyncSession, user: User) -> tuple[str, str]:
     return path, f"{page['headline']} 📰 «Газета лиги» в «Менеджере» Victor FC"
 
 
+async def _manager_champion(db: AsyncSession, user: User) -> tuple[str, str]:
+    """«Постер чемпиона»: my club's last league title."""
+    from app.services import manager_news
+
+    page = await manager_news.champion(db, user)
+    record = f"{page['won']}–{page['drawn']}–{page['lost']} · {page['points']} очк. · {page['gf']}:{page['ga']}"
+    lines = [f"Титулов клуба: {page['titles']}"]
+    if page["scorer"]:
+        lines.append(f"Бомбардир: {page['scorer']['name']} — {page['scorer']['goals']}")
+    image = share_card_service.render_manager_champion(
+        club=page["club"], league=page["league"], season=page["season_key"], record=record, lines=lines,
+        style=page["style"], bot_username=settings.telegram_bot_username,
+    )
+    fingerprint = f"champion|{page['season_key']}|{page['club']}|{page['style']}|{record}|{lines}"
+    path = _store(image, "manager_champion", user.id, fingerprint)
+    return path, f"🏆 «{page['club']}» — чемпион! {page['league']}, сезон {page['season_key']} · «Менеджер» Victor FC"
+
+
 def mordoboi_link(user: User) -> str:
     """Opens the bot, which answers with «Выйти на ринг» → /play/mordoboi?vs=<id>."""
     return f"https://t.me/{settings.telegram_bot_username}?start=mordoboi_vs_{user.id}"
@@ -438,6 +456,8 @@ async def prepare_share(db: AsyncSession, user: User, kind: str, object_id: int)
         path, caption = await _manager_transfer(db, user, object_id)
     elif kind == "manager_news":
         path, caption = await _manager_news(db, user)
+    elif kind == "manager_champion":
+        path, caption = await _manager_champion(db, user)
     else:
         raise NotFoundError("Нечем поделиться")
 

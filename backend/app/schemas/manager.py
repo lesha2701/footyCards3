@@ -49,6 +49,8 @@ class ManagerLookIn(BaseModel):
     theme: Optional[str] = Field(default=None, max_length=32)
     rim: Optional[str] = Field(default=None, max_length=32)
     fx: Optional[str] = Field(default=None, max_length=32)
+    stands: Optional[str] = Field(default=None, max_length=32)
+    poster: Optional[str] = Field(default=None, max_length=32)
 
 
 class ManagerStadiumNameIn(BaseModel):
