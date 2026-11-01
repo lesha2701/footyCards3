@@ -1,7 +1,7 @@
 """«Менеджер» monetization: stadium skins («stands») and champion poster
 styles («poster») appended to GameConfig.manager_cosmetics (codes already
 there are skipped, an admin's edits stay), and manager_clubs.perks — the
-Stars passes «Помощник президента» / «Аналитика Pro» and their reminders.
+Stars pass «Аналитика Pro» and its reminders.
 
 Revision ID: 0237
 Revises: 0236

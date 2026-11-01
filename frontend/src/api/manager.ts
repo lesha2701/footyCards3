@@ -243,12 +243,12 @@ export interface ManagerShop {
   my_merch: { club_name: string; code: string; emoji: string; name: string }[];
   pro_stars: number;
   pro_days: number;
-  /** Stars passes: «Помощник президента», «Аналитика Pro». */
+  /** Stars passes: «Аналитика Pro». */
   passes: ManagerPass[];
 }
 
 export interface ManagerPass {
-  code: "assistant" | "analytics";
+  code: "analytics";
   name: string;
   about: string;
   stars: number;

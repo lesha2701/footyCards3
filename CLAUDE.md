@@ -88,8 +88,9 @@ Main features:
   «🏆 Лучший президент» by season profit and capital. Between rounds:
   «Установка на матч» and «События клуба» (`manager_events.py`), the
   seasonal knockout «Кубок менеджеров» and friendlies (`manager_cup.py`),
-  «Газета лиги» / «Постер чемпиона» shares (`manager_news.py`). Stars
-  passes «Помощник президента» / «Аналитика Pro», gifts of style items to
+  «Газета лиги» / «Постер чемпиона» shares (`manager_news.py`). The Stars
+  pass «Аналитика Pro» (opponent breakdown, share alerts, a forgotten sponsor
+  signed, window reminders), gifts of style items to
   another club and the stadium skins (`manager_perks.py`, cosmetics kinds
   "stands" / "poster") — convenience and style only. Numbers: GameConfig.manager_finance
   over `manager_finance.DEFAULTS`;

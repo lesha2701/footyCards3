@@ -26,30 +26,29 @@ async def test_passes_are_sold_for_stars_and_stack(client, db_session, bot_token
     uid, headers, club_id = await _setup(client, db_session, bot_token, 899401)
     shop = (await client.get(f"{API}/manager", headers=headers)).json()["shop"]
     passes = {p["code"]: p for p in shop["passes"]}
-    assert set(passes) == {"assistant", "analytics"} and not passes["assistant"]["active"]
-    stars = passes["assistant"]["stars"]
-    key, _title, _about, price = await manager_shop.stars_order(db_session, uid, "assistant", config)
-    assert key == "manager:assistant" and price == stars > 0
-    assert not (await manager_shop.validate_stars(db_session, _invoice(uid, "assistant", stars + 1), config))[0]
-    assert (await manager_shop.validate_stars(db_session, _invoice(uid, "assistant", stars), config))[0]
+    assert set(passes) == {"analytics"} and not passes["analytics"]["active"]
+    stars = passes["analytics"]["stars"]
+    key, _title, _about, price = await manager_shop.stars_order(db_session, uid, "analytics", config)
+    assert key == "manager:analytics" and price == stars > 0
+    assert not (await manager_shop.validate_stars(db_session, _invoice(uid, "analytics", stars + 1), config))[0]
+    assert (await manager_shop.validate_stars(db_session, _invoice(uid, "analytics", stars), config))[0]
     user = await _user(db_session, uid)
-    await manager_shop.deliver_stars(db_session, user, _invoice(uid, "assistant", stars), config)
+    await manager_shop.deliver_stars(db_session, user, _invoice(uid, "analytics", stars), config)
     await db_session.commit()
-    first = perks.until(await _club_row(db_session, club_id), "assistant")
-    await manager_shop.deliver_stars(db_session, user, _invoice(uid, "assistant", stars), config)
+    first = perks.until(await _club_row(db_session, club_id), "analytics")
+    await manager_shop.deliver_stars(db_session, user, _invoice(uid, "analytics", stars), config)
     await db_session.commit()
     club = await _club_row(db_session, club_id)
-    assert perks.active(club, "assistant") and perks.until(club, "assistant") - first == timedelta(days=passes["assistant"]["days"])
-    assert not perks.active(club, "analytics")
+    assert perks.active(club, "analytics") and perks.until(club, "analytics") - first == timedelta(days=passes["analytics"]["days"])
 
 
-async def test_assistant_signs_the_forgotten_sponsor_and_reminds_once(client, db_session, bot_token):
+async def test_analytics_signs_the_forgotten_sponsor_and_reminds_once(client, db_session, bot_token):
     config = await get_config(db_session)
     await _squad(db_session, config.manager_division_rating[-1])
     uid, _headers, club_id = await _setup(client, db_session, bot_token, 899411)
     _other_uid, _h, other_id = await _setup(client, db_session, bot_token, 899412, name="Ястребы")
     club = await _club_row(db_session, club_id)
-    perks.extend(club, "assistant", 30)
+    perks.extend(club, "analytics", 30)
     await db_session.commit()
     start = _next_season_start(config)
     # The reminder comes only within remind_hours of the window's end, and only once.
@@ -64,8 +63,8 @@ async def test_assistant_signs_the_forgotten_sponsor_and_reminds_once(client, db
     assert await manager_service.ensure_season(db_session, start)
     key = manager_service.season_key(start)
     deals = (await db_session.execute(select(ManagerDeal).where(ManagerDeal.kind == "sponsor", ManagerDeal.season_key == key))).scalars().all()
-    assert [d.club_id for d in deals] == [club_id]  # only the club with the assistant
-    assert deals[0].data["assistant"] is True and deals[0].amount > 0
+    assert [d.club_id for d in deals] == [club_id]  # only the club with the pass
+    assert deals[0].data["auto"] is True and deals[0].amount > 0
     assert other_id not in [d.club_id for d in deals]
 
 

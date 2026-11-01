@@ -1,20 +1,19 @@
-"""«Менеджер»: the Stars passes and gifts — convenience and style only,
+"""«Менеджер»: the Stars pass and gifts — convenience and style only,
 nothing here makes a club stronger or sells euros.
 
-- «Помощник президента» (`assistant_stars` for `assistant_days`): signs the
-  best sponsor at the season start if the club forgot to (the same offer any
-  club signs with one tap in the window) and, `remind_hours` before the
-  window closes, sends one reminder of what is still open (sponsor, kit
-  sponsor, events waiting for a decision, budget left unspent).
-- «Аналитика Pro» (`analytics_stars` for `analytics_days`): the next
-  opponent's breakdown (lines against mine, style, form, goals) and share
-  price alerts — a move of `price_alert_pct` % or more after a round of a
-  club whose shares the club holds (or its own).
+- «Аналитика Pro» (`analytics_stars` for `analytics_days`):
+  * the next opponent's breakdown (lines against mine, style, form, goals);
+  * share price alerts — a move of `price_alert_pct` % or more after a
+    round of a club whose shares the club holds (or its own);
+  * the best sponsor signed at the season start if the club forgot to (the
+    same offer any club signs with one tap in the window);
+  * one reminder `remind_hours` before the window closes of what is still
+    open (sponsor, kit sponsor, events waiting for a decision).
 - Gifts: a style item for Stars bought for ANOTHER user's club (purchase key
   "manager:gift:<club_id>:<code>"), the giver named in a notification.
 
-Passes live in `manager_clubs.perks` ({"assistant": iso, "analytics": iso,
-"reminded": season key}); numbers in GameConfig.manager_finance."""
+The pass lives in `manager_clubs.perks` ({"analytics": iso, "reminded":
+season key}); numbers in GameConfig.manager_finance."""
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -32,8 +31,7 @@ from app.services.game_config_service import get_config
 from app.services.notification_service import notify
 
 PASSES = {
-    "assistant": ("Помощник президента", "Подпишет лучшего спонсора, если забудешь, и напомнит о делах до закрытия окна"),
-    "analytics": ("Аналитика Pro", "Разбор соперника перед матчем и уведомления о курсе акций"),
+    "analytics": ("Аналитика Pro", "Разбор соперника, алерты по акциям, спонсор и напоминания до закрытия окна"),
 }
 LINES = ("GK", "DEF", "MID", "FWD")
 RELATED = "manager_club"
@@ -143,13 +141,13 @@ async def giftable(db: AsyncSession, user: User, club_id: int) -> dict:
             "items": sorted(items, key=lambda i: (i["stars"], i["kind"]))}
 
 
-# --- «Помощник президента» ------------------------------------------------------------------------
+# --- «Аналитика Pro»: the president's chores ---------------------------------------------------
 
 async def assistant_season_start(db: AsyncSession, club: ManagerClub, key: str, snap: dict, config) -> Optional[str]:
     """Before the (locked) club's season start: the best sponsor if none was signed."""
     from app.models.manager_club import ManagerDeal
 
-    if not active(club, "assistant") or await finance._taken(db, club.id, "sponsor", key):
+    if not active(club, "analytics") or await finance._taken(db, club.id, "sponsor", key):
         return None
     terms = finance.sponsor_terms(club, snap, config)
     if not terms:
@@ -157,13 +155,13 @@ async def assistant_season_start(db: AsyncSession, club: ManagerClub, key: str, 
     best = max(terms, key=lambda s: (s["upfront"] + s["per_win"] * 5, s["code"]))
     deal = ManagerDeal(club_id=club.id, kind="sponsor", season_key=key, seasons=1, option=best["code"], amount=best["upfront"],
                        data={"keys": [key], "brand": best["brand"], "name": best["name"], "per_win": best["per_win"],
-                             "places": best["places"], "rest": best["rest"], "relegated": best["relegated"], "assistant": True})
+                             "places": best["places"], "rest": best["rest"], "relegated": best["relegated"], "auto": True})
     try:
         await finance._add_deal(db, deal)
     except ConflictError:
         return None
     await finance.book(db, club, "sponsor", best["upfront"], key, ref=f"sponsor_up:{deal.id}", note=best["brand"])
-    return f"🤵 Помощник подписал спонсора: {best['emoji']} {best['name']}"
+    return f"📊 «Аналитика Pro» подписала спонсора: {best['emoji']} {best['name']}"
 
 
 async def _gaps(db: AsyncSession, club: ManagerClub, key: str) -> list[str]:
@@ -181,7 +179,7 @@ async def _gaps(db: AsyncSession, club: ManagerClub, key: str) -> list[str]:
 
 
 async def remind(db: AsyncSession, now: Optional[datetime] = None) -> int:
-    """The bot's sweep: one reminder per season to clubs with the assistant
+    """The bot's sweep: one reminder per season to clubs with «Аналитика Pro»
     `remind_hours` before the window closes."""
     from app.services import manager_service as ms
 
@@ -195,21 +193,21 @@ async def remind(db: AsyncSession, now: Optional[datetime] = None) -> int:
     clubs = (await db.execute(select(ManagerClub).where(ManagerClub.perks.is_not(None)))).scalars().all()
     sent = 0
     for club in clubs:
-        if not active(club, "assistant", now) or (club.perks or {}).get("reminded") == key:
+        if not active(club, "analytics", now) or (club.perks or {}).get("reminded") == key:
             continue
         gaps = await _gaps(db, club, await finance.upcoming_key(db, now))
         club.perks = {**(club.perks or {}), "reminded": key}
         flag_modified(club, "perks")
         left = max(1, round((pre_end - now).total_seconds() / 3600))
         body = ("Осталось: " + "; ".join(gaps)) if gaps else "Всё готово к сезону — можно проверить состав и тактику"
-        await notify(db, club.owner_id, NotificationType.manager_event, f"🤵 Окно закрывается через {left} ч",
+        await notify(db, club.owner_id, NotificationType.manager_event, f"📊 Окно закрывается через {left} ч",
                      body, related_object_type=RELATED, related_object_id=club.id)
         sent += 1
     await db.commit()
     return sent
 
 
-# --- «Аналитика Pro» ---------------------------------------------------------------------------------
+# --- «Аналитика Pro»: the opponent and the shares -------------------------------------------------
 
 def _line(position: Optional[str]) -> Optional[str]:
     from app.services.my_player_service import category_of

@@ -183,12 +183,12 @@ export default function StyleTab({ view, club, onView, onError }: {
 
       {(shop.passes ?? []).filter((p) => p.stars > 0).map((p) => (
         <section key={p.code} className="flex flex-col gap-2 rounded-2xl bg-gradient-to-br from-sky-400/15 to-bg-surface p-4 ring-1 ring-sky-300/30" data-testid={`pass-${p.code}`}>
-          <h2 className="font-display text-base font-bold text-ink-chalk">{p.code === "assistant" ? "🤵" : "📊"} {p.name}</h2>
+          <h2 className="font-display text-base font-bold text-ink-chalk">📊 {p.name}</h2>
           <ul className="flex flex-col gap-1 text-caption text-ink-mist">
-            {(p.code === "assistant"
-              ? ["Подпишет лучшего спонсора, если ты забыл до старта сезона", "Напомнит за сутки до закрытия окна, что осталось сделать"]
-              : ["Разбор следующего соперника: линии, форма, голы, травмы", "Уведомления о скачках курса твоих акций"]
-            ).map((t) => <li key={t}>• {t}</li>)}
+            {[
+              "Разбор следующего соперника: линии, форма, голы, травмы", "Уведомления о скачках курса твоих акций",
+              "Подпишет лучшего спонсора, если забыл до старта сезона", "Напомнит за сутки до закрытия окна, что осталось сделать",
+            ].map((t) => <li key={t}>• {t}</li>)}
             <li className="text-micro">Без бонусов к силе — только удобство.</li>
           </ul>
           {p.active && p.until && (

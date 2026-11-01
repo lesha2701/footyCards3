@@ -1233,7 +1233,7 @@ async def _prepare_club(db: AsyncSession, club: ManagerClub, key: str, now: date
     await _expire(db, club, now, key)
     await _grant_budget(db, club, key, config)
     snap = await base_snapshot(db, club.owner_id, config)
-    assistant_note = await perks.assistant_season_start(db, club, key, snap, config)  # «Помощник президента»
+    assistant_note = await perks.assistant_season_start(db, club, key, snap, config)  # «Аналитика Pro»: a forgotten sponsor
     money_state = await finance.season_start(db, club, key, snap, config)
     await exchange.bonds_start(db, club, key)
     await exchange.season_open(db, club, key, config)  # a listed club is re-valued
