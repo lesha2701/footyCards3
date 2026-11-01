@@ -215,7 +215,10 @@ async def test_loan_is_collected_when_the_budget_has_it(client, db_session, bot_
     await finance.season_start(db_session, club, key, {}, config)
     await db_session.commit()
     budget, debt = club.budget, (await db_session.execute(select(ManagerLoan))).scalar_one().debt
+    # The next start collects it: the window sets the debt aside like the wages.
     club = await _club_row(db_session, club_id)
+    assert await finance.loan_due(db_session, club) == debt
+    assert await manager_service.start_bill(db_session, club, config) == await manager_service.wage_bill(db_session, club, config) + debt
     await finance.season_start(db_session, club, finance.shift_key(key, 1), {}, config)
     await db_session.commit()
     loan = (await db_session.execute(select(ManagerLoan))).scalar_one()

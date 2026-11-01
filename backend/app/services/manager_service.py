@@ -690,7 +690,7 @@ async def make_offer(
     if await _squad_size(db, club) >= config.manager_squad_max:
         raise ConflictError(f"В заявке не больше {config.manager_squad_max} игроков")
     need = fee + wage_eur(wage, config)
-    reserved = await wage_bill(db, club, config)
+    reserved = await start_bill(db, club, config)
     if need > club.budget - reserved:
         raise ConflictError(_short_of(need, club.budget, reserved))
     contract = ManagerContract(
@@ -807,7 +807,7 @@ async def _execute(db, contract, buyer, seller, parent, player_user, player_name
     await finance.ensure_can_transfer(db, buyer)
     # Checked again now: the buyer may have spent since the offer.
     need = contract.fee + wage_eur(min(contract.wage, config.manager_live_wage_max), config)
-    if need > buyer.budget - await wage_bill(db, buyer, config):
+    if need > buyer.budget - await start_bill(db, buyer, config):
         raise ConflictError(f"У «{buyer.name}» не хватает свободного бюджета на сделку (сумма + зарплата за сезон)")
     if contract.fee:
         key = await finance.upcoming_key(db, now)
@@ -995,9 +995,14 @@ async def wage_bill(db: AsyncSession, club: ManagerClub, config, snap: Optional[
     return live + npcs
 
 
+async def start_bill(db: AsyncSession, club: ManagerClub, config, snap: Optional[dict] = None) -> int:
+    """All the next season start takes: the squad's wages and a loan due."""
+    return await wage_bill(db, club, config, snap) + await finance.loan_due(db, club)
+
+
 def _short_of(need: int, budget: int, reserved: int) -> str:
     return (f"Не хватает бюджета: нужно {money(need)} (сумма + зарплата за сезон), свободно {money(max(0, budget - reserved))}"
-            + (f" — ещё {money(reserved)} уже отложено на зарплаты состава" if reserved else ""))
+            + (f" — ещё {money(reserved)} отложено на старт сезона (зарплаты, кредит)" if reserved else ""))
 
 
 CATALOG_PAGE = 40
@@ -1040,7 +1045,7 @@ async def npc_catalog(
         stmt = stmt.where(Player.display_name.ilike(f"%{query.strip()[:40]}%"))
     max_rating = None
     if afford in ("loan", "buy") and mine:
-        max_rating = affordable_rating(mine.budget - await wage_bill(db, mine, config), afford, config, mine.division, discount, loan_cut)
+        max_rating = affordable_rating(mine.budget - await start_bill(db, mine, config), afford, config, mine.division, discount, loan_cut)
         stmt = stmt.where(Player.rating <= max_rating)
     if free_only and taken:
         stmt = stmt.where(Player.id.notin_(list(taken)))
@@ -1085,7 +1090,7 @@ async def sign_npc(db: AsyncSession, user: User, player_id: int, kind: str, seas
     snap = await base_snapshot(db, club.owner_id, config)
     terms = npc_terms(player.rating, config, club.division, snap["discount_pct"], await _farm_loan_cut(db, club))
     fee = terms["value"] if kind == "buy" else terms["loan_fee"]
-    reserved = await wage_bill(db, club, config, snap)
+    reserved = await start_bill(db, club, config, snap)
     if fee + terms["wage_now"] > club.budget - reserved:
         raise ConflictError(_short_of(fee + terms["wage_now"], club.budget, reserved))
     await finance.book(db, club, "npc_buy" if kind == "buy" else "npc_loan", -fee,
@@ -1893,6 +1898,7 @@ async def get_view(db: AsyncSession, user: User, now: Optional[datetime] = None)
         grant = season_grant(club.division, snap, config)
         wage_pct = _pct(config.manager_division_wage_pct, club.division)
         reserved = await wage_bill(db, club, config, snap)
+        due = await finance.loan_due(db, club)
         club_out = {
             "id": club.id, "name": club.name, "formation": tactics.clean_formation(club.formation),
             "style": tactics.clean_style(club.style), "budget": club.budget,
@@ -1912,7 +1918,7 @@ async def get_view(db: AsyncSession, user: User, now: Optional[datetime] = None)
             ],
             # What the next season start pays for the squad already signed:
             # the window's deals spend only the budget above it.
-            "wages_per_season": reserved, "free_budget": max(0, club.budget - reserved),
+            "wages_per_season": reserved, "loan_due": due, "free_budget": max(0, club.budget - reserved - due),
             "squad_value": sum(p.get("value", 0) for p in (*squad["xi"], *squad["bench"])), "next_match": None,
             "live_count": sum(1 for c in club_contracts if c.status in ("active", "offered") and c.user_id != club.owner_id),
             "academy_card_id": club.academy_card_id,

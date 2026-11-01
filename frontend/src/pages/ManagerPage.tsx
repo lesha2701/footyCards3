@@ -446,7 +446,7 @@ function TransfersTab({ view, club, onView, onError }: TabProps & { club: Manage
 /** The budget, the squad's wages the season start takes (set aside) and
  * what is left for the window's deals. */
 function BudgetBar({ club }: { club: ManagerClub }) {
-  const reserved = Math.min(club.budget, club.wages_per_season);
+  const reserved = Math.min(club.budget, club.wages_per_season + club.loan_due);
   const pct = club.budget > 0 ? Math.round((reserved / club.budget) * 100) : 100;
   return (
     <div className="rounded-xl bg-bg-surface px-3 py-2.5" data-testid="budget-bar">
@@ -459,9 +459,11 @@ function BudgetBar({ club }: { club: ManagerClub }) {
       </div>
       <div className="mt-1 flex justify-between text-micro text-ink-mist">
         <span>Бюджет {eur(club.budget)}</span>
-        <span className="text-amber-300">🔒 зарплаты состава {eur(club.wages_per_season)}</span>
+        <span className="text-amber-300">
+          🔒 зарплаты состава {eur(club.wages_per_season)}{club.loan_due > 0 && ` · кредит ${eur(club.loan_due)}`}
+        </span>
       </div>
-      {club.wages_per_season > club.budget && (
+      {club.wages_per_season + club.loan_due > club.budget && (
         <p className="mt-1 text-micro text-red-400">На зарплаты не хватает — на старте сезона уйдут те, кому не заплатят. Продай кого-нибудь.</p>
       )}
     </div>

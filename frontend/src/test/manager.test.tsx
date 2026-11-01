@@ -92,7 +92,7 @@ const club: ManagerClub = {
       { slot: "FWD2", kind: "own", name: "Виктор", position: "ST", rating: 74, user_id: 1, value: 9_800_000 },
     ],
   },
-  contracts: [contract], offers_sent: [], incoming: [], npcs: [], wages_per_season: 600_000, free_budget: 3_900_000, squad_value: 15_300_000, live_count: 1,
+  contracts: [contract], offers_sent: [], incoming: [], npcs: [], wages_per_season: 600_000, loan_due: 0, free_budget: 3_900_000, squad_value: 15_300_000, live_count: 1,
   next_match: null,
   academy_card_id: null, kit_sponsor: null, academy_options: [{ card_id: 9, name: "Свой Воспитанник", position: "CM", rating: 64 }],
   look: LOOK, owned_cosmetics: [], stadium_name: null, pro: false, pro_until: null, merch: { sold: 0, eur_season: 0, cap_eur: 15_000_000 },

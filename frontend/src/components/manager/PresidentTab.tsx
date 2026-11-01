@@ -505,7 +505,7 @@ function DealPanel({ kind, office, busy, ask, sign }: {
         </div>
         {boost("🏨", t.hotel_cut_pct > 0 ? `Клубный отель ур. ${lv.hotel}: расходы −${pct(t.hotel_cut_pct)}` : "Клубный отель удешевит турне")}
         {boost("🎥", t.media_fans_pct > 0 ? `Медиацентр ур. ${lv.media}: фанатов +${pct(t.media_fans_pct)}` : "Медиацентр приведёт больше фанатов")}
-        {button("Отправиться в турне", !picked || office.budget < (picked?.cost ?? 0), `${picked?.name}?`,
+        {button("Отправиться в турне", !picked || office.free_budget < (picked?.cost ?? 0), `${picked?.name}?`,
           `Доход ${eur(picked?.revenue ?? 0)}, расходы ${eur(picked?.cost ?? 0)}. Первые ${picked?.fatigue_rounds} туров команда будет слабее на ${pct(picked?.fatigue_pct ?? 0)}.`,
           { option: choice ?? undefined })}
       </Card>
@@ -568,7 +568,7 @@ function DealPanel({ kind, office, busy, ask, sign }: {
       </div>
       <p className="mt-2 text-caption text-ink-mist">Аренды футболистов на этот сезон дешевле, «ребята из академии» на пустых местах — сильнее.</p>
       {boost("🏋️", lv.training > 0 ? `Тренировочный центр ур. ${lv.training} усиливает воспитанников` : "Тренировочный центр усилит воспитанников")}
-      {button(`Подписать за ${eur(f.fee)}`, office.budget < f.fee, "Фарм-клуб на сезон?", `Стоит ${eur(f.fee)}. Действует весь сезон.`, {})}
+      {button(`Подписать за ${eur(f.fee)}`, office.free_budget < f.fee, "Фарм-клуб на сезон?", `Стоит ${eur(f.fee)}. Действует весь сезон.`, {})}
     </Card>
   );
 }

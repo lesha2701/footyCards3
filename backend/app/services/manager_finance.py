@@ -333,6 +333,15 @@ async def open_loan(db: AsyncSession, club_id: int, lock: bool = False) -> Optio
     return (await db.execute(stmt)).scalar_one_or_none()
 
 
+async def loan_due(db: AsyncSession, club: ManagerClub) -> int:
+    """The debt the next season start collects (the last season of the term,
+    or an overdue loan) — set aside in the window like the squad's wages."""
+    loan = await open_loan(db, club.id)
+    if loan is None or (loan.status == "active" and loan.seasons_left > 0):
+        return 0
+    return int(loan.debt)
+
+
 async def _invested(db: AsyncSession, club_id: int, kinds: tuple[str, ...] = ("deposit", "venture")) -> int:
     """Money parked in deposits and the venture fund that has not come back."""
     return int((await db.execute(
@@ -596,6 +605,8 @@ async def sign(db: AsyncSession, user: User, kind: str, option: Optional[str] = 
     f = cfg(config)
     snap = await ms.base_snapshot(db, club.owner_id, config)
     grant = grant_of(club.division, config)
+    # Spending deals use the budget above what the next season start takes (wages, a loan due).
+    free = max(0, club.budget - await ms.start_bill(db, club, config, snap))
     deal = ManagerDeal(club_id=club.id, kind=kind, season_key=key, seasons=1, option=option, data={"keys": [key]})
     if kind == "sponsor":
         terms = next((s for s in sponsor_terms(club, snap, config) if s["code"] == option), None)
@@ -625,8 +636,8 @@ async def sign(db: AsyncSession, user: User, kind: str, option: Optional[str] = 
         terms = next((t for t in tour_terms(club.division, snap, config) if t["code"] == option), None)
         if terms is None:
             raise NotFoundError("Такого турне нет")
-        if club.budget < terms["cost"]:
-            raise ConflictError(f"На турне нужно {ms.money(terms['cost'])} — столько в бюджете нет")
+        if free < terms["cost"]:
+            raise ConflictError(f"На турне нужно {ms.money(terms['cost'])}, свободно {ms.money(free)} (зарплаты состава отложены)")
         deal.amount = terms["cost"]
         deal.result = terms["revenue"]
         deal.data = {"keys": [key], **{k: terms[k] for k in ("name", "revenue", "cost", "fans", "fatigue_pct", "fatigue_rounds")}}
@@ -645,14 +656,14 @@ async def sign(db: AsyncSession, user: User, kind: str, option: Optional[str] = 
     elif kind == "deposit":
         if await open_loan(db, club.id):
             raise ConflictError("Банк не открывает депозит, пока у клуба есть кредит")
-        high = club.budget * int(_num(f["deposit_max_budget_pct"])) // 100
+        high = free * int(_num(f["deposit_max_budget_pct"])) // 100
         stake = _amount(amount, int(_num(f["deposit_min_eur"])), high, "Депозит")
         deal.amount = stake
         deal.data = {"keys": [key], "rate_bp": deposit_rate_bp(snap, config)}
         await _add_deal(db, deal)
         await book(db, club, "deposit_out", -stake, key, ref=f"deposit_out:{deal.id}")
     elif kind == "venture":
-        high = club.budget * int(_num(f["venture_max_budget_pct"])) // 100
+        high = free * int(_num(f["venture_max_budget_pct"])) // 100
         stake = _amount(amount, int(_num(f["venture_min_eur"])), high, "Венчурный фонд")
         deal.amount = stake
         deal.data = {"keys": [key], "win_pct": _num(f["venture_win_pct"]), "multiplier": _num(f["venture_multiplier"])}
@@ -660,8 +671,8 @@ async def sign(db: AsyncSession, user: User, kind: str, option: Optional[str] = 
         await book(db, club, "venture_out", -stake, key, ref=f"venture_out:{deal.id}")
     elif kind == "farm":
         terms = farm_terms(club.division, snap, config)
-        if club.budget < terms["fee"]:
-            raise ConflictError(f"Фарм-клуб стоит {ms.money(terms['fee'])} — столько в бюджете нет")
+        if free < terms["fee"]:
+            raise ConflictError(f"Фарм-клуб стоит {ms.money(terms['fee'])}, свободно {ms.money(free)} (зарплаты состава отложены)")
         deal.amount = terms["fee"]
         deal.data = {"keys": [key], "loan_cut_pct": terms["loan_cut_pct"], "kid_bonus": terms["kid_bonus"]}
         await _add_deal(db, deal)
@@ -775,9 +786,10 @@ async def view(db: AsyncSession, user: User, now: Optional[datetime] = None) -> 
     grant = grant_of(division, config)
     estimate = tv_estimate(division, config)
     discount = tv_discount_pct(snap, config)
+    free = max(0, club.budget - await ms.start_bill(db, club, config, snap))
     return {
         "enabled": bool(f["enabled"]),
-        "club_id": club.id, "name": club.name, "look": manager_shop.resolve_look(club), "division": division, "budget": club.budget, "grant": grant,
+        "club_id": club.id, "name": club.name, "look": manager_shop.resolve_look(club), "division": division, "budget": club.budget, "free_budget": free, "grant": grant,
         "window_open": not playing, "season_key": key, "current_key": current,
         "value": value, "fans": await fans_of(db, club),
         "levels": {code: _lvl(snap, code) for code in ("stadium", "hotel", "media", "marketing", "accounting", "training", "shop")},
@@ -801,10 +813,10 @@ async def view(db: AsyncSession, user: User, now: Optional[datetime] = None) -> 
             "tv": {"taken": "tv" in taken, "estimate": estimate, "discount_pct": discount,
                    "advance": ms._nice(estimate * (100 - discount) / 100)},
             "deposit": {"taken": "deposit" in taken, "rate_pct": deposit_rate_bp(snap, config) / 100,
-                        "min": int(_num(f["deposit_min_eur"])), "max": club.budget * int(_num(f["deposit_max_budget_pct"])) // 100,
+                        "min": int(_num(f["deposit_min_eur"])), "max": free * int(_num(f["deposit_max_budget_pct"])) // 100,
                         "blocked": loan is not None},
             "venture": {"taken": "venture" in taken, "win_pct": _num(f["venture_win_pct"]), "multiplier": _num(f["venture_multiplier"]),
-                        "min": int(_num(f["venture_min_eur"])), "max": club.budget * int(_num(f["venture_max_budget_pct"])) // 100,
+                        "min": int(_num(f["venture_min_eur"])), "max": free * int(_num(f["venture_max_budget_pct"])) // 100,
                         "max_pct": _num(f["venture_max_budget_pct"])},
             "farm": {"taken": "farm" in taken, **farm_terms(division, snap, config)},
         },

@@ -571,7 +571,7 @@ async def test_window_reserves_the_squad_wages_and_logs_every_move(client, db_se
     assert view["club"]["wages_per_season"] == terms["wage_now"]
     assert view["club"]["free_budget"] == view["club"]["budget"] - terms["wage_now"]
     resp = await client.post(f"{API}/manager/npc", headers=a_headers, json={"player_id": second_id, "kind": "buy", "seasons": 1})
-    assert resp.status_code == 409 and "отложено на зарплаты" in resp.text
+    assert resp.status_code == 409 and "отложено на старт сезона" in resp.text
     catalog = (await client.get(f"{API}/manager/npc", headers=a_headers, params={"afford": "buy"})).json()
     assert catalog["max_rating"] < 70
     wage = (view["club"]["free_budget"] // config.manager_wage_eur_per_coin) + 1

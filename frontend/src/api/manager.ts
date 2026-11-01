@@ -122,7 +122,9 @@ export interface ManagerClub {
   npcs: ManagerNpc[];
   /** Wages the next season start takes for the squad already signed — set aside. */
   wages_per_season: number;
-  /** The budget above those wages: what the window's deals may spend. */
+  /** A bank loan the next season start collects — set aside too. */
+  loan_due: number;
+  /** The budget above those wages and the loan due: what the window's deals may spend. */
   free_budget: number;
   squad_value: number;
   /** The next league match (during a season). */
@@ -532,6 +534,8 @@ export interface ManagerOffice {
   look: ManagerLook;
   division: number;
   budget: number;
+  /** The budget above the next start's wages and loan due — what spending deals may use. */
+  free_budget: number;
   grant: number;
   /** Deals are signed while the club does not play (for `season_key`). */
   window_open: boolean;
