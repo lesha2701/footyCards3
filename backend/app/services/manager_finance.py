@@ -121,6 +121,8 @@ DEFAULTS: dict = {
     "insurance_premium_pct": 3, "insurance_medical_cut_pct": 4, "insurance_cover_pct": 100,
     # «Лучший президент»: clubs shown.
     "rating_size": 20,
+    # «Первый сезон»: the checklist bonus to the club budget (manager_today).
+    "onboarding_bonus_eur": 500_000,
 }
 
 DEAL_KINDS = ("sponsor", "kit", "tour", "tv", "deposit", "venture", "farm", "insurance")
@@ -167,6 +169,7 @@ KINDS: dict[str, tuple[str, str]] = {
     "coupon_out": ("expense", "Купоны по облигациям"),
     "bond_back": ("finance", "Погашение облигаций (получено)"),
     "bond_repay": ("finance", "Погашение своих облигаций"),
+    "onboarding": ("income", "Бонус первого сезона"),
 }
 REPORT_SEASONS = 6
 

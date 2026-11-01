@@ -11,6 +11,7 @@ import {
   fetchManagerMoves,
   fetchManagerPopular,
   fetchManagerScout,
+  fetchManagerSummary,
   foundManagerClub,
   offerManagerContract,
   releaseManagerNpc,
@@ -26,6 +27,7 @@ import {
   type ManagerMarketPlayer,
   type ManagerMove,
   type ManagerMoveKind,
+  type ManagerSummary,
   type ManagerView,
 } from "@/api/manager";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
@@ -34,6 +36,7 @@ import ShareButton from "@/components/common/ShareButton";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconCoin, IconProfile, IconSearch, IconTrophy } from "@/components/icons";
 import ClubCardSheet from "@/components/manager/ClubCardSheet";
+import TodayPanel, { Timeline } from "@/components/manager/TodayPanel";
 import Emblem, { KitShirt } from "@/components/manager/Emblem";
 import ManagerPitch from "@/components/manager/ManagerPitch";
 import PresidentTab from "@/components/manager/PresidentTab";
@@ -74,9 +77,15 @@ export default function ManagerPage() {
   const queryClient = useQueryClient();
   const updateBalance = useAuthStore((s) => s.updateBalance);
   const { data, isLoading } = useQuery({ queryKey: ["manager"], queryFn: fetchManager, refetchInterval: 60_000 });
+  const { data: summary } = useQuery({ queryKey: ["manager", "summary"], queryFn: fetchManagerSummary, refetchInterval: 60_000 });
   const [tab, setTab] = useState<Tab>("club");
   const [error, setError] = useState<string | null>(null);
-  const onView = (v: ManagerView) => { setError(null); queryClient.setQueryData(["manager"], v); updateBalance(v.balance); };
+  const onView = (v: ManagerView) => {
+    setError(null);
+    queryClient.setQueryData(["manager"], v);
+    queryClient.invalidateQueries({ queryKey: ["manager", "summary"] });
+    updateBalance(v.balance);
+  };
   const onError = (err: unknown) => setError(formatGameError(err, "Не получилось"));
 
   if (isLoading || !data) return <ListSkeleton />;
@@ -105,14 +114,15 @@ export default function ManagerPage() {
   return (
     <div className="flex flex-col gap-4" data-testid="manager-page">
       <GameHero game="manager" title="Менеджер" />
-      <SeasonBanner view={data} />
+      <SeasonBanner view={data} summary={summary} />
+      <TodayPanel onTab={setTab} onError={onError} />
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
-      <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1">
+      <div className="grid grid-cols-3 gap-1.5">
         {tabs.map(([id, label, dot]) => (
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`relative shrink-0 rounded-full px-3.5 py-2 text-xs font-semibold ${tab === id ? "bg-floodlight text-bg-base" : "bg-bg-surface text-ink-mist"}`}
+            className={`relative truncate rounded-full px-2 py-2 text-xs font-semibold ${tab === id ? "bg-floodlight text-bg-base" : "bg-bg-surface text-ink-mist"}`}
           >
             {label}
             {dot && tab !== id && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-accent-lime" />}
@@ -137,13 +147,14 @@ interface TabProps {
   onError: (err: unknown) => void;
 }
 
-function SeasonBanner({ view }: { view: ManagerView }) {
+function SeasonBanner({ view, summary }: { view: ManagerView; summary?: ManagerSummary }) {
   const playing = view.club?.playing;
   const { phase } = view.season;
   const pre = phase === "preseason" && !playing;
   const slots = view.season.slots.join(", ");
   return (
-    <section className={`flex items-center gap-3 rounded-2xl p-3 ${pre ? "bg-accent-lime/15 ring-1 ring-accent-lime/40" : "bg-bg-surface"}`} data-testid="season-banner">
+    <section className={`flex flex-col gap-2.5 rounded-2xl p-3 ${pre ? "bg-accent-lime/15 ring-1 ring-accent-lime/40" : "bg-bg-surface"}`} data-testid="season-banner">
+      <div className="flex items-center gap-3">
       <span className="text-2xl">{pre ? "🔁" : "⚽"}</span>
       <span className="min-w-0 flex-1 text-xs text-ink-mist">
         {pre ? (
@@ -156,6 +167,8 @@ function SeasonBanner({ view }: { view: ManagerView }) {
           <><b className="block text-sm text-ink-chalk">Межсезонье</b>Трансферы открыты до {when(view.season.preseason_ends_at)}, первый тур — {when(view.season.first_round_at)}</>
         )}
       </span>
+      </div>
+      {summary?.club && <Timeline view={summary} />}
     </section>
   );
 }
@@ -826,7 +839,21 @@ function LeagueTab({ view, onError }: { view: ManagerView; onError: (e: unknown)
   );
 }
 
+/** Rows worth a glance: the top 3, two around my club, the bottom 2. */
+function compactRows(league: ManagerLeague): Set<number> {
+  const n = league.table.length;
+  const me = league.table.findIndex((r) => r.is_mine);
+  const keep = new Set<number>();
+  for (let i = 0; i < n; i++) {
+    if (i < 3 || i >= n - 2 || (me >= 0 && Math.abs(i - me) <= 2)) keep.add(i);
+  }
+  return keep;
+}
+
 function LeagueTable({ league, onClub }: { league: ManagerLeague; onClub: (id: number) => void }) {
+  const [full, setFull] = useState(false);
+  const keep = compactRows(league);
+  const compact = !full && keep.size < league.table.length;
   return (
     <section className="flex flex-col gap-3 rounded-2xl bg-bg-surface p-4" data-testid="manager-league">
       <div className="flex items-center justify-between gap-2">
@@ -843,7 +870,9 @@ function LeagueTable({ league, onClub }: { league: ManagerLeague; onClub: (id: n
           <tr><th className="py-1">#</th><th>Клуб</th><th className="text-center">И</th><th className="text-center">Р</th><th className="text-center">О</th></tr>
         </thead>
         <tbody>
-          {league.table.map((row, i) => (
+          {league.table.map((row, i) => (compact && !keep.has(i) ? (
+            keep.has(i - 1) ? <tr key={`gap-${i}`}><td colSpan={5} className="py-0.5 text-center text-ink-mist-dim">⋯</td></tr> : null
+          ) : (
             <tr key={row.team_index}
               onClick={() => row.club_id && onClub(row.club_id)}
               className={`${row.club_id ? "cursor-pointer" : ""} ${row.is_mine ? "font-bold text-accent-lime" : row.is_live ? "text-ink-chalk" : "text-ink-mist"} ${row.zone === "up" ? "bg-emerald-500/10" : row.zone === "down" ? "bg-red-500/10" : ""}`}>
@@ -853,9 +882,14 @@ function LeagueTable({ league, onClub }: { league: ManagerLeague; onClub: (id: n
               <td className="text-center">{row.gf - row.ga}</td>
               <td className="text-center">{row.points}</td>
             </tr>
-          ))}
+          )))}
         </tbody>
       </table>
+      {keep.size < league.table.length && (
+        <button onClick={() => setFull(!full)} className="-mt-1 self-center rounded-full bg-white/5 px-3 py-1 text-micro font-semibold text-ink-mist">
+          {full ? "Свернуть таблицу" : `Вся таблица · ${league.table.length} клубов`}
+        </button>
+      )}
       <p className="-mt-1 text-micro text-ink-mist">Нажми на клуб с 👤 — откроется его карточка и мерч.</p>
       <div className="flex flex-col gap-2">
         {league.rounds.map((r) => {

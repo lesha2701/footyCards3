@@ -25,7 +25,7 @@ from app.schemas.manager import (
     ManagerTicketsIn,
     ManagerStadiumNameIn,
 )
-from app.services import manager_exchange, manager_finance, manager_service, manager_shop
+from app.services import manager_exchange, manager_finance, manager_service, manager_shop, manager_today
 
 router = APIRouter(prefix="/manager", tags=["manager"])
 
@@ -36,6 +36,21 @@ async def get_manager(db: AsyncSession = Depends(get_db), user: User = Depends(g
     as a player, offers to me, the season phase and the league (the season
     start and due rounds run first)."""
     return await manager_service.get_view(db, user)
+
+
+@router.get("/summary")
+async def get_summary(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """My club at a glance (the home tile, the top of the mode): the season,
+    the place and next match, «Сегодня в клубе», the first-season checklist.
+    Read-only: the bot's sweep runs the season."""
+    return await manager_today.summary(db, user)
+
+
+@router.post("/onboarding/claim")
+async def claim_onboarding(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """The first-season checklist bonus (once)."""
+    await check_rate_limit(f"manager_office:{user.id}", max_calls=20, window_seconds=60)
+    return await manager_today.claim_onboarding(db, user)
 
 
 @router.get("/market")

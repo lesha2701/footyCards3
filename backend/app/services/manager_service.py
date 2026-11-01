@@ -1868,6 +1868,9 @@ def _league_out(league: ManagerLeague, my_club_ids: set[int], depth: int, config
         played = results[r] if r < len(results) else None
         matches = []
         for h, a in fixtures:
+            # The mode shows my matches only: the others stay out of the payload.
+            if not {teams[h]["club_id"], teams[a]["club_id"]} & my_club_ids:
+                continue
             m = next((x for x in played or [] if x["home"] == h), None)
             matches.append({
                 "home": teams[h]["name"], "away": teams[a]["name"],

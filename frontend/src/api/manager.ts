@@ -322,6 +322,47 @@ export async function fetchManager(): Promise<ManagerView> {
   return data;
 }
 
+export type ManagerTodayTab = "club" | "office" | "transfers" | "league" | "me";
+
+/** «Сегодня в клубе»: what to do now, most urgent first. */
+export interface ManagerTodayItem {
+  code: string;
+  icon: string;
+  text: string;
+  tab: ManagerTodayTab;
+  urgent: boolean;
+}
+
+export interface ManagerChecklist {
+  steps: { code: string; title: string; done: boolean; tab: ManagerTodayTab }[];
+  bonus: number;
+  ready: boolean;
+}
+
+/** GET /manager/summary — light, read-only: the home tile and the top of the mode. */
+export interface ManagerSummary {
+  enabled: boolean;
+  season: { phase: "preseason" | "season" | "offseason"; transfers_open: boolean; preseason_ends_at: string; first_round_at: string; rounds: number };
+  club: {
+    id: number; name: string; look: ManagerLook; division: number; division_name: string; budget: number;
+    trade_locked: boolean; seasons_played: number;
+    next_match: { opponent: string; home: boolean; at: string | null; edge: "win" | "lose" | "even" } | null;
+    checklist: ManagerChecklist | null;
+  } | null;
+  league: { status: "active" | "finished"; rounds_played: number; total_rounds: number; place: number; size: number } | null;
+  today: ManagerTodayItem[];
+}
+
+export async function fetchManagerSummary(): Promise<ManagerSummary> {
+  const { data } = await api.get<ManagerSummary>("/manager/summary");
+  return data;
+}
+
+export async function claimManagerOnboarding(): Promise<ManagerSummary> {
+  const { data } = await api.post<ManagerSummary>("/manager/onboarding/claim");
+  return data;
+}
+
 export async function fetchManagerMarket(): Promise<{ players: ManagerMarketPlayer[] }> {
   const { data } = await api.get<{ players: ManagerMarketPlayer[] }>("/manager/market");
   return data;

@@ -71,6 +71,7 @@ const LABELS: [string, string][] = [
   ["insurance_medical_cut_pct", "Страховка: −% взноса за уровень «Медцентра» (до −50%)"],
   ["insurance_cover_pct", "Страховка: оплачивает, % лечения"],
   ["rating_size", "«Лучший президент»: клубов в рейтинге"],
+  ["onboarding_bonus_eur", "«Первый сезон»: бонус за чек-лист, €"],
 ];
 
 const JSON_KEYS: [string, string][] = [

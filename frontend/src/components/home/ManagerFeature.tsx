@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
-import { fetchManager, type ManagerView } from "@/api/manager";
+import { fetchManagerSummary, type ManagerSummary } from "@/api/manager";
 import officeArt from "@/assets/manager/office.webp";
 import Emblem from "@/components/manager/Emblem";
 import { eur } from "@/lib/managerMoney";
@@ -22,23 +22,21 @@ interface Status {
 }
 
 /** One line of what is happening at my club right now, most urgent first. */
-function statusOf(view: ManagerView): Status {
+function statusOf(view: ManagerSummary): Status {
   const club = view.club;
+  const urgent = view.today.find((i) => i.urgent);
   if (!club) {
     return {
       kicker: "Стань президентом",
-      line: view.offers.length ? `Тебя зовут в клуб: ${view.offers.length}` : "Основай свой клуб и веди его к вершине",
-      alert: view.offers.length > 0,
+      line: urgent?.text ?? "Основай свой клуб и веди его к вершине",
+      alert: !!urgent,
       chips: ["Трансферы", "Биржа", "Матчдей"],
     };
   }
   const league = view.league?.status === "active" ? view.league : null;
-  const place = league ? league.table.findIndex((r) => r.is_mine) + 1 : 0;
   const chips = [club.division_name, `Бюджет ${eur(club.budget)}`];
-  if (place > 0) chips.unshift(`${place} место`);
-  if (club.incoming.length > 0) {
-    return { kicker: club.name, line: `Предложения по твоим игрокам: ${club.incoming.length}`, alert: true, chips };
-  }
+  if (league && league.place > 0) chips.unshift(`${league.place} место`);
+  if (urgent && urgent.code !== "edge") return { kicker: club.name, line: `${urgent.icon} ${urgent.text}`, alert: true, chips };
   if (view.season.transfers_open && !club.trade_locked) {
     return { kicker: club.name, line: `🔓 Трансферное окно до ${clock(view.season.preseason_ends_at)}`, alert: true, chips };
   }
@@ -47,19 +45,19 @@ function statusOf(view: ManagerView): Status {
     return {
       kicker: `${club.name} · тур ${Math.min(league.rounds_played + 1, league.total_rounds)}/${league.total_rounds}`,
       line: `${m.home ? "Дома" : "В гостях"}: ${m.opponent}${m.at ? ` · ${clock(m.at)}` : ""}`,
-      alert: false,
+      alert: m.edge === "lose",
       chips,
     };
   }
-  return { kicker: club.name, line: `Состав ${club.squad.rating} · стоимость ${eur(club.squad_value)}`, alert: false, chips };
+  return { kicker: club.name, line: view.today[0] ? `${view.today[0].icon} ${view.today[0].text}` : "Загляни в клуб", alert: false, chips };
 }
 
 /** «Менеджер» on the home screen: a wide tile over the modes grid with the
- * club's live status (the window, the next match, offers). */
+ * club's live status (the window, the next match, offers). Light summary,
+ * not the mode's full view. */
 export default function ManagerFeature() {
   const navigate = useNavigate();
-  // Same key as ManagerPage, so the cache is shared.
-  const { data } = useQuery({ queryKey: ["manager"], queryFn: fetchManager, staleTime: 60_000, retry: false });
+  const { data } = useQuery({ queryKey: ["manager", "summary"], queryFn: fetchManagerSummary, staleTime: 60_000, retry: false });
   if (!data || !data.enabled) return null;
   const s = statusOf(data);
   return (
