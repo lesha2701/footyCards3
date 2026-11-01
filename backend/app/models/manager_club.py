@@ -43,6 +43,8 @@ class ManagerClub(Base):
     merch_eur: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     # Supporters won by preseason tours («Кабинет президента»), on top of merchandise buyers.
     fans_bonus: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Ticket price, % of the base price («Кабинет президента»): set in the window, frozen for the season.
+    ticket_pct: Mapped[int] = mapped_column(Integer, nullable=False, default=100, server_default="100")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 

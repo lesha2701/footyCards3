@@ -22,6 +22,7 @@ from app.schemas.manager import (
     ManagerRespondIn,
     ManagerShareListIn,
     ManagerSharesIn,
+    ManagerTicketsIn,
     ManagerStadiumNameIn,
 )
 from app.services import manager_exchange, manager_finance, manager_service, manager_shop
@@ -183,6 +184,19 @@ async def sign_deal(kind: str, payload: ManagerDealIn, db: AsyncSession = Depend
     for the coming season (one of each kind a season)."""
     await check_rate_limit(f"manager_office:{user.id}", max_calls=20, window_seconds=60)
     return await manager_finance.sign(db, user, kind, payload.option, payload.seasons, payload.amount)
+
+
+@router.post("/office/tickets")
+async def set_tickets(payload: ManagerTicketsIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """The ticket price of the coming season, % of the base."""
+    await check_rate_limit(f"manager_office:{user.id}", max_calls=20, window_seconds=60)
+    return await manager_finance.set_tickets(db, user, payload.pct)
+
+
+@router.get("/office/rating")
+async def president_rating(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """«Лучший президент»: the season's profit and the capital."""
+    return await manager_finance.rating(db, user)
 
 
 @router.post("/office/loan")

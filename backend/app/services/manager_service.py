@@ -272,8 +272,9 @@ async def base_snapshot(db: AsyncSession, owner_id: int, config) -> dict:
     return {
         "level": sum(int(v) for v in levels.values()) + int(academy),
         "stadium": int(levels.get("stadium", 0)), "marketing": int(levels.get("marketing", 0)), "shop": int(levels.get("shop", 0)),
-        **{code: int(levels.get(code, 0)) for code in ("hotel", "media", "accounting", "training")},
+        **{code: int(levels.get(code, 0)) for code in ("hotel", "media", "accounting", "training", "medical")},
         "matchday_pct": int(effects.get("matchday_pct", 0)), "discount_pct": int(effects.get("discount_pct", 0)),
+        "injury_pct": int(effects.get("injury_pct", 0)),
         "capacity": club_base_service.value_at(config, "stadium", "capacity", int(levels.get("stadium", 0)))
         if levels.get("stadium") else 0,
     }
@@ -1454,6 +1455,9 @@ async def _play_round(db: AsyncSession, league: ManagerLeague, round_index: int,
             # An empty roster is a real «nobody but academy kids» squad — only
             # states frozen before rosters existed fall back to the XI.
             roster = [dict(e) for e in (t["roster"] if "roster" in t else t["xi"])]
+            # The injured sit out (`state["injuries"]`: club → key → the round they are back).
+            hurt = (state.get("injuries") or {}).get(str(t["club_id"])) or {}
+            roster = [e for e in roster if int((hurt.get(e.get("key") or "") or {}).get("back", 0)) <= round_index]
             live = await _live_cards(db, roster, config)
             for e in roster:
                 if e.get("key") in live:
@@ -1474,6 +1478,8 @@ async def _play_round(db: AsyncSession, league: ManagerLeague, round_index: int,
             p = plan[idx]
             mods = tactics.modifiers(p["style"], p["formation"], plan[opp]["style"], config)
             mods = finance.fatigue_mods(mods, teams[idx].get("finance") or {}, round_index)  # a preseason tour's tired legs
+            if idx == home and teams[idx]["club_id"]:
+                mods = finance.support_mods(mods, teams[idx].get("finance") or {}, config)  # the home crowd (ticket price)
             sides[idx] = _side_from(p["xi"], p["cards"], idx, p["name"], p["formation"], mods, config)
         match = tournament_match_engine.simulate_match(
             sides[home][0], sides[away][0], sides[home][1], sides[away][1], config, teams[home]["name"], teams[away]["name"],
@@ -1490,6 +1496,7 @@ async def _play_round(db: AsyncSession, league: ManagerLeague, round_index: int,
                 continue
             await _settle_match(db, clubs[t["club_id"]], t, sides[idx][1], match, side, idx == home, league.division,
                                 at, rng, config, state, _match_rating, cups, league.season_key)
+            await _injury(db, clubs[t["club_id"]], t, plan[idx]["xi"], league, round_index, state, config)
     state["results"].append(results)
     league.state = state
     flag_modified(league, "state")
@@ -1503,12 +1510,61 @@ async def _play_round(db: AsyncSession, league: ManagerLeague, round_index: int,
         await _daily_digest(db, league, today)
 
 
+INJURABLE = ("live", "npc", "academy")
+
+
+async def _injury(db, club: ManagerClub, team: dict, xi: list[dict], league: ManagerLeague, round_index: int, state: dict,
+                  config) -> None:
+    """After a match: maybe one of the club's players is hurt — he misses a
+    few rounds, the treatment costs a part of his value, the insurance of
+    the season pays its share. Own «Мой игрок» is never hurt here."""
+    f = finance.cfg(config)
+    rng = random.Random(f"injury:{league.id}:{round_index}:{club.id}")
+    if rng.random() * 100 >= finance.injury_chance(team.get("base") or {}, config):
+        return
+    hurt = state.setdefault("injuries", {}).setdefault(str(club.id), {})
+    pool = [p for p in xi if p.get("kind") in INJURABLE and p.get("key")
+            and int((hurt.get(p["key"]) or {}).get("back", 0)) <= round_index]
+    if not pool:
+        return
+    p = rng.choice(sorted(pool, key=lambda x: x["key"]))
+    low = int(finance._num(f["injury_rounds_min"], 1))
+    rounds = rng.randint(low, max(low, int(finance._num(f["injury_rounds_max"], 1))))
+    cost = value_of(int(p.get("rating", 50)), config) * int(finance._num(f["injury_treatment_pct"])) // 100
+    hurt[p["key"]] = {"name": p.get("name") or "игрок", "back": round_index + 1 + rounds, "rounds": rounds, "cost": cost}
+    key = league.season_key
+    if cost:
+        await finance.book(db, club, "injury", -cost, key, note=p.get("name"))
+        cover = cost * int(finance._num((team.get("finance") or {}).get("insured_pct"))) // 100
+        if cover:
+            await finance.book(db, club, "insurance_in", cover, key, note=p.get("name"))
+    await notify(db, club.owner_id, NotificationType.manager_event, f"«{club.name}»: травма 🚑",
+                 f"{p.get('name') or 'Игрок'} пропустит {rounds} тур(а). Лечение {money(cost)}"
+                 + (" — оплатила страховка" if (team.get("finance") or {}).get("insured_pct") else ""),
+                 related_object_type=RELATED, related_object_id=club.id)
+
+
+async def injuries_of(db: AsyncSession, club: ManagerClub) -> list[dict]:
+    """The club's players out injured in its running league."""
+    if not club.league_id:
+        return []
+    league = await db.get(ManagerLeague, club.league_id)
+    if league is None or league.status != "active":
+        return []
+    hurt = ((league.state or {}).get("injuries") or {}).get(str(club.id)) or {}
+    played = int(league.rounds_played or 0)
+    return [{"name": v.get("name"), "rounds_left": int(v.get("back", 0)) - played, "cost": int(v.get("cost", 0))}
+            for v in hurt.values() if int(v.get("back", 0)) > played]
+
+
 async def _settle_match(db, club, team, lineup, match, side, home, division, at, rng, config, state, match_rating, cups,
                         key: str) -> None:
     own, opp = (match.score_a, match.score_b) if side == "a" else (match.score_b, match.score_a)
     income = config.manager_income_win if own > opp else config.manager_income_draw if own == opp else config.manager_income_loss
     if home:
-        await finance.book(db, club, "tickets", ticket_income(division, team.get("base") or {}, config), key)
+        ticket_pct = int((team.get("finance") or {}).get("ticket_pct", 100))
+        await finance.book(db, club, "tickets",
+                           ticket_income(division, team.get("base") or {}, config) * finance.ticket_factor(ticket_pct, config) // 100, key)
     # The match income (unless the TV rights were sold), tour fans' tickets, the sponsor's win bonus.
     await finance.match_money(db, club, team.get("finance") or {}, key, own > opp, home, division,
                               income * _pct(config.manager_division_income_pct, division) // 100, config)

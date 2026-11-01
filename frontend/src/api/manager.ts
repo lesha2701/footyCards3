@@ -470,7 +470,7 @@ export async function buyManagerMerch(clubId: number, code: string): Promise<Man
 
 // --- «Кабинет президента» (manager_finance) -----------------------------------------------------
 
-export type ManagerDealKind = "sponsor" | "kit" | "tour" | "tv" | "deposit" | "venture" | "farm";
+export type ManagerDealKind = "sponsor" | "kit" | "tour" | "tv" | "deposit" | "venture" | "farm" | "insurance";
 
 export interface ManagerReportLine {
   kind: string;
@@ -563,8 +563,50 @@ export interface ManagerOffice {
     deposit: { taken: boolean; rate_pct: number; min: number; max: number; blocked: boolean };
     venture: { taken: boolean; win_pct: number; multiplier: number; min: number; max: number; max_pct: number };
     farm: { taken: boolean; fee: number; loan_cut_pct: number; kid_bonus: number };
+    /** Injury insurance for the coming season: the premium, the share of treatments it pays. */
+    insurance: { taken: boolean; premium: number; cover_pct: number; medical: number; chance_pct: number; treatment_pct: number; rounds: [number, number] };
   };
   deals: ManagerDeal[];
+  /** The ticket price (% of the base) for the coming season and the curve's numbers. */
+  tickets: {
+    pct: number; min: number; max: number; elasticity: number; attendance_min: number; attendance_max: number;
+    support_per_pct: number; fans_per_pct: number; base_per_match: number; capacity: number;
+  };
+  /** Players out injured now. */
+  injuries: { name: string; rounds_left: number; cost: number }[];
+}
+
+export interface ManagerRatingRow {
+  place: number;
+  club_id: number;
+  name: string;
+  division: number;
+  look: ManagerLook;
+  score: number;
+  mine: boolean;
+}
+
+export interface ManagerRatingTable {
+  rows: ManagerRatingRow[];
+  my_place: number | null;
+  my_score: number;
+  total: number;
+}
+
+export interface ManagerRating {
+  season_key: string;
+  profit: ManagerRatingTable;
+  capital: ManagerRatingTable;
+}
+
+export async function setManagerTickets(pct: number): Promise<ManagerOffice> {
+  const { data } = await api.post<ManagerOffice>("/manager/office/tickets", { pct });
+  return data;
+}
+
+export async function fetchManagerRating(): Promise<ManagerRating> {
+  const { data } = await api.get<ManagerRating>("/manager/office/rating");
+  return data;
 }
 
 export async function fetchManagerOffice(): Promise<ManagerOffice> {

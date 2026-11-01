@@ -61,6 +61,10 @@ class ManagerDealIn(BaseModel):
     amount: Optional[int] = Field(default=None, ge=0)
 
 
+class ManagerTicketsIn(BaseModel):
+    pct: int = Field(ge=0, le=1000)
+
+
 class ManagerLoanIn(BaseModel):
     amount: int = Field(ge=0)
     seasons: int = Field(default=1, ge=1, le=10)

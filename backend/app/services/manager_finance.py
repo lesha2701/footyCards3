@@ -106,9 +106,24 @@ DEFAULTS: dict = {
     # club owes at most min(G × bond_grant_pct, value × bond_value_pct).
     "bond_rate_min_pct": 4, "bond_rate_max_pct": 25, "bond_unit_eur": 100_000, "bond_grant_pct": 60,
     "bond_value_pct": 20, "bond_seasons_max": 3, "bond_holder_max_pct": 25,
+    # Ticket price (% of the base): attendance = 100 − (price − 100) × elasticity
+    # (within ticket_attendance_min..max %); home matches give every line
+    # (attendance − 100) × ticket_support_pct % (a full stadium pushes, an empty
+    # one doesn't); at the season end fans change by (attendance − 100) × ticket_fans_per_pct.
+    "ticket_min_pct": 50, "ticket_max_pct": 200, "ticket_elasticity": 0.6, "ticket_attendance_min_pct": 20,
+    "ticket_attendance_max_pct": 130, "ticket_support_pct": 0.1, "ticket_fans_per_pct": 20,
+    # Injuries: after a match a club's player gets injured with this chance
+    # («Медцентр» of «Клубная база» cuts it), misses injury_rounds_min..max
+    # rounds; the treatment costs injury_treatment_pct of his value.
+    "injury_chance_pct": 8, "injury_rounds_min": 1, "injury_rounds_max": 3, "injury_treatment_pct": 5,
+    # Insurance for a season: the premium in % of G (−insurance_medical_cut_pct
+    # per «Медцентр» level, at most −50 %), it pays insurance_cover_pct of treatments.
+    "insurance_premium_pct": 3, "insurance_medical_cut_pct": 4, "insurance_cover_pct": 100,
+    # «Лучший президент»: clubs shown.
+    "rating_size": 20,
 }
 
-DEAL_KINDS = ("sponsor", "kit", "tour", "tv", "deposit", "venture", "farm")
+DEAL_KINDS = ("sponsor", "kit", "tour", "tv", "deposit", "venture", "farm", "insurance")
 
 # Report lines: kind → (group, label). Groups: income, expense, finance.
 KINDS: dict[str, tuple[str, str]] = {
@@ -131,6 +146,9 @@ KINDS: dict[str, tuple[str, str]] = {
     "npc_loan": ("expense", "Аренда футболистов"),
     "tour_cost": ("expense", "Расходы на турне"),
     "farm": ("expense", "Фарм-клуб"),
+    "injury": ("expense", "Лечение травм"),
+    "insurance": ("expense", "Страховка игроков"),
+    "insurance_in": ("income", "Страховые выплаты"),
     "loan_in": ("finance", "Кредит банка"),
     "loan_repay": ("finance", "Погашение кредита"),
     "deposit_out": ("finance", "Вклад на депозит"),
@@ -487,9 +505,108 @@ async def season_start(db: AsyncSession, club: ManagerClub, key: str, snap: dict
             out["fatigue_rounds"] = int(data.get("fatigue_rounds", 0))
         elif deal.kind == "tv":
             out["tv_sold"] = True
+        elif deal.kind == "insurance":
+            out["insured_pct"] = _num(data.get("cover_pct"))
+    out["ticket_pct"] = int(club.ticket_pct or 100)
     out["notes"] += await _process_loan(db, club, key, config)
     out["fans"] = int(club.fans_bonus or 0)
     return out
+
+
+def attendance_pct(ticket_pct: int, config) -> float:
+    f = cfg(config)
+    att = 100 - (int(ticket_pct) - 100) * _num(f["ticket_elasticity"])
+    return max(_num(f["ticket_attendance_min_pct"]), min(_num(f["ticket_attendance_max_pct"]), att))
+
+
+def ticket_factor(ticket_pct: int, config) -> int:
+    """% of the base ticket money a home match brings: price × attendance."""
+    return round(int(ticket_pct) * attendance_pct(ticket_pct, config) / 100)
+
+
+def support_pct(ticket_pct: int, config) -> float:
+    """% to every line of the home side: the crowd."""
+    return round((attendance_pct(ticket_pct, config) - 100) * _num(cfg(config)["ticket_support_pct"]), 2)
+
+
+def support_mods(mods: dict, finance: dict, config) -> dict:
+    pct = support_pct(int((finance or {}).get("ticket_pct", 100)), config)
+    if not pct:
+        return mods
+    return {line: mods.get(line, 0) + pct for line in ("GK", "DEF", "MID", "FWD")}
+
+
+def insurance_premium(division: int, snap: dict, config) -> int:
+    from app.services import manager_service as ms
+
+    f = cfg(config)
+    cut = min(50.0, _num(f["insurance_medical_cut_pct"]) * int(snap.get("medical", 0)))
+    return ms._nice(grant_of(division, config) * _num(f["insurance_premium_pct"]) / 100 * (100 - cut) / 100)
+
+
+def injury_chance(snap: dict, config) -> float:
+    return _num(cfg(config)["injury_chance_pct"]) * (100 - min(90, int(snap.get("injury_pct", 0)))) / 100
+
+
+async def set_tickets(db: AsyncSession, user: User, pct: int, now: Optional[datetime] = None) -> dict:
+    """The ticket price for the coming season (in the window)."""
+    config = await get_config(db)
+    f = cfg(config)
+    club = await _locked_club(db, user, config)
+    await _window(db, club)
+    low, high = int(_num(f["ticket_min_pct"])), int(_num(f["ticket_max_pct"]))
+    pct = int(pct)
+    if not low <= pct <= high:
+        raise ConflictError(f"Цена билета — от {low}% до {high}% базовой")
+    club.ticket_pct = pct
+    await db.commit()
+    return await view(db, user, now)
+
+
+async def rating(db: AsyncSession, user: User, now: Optional[datetime] = None) -> dict:
+    """«Лучший президент»: the season's profit (income − expenses of the
+    report, financing aside) and the capital (budget + deposits and venture +
+    shares at the price + bonds held − the loan − own bonds)."""
+    from app.models.manager_club import ManagerBond, ManagerBondHolding, ManagerShare, ManagerStock
+    from app.services import manager_service as ms, manager_shop
+
+    now = now or datetime.now(timezone.utc)
+    config = await get_config(db)
+    size = int(_num(cfg(config)["rating_size"], 20)) or 20
+    me = await ms._owned_club(db, user.id)
+    week = ms.season_key(now)
+    key = week if await db.get(ManagerSeason, week) is not None else shift_key(week, -1)
+    kinds = [k for k, (group, _l) in KINDS.items() if group in ("income", "expense")]
+    profit = dict((await db.execute(
+        select(ManagerLedger.club_id, func.sum(ManagerLedger.amount))
+        .where(ManagerLedger.season_key == key, ManagerLedger.kind.in_(kinds)).group_by(ManagerLedger.club_id)
+    )).all())
+    clubs = {c.id: c for c in (await db.execute(select(ManagerClub))).scalars().all()}
+    capital = {cid: max(0, int(c.budget)) for cid, c in clubs.items()}
+    for d in (await db.execute(select(ManagerDeal).where(ManagerDeal.status == "active", ManagerDeal.kind.in_(("deposit", "venture"))))).scalars():
+        capital[d.club_id] = capital.get(d.club_id, 0) + int(d.amount)
+    prices = dict((await db.execute(select(ManagerStock.club_id, ManagerStock.price))).all())
+    for h in (await db.execute(select(ManagerShare).where(ManagerShare.shares > 0))).scalars():
+        capital[h.holder_club_id] = capital.get(h.holder_club_id, 0) + h.shares * int(prices.get(h.club_id, 0))
+    live = {b.id: b for b in (await db.execute(select(ManagerBond).where(ManagerBond.status.in_(("selling", "active", "default"))))).scalars()}
+    for b in live.values():
+        capital[b.club_id] = capital.get(b.club_id, 0) - b.units_sold * b.unit_eur
+    for h in (await db.execute(select(ManagerBondHolding).where(ManagerBondHolding.units > 0))).scalars():
+        b = live.get(h.bond_id)
+        if b is not None:
+            capital[h.holder_club_id] = capital.get(h.holder_club_id, 0) + h.units * b.unit_eur
+    for loan in (await db.execute(select(ManagerLoan).where(ManagerLoan.status.in_(("active", "overdue"))))).scalars():
+        capital[loan.club_id] = capital.get(loan.club_id, 0) - int(loan.debt)
+
+    def table(scores: dict[int, int]) -> dict:
+        ranked = sorted(((v, cid) for cid, v in scores.items() if cid in clubs), key=lambda x: (-x[0], x[1]))
+        place = next((i + 1 for i, (_v, cid) in enumerate(ranked) if me and cid == me.id), None)
+        rows = [{"place": i + 1, "club_id": cid, "name": clubs[cid].name, "division": clubs[cid].division,
+                 "look": manager_shop.resolve_look(clubs[cid]), "score": int(v), "mine": bool(me and cid == me.id)}
+                for i, (v, cid) in enumerate(ranked[:size])]
+        return {"rows": rows, "my_place": place, "my_score": int(scores.get(me.id, 0)) if me else 0, "total": len(ranked)}
+
+    return {"season_key": key, "profit": table({cid: int(v) for cid, v in profit.items()}), "capital": table(capital)}
 
 
 def fatigue_mods(mods: dict, finance: dict, round_index: int) -> dict:
@@ -509,7 +626,7 @@ async def match_money(db: AsyncSession, club: ManagerClub, finance: dict, key: s
         await book(db, club, "match", income, key)
     if home and finance.get("fans"):
         fans_eur = int(finance["fans"]) * int(_num(cfg(config)["fan_ticket_eur"])) * _division_pct(division, config) // 100
-        await book(db, club, "tickets", fans_eur, key)
+        await book(db, club, "tickets", fans_eur * ticket_factor(int(finance.get("ticket_pct", 100)), config) // 100, key)
     if won and finance.get("sponsor_win"):
         await book(db, club, "sponsor", int(finance["sponsor_win"]), key, note="бонус за победу")
 
@@ -558,6 +675,12 @@ async def season_end(db: AsyncSession, club: ManagerClub, key: str, place: Optio
         if deal.status == "active":
             deal.status = "done"
         deal.settled_at = now
+    # The crowd of the season: cheap tickets win fans, dear ones lose them.
+    att = attendance_pct(int(club.ticket_pct or 100), config)
+    delta = round((att - 100) * _num(cfg(config)["ticket_fans_per_pct"]))
+    if delta:
+        club.fans_bonus = max(0, int(club.fans_bonus or 0) + delta)
+        lines.append(f"болельщиков {'+' if delta > 0 else ''}{delta}")
     from app.services import manager_exchange
 
     lines += await manager_exchange.season_end(db, club, key, config)
@@ -703,6 +826,14 @@ async def sign(db: AsyncSession, user: User, kind: str, option: Optional[str] = 
         deal.data = {"keys": [key], "win_pct": _num(f["venture_win_pct"]), "multiplier": _num(f["venture_multiplier"])}
         await _add_deal(db, deal)
         await book(db, club, "venture_out", -stake, key, ref=f"venture_out:{deal.id}")
+    elif kind == "insurance":
+        premium = insurance_premium(club.division, snap, config)
+        if free < premium:
+            raise ConflictError(f"Страховка стоит {ms.money(premium)}, свободно {ms.money(free)} (зарплаты состава отложены)")
+        deal.amount = premium
+        deal.data = {"keys": [key], "cover_pct": _num(f["insurance_cover_pct"])}
+        await _add_deal(db, deal)
+        await book(db, club, "insurance", -premium, key, ref=f"insurance:{deal.id}")
     elif kind == "farm":
         terms = farm_terms(club.division, snap, config)
         if free < terms["fee"]:
@@ -853,6 +984,18 @@ async def view(db: AsyncSession, user: User, now: Optional[datetime] = None) -> 
                         "min": int(_num(f["venture_min_eur"])), "max": free * int(_num(f["venture_max_budget_pct"])) // 100,
                         "max_pct": _num(f["venture_max_budget_pct"])},
             "farm": {"taken": "farm" in taken, **farm_terms(division, snap, config)},
+            "insurance": {"taken": "insurance" in taken, "premium": insurance_premium(division, snap, config),
+                          "cover_pct": _num(f["insurance_cover_pct"]), "medical": int(snap.get("medical", 0)),
+                          "chance_pct": round(injury_chance(snap, config), 2), "treatment_pct": _num(f["injury_treatment_pct"]),
+                          "rounds": [int(_num(f["injury_rounds_min"])), int(_num(f["injury_rounds_max"]))]},
         },
+        "tickets": {
+            "pct": int(club.ticket_pct or 100), "min": int(_num(f["ticket_min_pct"])), "max": int(_num(f["ticket_max_pct"])),
+            "elasticity": _num(f["ticket_elasticity"]), "attendance_min": _num(f["ticket_attendance_min_pct"]),
+            "attendance_max": _num(f["ticket_attendance_max_pct"]), "support_per_pct": _num(f["ticket_support_pct"]),
+            "fans_per_pct": _num(f["ticket_fans_per_pct"]),
+            "base_per_match": ms.ticket_income(division, snap, config), "capacity": int(snap.get("capacity", 0)),
+        },
+        "injuries": await ms.injuries_of(db, club),
         "deals": [_deal_out(d) for d in deals],
     }

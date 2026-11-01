@@ -106,3 +106,30 @@ frontend `components/manager/ExchangePanel.tsx` («📈 Биржа» section).
   last; can't pay → `default`, transfers blocked (`default_block`) until
   `repay_bond`.
 - `exchange_enabled` switches the whole thing off.
+
+## Phase 3: matchday, injuries, «Лучший президент» (migration `0232_manager_tickets`)
+
+- **Ticket price** (`manager_clubs.ticket_pct`, `POST /manager/office/tickets`,
+  window only, frozen into the league team's `finance.ticket_pct` at the
+  season start). Attendance = 100 − (price − 100) × `ticket_elasticity`
+  within `ticket_attendance_min_pct..max_pct`; a home match's tickets (the
+  stadium and tour fans) × price × attendance; the home side gets
+  (attendance − 100) × `ticket_support_pct` % on every line
+  (`finance.support_mods`); at the season end fans change by
+  (attendance − 100) × `ticket_fans_per_pct`. The money peaks around +30 %.
+- **Injuries** (`manager_service._injury`, after every league match): with
+  `injury_chance_pct` (cut by «Медцентр», `snap.injury_pct`) one of the
+  club's live / catalog / academy players (never «Мой игрок») misses
+  `injury_rounds_min..max` rounds — `league.state["injuries"][club_id][key]
+  = {back, rounds, cost, name}`, the roster skips him until `back`; the
+  treatment (`injury`) is `injury_treatment_pct` of his value. Seeded per
+  league/round/club, so a replay is the same.
+- **Insurance** — a season deal (`insurance`): the premium
+  `insurance_premium_pct` of G (−`insurance_medical_cut_pct` per «Медцентр»
+  level, at most −50 %); the season's treatments are paid back by
+  `insurance_cover_pct` (`insurance_in`).
+- **«Лучший президент»** (`GET /manager/office/rating`, `finance.rating`):
+  the season's profit (income + expense groups of the report for the
+  running or last season) and the capital (budget + deposits and venture +
+  shares at the price + bonds held − the loan debt − own bonds sold), top
+  `rating_size` and my place.

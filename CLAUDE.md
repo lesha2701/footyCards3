@@ -82,7 +82,10 @@ Main features:
   holders resell to each other through asks or to the exchange at a spread) at a
   price set by club value × form after each round (trades never move it),
   25% holder cap, burnt fee, dividends and bond coupons at season end, bond
-  default blocks transfers. Numbers: GameConfig.manager_finance
+  default blocks transfers. «🎟 Матчдей»: the ticket price (attendance ×
+  price, the home crowd's %, fans), injuries after league matches
+  (`state["injuries"]`, treatment cost) and a season insurance deal;
+  «🏆 Лучший президент» by season profit and capital. Numbers: GameConfig.manager_finance
   over `manager_finance.DEFAULTS`;
 - «Мой игрок» extras (`my_player_extras.py`): a weekly «Спонсор» (one of
   three brands of `my_player_sponsors`, goals counted by hooks in the
