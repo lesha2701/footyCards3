@@ -14,6 +14,7 @@ import {
   type ManagerExchange,
   type ManagerStockRow,
 } from "@/api/manager";
+import exchangeArt from "@/assets/manager/exchange.webp";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import Emblem from "@/components/manager/Emblem";
@@ -75,7 +76,7 @@ function Ticker({ x }: { x: ManagerExchange }) {
   const top = x.market.slice(0, 6);
   return (
     <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#06281f] via-[#0b1f33] to-[#1c0f33] p-4 ring-1 ring-emerald-300/30">
-      <BullArt className="pointer-events-none absolute -right-1 -top-2 h-20 w-24 opacity-90" />
+      <img src={exchangeArt} alt="" className="pointer-events-none absolute -right-2 -top-3 h-28 w-28 object-cover [mask-image:radial-gradient(circle,black_52%,transparent_72%)]" />
       <p className="relative text-micro font-bold uppercase tracking-[0.2em] text-emerald-300">📈 Биржа клубов</p>
       <p className="relative mt-1 max-w-[65%] text-caption text-ink-mist">Цена акции — стоимость клуба × форма. Меняется после каждого тура.</p>
       <div className="relative mt-3 grid grid-cols-2 gap-2 text-center">
@@ -503,29 +504,5 @@ function BondRow({ b, x, busy, ask, act }: { b: ManagerBondRow; x: ManagerExchan
         </div>
       )}
     </div>
-  );
-}
-
-/** A bull charging up a rising chart. */
-function BullArt({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 128 112" className={className} aria-hidden>
-      <defs>
-        <linearGradient id="bx-up" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stopColor="#22d3ee" /><stop offset="1" stopColor="#a3e635" /></linearGradient>
-      </defs>
-      {[18, 38, 58, 78].map((x, i) => (
-        <rect key={x} x={x} y={86 - i * 16} width="12" height={20 + i * 16} rx="2" fill="#34d399" opacity={0.25 + i * 0.15} />
-      ))}
-      <polyline points="8,92 30,78 48,82 70,56 90,60 118,22" fill="none" stroke="url(#bx-up)" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M110 14 L122 18 L114 28 Z" fill="#a3e635" />
-      <g transform="translate(64 40)">
-        <ellipse cx="22" cy="20" rx="20" ry="11" fill="#7c2d12" />
-        <circle cx="40" cy="14" r="8" fill="#9a3412" />
-        <path d="M44 8 Q52 2 50 -4" stroke="#fde68a" strokeWidth="3" fill="none" strokeLinecap="round" />
-        <path d="M36 8 Q32 0 36 -4" stroke="#fde68a" strokeWidth="3" fill="none" strokeLinecap="round" />
-        <circle cx="43" cy="13" r="1.5" fill="#fff" />
-        {[8, 16, 28, 36].map((x) => <rect key={x} x={x} y="27" width="4" height="10" rx="1" fill="#7c2d12" />)}
-      </g>
-    </svg>
   );
 }

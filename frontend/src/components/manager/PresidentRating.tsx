@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { fetchManagerRating, type ManagerRatingTable } from "@/api/manager";
+import ratingArt from "@/assets/manager/rating.webp";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import Emblem from "@/components/manager/Emblem";
 import { eur } from "@/lib/managerMoney";
@@ -19,7 +20,7 @@ export default function PresidentRating() {
   return (
     <div className="flex flex-col gap-3" data-testid="president-rating">
       <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500/30 via-[#2a1a05] to-[#0b1220] p-4 ring-1 ring-amber-300/40">
-        <span className="pointer-events-none absolute -right-2 -top-3 text-[88px] leading-none opacity-80">🏆</span>
+        <img src={ratingArt} alt="" className="pointer-events-none absolute -right-2 -top-3 h-28 w-28 object-cover [mask-image:radial-gradient(circle,black_52%,transparent_72%)]" />
         <p className="relative text-micro font-bold uppercase tracking-[0.2em] text-amber-200">Лучший президент</p>
         <p className="relative mt-1 max-w-[65%] text-caption text-ink-mist">
           {board === "profit" ? `Прибыль сезона недели ${week}: доходы минус расходы, без кредитов и вложений.`

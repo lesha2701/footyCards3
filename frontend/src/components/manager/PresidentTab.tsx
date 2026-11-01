@@ -11,6 +11,7 @@ import {
   type ManagerReportSeason,
   type ManagerSponsorOffer,
 } from "@/api/manager";
+import officeArt from "@/assets/manager/office.webp";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { KitShirt } from "@/components/manager/Emblem";
@@ -55,7 +56,7 @@ export default function PresidentTab({ onError }: { onError: (e: unknown) => voi
   const ask = (title: string, text: string, run: () => void) => setConfirm({ title, text, run });
   const sections: [Section, string, string][] = [
     ["report", "📊", "Отчёт"], ["sponsor", "🤝", "Спонсор"], ["bank", "🏦", "Банк"], ["deals", "💼", "Сделки"],
-    ["matchday", "🎟", "Матчдей"], ["exchange", "📈", "Биржа"], ["rating", "🏆", "Рейтинг"],
+    ["matchday", "🏟️", "Матчдей"], ["exchange", "📈", "Биржа"], ["rating", "🏆", "Рейтинг"],
   ];
   return (
     <div className="flex flex-col gap-4" data-testid="president-tab">
@@ -111,7 +112,7 @@ function OfficeHero({ office }: { office: ManagerOffice }) {
   const last = office.report[0];
   return (
     <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#2a1d05] via-[#14261d] to-[#0b1f2e] p-4 ring-1 ring-amber-300/30">
-      <OfficeArt className="pointer-events-none absolute -right-3 -top-2 h-36 w-44 opacity-90" />
+      <img src={officeArt} alt="" className="pointer-events-none absolute -right-3 -top-3 h-36 w-36 object-cover [mask-image:radial-gradient(circle,black_52%,transparent_72%)]" />
       <p className="relative text-micro font-bold uppercase tracking-[0.2em] text-amber-300">💼 Кабинет президента</p>
       <p className="relative mt-1 max-w-[60%] truncate font-display text-base font-bold text-ink-chalk">{office.name}</p>
       <p className="relative mt-3 text-micro uppercase tracking-wide text-ink-mist">Стоимость клуба</p>
@@ -143,40 +144,6 @@ function Chip({ label, value, tone }: { label: string; value: ReactNode; tone: s
       <span className={`block whitespace-nowrap font-display text-sm font-bold ${tone}`}>{value}</span>
       <span className="block truncate text-micro text-ink-mist">{label}</span>
     </span>
-  );
-}
-
-/** A president's desk at the window over the floodlit pitch. */
-function OfficeArt({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 176 144" className={className} aria-hidden>
-      <defs>
-        <linearGradient id="po-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#0f2a4a" /><stop offset="1" stopColor="#1d4d3a" /></linearGradient>
-        <linearGradient id="po-desk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8a5a2b" /><stop offset="1" stopColor="#4a2e14" /></linearGradient>
-        <radialGradient id="po-light" cx="0.5" cy="0" r="0.8"><stop offset="0" stopColor="#fff7c2" stopOpacity="0.9" /><stop offset="1" stopColor="#fff7c2" stopOpacity="0" /></radialGradient>
-      </defs>
-      <rect x="40" y="6" width="130" height="86" rx="8" fill="url(#po-sky)" stroke="#fbbf24" strokeOpacity="0.5" strokeWidth="2" />
-      <ellipse cx="105" cy="72" rx="54" ry="14" fill="#2f8f4e" />
-      <ellipse cx="105" cy="72" rx="54" ry="14" fill="none" stroke="#e7f5e9" strokeOpacity="0.5" />
-      <line x1="105" y1="58" x2="105" y2="86" stroke="#e7f5e9" strokeOpacity="0.45" />
-      <path d="M48 70 Q105 40 162 70" fill="none" stroke="#64748b" strokeWidth="6" strokeOpacity="0.6" />
-      {[56, 154].map((x) => (
-        <g key={x}>
-          <line x1={x} y1="18" x2={x} y2="62" stroke="#cbd5e1" strokeWidth="1.5" />
-          <rect x={x - 6} y="14" width="12" height="6" rx="1" fill="#fef9c3" />
-          <path d={`M${x - 6} 20 L${x - 22} 70 L${x + 22} 70 L${x + 6} 20 Z`} fill="url(#po-light)" opacity="0.35" />
-        </g>
-      ))}
-      <line x1="105" y1="6" x2="105" y2="92" stroke="#fbbf24" strokeOpacity="0.35" strokeWidth="2" />
-      <rect x="18" y="96" width="158" height="16" rx="4" fill="url(#po-desk)" />
-      <rect x="26" y="112" width="10" height="30" fill="#4a2e14" /><rect x="156" y="112" width="10" height="30" fill="#4a2e14" />
-      <rect x="62" y="84" width="34" height="13" rx="2" fill="#0f172a" stroke="#38bdf8" strokeOpacity="0.6" />
-      <polyline points="65,93 72,89 78,91 85,86 93,88" fill="none" stroke="#4ade80" strokeWidth="1.5" />
-      <rect x="112" y="88" width="26" height="9" rx="1.5" fill="#f8fafc" opacity="0.9" />
-      <rect x="114" y="85" width="26" height="9" rx="1.5" fill="#fef3c7" />
-      <circle cx="150" cy="90" r="6" fill="#fbbf24" /><text x="150" y="93" textAnchor="middle" fontSize="8" fontWeight="900" fill="#78350f">€</text>
-      <circle cx="158" cy="94" r="5" fill="#f59e0b" />
-    </svg>
   );
 }
 

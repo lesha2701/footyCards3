@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { setManagerTickets, type ManagerOffice } from "@/api/manager";
+import matchdayArt from "@/assets/manager/matchday.webp";
 import { eur } from "@/lib/managerMoney";
 
 type Tickets = ManagerOffice["tickets"];
@@ -29,12 +30,11 @@ export default function MatchdayPanel({ office, onDone, onError, busy, onInsure 
   const save = useMutation({ mutationFn: (v: number) => setManagerTickets(v), onSuccess: onDone, onError });
   const c = ticketCurve(t, pct);
   const perMatch = Math.round((t.base_per_match * c.factor) / 100);
-  const fill = Math.min(100, c.attendance);
   const ins = office.offers.insurance;
   return (
     <div className="flex flex-col gap-3" data-testid="matchday">
       <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1a1035] via-[#0f2a2a] to-[#062018] p-4 ring-1 ring-fuchsia-300/25">
-        <Stands fill={fill} className="pointer-events-none absolute -right-3 -top-2 h-24 w-36 opacity-90" />
+        <img src={matchdayArt} alt="" className="pointer-events-none absolute -right-2 -top-3 h-28 w-28 object-cover [mask-image:radial-gradient(circle,black_52%,transparent_72%)]" />
         <p className="relative text-micro font-bold uppercase tracking-[0.2em] text-fuchsia-200">🎟 Цена билета</p>
         <p className="relative mt-1 max-w-[60%] text-caption text-ink-mist">Дороже — больше денег с каждого зрителя, но меньше людей и тише трибуны.</p>
         <div className="relative mt-3 flex items-end justify-between">
@@ -95,25 +95,5 @@ function Stat({ label, value, tone }: { label: string; value: string; tone: stri
       <b className={`block font-display text-sm ${tone}`}>{value}</b>
       <span className="block text-micro text-ink-mist">{label}</span>
     </span>
-  );
-}
-
-/** Stands that fill up with the crowd. */
-function Stands({ fill, className }: { fill: number; className?: string }) {
-  const rows = 4, cols = 9;
-  const seats = rows * cols;
-  const taken = Math.round((seats * fill) / 100);
-  return (
-    <svg viewBox="0 0 144 96" className={className} aria-hidden>
-      <path d="M8 88 L24 20 L120 20 L136 88 Z" fill="#1e1b4b" opacity="0.7" />
-      {Array.from({ length: seats }, (_, i) => {
-        const r = Math.floor(i / cols), col = i % cols;
-        const on = seats - 1 - i < taken;
-        const y = 30 + r * 14, inset = (3 - r) * 4;
-        const x = 22 + inset + col * ((100 - inset * 2) / (cols - 1));
-        return <circle key={i} cx={x} cy={y} r="4" fill={on ? ["#f0abfc", "#fde68a", "#86efac", "#7dd3fc"][(r + col) % 4] : "#334155"} />;
-      })}
-      <rect x="20" y="86" width="104" height="6" rx="3" fill="#22c55e" />
-    </svg>
   );
 }
