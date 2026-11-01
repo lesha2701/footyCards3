@@ -586,3 +586,112 @@ export async function repayManagerLoan(amount?: number): Promise<ManagerOffice> 
   const { data } = await api.post<ManagerOffice>("/manager/office/loan/repay", amount == null ? {} : { amount });
   return data;
 }
+
+// --- «Кабинет президента»: the exchange and bonds ---------------------------------------
+
+export interface ManagerStockRow {
+  club_id: number;
+  name: string;
+  division: number;
+  division_name: string;
+  look: ManagerLook;
+  /** € per share — changes only after a round / at a season start. */
+  price: number;
+  change_pct: number | null;
+  cap: number;
+  /** Shares on the exchange now (unsold IPO + sold back). */
+  available: number;
+  floated: number;
+  history: number[];
+  mine: boolean;
+  held: number;
+  holder_cap: number;
+  dividends_paid: number;
+}
+
+export interface ManagerBondRow {
+  id: number;
+  club_id: number;
+  name: string;
+  division: number | null;
+  rate_pct: number;
+  unit_eur: number;
+  units_total: number;
+  units_sold: number;
+  seasons_total: number;
+  seasons_left: number;
+  status: "selling" | "active" | "default" | "repaid";
+  season_key: string;
+  mine: boolean;
+  held: number;
+  received: number;
+  holder_cap: number;
+}
+
+export interface ManagerExchange {
+  enabled: boolean;
+  club_id: number;
+  window_open: boolean;
+  budget: number;
+  free_budget: number;
+  rules: Record<
+    "shares_total" | "ipo_max_pct" | "holder_max_pct" | "exchange_fee_pct" | "buyback_premium_pct" | "ipo_season_cap_pct"
+    | "dividend_pct" | "bond_rate_min_pct" | "bond_rate_max_pct" | "bond_unit_eur" | "bond_seasons_max" | "bond_holder_max_pct",
+    number
+  >;
+  my_stock: {
+    listed: boolean;
+    shares_total: number;
+    floated: number;
+    unsold: number;
+    pool: number;
+    held_by_others: number;
+    price: number;
+    history: number[];
+    ipo_left: number;
+    raised_this_season: number;
+    raise_cap: number;
+    dividends_paid: number;
+    buyback_price: number;
+    holders: { name: string; shares: number }[];
+  };
+  market: ManagerStockRow[];
+  portfolio: { club_id: number; name: string; shares: number; price: number; value: number; cost: number; dividends: number }[];
+  bonds: { limit: number; owed: number; market: ManagerBondRow[]; mine: ManagerBondRow[]; held: ManagerBondRow[] };
+  tape: { id: number; club: string; side: "ipo" | "buy" | "sell" | "buyback"; shares: number; price: number; at: string | null }[];
+}
+
+export async function fetchManagerExchange(): Promise<ManagerExchange> {
+  const { data } = await api.get<ManagerExchange>("/manager/exchange");
+  return data;
+}
+
+export async function floatManagerShares(shares: number): Promise<ManagerExchange> {
+  const { data } = await api.post<ManagerExchange>("/manager/exchange/ipo", { shares });
+  return data;
+}
+
+export async function buyBackManagerShares(shares: number): Promise<ManagerExchange> {
+  const { data } = await api.post<ManagerExchange>("/manager/exchange/buyback", { shares });
+  return data;
+}
+
+export async function tradeManagerShares(clubId: number, side: "buy" | "sell", shares: number): Promise<ManagerExchange> {
+  const { data } = await api.post<ManagerExchange>(`/manager/exchange/${clubId}/${side}`, { shares });
+  return data;
+}
+
+export async function issueManagerBond(body: { units: number; rate_pct: number; seasons: number }): Promise<ManagerExchange> {
+  const { data } = await api.post<ManagerExchange>("/manager/bonds", body);
+  return data;
+}
+
+export async function buyManagerBond(bondId: number, units: number): Promise<ManagerExchange> {
+  const { data } = await api.post<ManagerExchange>(`/manager/bonds/${bondId}/buy`, { units });
+  return data;
+}
+
+export async function repayManagerBond(bondId: number): Promise<ManagerExchange> {
+  const { data } = await api.post<ManagerExchange>(`/manager/bonds/${bondId}/repay`, {});
+  return data;
+}

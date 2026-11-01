@@ -64,3 +64,38 @@ season start after the term collects it. Not enough budget → `overdue`: a
 penalty on the debt, `ensure_can_transfer` refuses buying / loaning /
 signing until it is repaid. Repay any part any time. No deposit while a loan
 is open and no loan while money is on deposit (no rate arbitrage).
+
+## Exchange (phase 2, `manager_exchange.py`, migration `0231_manager_exchange`)
+
+Tables `manager_stocks` (one per listed club), `manager_shares` (holder
+rows, unique club + holder), `manager_trades` (the tape), `manager_bonds`,
+`manager_bond_holdings`. Routes `/manager/exchange*` and `/manager/bonds*`,
+frontend `components/manager/ExchangePanel.tsx` («📈 Биржа» section).
+
+- **Shares.** `shares_total` per club; the owner floats up to `ipo_max_pct`
+  (always keeps control). Unfloated-but-offered shares are `unsold` (buying
+  them pays the issuer, at most `ipo_season_cap_pct` of G per season);
+  shares sold back to the exchange go to `pool` (reselling them pays
+  nobody). Trades go only through the exchange at the published price; a
+  burnt `exchange_fee_pct` on each side; one holder owns at most
+  `holder_max_pct`; buyers pass `trade_guard_service.ensure_can_give`
+  (no fresh multi-accounts pumping a club).
+- **Price.** base = club value without budget/invested money ÷ shares, ×
+  form % = 100 + (ppg − 1.4)·`price_ppg_pct` + (last-5 ppg − 1.4)·
+  `price_form_pct`, clamped to `price_min_pct..price_max_pct`. Set at
+  listing and at every season start (`season_open`), recomputed after each
+  round (`after_round`); trading never moves it, so there is nothing to
+  pump. A trade first resolves the issuer's due round (`_fresh`).
+- **Dividends.** At `season_end`: `dividend_pct` of the season profit
+  (ledger income + expenses, excluding `dividend_out`) split per share;
+  ledger refs make it pay once.
+- **Buyback** (window only): unsold shares free, then pool shares at the
+  price, then holders pro rata at price + `buyback_premium_pct`.
+- **Bonds.** Units of `bond_unit_eur`, coupon chosen in
+  `bond_rate_min_pct..bond_rate_max_pct`, 1..`bond_seasons_max` seasons,
+  limit min(G × `bond_grant_pct`, value × `bond_value_pct`), one holder ≤
+  `bond_holder_max_pct`. `selling` → `active` at the issuer's season start
+  (unsold units dropped); coupon at every season end, principal with the
+  last; can't pay → `default`, transfers blocked (`default_block`) until
+  `repay_bond`.
+- `exchange_enabled` switches the whole thing off.

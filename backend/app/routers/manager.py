@@ -8,6 +8,8 @@ from app.core.rate_limit import check_rate_limit
 from app.database import get_db
 from app.models.user import User
 from app.schemas.manager import (
+    ManagerBondBuyIn,
+    ManagerBondIssueIn,
     ManagerClubUpdateIn,
     ManagerDealIn,
     ManagerFoundIn,
@@ -18,9 +20,10 @@ from app.schemas.manager import (
     ManagerOfferIn,
     ManagerRepayIn,
     ManagerRespondIn,
+    ManagerSharesIn,
     ManagerStadiumNameIn,
 )
-from app.services import manager_finance, manager_service, manager_shop
+from app.services import manager_exchange, manager_finance, manager_service, manager_shop
 
 router = APIRouter(prefix="/manager", tags=["manager"])
 
@@ -191,3 +194,51 @@ async def take_loan(payload: ManagerLoanIn, db: AsyncSession = Depends(get_db), 
 async def repay_loan(payload: ManagerRepayIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     await check_rate_limit(f"manager_office:{user.id}", max_calls=20, window_seconds=60)
     return await manager_finance.repay_loan(db, user, payload.amount)
+
+
+@router.get("/exchange")
+async def get_exchange(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """The club exchange: listed clubs, my stock and portfolio, bonds, the tape."""
+    return await manager_exchange.view(db, user)
+
+
+@router.post("/exchange/ipo")
+async def float_shares(payload: ManagerSharesIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_exchange:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_exchange.ipo(db, user, payload.shares)
+
+
+@router.post("/exchange/buyback")
+async def buy_back(payload: ManagerSharesIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_exchange:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_exchange.buyback(db, user, payload.shares)
+
+
+@router.post("/exchange/{club_id}/buy")
+async def buy_shares(club_id: int, payload: ManagerSharesIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_exchange:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_exchange.buy(db, user, club_id, payload.shares)
+
+
+@router.post("/exchange/{club_id}/sell")
+async def sell_shares(club_id: int, payload: ManagerSharesIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_exchange:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_exchange.sell(db, user, club_id, payload.shares)
+
+
+@router.post("/bonds")
+async def issue_bond(payload: ManagerBondIssueIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_exchange:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_exchange.issue_bond(db, user, payload.units, payload.rate_pct, payload.seasons)
+
+
+@router.post("/bonds/{bond_id}/buy")
+async def buy_bond(bond_id: int, payload: ManagerBondBuyIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_exchange:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_exchange.buy_bond(db, user, bond_id, payload.units)
+
+
+@router.post("/bonds/{bond_id}/repay")
+async def repay_bond(bond_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_exchange:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_exchange.repay_bond(db, user, bond_id)

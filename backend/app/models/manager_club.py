@@ -285,3 +285,96 @@ class ManagerMove(Base):
     fee: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     other_club: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class ManagerStock(Base):
+    """A club on the «Кабинет президента» exchange: `shares_total` shares, of
+    which `floated` were put on the market by IPO (≤ 49%). `unsold` = IPO
+    shares nobody bought yet (their money goes to the club), `pool` = shares
+    holders sold back to the exchange (resold without paying the club).
+    `price` (€ per share) changes only after a round / at a season start
+    (the club value without its budget × the form); `history` keeps the
+    last prices for the chart."""
+
+    __tablename__ = "manager_stocks"
+
+    club_id: Mapped[int] = mapped_column(ForeignKey("manager_clubs.id", ondelete="CASCADE"), primary_key=True)
+    shares_total: Mapped[int] = mapped_column(Integer, nullable=False, default=1000)
+    floated: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    unsold: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    pool: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    base: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    price: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    history: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    raised_season: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    raised_eur: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    dividends_paid: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class ManagerShare(Base):
+    """Shares of one club (`club_id`) held by another club (`holder_club_id`);
+    `cost` = euros paid for them (the P&L), `dividends` = euros received."""
+
+    __tablename__ = "manager_shares"
+    __table_args__ = (UniqueConstraint("club_id", "holder_club_id", name="uq_manager_share_holder"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("manager_clubs.id", ondelete="CASCADE"), nullable=False, index=True)
+    holder_club_id: Mapped[int] = mapped_column(ForeignKey("manager_clubs.id", ondelete="CASCADE"), nullable=False, index=True)
+    shares: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cost: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    dividends: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+
+
+class ManagerTrade(Base):
+    """The exchange tape: ipo | buy | sell | buyback of `shares` of `club_id`
+    by `holder_club_id` at `price` (€ per share), `fee` burnt."""
+
+    __tablename__ = "manager_trades"
+    __table_args__ = (Index("ix_manager_trades_club", "club_id", "id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("manager_clubs.id", ondelete="CASCADE"), nullable=False)
+    holder_club_id: Mapped[Optional[int]] = mapped_column(ForeignKey("manager_clubs.id", ondelete="CASCADE"), nullable=True, index=True)
+    side: Mapped[str] = mapped_column(String(8), nullable=False)
+    shares: Mapped[int] = mapped_column(Integer, nullable=False)
+    price: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    fee: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class ManagerBond(Base):
+    """A club's bond: `units_total` units of `unit_eur` at `rate_bp` per
+    season, sold in the window for `season_key` (status selling), then active
+    for `seasons_total` seasons: a coupon at each season end, the principal
+    at the last one. Not paid → default (no transfers until repaid)."""
+
+    __tablename__ = "manager_bonds"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("manager_clubs.id", ondelete="CASCADE"), nullable=False, index=True)
+    season_key: Mapped[str] = mapped_column(String(10), nullable=False)
+    seasons_total: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    seasons_left: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    rate_bp: Mapped[int] = mapped_column(Integer, nullable=False)
+    unit_eur: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    units_total: Mapped[int] = mapped_column(Integer, nullable=False)
+    units_sold: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="selling")
+    last_season: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ManagerBondHolding(Base):
+    """Units of a bond held by a club; `received` = coupons and principal paid."""
+
+    __tablename__ = "manager_bond_holdings"
+    __table_args__ = (UniqueConstraint("bond_id", "holder_club_id", name="uq_manager_bond_holder"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    bond_id: Mapped[int] = mapped_column(ForeignKey("manager_bonds.id", ondelete="CASCADE"), nullable=False, index=True)
+    holder_club_id: Mapped[int] = mapped_column(ForeignKey("manager_clubs.id", ondelete="CASCADE"), nullable=False, index=True)
+    units: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    received: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)

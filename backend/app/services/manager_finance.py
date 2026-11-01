@@ -91,6 +91,21 @@ DEFAULTS: dict = {
     "venture_win_pct": 40, "venture_multiplier": 3, "venture_max_budget_pct": 20, "venture_min_eur": 100_000,
     # Farm club: fee in % of G, cheaper loans, stronger academy kids.
     "farm_fee_pct": 6, "farm_loan_cut_pct": 30, "farm_kid_rating": 3, "farm_kid_per_training_level": 0.2,
+    # Exchange (manager_exchange): shares per club, IPO up to ipo_max_pct, one
+    # holder up to holder_max_pct of a club, fee burnt on every trade, IPO
+    # money per season up to ipo_season_cap_pct of G.
+    "exchange_enabled": True, "shares_total": 1000, "ipo_max_pct": 49, "holder_max_pct": 25, "exchange_fee_pct": 2,
+    "buyback_premium_pct": 10, "ipo_season_cap_pct": 50,
+    # Price = the club value without its budget / shares × the form: +price_ppg_pct
+    # per point a game above 1.4 (the season), +price_form_pct per point above
+    # 1.4 (the last 5 games), within price_min_pct..price_max_pct.
+    "price_ppg_pct": 20, "price_form_pct": 10, "price_min_pct": 50, "price_max_pct": 200,
+    # Dividends: this % of the season's profit (income − expenses), per share.
+    "dividend_pct": 20,
+    # Bonds: coupon a season chosen within the range, sold in units; the
+    # club owes at most min(G × bond_grant_pct, value × bond_value_pct).
+    "bond_rate_min_pct": 4, "bond_rate_max_pct": 25, "bond_unit_eur": 100_000, "bond_grant_pct": 60,
+    "bond_value_pct": 20, "bond_seasons_max": 3, "bond_holder_max_pct": 25,
 }
 
 DEAL_KINDS = ("sponsor", "kit", "tour", "tv", "deposit", "venture", "farm")
@@ -122,6 +137,18 @@ KINDS: dict[str, tuple[str, str]] = {
     "deposit_in": ("finance", "Депозит с процентами"),
     "venture_out": ("finance", "Венчурный фонд"),
     "venture_in": ("finance", "Доход венчура"),
+    "ipo": ("finance", "Продажа акций (IPO)"),
+    "buyback": ("finance", "Выкуп своих акций"),
+    "shares_buy": ("finance", "Покупка акций"),
+    "shares_sell": ("finance", "Продажа акций"),
+    "dividend_in": ("income", "Дивиденды"),
+    "dividend_out": ("expense", "Дивиденды акционерам"),
+    "bond_in": ("finance", "Облигации клуба"),
+    "bond_buy": ("finance", "Покупка облигаций"),
+    "coupon_in": ("income", "Купоны облигаций"),
+    "coupon_out": ("expense", "Купоны по облигациям"),
+    "bond_back": ("finance", "Погашение облигаций (получено)"),
+    "bond_repay": ("finance", "Погашение своих облигаций"),
 }
 REPORT_SEASONS = 6
 
@@ -380,6 +407,10 @@ def loan_limit(division: int, value: int, config) -> int:
 
 
 async def transfer_block(db: AsyncSession, club: ManagerClub) -> Optional[str]:
+    from app.services import manager_exchange
+
+    if reason := await manager_exchange.default_block(db, club):
+        return reason
     loan = await open_loan(db, club.id)
     if loan is not None and loan.status == "overdue":
         from app.services import manager_service as ms
@@ -527,6 +558,9 @@ async def season_end(db: AsyncSession, club: ManagerClub, key: str, place: Optio
         if deal.status == "active":
             deal.status = "done"
         deal.settled_at = now
+    from app.services import manager_exchange
+
+    lines += await manager_exchange.season_end(db, club, key, config)
     if lines:
         await notify(
             db, club.owner_id, NotificationType.manager_event, f"«{club.name}»: финансы сезона 💼",

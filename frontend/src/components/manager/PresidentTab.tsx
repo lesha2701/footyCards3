@@ -14,10 +14,11 @@ import {
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { KitShirt } from "@/components/manager/Emblem";
+import ExchangePanel from "@/components/manager/ExchangePanel";
 import { eur } from "@/lib/managerMoney";
 import { hapticNotify } from "@/lib/telegram";
 
-type Section = "report" | "sponsor" | "bank" | "deals";
+type Section = "report" | "sponsor" | "bank" | "deals" | "exchange";
 
 /** ISO week key "2026-W45" → "неделя 45". */
 function weekOf(key: string): string {
@@ -51,12 +52,12 @@ export default function PresidentTab({ onError }: { onError: (e: unknown) => voi
   if (!data) return <ListSkeleton />;
   const ask = (title: string, text: string, run: () => void) => setConfirm({ title, text, run });
   const sections: [Section, string, string][] = [
-    ["report", "📊", "Отчёт"], ["sponsor", "🤝", "Спонсор"], ["bank", "🏦", "Банк"], ["deals", "💼", "Сделки"],
+    ["report", "📊", "Отчёт"], ["sponsor", "🤝", "Спонсор"], ["bank", "🏦", "Банк"], ["deals", "💼", "Сделки"], ["exchange", "📈", "Биржа"],
   ];
   return (
     <div className="flex flex-col gap-4" data-testid="president-tab">
       <OfficeHero office={data} />
-      <div className="grid grid-cols-4 gap-1.5">
+      <div className="grid grid-cols-5 gap-1.5">
         {sections.map(([id, icon, label]) => (
           <button key={id} onClick={() => setSection(id)}
             className={`flex flex-col items-center gap-0.5 rounded-2xl py-2 text-micro font-bold transition ${section === id
@@ -66,7 +67,7 @@ export default function PresidentTab({ onError }: { onError: (e: unknown) => voi
           </button>
         ))}
       </div>
-      {!data.window_open && section !== "report" && (
+      {!data.window_open && section !== "report" && section !== "exchange" && (
         <p className="rounded-xl bg-amber-400/10 px-3 py-2 text-caption text-amber-200">
           ⏳ Идёт сезон. Новые сделки и кредит — в межсезонье, на следующий сезон. Погасить кредит можно в любой момент.
         </p>
@@ -75,6 +76,7 @@ export default function PresidentTab({ onError }: { onError: (e: unknown) => voi
       {section === "sponsor" && <Sponsors office={data} busy={deal.isPending}
         onSign={(s) => ask(`Подписать «${s.brand}»?`, "Спонсор — один на сезон, контракт не расторгается.", () => deal.mutate({ kind: "sponsor", option: s.code }))} />}
       {section === "bank" && <Bank office={data} onDone={done} onError={onError} ask={ask} />}
+      {section === "exchange" && <ExchangePanel onError={onError} />}
       {section === "deals" && <Deals office={data} busy={deal.isPending} ask={ask} sign={(kind, body) => deal.mutate({ kind, ...body })} />}
       <ConfirmDialog
         open={!!confirm} title={confirm?.title ?? ""} description={confirm?.text} confirmLabel="Подписать"

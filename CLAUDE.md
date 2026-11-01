@@ -77,7 +77,11 @@ Main features:
   season sponsors, a bank loan (overdue → no transfers) and season deals
   (shirt sponsor, tour, TV rights, deposit, venture fund, farm club) in
   `manager_deals` / `manager_loans`, frozen into the league team at the
-  season start and settled in `_settle`. Numbers: GameConfig.manager_finance
+  season start and settled in `_settle`. «📈 Биржа» (`manager_exchange.py`):
+  IPO up to 49% of a club's shares, trading only through the exchange at a
+  price set by club value × form after each round (trades never move it),
+  25% holder cap, burnt fee, dividends and bond coupons at season end, bond
+  default blocks transfers. Numbers: GameConfig.manager_finance
   over `manager_finance.DEFAULTS`;
 - «Мой игрок» extras (`my_player_extras.py`): a weekly «Спонсор» (one of
   three brands of `my_player_sponsors`, goals counted by hooks in the

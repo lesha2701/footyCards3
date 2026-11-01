@@ -74,7 +74,7 @@ from app.models.my_player import MyPlayer
 from app.models.player import Player
 from app.models.user import User
 from app.services import club_base_service, my_player_service, player_career_clubs as pcc, tournament_match_engine
-from app.services import manager_finance as finance, manager_tactics as tactics, trade_guard_service, wallet_service
+from app.services import manager_exchange as exchange, manager_finance as finance, manager_tactics as tactics, trade_guard_service, wallet_service
 from app.services.manager_tactics import DEFAULT_FORMATION
 from app.services.career_service import standings
 from app.services.club_formation_service import get_formation_slots
@@ -1214,6 +1214,8 @@ async def _prepare_club(db: AsyncSession, club: ManagerClub, key: str, now: date
     await _grant_budget(db, club, key, config)
     snap = await base_snapshot(db, club.owner_id, config)
     money_state = await finance.season_start(db, club, key, snap, config)
+    await exchange.bonds_start(db, club, key)
+    await exchange.season_open(db, club, key, config)  # a listed club is re-valued
     notes = list(money_state.pop("notes", []))
     farm = await finance.farm_for(db, club.id, key) or {}
     for c in await _contracts(db, club.id):
@@ -1492,6 +1494,7 @@ async def _play_round(db: AsyncSession, league: ManagerLeague, round_index: int,
     league.state = state
     flag_modified(league, "state")
     league.rounds_played = round_index + 1
+    await exchange.after_round(db, league, state)  # listed clubs' share prices follow the form
     if league.rounds_played >= len(state["fixtures"]):
         await _finish(db, league, config)
     elif _local_day(schedule, round_index) != _local_day(schedule, round_index + 1):

@@ -36,6 +36,24 @@ const LABELS: [string, string][] = [
   ["farm_loan_cut_pct", "Фарм-клуб: аренды дешевле на, %"],
   ["farm_kid_rating", "Фарм-клуб: воспитанники сильнее на, рейтинга"],
   ["farm_kid_per_training_level", "Фарм-клуб: + рейтинга воспитанникам за уровень «Тренировочного центра»"],
+  ["shares_total", "Биржа: акций у клуба"],
+  ["ipo_max_pct", "Биржа: IPO не больше, % акций"],
+  ["holder_max_pct", "Биржа: в одних руках не больше, % акций клуба"],
+  ["exchange_fee_pct", "Биржа: комиссия сделки, % (сгорает)"],
+  ["buyback_premium_pct", "Биржа: премия акционерам при выкупе, %"],
+  ["ipo_season_cap_pct", "Биржа: IPO приносит клубу за сезон не больше, % гранта"],
+  ["price_ppg_pct", "Цена акции: +% за очко в среднем за матч сверх 1,4 (сезон)"],
+  ["price_form_pct", "Цена акции: +% за очко сверх 1,4 (последние 5 матчей)"],
+  ["price_min_pct", "Цена акции: не ниже, % базы"],
+  ["price_max_pct", "Цена акции: не выше, % базы"],
+  ["dividend_pct", "Дивиденды: % прибыли сезона акционерам"],
+  ["bond_rate_min_pct", "Облигации: купон от, % за сезон"],
+  ["bond_rate_max_pct", "Облигации: купон до, % за сезон"],
+  ["bond_unit_eur", "Облигации: номинал одной, €"],
+  ["bond_grant_pct", "Облигации: долг не больше, % гранта дивизиона"],
+  ["bond_value_pct", "Облигации: долг не больше, % стоимости клуба (берётся меньший)"],
+  ["bond_seasons_max", "Облигации: срок, сезонов максимум"],
+  ["bond_holder_max_pct", "Облигации: в одних руках не больше, % выпуска"],
 ];
 
 const JSON_KEYS: [string, string][] = [
@@ -54,6 +72,10 @@ export default function ManagerFinanceFields({ value, onChange }: {
       <label className="col-span-2 flex items-center gap-2 text-xs text-slate-300">
         <input type="checkbox" checked={data.enabled !== false} onChange={(e) => onChange({ ...data, enabled: e.target.checked })} />
         Кабинет открыт (сделки, кредиты, спонсоры)
+      </label>
+      <label className="col-span-2 flex items-center gap-2 text-xs text-slate-300">
+        <input type="checkbox" checked={data.exchange_enabled !== false} onChange={(e) => onChange({ ...data, exchange_enabled: e.target.checked })} />
+        Биржа открыта (акции, IPO, облигации)
       </label>
       {LABELS.map(([key, label]) => (
         <label key={key} className="flex flex-col gap-1">
