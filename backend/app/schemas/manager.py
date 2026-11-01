@@ -65,6 +65,14 @@ class ManagerTicketsIn(BaseModel):
     pct: int = Field(ge=0, le=1000)
 
 
+class ManagerPlanIn(BaseModel):
+    code: str = Field(min_length=1, max_length=32)
+
+
+class ManagerEventChoiceIn(BaseModel):
+    option: str = Field(min_length=1, max_length=32)
+
+
 class ManagerLoanIn(BaseModel):
     amount: int = Field(ge=0)
     seasons: int = Field(default=1, ge=1, le=10)

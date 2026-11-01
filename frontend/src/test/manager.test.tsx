@@ -22,6 +22,7 @@ const updateManagerClub = vi.fn();
 vi.mock("@/api/manager", async (orig) => ({
   ...(await orig<typeof import("@/api/manager")>()),
   fetchManager: () => fetchManager(),
+  fetchManagerEvents: async () => ({ plans: [], plan: "normal", can_plan: false, form_pct: 0, events: [], recent: [] }),
   fetchManagerSummary: async () => ({ enabled: true, season: { rounds: 15, transfers_open: true }, club: null, league: null, today: [] }),
   fetchManagerMarket: () => fetchManagerMarket(),
   fetchManagerCatalog: (...args: unknown[]) => fetchManagerCatalog(...args),

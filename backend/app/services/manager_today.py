@@ -15,11 +15,12 @@ from app.core.exceptions import ConflictError, NotFoundError
 from app.core.timeutil import app_timezone
 from app.models.manager_club import ManagerClub, ManagerContract, ManagerDeal, ManagerLedger, ManagerLeague, ManagerNpc, ManagerSeason
 from app.models.user import User
-from app.services import manager_finance as finance, manager_service as ms, manager_shop
+from app.services import manager_events as events, manager_finance as finance, manager_service as ms, manager_shop
 from app.services.career_service import standings
 from app.services.game_config_service import get_config
 
 ONBOARDING_REF = "onboarding"
+WEEKDAYS = ("пн", "вт", "ср", "чт", "пт", "сб", "вс")
 
 
 async def _signed(db: AsyncSession, club: ManagerClub) -> bool:
@@ -111,6 +112,10 @@ async def _today(db: AsyncSession, user: User, club: Optional[ManagerClub], seas
         items.append({"code": "incoming", "icon": "📨", "text": f"Предложения по твоим игрокам: {incoming}", "tab": "club", "urgent": True})
     if offers_to_me:
         items.append({"code": "offers_me", "icon": "✍️", "text": f"Тебя зовут в другой клуб: {offers_to_me}", "tab": "me", "urgent": False})
+    league_row = await db.get(ManagerLeague, club.league_id) if club.league_id else None
+    for event in await events.open_events(db, club, league_row):
+        d = event.data or {}
+        items.append({"code": "event", "icon": d.get("emoji") or "📰", "text": f"{d.get('title')} — нужно твоё решение", "tab": "club", "urgent": True})
     if season["transfers_open"] and not await ms.is_playing(db, club):
         left = _hours(season["preseason_ends_at"], now)
         if left is not None and 0 < left <= 48:
@@ -126,7 +131,11 @@ async def _today(db: AsyncSession, user: User, club: Optional[ManagerClub], seas
     if next_match is not None:
         where = "дома" if next_match["home"] else "в гостях"
         at = next_match.get("at")
-        clock = datetime.fromisoformat(at).astimezone(app_timezone()).strftime("%H:%M") if at else ""
+        clock = ""
+        if at:
+            local = datetime.fromisoformat(at).astimezone(app_timezone())
+            day = "" if local.date() == now.astimezone(app_timezone()).date() else f"{WEEKDAYS[local.weekday()]} "
+            clock = f"{day}{local:%H:%M}"
         text = f"Матч {where} с «{next_match['opponent']}»{f' в {clock}' if clock else ''}"
         if next_match.get("edge") == "lose":
             items.append({"code": "edge", "icon": "⚠️", "text": f"{text}: его стиль бьёт твой — проверь тактику", "tab": "club", "urgent": True})

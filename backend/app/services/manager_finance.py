@@ -123,6 +123,44 @@ DEFAULTS: dict = {
     "rating_size": 20,
     # «Первый сезон»: the checklist bonus to the club budget (manager_today).
     "onboarding_bonus_eur": 500_000,
+    # «Установка на матч» (manager_events): % on the lines for the next match only, × the injury chance of it.
+    "match_plans": [
+        {"code": "press", "name": "Высокий прессинг", "emoji": "🔥", "about": "Давим с первой минуты: атака сильнее, но ноги устают",
+         "mods": {"GK": 0, "DEF": 0, "MID": 4, "FWD": 4}, "injury_x": 1.5},
+        {"code": "bus", "name": "Автобус", "emoji": "🚌", "about": "Все назад: оборона крепче, впереди пусто",
+         "mods": {"GK": 3, "DEF": 5, "MID": 0, "FWD": -5}, "injury_x": 1},
+        {"code": "rotate", "name": "Ротация", "emoji": "🔄", "about": "Бережём лидеров: чуть слабее, зато без травм",
+         "mods": {"GK": -2, "DEF": -2, "MID": -2, "FWD": -2}, "injury_x": 0},
+    ],
+    # «События клуба»: after these rounds of the season an event comes (one each).
+    "event_rounds": [3, 7, 11],
+    # Options: money_pct = % of the division grant (+ income, − expense), fans, form_pct for form_rounds next rounds.
+    "events": [
+        {"code": "raise", "emoji": "💰", "title": "Звезда просит прибавку",
+         "text": "Лидер команды намекает агенту, что в другом клубе ему заплатят больше.",
+         "options": [{"code": "pay", "label": "Поднять зарплату", "money_pct": -4, "form_pct": 3, "form_rounds": 3},
+                     {"code": "refuse", "label": "Отказать", "form_pct": -2, "form_rounds": 2}]},
+        {"code": "prices", "emoji": "📣", "title": "Фанаты недовольны ценами",
+         "text": "Ультрас вывесили баннер про дорогие билеты и грозят бойкотом.",
+         "options": [{"code": "discount", "label": "Раздать билеты на матч", "money_pct": -2, "fans": 300, "form_pct": 1, "form_rounds": 1},
+                     {"code": "ignore", "label": "Не обращать внимания", "fans": -200}]},
+        {"code": "shoot", "emoji": "🎬", "title": "Рекламная съёмка",
+         "text": "Спонсор хочет снять ролик с игроками прямо перед матчем.",
+         "options": [{"code": "yes", "label": "Согласиться", "money_pct": 5, "form_pct": -2, "form_rounds": 2},
+                     {"code": "no", "label": "Отказать — сначала футбол"}]},
+        {"code": "press", "emoji": "🎙️", "title": "Пресс-конференция",
+         "text": "Журналист спрашивает про следующего соперника.",
+         "options": [{"code": "respect", "label": "Похвалить соперника", "form_pct": 1, "form_rounds": 2},
+                     {"code": "provoke", "label": "Задеть соперника", "fans": 250, "form_pct": -1, "form_rounds": 1}]},
+        {"code": "camp", "emoji": "⛺", "title": "Тренировочный сбор",
+         "text": "Тренеры предлагают выездной сбор посреди сезона.",
+         "options": [{"code": "go", "label": "Провести сбор", "money_pct": -3, "form_pct": 3, "form_rounds": 3},
+                     {"code": "rest", "label": "Дать отдохнуть"}]},
+        {"code": "charity", "emoji": "❤️", "title": "Благотворительный матч",
+         "text": "Город просит сыграть товарищеский матч в пользу детской больницы.",
+         "options": [{"code": "play", "label": "Сыграть", "fans": 400, "form_pct": -1, "form_rounds": 1},
+                     {"code": "decline", "label": "Отказаться", "fans": -100}]},
+    ],
 }
 
 DEAL_KINDS = ("sponsor", "kit", "tour", "tv", "deposit", "venture", "farm", "insurance")
@@ -170,6 +208,8 @@ KINDS: dict[str, tuple[str, str]] = {
     "bond_back": ("finance", "Погашение облигаций (получено)"),
     "bond_repay": ("finance", "Погашение своих облигаций"),
     "onboarding": ("income", "Бонус первого сезона"),
+    "event_in": ("income", "События клуба"),
+    "event_out": ("expense", "События клуба"),
 }
 REPORT_SEASONS = 6
 
@@ -205,6 +245,14 @@ def validate(raw: dict) -> dict:
             if not isinstance(value, list) or not 1 <= len(value) <= 6 or not all(isinstance(x, dict) and x.get("code") for x in value):
                 raise ValueError(f"{key}: нужен список из 1–6 объектов с code")
             out[key] = value
+        elif key in ("match_plans", "events"):
+            if not isinstance(value, list) or not value or not all(isinstance(x, dict) and x.get("code") for x in value):
+                raise ValueError(f"{key}: нужен список объектов с code")
+            out[key] = value
+        elif key == "event_rounds":
+            if not isinstance(value, list) or not all(isinstance(x, int) and x > 0 for x in value):
+                raise ValueError("event_rounds: нужен список номеров туров")
+            out[key] = sorted(set(value))
         elif key == "kit_brands":
             if not isinstance(value, list) or not value:
                 raise ValueError("kit_brands: нужен список названий")

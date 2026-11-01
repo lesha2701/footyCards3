@@ -363,6 +363,61 @@ export async function claimManagerOnboarding(): Promise<ManagerSummary> {
   return data;
 }
 
+export interface ManagerPlan {
+  code: string;
+  name: string;
+  emoji: string;
+  about: string;
+  mods: Record<ManagerLine, number>;
+  injury_x: number;
+}
+
+export interface ManagerEventOption {
+  code: string;
+  label: string;
+  money: number;
+  fans: number;
+  form_pct: number;
+  form_rounds: number;
+}
+
+export interface ManagerClubEvent {
+  id: number;
+  code: string;
+  title: string;
+  text: string;
+  emoji: string;
+  status: "offered" | "chosen" | "expired";
+  choice: string | null;
+  options: ManagerEventOption[];
+  result: ManagerEventOption | null;
+}
+
+/** GET /manager/events: «Установка на матч» and «События клуба». */
+export interface ManagerEvents {
+  plans: ManagerPlan[];
+  plan: string;
+  can_plan: boolean;
+  form_pct: number;
+  events: ManagerClubEvent[];
+  recent: ManagerClubEvent[];
+}
+
+export async function fetchManagerEvents(): Promise<ManagerEvents> {
+  const { data } = await api.get<ManagerEvents>("/manager/events");
+  return data;
+}
+
+export async function setManagerPlan(code: string): Promise<ManagerEvents> {
+  const { data } = await api.post<ManagerEvents>("/manager/plan", { code });
+  return data;
+}
+
+export async function chooseManagerEvent(id: number, option: string): Promise<ManagerEvents> {
+  const { data } = await api.post<ManagerEvents>(`/manager/events/${id}`, { option });
+  return data;
+}
+
 export async function fetchManagerMarket(): Promise<{ players: ManagerMarketPlayer[] }> {
   const { data } = await api.get<{ players: ManagerMarketPlayer[] }>("/manager/market");
   return data;

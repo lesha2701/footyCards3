@@ -12,12 +12,14 @@ from app.schemas.manager import (
     ManagerBondIssueIn,
     ManagerClubUpdateIn,
     ManagerDealIn,
+    ManagerEventChoiceIn,
     ManagerFoundIn,
     ManagerLoanIn,
     ManagerLookIn,
     ManagerMarketIn,
     ManagerNpcIn,
     ManagerOfferIn,
+    ManagerPlanIn,
     ManagerRepayIn,
     ManagerRespondIn,
     ManagerShareListIn,
@@ -25,7 +27,7 @@ from app.schemas.manager import (
     ManagerTicketsIn,
     ManagerStadiumNameIn,
 )
-from app.services import manager_exchange, manager_finance, manager_service, manager_shop, manager_today
+from app.services import manager_events, manager_exchange, manager_finance, manager_service, manager_shop, manager_today
 
 router = APIRouter(prefix="/manager", tags=["manager"])
 
@@ -51,6 +53,27 @@ async def claim_onboarding(db: AsyncSession = Depends(get_db), user: User = Depe
     """The first-season checklist bonus (once)."""
     await check_rate_limit(f"manager_office:{user.id}", max_calls=20, window_seconds=60)
     return await manager_today.claim_onboarding(db, user)
+
+
+@router.get("/events")
+async def get_events(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """«Установка на матч» (the plans, the one set) and «События клуба» (open, recent)."""
+    return await manager_events.view(db, user)
+
+
+@router.post("/plan")
+async def set_plan(payload: ManagerPlanIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """The plan for the club's next league match ("normal" clears it)."""
+    await check_rate_limit(f"manager_office:{user.id}", max_calls=20, window_seconds=60)
+    return await manager_events.set_plan(db, user, payload.code)
+
+
+@router.post("/events/{event_id}")
+async def choose_event(event_id: int, payload: ManagerEventChoiceIn, db: AsyncSession = Depends(get_db),
+                       user: User = Depends(get_current_user)):
+    """The decision on an event of the club (once)."""
+    await check_rate_limit(f"manager_office:{user.id}", max_calls=20, window_seconds=60)
+    return await manager_events.choose(db, user, event_id, payload.option)
 
 
 @router.get("/market")

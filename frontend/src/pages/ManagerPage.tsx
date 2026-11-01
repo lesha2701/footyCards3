@@ -36,6 +36,7 @@ import ShareButton from "@/components/common/ShareButton";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconCoin, IconProfile, IconSearch, IconTrophy } from "@/components/icons";
 import ClubCardSheet from "@/components/manager/ClubCardSheet";
+import MatchPlanPanel from "@/components/manager/MatchPlanPanel";
 import TodayPanel, { Timeline } from "@/components/manager/TodayPanel";
 import Emblem, { KitShirt } from "@/components/manager/Emblem";
 import ManagerPitch from "@/components/manager/ManagerPitch";
@@ -301,6 +302,8 @@ function ClubTab({ view, club, onView, onError }: TabProps & { club: ManagerClub
           ))}
         </section>
       )}
+
+      <MatchPlanPanel onError={onError} />
 
       <TacticsPanel
         style={club.style} formation={club.formation} rules={rules.tactics} busy={patch.isPending} onChange={(p) => patch.mutate(p)}

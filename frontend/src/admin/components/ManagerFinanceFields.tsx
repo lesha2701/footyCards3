@@ -78,6 +78,9 @@ const JSON_KEYS: [string, string][] = [
   ["sponsors", "Спонсоры (суммы — % гранта): upfront_pct сразу, win_pct за победу, place_pct по местам (0 = чемпион), rest_pct другие места, relegated_pct при вылете"],
   ["tours", "Турне: revenue_pct / cost_pct (% гранта), fans, fatigue_pct (−% ко всем линиям) в первых fatigue_rounds турах"],
   ["kit_brands", "Спонсор на форме: бренды на выбор"],
+  ["match_plans", "Установки на матч: mods (% к линиям GK/DEF/MID/FWD на один матч), injury_x (× шанс травмы; 0 = без травм)"],
+  ["event_rounds", "События клуба: после каких туров сезона приходит событие"],
+  ["events", "События клуба: options — money_pct (% гранта, + доход / − расход), fans, form_pct на form_rounds следующих туров"],
 ];
 
 export default function ManagerFinanceFields({ value, onChange }: {

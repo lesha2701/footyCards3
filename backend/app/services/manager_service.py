@@ -76,7 +76,7 @@ from app.models.my_player import MyPlayer
 from app.models.player import Player
 from app.models.user import User
 from app.services import club_base_service, my_player_service, player_career_clubs as pcc, tournament_match_engine
-from app.services import manager_exchange as exchange, manager_finance as finance, manager_tactics as tactics, trade_guard_service, wallet_service
+from app.services import manager_events as events, manager_exchange as exchange, manager_finance as finance, manager_tactics as tactics, trade_guard_service, wallet_service
 from app.services.manager_tactics import DEFAULT_FORMATION
 from app.services.career_service import standings
 from app.services.club_formation_service import get_formation_slots
@@ -1496,6 +1496,8 @@ async def _play_round(db: AsyncSession, league: ManagerLeague, round_index: int,
             p = plan[idx]
             mods = tactics.modifiers(p["style"], p["formation"], plan[opp]["style"], config)
             mods = finance.fatigue_mods(mods, teams[idx].get("finance") or {}, round_index)  # a preseason tour's tired legs
+            if teams[idx]["club_id"]:  # «Установка на матч» and the events' form
+                mods = events.match_mods(mods, clubs[teams[idx]["club_id"]], league.id, round_index, config)
             if idx == home and teams[idx]["club_id"]:
                 mods = finance.support_mods(mods, teams[idx].get("finance") or {}, config)  # the home crowd (ticket price)
             sides[idx] = _side_from(p["xi"], p["cards"], idx, p["name"], p["formation"], mods, config)
@@ -1514,12 +1516,15 @@ async def _play_round(db: AsyncSession, league: ManagerLeague, round_index: int,
                 continue
             await _settle_match(db, clubs[t["club_id"]], t, sides[idx][1], match, side, idx == home, league.division,
                                 at, rng, config, state, _match_rating, cups, league.season_key)
-            await _injury(db, clubs[t["club_id"]], t, plan[idx]["xi"], league, round_index, state, config)
+            await _injury(db, clubs[t["club_id"]], t, plan[idx]["xi"], league, round_index, state, config,
+                          events.injury_factor(clubs[t["club_id"]], league.id, round_index, config))
     state["results"].append(results)
     league.state = state
     flag_modified(league, "state")
     league.rounds_played = round_index + 1
     await exchange.after_round(db, league, state)  # listed clubs' share prices follow the form
+    for club in clubs.values():
+        await events.after_round(db, club, league, config)  # «События клуба» after the set rounds
     if league.rounds_played >= len(state["fixtures"]):
         await _finish(db, league, config)
     elif _local_day(schedule, round_index) != _local_day(schedule, round_index + 1):
@@ -1532,13 +1537,13 @@ INJURABLE = ("live", "npc", "academy")
 
 
 async def _injury(db, club: ManagerClub, team: dict, xi: list[dict], league: ManagerLeague, round_index: int, state: dict,
-                  config) -> None:
+                  config, factor: float = 1.0) -> None:
     """After a match: maybe one of the club's players is hurt — he misses a
     few rounds, the treatment costs a part of his value, the insurance of
     the season pays its share. Own «Мой игрок» is never hurt here."""
     f = finance.cfg(config)
     rng = random.Random(f"injury:{league.id}:{round_index}:{club.id}")
-    if rng.random() * 100 >= finance.injury_chance(team.get("base") or {}, config):
+    if rng.random() * 100 >= finance.injury_chance(team.get("base") or {}, config) * factor:
         return
     hurt = state.setdefault("injuries", {}).setdefault(str(club.id), {})
     pool = [p for p in xi if p.get("kind") in INJURABLE and p.get("key")

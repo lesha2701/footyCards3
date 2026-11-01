@@ -45,6 +45,10 @@ class ManagerClub(Base):
     fans_bonus: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # Ticket price, % of the base price («Кабинет президента»): set in the window, frozen for the season.
     ticket_pct: Mapped[int] = mapped_column(Integer, nullable=False, default=100, server_default="100")
+    # «Установка на матч» (manager_events): {"league_id", "round", "code"} — for that one round only.
+    match_plan: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Form from the club's events: [{"pct", "league_id", "from", "to"}] — % on every line for rounds from..to-1.
+    buffs: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
@@ -383,3 +387,25 @@ class ManagerBondHolding(Base):
     holder_club_id: Mapped[int] = mapped_column(ForeignKey("manager_clubs.id", ondelete="CASCADE"), nullable=False, index=True)
     units: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     received: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+
+
+class ManagerEvent(Base):
+    """«События клуба» (manager_events): a situation with a choice that comes
+    after some rounds of the season (a star asks for a raise, the fans and
+    the prices, the press…). One per club and slot (unique = idempotency);
+    status offered → chosen | expired; `data` = the template's texts and
+    options frozen when offered, then the effects applied."""
+
+    __tablename__ = "manager_events"
+    __table_args__ = (UniqueConstraint("club_id", "season_key", "slot", name="uq_manager_event_slot"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("manager_clubs.id", ondelete="CASCADE"), nullable=False, index=True)
+    season_key: Mapped[str] = mapped_column(String(10), nullable=False)
+    slot: Mapped[int] = mapped_column(Integer, nullable=False)
+    code: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="offered")
+    choice: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    data: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    decided_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
