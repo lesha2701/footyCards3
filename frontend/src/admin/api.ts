@@ -1618,3 +1618,28 @@ export async function updateAdminFanBattle(payload: {
   const { data } = await api.put<AdminFanBattle>("/admin/fan-battle", payload);
   return data;
 }
+
+// «💯 Нам 100 дней!» (backend/app/routers/admin_anniversary.py)
+export interface AdminAnniversary {
+  enabled: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  settings: Record<string, unknown>;
+  defaults: Record<string, unknown>;
+  stats: { members?: number; games?: number; calendar_claims?: number; community_claims?: number; recaps?: number };
+}
+
+export async function fetchAdminAnniversary(): Promise<AdminAnniversary> {
+  const { data } = await api.get<AdminAnniversary>("/admin/anniversary");
+  return data;
+}
+
+export async function updateAdminAnniversary(payload: {
+  enabled?: boolean;
+  starts_at?: string;
+  ends_at?: string;
+  settings?: Record<string, unknown>;
+}): Promise<AdminAnniversary> {
+  const { data } = await api.put<AdminAnniversary>("/admin/anniversary", payload);
+  return data;
+}

@@ -5,6 +5,7 @@ import { fetchFeatureFlags } from "@/api/featureFlags";
 import { fetchLeagueStatus } from "@/api/leagues";
 import { fetchMyProfile } from "@/api/profile";
 import { fetchWheelStatus } from "@/api/wheel";
+import AnniversaryBanner from "@/components/anniversary/AnniversaryBanner";
 import FanBattleBanner from "@/components/fans/FanBattleBanner";
 import HalloweenBanner from "@/components/halloween/HalloweenBanner";
 import HomeHero from "@/components/home/HomeHero";
@@ -30,6 +31,8 @@ export default function HomePage() {
       <HalloweenBanner />
 
       <FanBattleBanner />
+
+      <AnniversaryBanner />
 
       <NewbieCard />
 

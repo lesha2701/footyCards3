@@ -4132,3 +4132,73 @@ export interface FanClaimResult {
   titles: string[];
   new_balance: number;
 }
+
+// «💯 Нам 100 дней!» (backend/app/schemas/anniversary.py)
+export interface AnniversaryCalendarDay {
+  n: number;
+  status: "claimed" | "today" | "locked";
+  reward: RewardBundle;
+}
+
+export interface AnniversaryTier {
+  pct: number;
+  target: number;
+  reached: boolean;
+  claimed: boolean;
+  reward: RewardBundle;
+}
+
+export interface AnniversaryCommunity {
+  total: number;
+  goal: number;
+  my_games: number;
+  min_games: number;
+  tiers: AnniversaryTier[];
+  claimable: boolean;
+}
+
+export interface AnniversaryState {
+  enabled: boolean;
+  active: boolean;
+  finished: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  claim_until: string | null;
+  teaser_days: number;
+  calendar: AnniversaryCalendarDay[];
+  calendar_claimed: number;
+  calendar_ready: boolean;
+  day_resets_at: string | null;
+  community: AnniversaryCommunity | null;
+  recap_coins: number;
+  recap_claimed: boolean;
+  collection: HalloweenState["collection"];
+  pack_id: number | null;
+}
+
+export interface AnniversaryRecap {
+  days_with_us: number;
+  active_days: number;
+  packs_opened: number;
+  cards: number;
+  unique_players: number;
+  coins_earned: number;
+  trades: number;
+  badges: number;
+  player_number: number;
+  games: number;
+  favourite_mode: string | null;
+  favourite_mode_games: number;
+  best_card_name: string | null;
+  best_card_rating: number | null;
+  best_card_rarity: Rarity | null;
+  best_card_image: string | null;
+  best_card_position: string | null;
+  cards_better_than_pct: number;
+}
+
+export interface AnniversaryClaimResult {
+  title: string;
+  rewards: GrantedRewards;
+  new_balance: number;
+}

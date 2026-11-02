@@ -954,6 +954,12 @@ class GameConfig(TimestampMixin, Base):
     fan_battle_starts_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     fan_battle_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     fan_battle_settings: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # «💯 Нам 100 дней!» (services/anniversary_service.py): the same shape —
+    # calendar gifts, the community goal «Сотня», the recap gift, the ids.
+    anniversary_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    anniversary_starts_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    anniversary_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    anniversary_settings: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
 
     # «Топ недели» (weekly_top_service.py): every Monday the top places of
     # each ranking get the reward of their place. weekly_top_rewards is one

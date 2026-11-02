@@ -180,6 +180,9 @@ class TransactionType(str, enum.Enum):
     # «⚔️ Битва фанатов» (services/fan_battle_service.py): daily battles,
     # milestones and the final.
     fan_battle_reward = "fan_battle_reward"
+    # «💯 Нам 100 дней!» (services/anniversary_service.py): calendar gifts,
+    # the community goal «Сотня» and the recap gift.
+    anniversary_reward = "anniversary_reward"
 
 
 class GiftKind(str, enum.Enum):

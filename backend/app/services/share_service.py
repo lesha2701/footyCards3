@@ -39,7 +39,7 @@ settings = get_settings()
 
 SHARE_DIR = STATIC_DIR / "share"
 SHAREABLE_RARITIES = {Rarity.legendary, Rarity.diamond}
-KINDS = ("card", "match", "trophy", "my_player", "trade_wishes", "mordoboi_win")
+KINDS = ("card", "match", "trophy", "my_player", "trade_wishes", "mordoboi_win", "anniversary_recap")
 
 
 def referral_link(user: User) -> str:
@@ -430,10 +430,15 @@ async def prepare_share(db: AsyncSession, user: User, kind: str, object_id: int)
             "link": link,
             "share_url": f"https://t.me/share/url?url={quote(link, safe='')}&text={quote(text, safe='')}",
         }
-    if kind in ("trade_wishes",):
+    if kind in ("trade_wishes", "anniversary_recap"):
         if kind == "trade_wishes":
             text, link = await _trade_wishes(db, user), trade_link(user)
             labels = {}
+        else:  # «💯 Нам 100 дней!»: the player's own recap, as text
+            from app.services import anniversary_service
+
+            text, link = anniversary_service.share_text(await anniversary_service.recap(db, user)), referral_link(user)
+            labels = {"title": "Мои 100 дней в Victor FC", "button": "⚽ Играть в Victor FC"}
         prepared_id = await _save_prepared_text(user, text, link, **labels) if _can_prepare_messages() else None
         return {
             "prepared_message_id": prepared_id,

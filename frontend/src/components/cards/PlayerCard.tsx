@@ -106,6 +106,8 @@ function PlayerCard({
   // «Капитаны» of «Битва фанатов»: the frame wears the viewer's side colour.
   const fanColor = useFanColor();
   const fanSkin = !isPath && !hwSkin && player.collection_skin === "fans";
+  // «Первые 100» of «💯 Нам 100 дней!»: the gold anniversary frame.
+  const goldSkin = !isPath && !hwSkin && player.collection_skin === "gold100";
   const imageUrl = staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp");
 
   return (
@@ -119,7 +121,7 @@ function PlayerCard({
       }${inSquad ? ", в составе" : ""}${userLocked ? ", под замком" : ""}`}
       className={`group relative flex select-none [-webkit-touch-callout:none] aspect-[3/4] w-full flex-col overflow-hidden rounded-2xl bg-gradient-to-b ${frame} ${
         isPath ? "p-[3px]" : "p-[2px]"
-      }${hwSkin ? ` hw-frame-${hwSkin}` : ""}${fanSkin ? " fans-frame" : ""} transition-transform active:scale-[0.97] ${
+      }${hwSkin ? ` hw-frame-${hwSkin}` : ""}${fanSkin ? " fans-frame" : ""}${goldSkin ? " gold100-frame" : ""} transition-transform active:scale-[0.97] ${
         selected ? (player.rarity === "diamond" ? "ring-4 ring-rarity-diamond" : "ring-4 ring-accent-lime") : ""
       } ${dimmed ? "opacity-40 grayscale" : ""} ${onClick ? "cursor-pointer" : "cursor-default"}${
         skin && !selected ? ` ${skin}` : ""
