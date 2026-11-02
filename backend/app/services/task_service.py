@@ -13,6 +13,7 @@ from app.models.pack import Pack, PackOpening
 from app.models.task import TaskActivity, TaskChestClaim, TaskDefinition, UserTask
 from app.models.trade import TradeOffer
 from app.models.user import User
+from app.models.user_activity import UserDailyActivity
 from app.models.badge import Badge
 from app.schemas.badge import BadgeOut
 from app.schemas.pack import PackOpenResult
@@ -24,6 +25,20 @@ from app.services.telegram_service import check_channel_membership
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
 REGULAR_SLOT_COUNT = 5  # the default daily set (GameConfig.task_daily_slots)
+# Not a lifetime counter: how many counted friends (referral_service) played
+# today. Its tasks have no baseline and start from today's value (_assign).
+FRIENDS_ACTIVE_TODAY = "friends_active_today"
+
+
+async def friends_active_today(db: AsyncSession, user_id: int, now: Optional[datetime] = None) -> int:
+    """Counted friends (they played referral_active_days days) of this user
+    who have played today."""
+    return int((await db.execute(
+        select(func.count()).select_from(UserDailyActivity).join(User, User.id == UserDailyActivity.user_id).where(
+            User.referred_by_id == user_id, User.referral_reward_granted.is_(True),
+            UserDailyActivity.day == local_today(now),
+        )
+    )).scalar_one())
 
 
 async def _assigned_definition_ids(db: AsyncSession, user_id: int) -> set[int]:
@@ -38,6 +53,8 @@ async def _current_metric_value(db: AsyncSession, user: User, metric: Optional[s
     alongside their `evaluate_metric_progress` call site."""
     if metric == "referrals_count":
         return user.referral_count
+    if metric == FRIENDS_ACTIVE_TODAY:
+        return 0
     if metric == "arena_clean_sheet_wins":
         return user.arena_clean_sheet_wins
     if metric == "memory_levels_completed":
@@ -108,13 +125,19 @@ async def _assign(db: AsyncSession, user: User, definition: TaskDefinition, slot
         if definition.condition_type == TaskConditionType.metric_counter and definition.target_value <= 0
         else None
     )
+    progress = 0
+    if definition.condition_type == TaskConditionType.metric_counter and definition.metric == FRIENDS_ACTIVE_TODAY:
+        # A friend may have played before this player opened today's set.
+        progress = await friends_active_today(db, user.id)
+        if progress >= definition.target_value:
+            completed_at = datetime.now(timezone.utc)
     row = rows_by_definition.get(definition.id)
     if row is None:
         row = UserTask(user_id=user.id, task_definition_id=definition.id)
         rows_by_definition[definition.id] = row
     row.slot_index = slot_index
     row.period_key = key
-    row.progress = 0
+    row.progress = progress
     row.completed_at = completed_at
     row.reward_claimed = False
     row.metric_baseline = baseline
@@ -216,6 +239,7 @@ DEFAULT_ROUTES = {
     "saboteur_levels_cleared": "/play/saboteur",
     "trades_completed": "/trades",
     "referrals_count": "/friends",
+    FRIENDS_ACTIVE_TODAY: "/friends",
     TaskConditionType.match_min_rating.value: "/play/arena",
     TaskConditionType.match_same_country.value: "/play/arena",
     TaskConditionType.penalty_win_max_rating.value: "/play/penalty",
