@@ -7,6 +7,7 @@ from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.models.card import UserCard
 from app.models.coach import Coach
 from app.models.personal_squad import PersonalSquad, PersonalSquadCard
+from app.models.stadium import Stadium
 from app.models.user import User
 from app.models.user_coach_card import UserCoachCard
 from app.models.user_stadium_card import UserStadiumCard
@@ -154,7 +155,7 @@ def _serialize(
         s = squad.user_stadium_card.stadium
         stadium = EquippedStadiumOut(
             id=s.id, display_name=s.display_name, rarity=s.rarity.value,
-            image_path=s.image_path, boost_pct=float(s.boost_pct), club=s.club,
+            image_path=s.image_path, boost_pct=float(s.boost_pct), club=s.club, opp_malus=s.opp_malus or 0,
         )
     return PersonalSquadOut(
         template_index=squad.template_index, name=squad.name, is_active=squad.is_active,
@@ -373,6 +374,28 @@ async def resolve_active_squad(
 async def is_squad_complete(db: AsyncSession, user_id: int) -> bool:
     squad, pairs = await resolve_active_squad(db, user_id)
     return len(pairs) == len(get_formation_slots(squad.formation))
+
+
+async def active_staff(db: AsyncSession, user_id: int) -> tuple[Coach | None, Stadium | None]:
+    """(coach, stadium) of the user's active squad — what the tournament
+    opponent's lines lose to («Проклятый стадион», Моуриньо, …)."""
+    squad = (await db.execute(
+        select(PersonalSquad)
+        .where(PersonalSquad.user_id == user_id, PersonalSquad.is_active.is_(True))
+        .options(
+            joinedload(PersonalSquad.user_coach_card).joinedload(UserCoachCard.coach).selectinload(Coach.boosts),
+            joinedload(PersonalSquad.user_stadium_card).joinedload(UserStadiumCard.stadium),
+        )
+        # The squad row is usually already in the identity map (other matches
+        # of the round): re-read the equipped coach / stadium.
+        .execution_options(populate_existing=True)
+    )).unique().scalar_one_or_none()
+    if squad is None:
+        return None, None
+    return (
+        squad.user_coach_card.coach if squad.user_coach_card else None,
+        squad.user_stadium_card.stadium if squad.user_stadium_card else None,
+    )
 
 
 async def active_tactics(db: AsyncSession, user_id: int) -> tuple[str, str]:

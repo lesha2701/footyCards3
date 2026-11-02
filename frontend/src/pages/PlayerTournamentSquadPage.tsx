@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { stadiumEffectText } from "@/lib/stadiums";
 import { useNavigate } from "react-router-dom";
 import { useRef, useState } from "react";
 
@@ -367,9 +368,16 @@ export default function PlayerTournamentSquadPage() {
                           alt="" className="h-full w-full object-cover" loading="lazy"
                         />
                       </div>
-                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-accent-cyan">
-                        +{Math.round(squad.stadium.boost_pct * 100)}%
-                      </span>
+                      {squad.stadium.boost_pct > 0 && (
+                        <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-accent-cyan">
+                          +{Math.round(squad.stadium.boost_pct * 100)}%
+                        </span>
+                      )}
+                      {!!squad.stadium.opp_malus && (
+                        <span className="rounded-full bg-red-600/80 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-white">
+                          ☠ −{squad.stadium.opp_malus}
+                        </span>
+                      )}
                     </>
                   ) : (
                     <>
@@ -435,7 +443,7 @@ export default function PlayerTournamentSquadPage() {
         {squad?.stadium && (
           <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
             <p className="text-xs font-semibold text-ink-chalk">{squad.stadium.display_name}</p>
-            <p className="mt-0.5 text-caption text-ink-mist">+{Math.round(squad.stadium.boost_pct * 100)}% к силе</p>
+            <p className="mt-0.5 text-caption text-ink-mist">{stadiumEffectText(squad.stadium)}</p>
           </div>
         )}
       </section>
