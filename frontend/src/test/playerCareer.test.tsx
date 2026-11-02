@@ -176,6 +176,14 @@ describe("PlayerCareerPage", () => {
         table: [{ place: 1, user_id: 7, user_name: "Петя", is_me: false, matches: 10, goals: 0, assists: 0, clean_sheets: 6, line: "GK", avg_rating: 7.4, score: 116 }],
         me: { place: 0, user_id: 1, user_name: "Я", is_me: true, matches: 5, goals: 2, assists: 1, clean_sheets: 0, line: "FWD", avg_rating: 7, score: 78 },
         winners: [{ month: "2026-09", month_label: "Сентябрь 2026", user_name: "Вася", is_me: false, score: 120, goals: 11, assists: 4, avg_rating: 7.9 }],
+        award_coins: 1500, award_prestige: 25,
+        awards: [
+          { code: "golden_boot", trophy: "player_career_golden_boot", title: "Золотая бутса", line: null, stat: "goals",
+            leader: { user_name: "Вася", is_me: false, value: 9 }, my_value: 2, my_place: null, last: null },
+          { code: "golden_glove", trophy: "player_career_golden_glove", title: "Золотая перчатка", line: "GK", stat: "clean_sheets",
+            leader: { user_name: "Петя", is_me: false, value: 6 }, my_value: null, my_place: null,
+            last: { month_label: "Сентябрь 2026", user_name: "Петя", is_me: false, value: 5 } },
+        ],
       },
     });
     renderPage();
@@ -193,6 +201,12 @@ describe("PlayerCareerPage", () => {
     expect(ball).toHaveTextContent("Сентябрь 2026: Вася");
     expect(screen.getByTestId("golden-ball-weights")).toHaveTextContent("Вратарь: гол 6 · пас 3 · на ноль 7");
     expect(ball).toHaveTextContent("🧱 6");
+    expect(screen.getByTestId("award-golden_boot")).toHaveTextContent("Вася · 9 голов");
+    expect(screen.getByTestId("award-golden_boot")).toHaveTextContent("Ты: 2 голов");
+    const glove = screen.getByTestId("award-golden_glove");
+    expect(glove).toHaveTextContent("только вратари");
+    expect(glove).toHaveTextContent("Сентябрь 2026: Петя");
+    expect(screen.getByTestId("month-awards")).toHaveTextContent("1500 монет");
   });
 
   it("plays a key moment: action, timing, result", async () => {

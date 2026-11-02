@@ -548,7 +548,7 @@ class GameConfig(TimestampMixin, Base):
             "gloves_lime": 30, "gloves_pink": 30, "gloves_gold": 60,
             "cel_shush": 60, "cel_flex": 60, "cel_knee": 75, "cel_calma": 90, "cel_flip": 120, "cel_siu_gold": 300,
             "walk_smoke": 60, "walk_fireworks": 100, "walk_legend": 250,
-            "sc_gold": 75, "sc_crystal": 150,
+            "sc_gold": 75, "sc_crystal": 150, "sc_stadium": 120, "sc_velvet": 150, "sc_neon": 100,
         },
     )
     # Limited style items: {code: copies}; each copy is numbered by sale
@@ -633,6 +633,10 @@ class GameConfig(TimestampMixin, Base):
     player_career_golden_ball_min_matches: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
     player_career_golden_ball_coins: Mapped[int] = mapped_column(Integer, default=3000, nullable=False)
     player_career_golden_ball_prestige: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    # Each month award («Золотая бутса», «Король передач», «Золотая перчатка»,
+    # «Лучший защитник»): coins and prestige.
+    player_career_award_coins: Mapped[int] = mapped_column(Integer, default=1500, nullable=False)
+    player_career_award_prestige: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
     # Key moments in the player's league match (+1 with «Карьера Pro»).
     player_career_moments: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     # Key moment: +% success for a good timing hit.

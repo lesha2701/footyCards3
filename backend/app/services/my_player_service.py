@@ -149,6 +149,9 @@ COSMETICS = {
     "sc_marble": ("showcase", "Мраморная витрина"),
     "sc_gold": ("showcase", "Золотая витрина"),
     "sc_crystal": ("showcase", "Хрустальная витрина"),
+    "sc_stadium": ("showcase", "Витрина «Ночной стадион»"),
+    "sc_velvet": ("showcase", "Витрина «Королевский бархат»"),
+    "sc_neon": ("showcase", "Неоновая витрина"),
 }
 COSMETIC_KINDS = (
     "accessory", "background", "effect", "hair", "celebration", "ball", "boots", "gloves", "walkout", "showcase",
@@ -162,6 +165,7 @@ COSMETIC_STATUS = {
     "hair_neymar": 30, "hair_cr7": 25, "hair_pogba": 20, "aviators": 15, "diamond_chain": 20,
     "crown": 25, "bg_galaxy": 10, "bg_champions": 15, "fx_sparkle": 8, "fx_fire": 10, "fx_lightning": 15,
     "cel_siu_gold": 40, "walk_legend": 35, "cel_flip": 10, "walk_fireworks": 10, "sc_gold": 10, "sc_crystal": 20,
+    "sc_stadium": 15, "sc_velvet": 20, "sc_neon": 15,
 }
 
 TRAINING_MAX_HITS = 3
@@ -197,6 +201,7 @@ DUEL_CHANCE_RANGE = (0.08, 0.75)
 TROPHY_CODES = (
     "player_career_champion", "player_career_top_scorer", "player_career_mvp",
     "player_career_cl_winner", "player_career_national_winner", "player_career_golden_ball",
+    "player_career_golden_boot", "player_career_top_assist", "player_career_golden_glove", "player_career_best_defender",
 )
 
 NAME_RE = re.compile(r"^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё .'\-]{1,19}$")

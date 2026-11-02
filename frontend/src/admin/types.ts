@@ -471,6 +471,8 @@ export interface GameConfig {
   player_career_golden_ball_min_matches: number;
   player_career_golden_ball_coins: number;
   player_career_golden_ball_prestige: number;
+  player_career_award_coins: number;
+  player_career_award_prestige: number;
   player_career_moments: number;
   player_career_moment_hit_pct: number;
   player_career_moment_window_hours: number;

@@ -287,6 +287,31 @@ class PlayerCareerGoldenBallWinnerOut(BaseModel):
     avg_rating: float
 
 
+class PlayerCareerAwardLeaderOut(BaseModel):
+    user_name: str
+    is_me: bool
+    value: float
+
+
+class PlayerCareerAwardLastOut(PlayerCareerAwardLeaderOut):
+    month_label: str
+
+
+class PlayerCareerMonthAwardOut(BaseModel):
+    # golden_boot | top_assist | golden_glove | best_defender
+    code: str
+    trophy: str
+    title: str
+    # Only this line competes (GK / DEF); null = every line.
+    line: Optional[str] = None
+    # goals | assists | clean_sheets | score
+    stat: str
+    leader: Optional[PlayerCareerAwardLeaderOut] = None
+    my_value: Optional[float] = None
+    my_place: Optional[int] = None
+    last: Optional[PlayerCareerAwardLastOut] = None
+
+
 class PlayerCareerGoldenBallOut(BaseModel):
     month: str
     month_label: str
@@ -295,6 +320,12 @@ class PlayerCareerGoldenBallOut(BaseModel):
     prize_prestige: int
     # Points per goal / assist / clean sheet by line.
     weights: dict[str, dict[str, int]] = {}
+    # Each line's average rating / contribution per match this month — the
+    # form index is measured against them (~100 = an average month).
+    baselines: dict[str, dict[str, float]] = {}
+    award_coins: int = 0
+    award_prestige: int = 0
+    awards: list[PlayerCareerMonthAwardOut] = []
     table: list[PlayerCareerGoldenBallEntryOut]
     me: Optional[PlayerCareerGoldenBallEntryOut] = None
     winners: list[PlayerCareerGoldenBallWinnerOut]

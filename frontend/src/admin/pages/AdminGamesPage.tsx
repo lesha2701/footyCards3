@@ -58,6 +58,9 @@ const MY_PLAYER_COSMETICS: [string, string][] = [
   ["sc_marble", "Мраморная витрина трофеев"],
   ["sc_gold", "Золотая витрина трофеев"],
   ["sc_crystal", "Хрустальная витрина трофеев"],
+  ["sc_stadium", "Витрина трофеев «Ночной стадион»"],
+  ["sc_velvet", "Витрина трофеев «Королевский бархат»"],
+  ["sc_neon", "Неоновая витрина трофеев"],
 ];
 
 const WEEKLY_TOP_METRICS: [string, string][] = [
@@ -785,6 +788,8 @@ export default function AdminGamesPage() {
           {field("player_career_golden_ball_min_matches", "Золотой мяч: минимум матчей")}
           {field("player_career_golden_ball_coins", "Золотой мяч: монеты")}
           {field("player_career_golden_ball_prestige", "Золотой мяч: престиж")}
+          {field("player_career_award_coins", "Призы месяца (бутса, передачи, перчатка, защитник): монеты")}
+          {field("player_career_award_prestige", "Призы месяца: престиж")}
           {field("player_career_moments", "Ключевых моментов в матче")}
           {field("player_career_moment_hit_pct", "Момент: +% шанса за тайминг")}
           {field("player_career_moment_window_hours", "Момент: ждать решения, часов")}

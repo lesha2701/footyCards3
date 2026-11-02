@@ -9,11 +9,19 @@
   up; 8 national teams built from the cards of each country, same knockout.
 - Coins for every round won (config *_rewards), XP per match, prestige and a
   trophy for the title; the player's match stats feed the month table.
-- «Золотой мяч»: the best of the month by score = average rating x 10 +
-  goals, assists and clean sheets weighted by the player's line (LINE_WEIGHTS:
-  a defender's goal is worth more than a forward's, keepers and defenders
-  score with clean sheets), at least config min matches. Awarded once per
-  month (PlayerCareerGoldenBall's primary key) when the next month starts.
+- «Золотой мяч»: the best of the month by a form index measured against
+  the player's own line (score_of): 50 x average rating / the line's average
+  rating + 50 x contribution per match / the line's average contribution
+  (goals, assists and clean sheets at LINE_WEIGHTS). An average player of any
+  line scores ~100, so a keeper who stands out among keepers beats a forward
+  who is merely good among forwards. Line averages are shrunk towards
+  LINE_PRIOR (LINE_PRIOR_WEIGHT virtual players) so a thin line isn't decided
+  by one or two players. At least config min matches. Awarded once per month
+  (PlayerCareerGoldenBall's primary key) when the next month starts.
+- Призы месяца (MONTH_AWARDS): «Золотая бутса» (goals), «Король передач»
+  (assists), «Золотая перчатка» (keepers, clean sheets) and «Лучший
+  защитник» (defenders, form index) — same minimum of matches, awarded with
+  the «Золотой мяч» once per (month, code) (PlayerCareerMonthAward's key).
 """
 import copy
 import random
@@ -29,7 +37,7 @@ from app.core.timeutil import app_timezone, ensure_aware, local_today
 from app.models.enums import NotificationType, TransactionType
 from app.models.my_player import MyPlayer
 from app.models.player import Player
-from app.models.player_career import PlayerCareerCup, PlayerCareerGoldenBall, PlayerCareerMonthStat
+from app.models.player_career import PlayerCareerCup, PlayerCareerGoldenBall, PlayerCareerMonthAward, PlayerCareerMonthStat
 from app.models.user import User
 from app.services import my_player_service, player_career_clubs as pcc, tournament_match_engine, wallet_service
 from app.services.career_service import build_schedule
@@ -55,6 +63,23 @@ LINE_WEIGHTS = {
     "MID": {"goals": 4, "assists": 3, "clean_sheets": 1},
     "DEF": {"goals": 6, "assists": 3, "clean_sheets": 4},
     "GK": {"goals": 6, "assists": 3, "clean_sheets": 7},
+}
+# Typical month of each line (per match): the shrinkage target of the line
+# averages in score_of.
+LINE_PRIOR = {
+    "FWD": {"rating": 7.0, "contribution": 2.3},
+    "MID": {"rating": 6.9, "contribution": 2.4},
+    "DEF": {"rating": 6.9, "contribution": 2.1},
+    "GK": {"rating": 6.9, "contribution": 2.1},
+}
+LINE_PRIOR_WEIGHT = 4
+# Monthly awards besides the «Золотой мяч»: code -> (trophy, title, line or
+# None for every line, the stat it is decided by).
+MONTH_AWARDS = {
+    "golden_boot": ("player_career_golden_boot", "Золотая бутса", None, "goals"),
+    "top_assist": ("player_career_top_assist", "Король передач", None, "assists"),
+    "golden_glove": ("player_career_golden_glove", "Золотая перчатка", "GK", "clean_sheets"),
+    "best_defender": ("player_career_best_defender", "Лучший защитник", "DEF", "score"),
 }
 MONTHS = ("январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь")
 
@@ -111,108 +136,237 @@ async def record_match(
         await my_player_extras.progress(db, user_id, "career_win", 1, at)
 
 
-def score_of(row: PlayerCareerMonthStat) -> float:
-    avg = row.rating_sum / row.matches if row.matches else 0
+def _avg_rating(row: PlayerCareerMonthStat) -> float:
+    return row.rating_sum / row.matches if row.matches else 0
+
+
+def _contribution(row: PlayerCareerMonthStat) -> float:
+    """Points per match: goals, assists and clean sheets at the line's weights."""
+    if not row.matches:
+        return 0
     w = LINE_WEIGHTS.get(row.line or "FWD", LINE_WEIGHTS["FWD"])
-    return round(avg * 10 + row.goals * w["goals"] + row.assists * w["assists"] + (row.clean_sheets or 0) * w["clean_sheets"], 1)
+    return (row.goals * w["goals"] + row.assists * w["assists"] + (row.clean_sheets or 0) * w["clean_sheets"]) / row.matches
 
 
-async def _month_table(db: AsyncSession, key: str, config, limit: int = 20) -> list[tuple[PlayerCareerMonthStat, User]]:
+def line_baselines(rows: list[PlayerCareerMonthStat]) -> dict[str, dict[str, float]]:
+    """Each line's average rating and contribution among the given (eligible)
+    month rows, shrunk towards LINE_PRIOR."""
+    out = {}
+    for line, prior in LINE_PRIOR.items():
+        mine = [r for r in rows if (r.line or "FWD") == line]
+        k = LINE_PRIOR_WEIGHT
+        out[line] = {
+            "rating": (sum(_avg_rating(r) for r in mine) + k * prior["rating"]) / (len(mine) + k),
+            "contribution": (sum(_contribution(r) for r in mine) + k * prior["contribution"]) / (len(mine) + k),
+        }
+    return out
+
+
+def score_of(row: PlayerCareerMonthStat, baselines: Optional[dict] = None) -> float:
+    """Form index against the player's own line: ~100 is an average month."""
+    base = (baselines or LINE_PRIOR).get(row.line or "FWD", LINE_PRIOR["FWD"])
+    rating = _avg_rating(row) / base["rating"] if base["rating"] else 0
+    contribution = _contribution(row) / base["contribution"] if base["contribution"] else 0
+    return round(50 * rating + 50 * contribution, 1)
+
+
+async def _eligible(db: AsyncSession, key: str, config) -> list[tuple[PlayerCareerMonthStat, User]]:
     rows = (await db.execute(
         select(PlayerCareerMonthStat, User).join(User, User.id == PlayerCareerMonthStat.user_id)
-        .where(PlayerCareerMonthStat.month == key)
+        .where(PlayerCareerMonthStat.month == key, PlayerCareerMonthStat.matches >= config.player_career_golden_ball_min_matches)
     )).all()
-    eligible = [(r, u) for r, u in rows if r.matches >= config.player_career_golden_ball_min_matches]
-    return sorted(eligible, key=lambda ru: (-score_of(ru[0]), ru[0].user_id))[:limit]
+    return [(r, u) for r, u in rows]
+
+
+async def _month_table(
+    db: AsyncSession, key: str, config, limit: Optional[int] = 20,
+) -> tuple[list[tuple[PlayerCareerMonthStat, User]], dict]:
+    """The month's «Золотой мяч» race and the line baselines it was scored by."""
+    eligible = await _eligible(db, key, config)
+    baselines = line_baselines([r for r, _ in eligible])
+    ranked = sorted(eligible, key=lambda ru: (-score_of(ru[0], baselines), ru[0].user_id))
+    return (ranked[:limit] if limit else ranked), baselines
+
+
+def award_value(code: str, row: PlayerCareerMonthStat, baselines: dict) -> float:
+    stat = MONTH_AWARDS[code][3]
+    return score_of(row, baselines) if stat == "score" else float(getattr(row, stat) or 0)
+
+
+def award_race(code: str, eligible: list[tuple[PlayerCareerMonthStat, User]], baselines: dict) -> list[tuple[PlayerCareerMonthStat, User, float]]:
+    """Candidates of a month award, best first (ties: higher average rating,
+    then the earlier player); a counting stat needs at least one."""
+    _, _, line, stat = MONTH_AWARDS[code]
+    rows = [(r, u, award_value(code, r, baselines)) for r, u in eligible if line is None or (r.line or "FWD") == line]
+    if stat != "score":
+        rows = [x for x in rows if x[2] > 0]
+    return sorted(rows, key=lambda x: (-x[2], -_avg_rating(x[0]), x[0].user_id))
+
+
+async def _prize(db: AsyncSession, user_id: int, coins: int, prestige: int, title: str, label: str, related: str) -> None:
+    locked = await wallet_service.lock_user_for_update(db, user_id)
+    if coins > 0:
+        await wallet_service.credit_coins(
+            db, locked, coins, TransactionType.player_career_reward, f"{title} · {label}", related_object_type=related,
+        )
+    mp = await my_player_service.get_my_player(db, user_id)
+    if mp is not None:
+        mp.reputation = (mp.reputation or 0) + prestige
+
+
+def award_text(code: str, value: float) -> str:
+    stat = MONTH_AWARDS[code][3]
+    n = int(value)
+    if stat == "goals":
+        return f"{n} голов"
+    if stat == "assists":
+        return f"{n} передач"
+    if stat == "clean_sheets":
+        return f"{n} сухих матчей"
+    return f"индекс формы {value:g}"
 
 
 async def award_golden_ball(db: AsyncSession, now: Optional[datetime] = None) -> Optional[int]:
-    """Awards last month's «Золотой мяч» once (a row is written even with no
-    winner). Returns the winner's user id. Commits."""
+    """Awards last month's «Золотой мяч» and the month awards once each (a
+    row is written even with no winner). Returns the «Золотой мяч» winner's
+    user id when this call awarded it. Commits."""
     from app.services.game_config_service import get_config
     from app.services.player_career_service import _grant_trophy
 
     now = now or datetime.now(timezone.utc)
     local = ensure_aware(now).astimezone(app_timezone())
-    first = local.replace(day=1)
-    previous = month_key(first - timedelta(days=1))
-    if await db.get(PlayerCareerGoldenBall, previous):
+    previous = month_key(local.replace(day=1) - timedelta(days=1))
+    ball_done = await db.get(PlayerCareerGoldenBall, previous) is not None
+    done_awards = set((await db.execute(
+        select(PlayerCareerMonthAward.code).where(PlayerCareerMonthAward.month == previous)
+    )).scalars().all())
+    if ball_done and done_awards >= set(MONTH_AWARDS):
         return None
     config = await get_config(db)
-    table = await _month_table(db, previous, config, limit=1)
-    winner = table[0] if table else None
-    row = PlayerCareerGoldenBall(month=previous, user_id=None, score=0)
-    if winner:
-        stat, user = winner
-        row.user_id = user.id
-        row.score = score_of(stat)
-        row.goals, row.assists = stat.goals, stat.assists
-        row.avg_rating = round(stat.rating_sum / stat.matches, 2)
-    try:
-        async with db.begin_nested():
-            db.add(row)
-            await db.flush()
-    except IntegrityError:
-        return None  # someone else just awarded it
-    if winner:
-        stat, user = winner
-        await _grant_trophy(db, user.id, GOLDEN_BALL_TROPHY, f"{month_label(previous)}: {stat.goals} голов, оценка {row.avg_rating}")
-        locked = await wallet_service.lock_user_for_update(db, user.id)
-        if config.player_career_golden_ball_coins > 0:
-            await wallet_service.credit_coins(
-                db, locked, config.player_career_golden_ball_coins, TransactionType.player_career_reward,
-                f"Золотой мяч · {month_label(previous)}", related_object_type="player_career_golden_ball",
+    eligible = await _eligible(db, previous, config)
+    baselines = line_baselines([r for r, _ in eligible])
+    label = month_label(previous)
+    winner_id = None
+
+    if not ball_done:
+        ranked = sorted(eligible, key=lambda ru: (-score_of(ru[0], baselines), ru[0].user_id))
+        winner = ranked[0] if ranked else None
+        row = PlayerCareerGoldenBall(month=previous, user_id=None, score=0)
+        if winner:
+            stat, user = winner
+            row.user_id = user.id
+            row.score = score_of(stat, baselines)
+            row.goals, row.assists = stat.goals, stat.assists
+            row.avg_rating = round(_avg_rating(stat), 2)
+        try:
+            async with db.begin_nested():
+                db.add(row)
+                await db.flush()
+        except IntegrityError:
+            winner = None  # someone else just awarded it
+        if winner:
+            stat, user = winner
+            winner_id = user.id
+            await _grant_trophy(db, user.id, GOLDEN_BALL_TROPHY, f"{label}: {stat.goals} голов, оценка {row.avg_rating}")
+            await _prize(
+                db, user.id, config.player_career_golden_ball_coins, config.player_career_golden_ball_prestige,
+                "Золотой мяч", label, "player_career_golden_ball",
             )
-        mp = await my_player_service.get_my_player(db, user.id)
-        if mp is not None:
-            mp.reputation = (mp.reputation or 0) + config.player_career_golden_ball_prestige
+            await notify(
+                db, user.id, NotificationType.player_career_event, "🏆 Ты выиграл «Золотой мяч»!",
+                f"Лучший игрок за {label.lower()}: +{config.player_career_golden_ball_coins} монет и "
+                f"+{config.player_career_golden_ball_prestige} престижа",
+            )
+
+    for code, (trophy, title, _, _) in MONTH_AWARDS.items():
+        if code in done_awards:
+            continue
+        race = award_race(code, eligible, baselines)
+        best = race[0] if race else None
+        row = PlayerCareerMonthAward(
+            month=previous, code=code, user_id=best[1].id if best else None,
+            value=best[2] if best else 0, avg_rating=round(_avg_rating(best[0]), 2) if best else 0,
+        )
+        try:
+            async with db.begin_nested():
+                db.add(row)
+                await db.flush()
+        except IntegrityError:
+            continue
+        if best is None:
+            continue
+        _, user, value = best
+        await _grant_trophy(db, user.id, trophy, f"{label}: {award_text(code, value)}")
+        await _prize(db, user.id, config.player_career_award_coins, config.player_career_award_prestige, title, label, trophy)
         await notify(
-            db, user.id, NotificationType.player_career_event, "🏆 Ты выиграл «Золотой мяч»!",
-            f"Лучший игрок за {month_label(previous).lower()}: +{config.player_career_golden_ball_coins} монет и "
-            f"+{config.player_career_golden_ball_prestige} престижа",
+            db, user.id, NotificationType.player_career_event, f"🏆 «{title}» за {label.lower()}!",
+            f"{award_text(code, value).capitalize()}: +{config.player_career_award_coins} монет и "
+            f"+{config.player_career_award_prestige} престижа",
         )
     await db.commit()
-    return winner[1].id if winner else None
+    return winner_id
 
 
 async def golden_ball_view(db: AsyncSession, user: User, config, now: Optional[datetime] = None) -> dict:
     now = now or datetime.now(timezone.utc)
     key = month_key(now)
-    table = await _month_table(db, key, config)
+    ranked, baselines = await _month_table(db, key, config, limit=None)
     mine = (await db.execute(
         select(PlayerCareerMonthStat).where(PlayerCareerMonthStat.user_id == user.id, PlayerCareerMonthStat.month == key)
     )).scalar_one_or_none()
-    my_place = None
-    if mine is not None and mine.matches >= config.player_career_golden_ball_min_matches:
-        ahead = (await db.execute(
-            select(func.count()).select_from(PlayerCareerMonthStat).where(
-                PlayerCareerMonthStat.month == key,
-                PlayerCareerMonthStat.matches >= config.player_career_golden_ball_min_matches,
-            )
-        )).scalar_one()
-        all_rows = await _month_table(db, key, config, limit=max(1, ahead))
-        my_place = next((i + 1 for i, (r, _) in enumerate(all_rows) if r.user_id == user.id), None)
+    my_place = next((i + 1 for i, (r, _) in enumerate(ranked) if r.user_id == user.id), None)
     winners = (await db.execute(
         select(PlayerCareerGoldenBall, User).outerjoin(User, User.id == PlayerCareerGoldenBall.user_id)
         .where(PlayerCareerGoldenBall.user_id.is_not(None)).order_by(PlayerCareerGoldenBall.month.desc()).limit(6)
     )).all()
 
+    def name(owner: Optional[User]) -> str:
+        return (owner.first_name or owner.username or "Игрок") if owner else "—"
+
     def entry(stat: PlayerCareerMonthStat, owner: User, place: int) -> dict:
         return {
-            "place": place, "user_id": owner.id, "user_name": owner.first_name or owner.username or "Игрок",
+            "place": place, "user_id": owner.id, "user_name": name(owner),
             "is_me": owner.id == user.id, "matches": stat.matches, "goals": stat.goals, "assists": stat.assists,
             "clean_sheets": stat.clean_sheets or 0, "line": stat.line or "FWD",
-            "avg_rating": round(stat.rating_sum / stat.matches, 2) if stat.matches else None, "score": score_of(stat),
+            "avg_rating": round(_avg_rating(stat), 2) if stat.matches else None, "score": score_of(stat, baselines),
         }
+
+    last_key = month_key(ensure_aware(now).astimezone(app_timezone()).replace(day=1) - timedelta(days=1))
+    last = {
+        a.code: (a, u) for a, u in (await db.execute(
+            select(PlayerCareerMonthAward, User).outerjoin(User, User.id == PlayerCareerMonthAward.user_id)
+            .where(PlayerCareerMonthAward.month == last_key)
+        )).all()
+    }
+    mine_eligible = mine is not None and mine.matches >= config.player_career_golden_ball_min_matches
+    awards = []
+    for code, (trophy, title, line, stat_name) in MONTH_AWARDS.items():
+        race = award_race(code, ranked, baselines)
+        leader = race[0] if race else None
+        my_line = mine is not None and (line is None or (mine.line or "FWD") == line)
+        prev = last.get(code)
+        awards.append({
+            "code": code, "trophy": trophy, "title": title, "line": line, "stat": stat_name,
+            "leader": {"user_name": name(leader[1]), "is_me": leader[1].id == user.id, "value": leader[2]} if leader else None,
+            "my_value": award_value(code, mine, baselines) if my_line else None,
+            "my_place": next((i + 1 for i, x in enumerate(race) if x[0].user_id == user.id), None) if mine_eligible else None,
+            "last": {
+                "month_label": month_label(last_key), "user_name": name(prev[1]),
+                "is_me": prev[1].id == user.id, "value": prev[0].value,
+            } if prev and prev[1] is not None else None,
+        })
 
     return {
         "month": key, "month_label": month_label(key), "min_matches": config.player_career_golden_ball_min_matches,
         "prize_coins": config.player_career_golden_ball_coins, "prize_prestige": config.player_career_golden_ball_prestige,
+        "award_coins": config.player_career_award_coins, "award_prestige": config.player_career_award_prestige,
         "weights": LINE_WEIGHTS,
-        "table": [entry(r, u, i + 1) for i, (r, u) in enumerate(table)],
+        "baselines": {line: {k: round(v, 2) for k, v in b.items()} for line, b in baselines.items()},
+        "table": [entry(r, u, i + 1) for i, (r, u) in enumerate(ranked[:20])],
         "me": entry(mine, user, my_place or 0) if mine is not None else None,
+        "awards": awards,
         "winners": [
-            {"month": g.month, "month_label": month_label(g.month), "user_name": (u.first_name or u.username or "Игрок") if u else "—",
+            {"month": g.month, "month_label": month_label(g.month), "user_name": name(u),
              "is_me": bool(u and u.id == user.id), "score": g.score, "goals": g.goals, "assists": g.assists,
              "avg_rating": g.avg_rating}
             for g, u in winners

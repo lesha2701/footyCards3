@@ -482,6 +482,8 @@ class GameConfigOut(BaseModel):
     player_career_golden_ball_min_matches: int = 8
     player_career_golden_ball_coins: int = 3000
     player_career_golden_ball_prestige: int = 50
+    player_career_award_coins: int = 1500
+    player_career_award_prestige: int = 25
     player_career_moments: int = 2
     player_career_moment_hit_pct: int = 18
     player_career_moment_window_hours: int = 6
@@ -1289,6 +1291,8 @@ class GameConfigUpdate(BaseModel):
     player_career_golden_ball_min_matches: Optional[int] = Field(default=None, ge=1, le=200)
     player_career_golden_ball_coins: Optional[int] = Field(default=None, ge=0)
     player_career_golden_ball_prestige: Optional[int] = Field(default=None, ge=0, le=10000)
+    player_career_award_coins: Optional[int] = Field(default=None, ge=0)
+    player_career_award_prestige: Optional[int] = Field(default=None, ge=0, le=10000)
     player_career_moments: Optional[int] = Field(default=None, ge=0, le=5)
     player_career_moment_hit_pct: Optional[int] = Field(default=None, ge=0, le=60)
     player_career_moment_window_hours: Optional[int] = Field(default=None, ge=1, le=48)
