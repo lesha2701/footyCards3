@@ -129,3 +129,35 @@ def test_tournament_shifts_and_rated_stand_ins():
     assert shifted[0][0].player.rating == 99 and shifted[0][0].id == 7  # capped at 99
     assert shifted[1][0] is card  # no shift → the card itself
     assert coach_boost_service.with_rating_shifts(pairs, {"FWD": -200})[0][0].player.rating == 1
+
+
+async def test_muse_counts_toward_a_card_collection_and_limited_never_drops(client, db_session, bot_token):
+    from app.services import muse_service
+
+    admin = await _admin(client, bot_token)
+    collection = CardCollection(name="Музы легенд (тест)", reward_coins=555)
+    db_session.add(collection)
+    await db_session.flush()
+    created = await client.post("/api/v1/admin/muses/muses", headers=admin, json={
+        "name": "Муза-лимитка (тест)", "rarity": "legendary", "card_collection_id": collection.id,
+        "is_pack_droppable": False,
+    })
+    assert created.status_code == 200, created.text
+    assert created.json()["is_pack_droppable"] is False and created.json()["card_collection_id"] == collection.id
+    plain = Muse(name="Обычная муза (тест)", effect="daily_coins", effect_value=100)
+    db_session.add(plain)
+    await db_session.commit()
+
+    pool = {m.id for m in await muse_service.droppable(db_session)}
+    assert plain.id in pool and created.json()["id"] not in pool
+
+    headers, user = await _user(client, db_session, bot_token, 991002)
+    balance = user.balance
+    album = (await client.get(f"/api/v1/collection/album/{collection.id}", headers=headers)).json()
+    assert album["total_count"] == 1 and album["staff"][0]["kind"] == "muse" and not album["staff"][0]["owned"]
+
+    await _buy(client, db_session, admin, user, {"muse_id": created.json()["id"]}, "mc-1")
+    await db_session.refresh(user)
+    assert user.balance == balance + 555  # the Muse alone completes the collection
+    album = (await client.get(f"/api/v1/collection/album/{collection.id}", headers=headers)).json()
+    assert album["is_complete"] and album["staff"][0]["owned"]

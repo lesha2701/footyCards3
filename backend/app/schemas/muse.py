@@ -38,6 +38,10 @@ class MuseIn(BaseModel):
     effect: str = "daily_coins"
     effect_value: int = Field(default=100, ge=0, le=100_000)
     drop_weight: int = Field(default=100, ge=0, le=100_000)
+    # False = «лимитка» (never in packs).
+    is_pack_droppable: bool = True
+    # A footballers' card collection she counts toward (None = none).
+    card_collection_id: Optional[int] = None
     is_active: bool = True
     sort_order: int = 0
 

@@ -2016,11 +2016,13 @@ export interface AlbumCollectionDetail {
 }
 
 export interface AlbumStaff {
-  kind: "coach" | "stadium";
+  kind: "coach" | "stadium" | "muse";
   id: number;
   name: string;
   rarity: Rarity;
   image_path: string | null;
+  /** A Muse's emoji while she has no photo. */
+  icon?: string | null;
   owned: boolean;
   effects: string[];
 }

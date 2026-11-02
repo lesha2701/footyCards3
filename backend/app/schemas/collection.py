@@ -255,11 +255,13 @@ class AlbumCollectionDetailOut(BaseModel):
 
 
 class AlbumStaffOut(BaseModel):
-    kind: str  # "coach" | "stadium"
+    kind: str  # "coach" | "stadium" | "muse"
     id: int
     name: str
     rarity: str
     image_path: Optional[str] = None
+    # A Muse's emoji, shown while she has no photo.
+    icon: Optional[str] = None
     owned: bool
     # What it does, short: «−5 к рейтингу соперника», «+8 Защита в центре», …
     effects: List[str] = []

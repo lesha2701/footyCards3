@@ -1439,7 +1439,7 @@ const MUSE_FIELDS: Record<AdminMuseKind, readonly string[]> = {
   collections: ["name", "description", "is_active", "sort_order"],
   muses: [
     "name", "title", "description", "icon", "rarity", "collection_id", "effect", "effect_value", "drop_weight",
-    "is_active", "sort_order",
+    "is_pack_droppable", "card_collection_id", "is_active", "sort_order",
   ],
   accessories: [
     "name", "description", "icon", "kind", "rarity", "boost_pct", "coins_price", "stars_price", "is_active", "sort_order",

@@ -1311,6 +1311,10 @@ export interface AdminMuse {
   effect_value: number;
   effect_label?: string;
   drop_weight: number;
+  /** False = «лимитка»: never drops from packs. */
+  is_pack_droppable: boolean;
+  /** The footballers' card collection she counts toward. */
+  card_collection_id: number | null;
   is_active: boolean;
   sort_order: number;
 }
@@ -1332,7 +1336,8 @@ export interface AdminMuseAccessory {
 }
 
 export interface AdminMuseCatalog {
-  effects: { code: string; label: string }[];
+  /** hint: what N means, where it acts, an example and its ceiling. */
+  effects: { code: string; label: string; hint?: string }[];
   kinds: { code: string; label: string }[];
   rarities: string[];
   collections: AdminMuseCollection[];

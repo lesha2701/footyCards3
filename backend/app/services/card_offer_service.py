@@ -220,6 +220,7 @@ async def deliver_stars(db: AsyncSession, user: User, invoice) -> dict:
         db, locked, [offer.player_id] if offer.player_id else [],
         collection_ids=await collection_service.staff_collection_ids(
             db, [offer.coach_id] if offer.coach_id else [], [offer.stadium_id] if offer.stadium_id else [],
+            [offer.muse_id] if offer.muse_id else [],
         ),
     )
     return {"kind": "card_offer", "user_card_id": card_id}

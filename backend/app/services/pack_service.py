@@ -693,6 +693,7 @@ async def open_pack(
         db, locked_user, [item.card.player.id for item in opened_items],
         collection_ids=await collection_service.staff_collection_ids(
             db, [i.card.coach.id for i in opened_coach_items], [i.card.stadium.id for i in opened_stadium_items],
+            [i.muse["id"] for i in opened_muse_items],
         ),
     )
 
@@ -878,6 +879,7 @@ async def open_pack_bulk(
         db, locked_user, [item.card.player.id for item in all_opened_items],
         collection_ids=await collection_service.staff_collection_ids(
             db, [i.card.coach.id for i in all_opened_coach_items], [i.card.stadium.id for i in all_opened_stadium_items],
+            [i.muse["id"] for i in all_opened_muse_items],
         ),
     )
 
