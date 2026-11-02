@@ -61,6 +61,10 @@ export interface CareerSquadCard {
   /** Rating change for the next match from the last one (+1..+2 / -1). */
   form: number;
   owned: boolean;
+  /** Flank duels: speed / technique / power / reading (seasons with duels). */
+  duel_style?: string | null;
+  /** Character trait (team morale seasons). */
+  trait?: string | null;
 }
 
 export interface CareerSlot {
@@ -128,6 +132,58 @@ export interface CareerProfile {
   promotions: number;
   objectives_met: number;
   achievements?: CareerAchievements;
+  /** The coach's specialization: one, levelled with experience. */
+  coach?: CoachSpecs;
+}
+
+export interface CoachSpec {
+  code: string;
+  label: string;
+  icon: string;
+  about: string;
+  /** Experience of this specialization (kept when switching away). */
+  xp: number;
+  /** 0 = never chosen. */
+  level: number;
+  /** Experience where the current level began / the next one begins (null = max). */
+  level_xp: number;
+  next_xp: number | null;
+  /** What each level gives (index 0 = level 1). */
+  levels: string[];
+}
+
+export interface CoachSpecs {
+  spec: string | null;
+  specs: CoachSpec[];
+  max_level: number;
+  /** When switching is possible again (null = now). */
+  switch_at: string | null;
+  switch_days: number;
+  xp_win: number;
+  xp_draw: number;
+  xp_loss: number;
+  /** Final place of a season: 1st, 2nd–3rd, the rest. */
+  xp_season: number[];
+}
+
+export interface MoraleOption {
+  code: string;
+  label: string;
+  hint: string;
+}
+
+/** Team morale: value 0..100, its level and rating shift, the last changes. */
+export interface CareerMorale {
+  value: number;
+  level: number;
+  label: string;
+  rating: number;
+  log: { round: number; before: number; after: number; reasons: string[] }[];
+  /** Pre-match speech chosen for the next round. */
+  speech: string | null;
+  speeches: MoraleOption[];
+  talks: MoraleOption[];
+  team_building: number;
 }
 
 export interface CareerAchievement {
@@ -379,6 +435,7 @@ export interface CareerSeason {
   second_half?: { round: number; match_index: number; second_half_at: string } | null;
   /** What the coach could still add to the match plan. */
   plan_hints?: { code: string; text: string }[];
+  morale?: CareerMorale | null;
 }
 
 export interface CareerLivePlayer {
@@ -394,6 +451,8 @@ export interface CareerHalftimeOrders {
   mentality: string | null;
   tactic: Tactic;
   subs: { out: number; in: number }[];
+  /** «Разговор в перерыве» (team morale seasons). */
+  talk?: string | null;
 }
 
 export interface CareerLive {
@@ -415,6 +474,7 @@ export interface CareerLive {
   mentality: string | null;
   tactic: Tactic | null;
   orders: CareerHalftimeOrders | null;
+  duels?: HalftimeDuels | null;
 }
 
 export interface CareerLeaderboardRow {
@@ -534,6 +594,71 @@ export async function fetchCareerCupMatch(seasonId: number, round: number, tie: 
   return data;
 }
 
+/** One flank duel: our wide attacker vs the full-back he meets (or theirs vs ours). */
+export interface FlankDuel {
+  attacker: string;
+  defender: string;
+  attacker_card_id: number | null;
+  defender_card_id: number | null;
+  attacker_style: string;
+  defender_style: string;
+  /** Edge in percentage points of duels won (for the attacker). */
+  pp: number;
+  verdict: "easy" | "hard" | "even";
+  reasons: string[];
+  /** Global history of this pair: [attacker wins, defender wins]. */
+  record: [number, number];
+  attacker_player_id?: number | null;
+  /** Where the duel is played: a flank or the centre (striker vs centre-back). */
+  flank: "left" | "right" | "centre";
+}
+
+/** One tap from a hint: switch the flank of attack or the direction (wings / centre), open the squad, or the man-marking card. */
+export interface DuelHintAction {
+  kind: "flank" | "direction" | "squad" | "marking";
+  value?: string;
+  label: string;
+}
+
+export interface DuelHint {
+  text: string;
+  actions: DuelHintAction[];
+}
+
+export interface FlankDuelsPreview {
+  enabled: boolean;
+  opponent?: string;
+  flank?: string;
+  attack?: FlankDuel[];
+  defence?: FlankDuel[];
+  /** Our strikers against their centre-backs. */
+  centre?: FlankDuel[];
+  hints?: DuelHint[];
+}
+
+/** A match's flank duels that involved my players (after the match). */
+export interface PlayedDuel {
+  attacker: string;
+  defender: string;
+  attacker_wins: number;
+  defender_wins: number;
+  mine: "attack" | "defence";
+  /** At the break: where the pair met. */
+  flank?: "left" | "right" | "centre";
+}
+
+/** «Дуэли первого тайма» in the live match centre at the break. */
+export interface HalftimeDuels {
+  duels: PlayedDuel[];
+  /** `flank` = the flank to attack down in the second half (one tap). */
+  hints: { text: string; flank: "left" | "right" | null }[];
+}
+
+export async function fetchCareerDuels(): Promise<FlankDuelsPreview> {
+  const { data } = await api.get<FlankDuelsPreview>("/career/duels");
+  return data;
+}
+
 export async function previewCareerTactic(tactic: Tactic): Promise<MatchupReport | null> {
   const { data } = await api.post<{ matchup: MatchupReport | null }>("/career/tactics/preview", { tactic });
   return data.matchup;
@@ -551,6 +676,16 @@ export async function setCareerRoles(roles: Record<string, string | null>, round
 
 export async function setCareerMarking(markerCardId: number | null, roundIndex?: number): Promise<CareerView> {
   const { data } = await api.put<CareerView>("/career/marking", { marker_card_id: markerCardId, round_index: roundIndex });
+  return data;
+}
+
+export async function setCareerSpeech(speech: string | null, roundIndex?: number): Promise<CareerView> {
+  const { data } = await api.put<CareerView>("/career/speech", { speech, round_index: roundIndex });
+  return data;
+}
+
+export async function chooseCoachSpec(code: string): Promise<CareerView> {
+  const { data } = await api.post<CareerView>(`/career/coach/spec/${code}`);
   return data;
 }
 
@@ -576,6 +711,12 @@ export interface CareerMatchEvents {
   events: MatchEvent[];
   /** My own tactical analysis (seasons with tactics only). */
   analysis?: CareerAnalysis | null;
+  /** «Ключевые дуэли»: the flank duels my players were in (seasons with duels). */
+  duels?: PlayedDuel[] | null;
+  /** Stories of the duels: a rival beaten, fear born or gone. */
+  duel_stories?: string[] | null;
+  /** Team morale before / after the match: what moved it in the match and after. */
+  morale?: { before: number; after: number; match: string[]; reasons: string[] } | null;
   /** My engine side: "a" = home, "b" = away. */
   my_side?: "a" | "b" | null;
   /** Cup tie level after 90': shootout score and kicks. */

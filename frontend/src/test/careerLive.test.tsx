@@ -70,7 +70,7 @@ describe("LiveMatchCenter", () => {
     fireEvent.click(screen.getByRole("button", { name: "Отдать указания" }));
     await vi.waitFor(() => expect(setCareerHalftime).toHaveBeenCalled());
     expect(setCareerHalftime.mock.calls[0][0]).toEqual({
-      mentality: "ATTACKING", tactic: { block: "high" }, subs: [{ out: 1, in: 50 }],
+      mentality: "ATTACKING", tactic: { block: "high" }, subs: [{ out: 1, in: 50 }], talk: null,
     });
   });
 

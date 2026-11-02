@@ -14,6 +14,7 @@ from app.schemas.career import (
     CareerPlanIn,
     CareerRolesIn,
     CareerMarkingIn,
+    CareerSpeechIn,
     CareerHalftimeIn,
     CareerTacticPreviewIn,
     CareerAmbitionIn,
@@ -90,6 +91,20 @@ async def set_roles(payload: CareerRolesIn, db: AsyncSession = Depends(get_db), 
 async def set_marking(payload: CareerMarkingIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     """Man-mark the next opponent's star (next round only)."""
     await career_service.set_marking(db, user, payload.marker_card_id, payload.round_index)
+    return await _view(db, user)
+
+
+@router.put("/speech", response_model=CareerViewOut)
+async def set_speech(payload: CareerSpeechIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Team morale: the pre-match speech for the next round."""
+    await career_service.set_speech(db, user, payload.speech, payload.round_index)
+    return await _view(db, user)
+
+
+@router.post("/coach/spec/{code}", response_model=CareerViewOut)
+async def choose_coach_spec(code: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Picks the coach's specialization (switching: once per a few weeks)."""
+    await career_service.choose_coach_spec(db, user, code)
     return await _view(db, user)
 
 
@@ -184,6 +199,12 @@ async def preview_tactic(
     """Matchup report for a tactic being chosen (not saved) vs the next
     opponent — the same interaction table the engine applies."""
     return {"matchup": await career_service.preview(db, user, payload.tactic)}
+
+
+@router.get("/duels")
+async def duels(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """«Дуэли на флангах» for the next league match (duel_service)."""
+    return await career_service.duels_preview(db, user)
 
 
 @router.post("/leave", status_code=status.HTTP_204_NO_CONTENT)

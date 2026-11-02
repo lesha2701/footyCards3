@@ -97,7 +97,9 @@ async def today_count(db: AsyncSession, pack_id: int, user_id: int) -> int:
     """Openings of this pack by the player since local midnight."""
     from app.core.timeutil import app_timezone
 
-    midnight = datetime.now(app_timezone()).replace(hour=0, minute=0, second=0, microsecond=0)
+    # In UTC: SQLite (tests) drops the offset of a bound datetime and compares
+    # wall times, so a local midnight would miss the evening's openings.
+    midnight = datetime.now(app_timezone()).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
     return (await db.execute(
         select(func.count(PackOpening.id)).where(
             PackOpening.pack_id == pack_id, PackOpening.user_id == user_id, PackOpening.created_at >= midnight,

@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 
+import { stadiumEffectText } from "@/lib/stadiums";
 import { staticUrl } from "@/lib/api";
 import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
 import type { EquippedStadium } from "@/types";
@@ -81,7 +82,7 @@ export function StadiumRevealStage({
         {revealed && (
           <>
             <p className="font-display text-lg font-bold text-ink-chalk">{stadium.display_name}</p>
-            <p className="font-mono text-xs text-ink-mist">+{Math.round(stadium.boost_pct * 100)}% к силе</p>
+            <p className="font-mono text-xs text-ink-mist">{stadiumEffectText(stadium)}</p>
             {opened.is_new && (
               <span className="inline-block rounded-full bg-accent-green px-2 py-0.5 text-caption font-bold text-bg-base">Новый!</span>
             )}

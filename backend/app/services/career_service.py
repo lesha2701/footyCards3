@@ -34,7 +34,8 @@ from app.services import career_achievements_service as achievements
 from app.services import career_league_service as league_service
 from app.services import career_replay_service as career_replay
 from app.services import career_tactics_service as tactics
-from app.services import chemistry_service
+from app.services import career_morale_service as morale
+from app.services import chemistry_service, duel_service
 from app.services import club_base_service, my_player_service, path_match_service, tournament_match_engine, wallet_service
 from app.services.auto_squad_service import SlotSpec, owned_cards, pick_cards
 from app.services.club_formation_service import CLUB_FORMATIONS, get_formation_slots
@@ -172,6 +173,7 @@ def _profile_out(profile: CareerProfile, config) -> dict:
         "seasons_played": profile.seasons_played, "titles": profile.titles, "promotions": profile.promotions,
         "objectives_met": profile.objectives_met,
         "achievements": achievements.achievements_out(profile),
+        "coach": morale.coach_view(profile, morale.coach_tuning_of(getattr(config, "career_tactics_tuning", None))),
     }
 
 
@@ -182,11 +184,14 @@ TRAININGS = {
     "tactical": ("Тактика", "Отработка схемы: сыгранность в этом матче выше. Нагрузка — немного усталости."),
     "opponent": ("Разбор соперника", "Взаимодействия в вашу пользу в этом матче сильнее. Нагрузка — немного усталости."),
     "set_pieces": ("Стандарты", "Угловые и штрафные в этом матче опаснее. Нагрузка — немного усталости."),
+    # Team morale seasons only (career_morale_service).
+    "team_building": ("Сплочение", "Командный выезд: мораль команды выше к матчу. Без нагрузки, но и без других плюсов."),
 }
 
 
-def training_options() -> list[dict]:
-    return [{"code": code, "label": label, "hint": hint} for code, (label, hint) in TRAININGS.items()]
+def training_options(morale_on: bool = False) -> list[dict]:
+    return [{"code": code, "label": label, "hint": hint} for code, (label, hint) in TRAININGS.items()
+            if code != "team_building" or morale_on]
 
 
 async def set_ambition(db: AsyncSession, user: User, ambition: str) -> None:
@@ -210,6 +215,8 @@ async def set_training(db: AsyncSession, user: User, training: Optional[str], ro
     season = await db.get(CareerSeason, part.season_id)
     if _tactics_version(season.state) < tactics.TACTICS_VERSION:
         raise ConflictError("Тренировки — с нового сезона")
+    if training == "team_building" and not morale.is_on(season.state):
+        raise ConflictError("«Сплочение» — в сезонах с моралью команды")
     part.training = training
     await db.commit()
 
@@ -590,6 +597,14 @@ async def _activate(db: AsyncSession, season: CareerSeason, now: datetime, confi
         # Seasons without this key (started before the tactics update) keep
         # the original match path; see _play_round.
         "tactics_version": tactics.TACTICS_VERSION,
+        # Flank duels (duel_service) for the whole season: a season started
+        # before they existed (or while they are off) keeps the old engine,
+        # so its replays and live halves never change.
+        "duels": 1 if getattr(config, "career_duels_enabled", False) else 0,
+        # Team morale (career_morale_service): every team's mood, the log of
+        # its changes and the coach's pre-match speeches; absent = off.
+        **({"morale": morale.initial(TEAMS, morale.tuning_of(getattr(config, "career_tactics_tuning", None)))}
+           if getattr(config, "career_morale_enabled", False) else {}),
         # Chemistry rules frozen for the whole season (like player
         # tournaments): later GameConfig edits don't change a running league.
         "chemistry_rules": (rules.as_dict() if (rules := chemistry_service.active_rules(config)) else None),
@@ -1230,6 +1245,39 @@ async def set_marking(db: AsyncSession, user: User, marker_card_id: Optional[int
     await db.commit()
 
 
+async def set_speech(db: AsyncSession, user: User, speech: Optional[str], round_index: Optional[int] = None) -> None:
+    """«Речь перед матчем» for the next league round (None = no speech)."""
+    if speech is not None and speech not in morale.SPEECHES:
+        raise ConflictError("Неизвестная речь")
+    part = await _editable_participation(db, user, round_index)
+    season = await _lock_season(db, part.season_id)
+    if not morale.is_on(season.state):
+        raise ConflictError("Мораль команды — с нового сезона")
+    state = copy.deepcopy(season.state)
+    speeches = state["morale"].setdefault("speeches", {})
+    if speech is None:
+        speeches.pop(str(part.team_index), None)
+    else:
+        speeches[str(part.team_index)] = {"round": season.rounds_played, "speech": speech}
+    season.state = state
+    flag_modified(season, "state")
+    await db.commit()
+
+
+async def choose_coach_spec(db: AsyncSession, user: User, code: str) -> None:
+    """Picks the coach's specialization, or switches it (once per
+    `switch_days`; each one keeps its experience)."""
+    config = await get_config(db)
+    profile = (await db.execute(
+        select(CareerProfile).where(CareerProfile.user_id == user.id).with_for_update()
+    )).scalar_one_or_none() or await get_profile(db, user.id, config)
+    try:
+        morale.choose(profile, code, morale.coach_tuning_of(getattr(config, "career_tactics_tuning", None)))
+    except ValueError as exc:
+        raise ConflictError(str(exc)) from exc
+    await db.commit()
+
+
 async def set_halftime(db: AsyncSession, user: User, orders: dict) -> None:
     """Half-time orders in the live match centre: until the second half
     starts, replaces any earlier orders for that match."""
@@ -1286,6 +1334,8 @@ def _live_out(season: CareerSeason, me: CareerParticipant, by_id: dict, config) 
         "subs_left": max(0, int(config.career_max_substitutions) - int(side.get("subs_used") or 0)),
         "mentality": side.get("mentality"), "tactic": side.get("tactic"),
         "orders": (live.get("orders") or {}).get(str(me.team_index)),
+        # «Дуэли первого тайма» (duel_service.first_half).
+        "duels": (rec.get("duels") or {}).get(str(me.team_index)),
     }
 
 
@@ -1522,6 +1572,127 @@ def _bot_marking(bot: tactics.CareerSideRunner, human: tactics.CareerSideRunner)
     return {"marker": marker.card.id, "target": star.card.player_id}
 
 
+def _duels_on(state: dict, config) -> bool:
+    return bool((state or {}).get("duels")) and bool(getattr(config, "career_duels_enabled", False))
+
+
+def _xi(runner: tactics.CareerSideRunner) -> list[tuple]:
+    return [(p.card, p.slot) for p in runner.on_pitch if p.slot is not None]
+
+
+async def _attach_duels(
+    db: AsyncSession, run_a: tactics.CareerSideRunner, run_b: tactics.CareerSideRunner, config, difficulty: str,
+    bot_a: bool, bot_b: bool, analyst_a: int = 0, analyst_b: int = 0,
+) -> duel_service.DuelBook:
+    """One «книга дуэлей» for the match, shared by both sides. A «Профи» /
+    «Легенда» bot facing a human sends its flank attacks where its duels
+    are better (it reads the same book the human sees before the match)."""
+    ids = {p.card.player_id for r in (run_a, run_b) for p in r.on_pitch + r.bench}
+    book = await duel_service.load_book(db, ids, getattr(config, "career_tactics_tuning", None))
+    run_a.duels = run_b.duels = book
+    # «Аналитик»: analyst_* — % less fear of his players in duels.
+    for runner, pct in ((run_a, analyst_a), (run_b, analyst_b)):
+        if pct:
+            left = max(0.0, 1 - pct / 100)
+            book.fear_left.update({key: left for key in _my_keys(book, runner)})
+    if difficulty in ("pro", "legend"):
+        for bot, other, is_bot, other_bot in ((run_a, run_b, bot_a, bot_b), (run_b, run_a, bot_b, bot_a)):
+            if is_bot and not other_bot:
+                bot.set_flank(duel_service.best_flank(book, _xi(bot), _xi(other)))
+                bot.adaptive_flank = True
+    return book
+
+
+def _my_keys(book: duel_service.DuelBook, runner: tactics.CareerSideRunner) -> set[str]:
+    return {info[0] for p in runner.on_pitch + runner.bench if (info := book.info(p.card))}
+
+
+def _duel_summary(book: duel_service.DuelBook, mine: tactics.CareerSideRunner, limit: int = 5) -> list[dict]:
+    """The match's flank duels that involved `mine`'s players, most played
+    first: who won how many, and whether it was our attack or our defence."""
+    my_keys = _my_keys(book, mine)
+    names = {key: name for key, _style, name in book.players.values()}
+    rows = []
+    for (a, d), (aw, dw) in book.played().items():
+        if a not in my_keys and d not in my_keys:
+            continue
+        rows.append({
+            "attacker": names.get(a, a), "defender": names.get(d, d), "attacker_wins": aw, "defender_wins": dw,
+            "mine": "attack" if a in my_keys else "defence",
+        })
+    rows.sort(key=lambda r: -(r["attacker_wins"] + r["defender_wins"]))
+    return rows[:limit]
+
+
+def _xi_rating(runner: tactics.CareerSideRunner) -> float:
+    ratings = [p.base_rating for p in runner.on_pitch]
+    return sum(ratings) / len(ratings) if ratings else 0.0
+
+
+def _attach_morale(
+    state: dict, round_index: int, config, run_h: tactics.CareerSideRunner, run_a: tactics.CareerSideRunner,
+    home: int, away: int, pre: dict[int, int], skills: dict[int, dict], orders: dict,
+) -> dict[int, dict]:
+    """Team morale for one match: each side's mood (+ its players' traits),
+    the coach's pre-match speech and the half-time talk. Returns what the
+    after-match update needs per team."""
+    tuning = morale.tuning_of(getattr(config, "career_tactics_tuning", None))
+    share = int(((getattr(config, "career_tactics_tuning", None) or {}).get("morale") or {}).get("trait_share_pct",
+                morale.TRAIT_TUNING["share_pct"]))
+    out: dict[int, dict] = {}
+    for index, runner, other in ((home, run_h, run_a), (away, run_a, run_h)):
+        value = pre.get(index, tuning["start"])
+        favourite = morale.favourite_of(_xi_rating(runner), _xi_rating(other), tuning)
+        speech = morale.speech_for(state, index, round_index)
+        mood, extra, reasons = morale.match_bonus(value, speech, favourite, tuning, skills.get(index))
+        runner.morale_mood, runner.morale_extra, runner.morale_value = mood, extra, value
+        runner.morale_cap = int(tuning["cap"])
+        runner.orator = int((skills.get(index) or {}).get("orator", 0))
+        runner.traits_by_card = {p.card.id: t for p in runner.on_pitch + runner.bench
+                                 if (t := morale.trait_of(p.card.player, share))}
+        talk = (orders.get(str(index)) or {}).get("talk")
+        if talk:
+            runner.talk = talk
+        out[index] = {"value": value, "favourite": favourite, "speech": speech, "reasons": reasons}
+    return out
+
+
+def _match_morale(info: dict, update: tuple, runner: tactics.CareerSideRunner) -> dict:
+    """The match screen's «Мораль команды»: what worked in the match (the
+    pre-match mood and speech, the half-time talk) and what moved it after."""
+    before, after, reasons = update
+    pre = info["reasons"]
+    match = list(pre)
+    if runner.talk and runner._talk_checked:
+        bonus = runner._talk_bonus
+        effect = f"{bonus:+d} во втором тайме" if bonus else "без эффекта"
+        match.append(f"разговор «{morale.TALKS[runner.talk][0]}»: {effect}")
+    return {"before": before, "after": after, "match": match, "reasons": match + reasons[len(pre):]}
+
+
+def _morale_after(
+    info: dict, runner: tactics.CareerSideRunner, own: int, opp: int, book: Optional[duel_service.DuelBook],
+    skills: Optional[dict], tuning: dict, coach: Optional[dict] = None,
+) -> tuple[int, list[str]]:
+    """A team's morale after the league match."""
+    duels = None
+    if book is not None:
+        keys = _my_keys(book, runner)
+        won = lost = 0
+        for (a, d), (aw, dw) in book.played().items():
+            if a in keys:
+                won, lost = won + aw, lost + dw
+            elif d in keys:
+                won, lost = won + dw, lost + aw
+        duels = (won, lost)
+    minutes = runner.minutes_played()
+    played = {runner.traits_by_card[cid] for cid, mins in minutes.items() if mins > 0 and cid in runner.traits_by_card}
+    benched = {t for p in runner.bench if (t := runner.traits_by_card.get(p.card.id)) and not minutes.get(p.card.id)}
+    extra = morale.trait_delta(own, opp, played, benched, tuning)
+    return morale.after_match(info["value"], own, opp, info["favourite"], info["speech"], duels, tuning, skills, extra,
+                              coach)
+
+
 def _match_seed(season_id: int, round_index: int, match_index: int) -> int:
     return season_id * 1_000_003 + round_index * 1_009 + match_index * 31 + 7
 
@@ -1723,6 +1894,23 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
             used_familiarity[team_index] = base_familiarity
         return runner
 
+    # Team morale: the value each team takes into the match («Сплочение»
+    # adds to it; stored only after the real pass), the coaches' skills.
+    morale_on = v1 and morale.is_on(state)
+    morale_tuning = morale.tuning_of(getattr(config, "career_tactics_tuning", None))
+    coach_tuning = morale.coach_tuning_of(getattr(config, "career_tactics_tuning", None))
+    coach_skills = {ti: morale.skills_of(profiles.get(ti), coach_tuning) for ti in humans}
+    morale_pre: dict[int, int] = {}
+    morale_updates: dict[int, tuple[int, int, list[str]]] = {}
+    if morale_on:
+        for ti in range(len(teams)):
+            value = morale.value_of(state, ti, morale_tuning)
+            part = humans.get(ti)
+            if part is not None and part.status == "accepted" and part.training == "team_building":
+                orator = morale.orator_perk(coach_skills.get(ti, {}).get("orator", 0), "team_building")
+                value = morale.clamp(value + morale_tuning["team_building"] + 2 * orator)
+            morale_pre[ti] = value
+
     results = []
     live_matches: dict = {}
     for match_index, (home, away) in enumerate(state["fixtures"][round_index]):
@@ -1742,6 +1930,14 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
                     for bot, human, bot_index in ((run_h, run_a, home), (run_a, run_h, away)):
                         if teams[bot_index].get("user_id") is None and teams[away if bot is run_h else home].get("user_id"):
                             bot.marking = _bot_marking(bot, human)
+                book = None
+                if _duels_on(state, config):
+                    book = await _attach_duels(db, run_h, run_a, config, season.difficulty,
+                                               teams[home].get("user_id") is None, teams[away].get("user_id") is None,
+                                               coach_skills.get(home, {}).get("analyst", 0) * coach_tuning["analyst_pct"],
+                                               coach_skills.get(away, {}).get("analyst", 0) * coach_tuning["analyst_pct"])
+                morale_info = (_attach_morale(state, round_index, config, run_h, run_a, home, away, morale_pre,
+                                              coach_skills, orders) if morale_on else None)
                 tracker: dict = {}
                 # Starting XIs for the 2D replay (career_replay_service);
                 # taken before kick-off, substitutions come from the events.
@@ -1753,8 +1949,34 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
                     )
                 if live:
                     live_matches[str(match_index)] = {**_live_record(match, run_h, run_a, home, away), "lineups": lineups}
+                    if book is not None:
+                        # «Дуэли первого тайма» for the break (the full match
+                        # is replayed on the same seed after it).
+                        live_matches[str(match_index)]["duels"] = {
+                            str(index): duel_service.first_half(book, _my_keys(book, runner))
+                            for index, runner in ((home, run_h), (away, run_a)) if teams[index].get("user_id")
+                        }
                     continue
                 hs, as_ = match.score_a, match.score_b
+                if morale_info is not None:
+                    for index, runner, own, opp in ((home, run_h, hs, as_), (away, run_a, as_, hs)):
+                        new, why = _morale_after(morale_info[index], runner, own, opp, book,
+                                                 coach_skills.get(index), morale_tuning, coach_tuning)
+                        morale_updates[index] = (morale_info[index]["value"], new, morale_info[index]["reasons"] + why)
+                    if with_human:
+                        extra["morale"] = {
+                            str(index): _match_morale(morale_info[index], morale_updates[index], runner)
+                            for index, runner in ((home, run_h), (away, run_a)) if teams[index].get("user_id")
+                        }
+                if book is not None:
+                    await duel_service.save_log(db, book)
+                    if with_human:
+                        extra["duels"] = {str(index): _duel_summary(book, runner)
+                                          for index, runner in ((home, run_h), (away, run_a)) if teams[index].get("user_id")}
+                        extra["duel_stories"] = {
+                            str(index): duel_service.stories(book, _my_keys(book, runner))
+                            for index, runner in ((home, run_h), (away, run_a)) if teams[index].get("user_id")
+                        }
                 extra["tactics"] = {}
                 for index, runner in ((home, run_h), (away, run_a)):
                     played_tactic = {"formation": runner.formation, "mentality": runner.mentality,
@@ -1818,6 +2040,17 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
         return
     state.pop("live", None)
     state["results"].append(results)
+    if morale_on:
+        # Teams without a match this round (or a technical result) keep
+        # their value and still drift back toward the start.
+        log = state["morale"].setdefault("log", {})
+        for ti in range(len(teams)):
+            before, after, reasons = morale_updates.get(ti, (morale_pre[ti], morale_pre[ti], []))
+            state["morale"]["teams"][str(ti)] = after
+            if ti in humans:
+                entries = log.setdefault(str(ti), [])
+                entries.append({"round": round_index, "before": before, "after": after, "reasons": reasons})
+                del entries[:-8]
 
     rng = random.Random(season.id * 104729 + round_index)
     reports = state.setdefault("reports", {}).setdefault(str(round_index), {})
@@ -1842,6 +2075,8 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
             season_minutes = state.setdefault("minutes", {}).setdefault(str(team_index), {})
             for cid, mins in minutes_by_team.get(team_index, {}).items():
                 season_minutes[str(cid)] = season_minutes.get(str(cid), 0) + mins
+        if morale_on and team_index in profiles:
+            morale.add_xp(profiles[team_index], own, opp, morale.coach_tuning_of(getattr(config, "career_tactics_tuning", None)))
         unlocked_text = ""
         if v1 and team_index in profiles:
             hint = (((match.get("analysis") or {}).get(str(team_index)) or {}).get("matchup") or {}).get("hint")
@@ -1928,6 +2163,10 @@ async def _play_cup_round(db, season, state, round_index, config, humans, runner
                 db, (run_a, run_b), {c.id: c for cards in cards_cache.values() for c in cards}, config,
             )
         res: dict = {"a": a, "b": b, "events": None, "pens": None}
+        book = None
+        if run_a and run_b and _duels_on(state, config):
+            book = await _attach_duels(db, run_a, run_b, config, season.difficulty,
+                                       team_a.get("user_id") is None, team_b.get("user_id") is None)
         if run_a and run_b:
             tracker: dict = {}
             lineups = {"a": career_replay.lineup_record(run_a), "b": career_replay.lineup_record(run_b)}
@@ -1935,6 +2174,14 @@ async def _play_cup_round(db, season, state, round_index, config, humans, runner
                 tactics.CareerMatchController(run_a, run_b), config, team_a["name"], team_b["name"], tracker=tracker,
             )
             res.update(sa=match.score_a, sb=match.score_b)
+            if book is not None:
+                await duel_service.save_log(db, book)
+                if with_human:
+                    res["duels"] = {str(index): _duel_summary(book, runner)
+                                    for index, runner in ((a, run_a), (b, run_b)) if _cup_team(state, index).get("user_id")}
+                    res["duel_stories"] = {str(index): duel_service.stories(book, _my_keys(book, runner))
+                                           for index, runner in ((a, run_a), (b, run_b))
+                                           if _cup_team(state, index).get("user_id")}
             if match.score_a == match.score_b:
                 pa, pb, kicks = tactics.penalty_shootout(run_a, run_b)
                 res["pens"] = [pa, pb]
@@ -2134,6 +2381,11 @@ async def _finish(db: AsyncSession, season: CareerSeason, config) -> None:
                 else:
                     rep += int((config.career_ambition_rep_fail or [0, 0, 0])[i])
                     move += f"\nЗадача «{target['label']}» провалена"
+            if morale.is_on(season.state):
+                coach_xp = morale.add_season_xp(
+                    profile, place, morale.coach_tuning_of(getattr(config, "career_tactics_tuning", None)))
+                if coach_xp:
+                    move += f"\nОпыт тренера: +{coach_xp}"
             rep = club_base_service.reputation_gain(rep, part.base_effects or {})  # «Клубная база» media centre
             profile.reputation = max(0, profile.reputation + rep)
             profile.division = part.next_division
@@ -2512,7 +2764,7 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
         "tactic": _my_tactic(me), "squad_size": len(me.squad_card_ids or []),
         "tactics_version": _tactics_version(state),
         "scouting": None, "familiarity": None, "match_plan": me.match_plan, "plan_limits": {},
-        "ambition": me.ambition, "ambitions": [], "training": me.training, "trainings": training_options(),
+        "ambition": me.ambition, "ambitions": [], "training": me.training, "trainings": training_options(morale.is_on(state)),
         "cup": None, "offseason": None, "summary": None,
         "set_pieces": {**tactics.DEFAULT_SET_PIECES, **(me.set_pieces or {})}, "squad_warnings": [],
         "roles": me.roles or {}, "live": None, "plan_hints": [],
@@ -2586,6 +2838,10 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
                         for s in get_formation_slots(me.formation)]
         from app.schemas.card import UserCardOut
 
+        duels_on = bool(state.get("duels")) and _duels_on(state, await get_config(db))
+        if morale.is_on(state):
+            out["morale"] = morale.view(state, me.team_index, season.rounds_played,
+                                        morale.tuning_of(getattr(await get_config(db), "career_tactics_tuning", None)))
         for card_id in _squad_ids(me, by_id):
             card = by_id.get(card_id)
             cond = _condition(me, card_id)
@@ -2604,6 +2860,11 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
                 "yellows": cond["yellows"],
                 "form": cond["form"],
                 "owned": card is not None,
+                # Flank duels: the player's style for the badge (seasons with duels).
+                "duel_style": (duel_service.style_of(card.player)
+                               if card is not None and not mine and duels_on else None),
+                # Team morale seasons: the player's character trait.
+                "trait": (morale.trait_of(card.player) if card is not None and not mine and morale.is_on(state) else None),
             })
     return out
 
@@ -2756,6 +3017,115 @@ async def preview(db: AsyncSession, user: User, tactic: dict) -> Optional[dict]:
     return matchup_preview(season, part, tactic, await get_config(db))
 
 
+# «на левый фланг», «нагружай правый фланг».
+_FLANK_WHERE = {"left": "левый", "right": "правый"}
+
+
+async def duels_preview(db: AsyncSession, user: User) -> dict:
+    """«Дуэли на флангах» before the next league match: my wide attackers
+    against the full-backs they will meet (and theirs against mine), each
+    with its edge and reasons, plus what to do about it — switch the flank,
+    play through the centre, change the player or man-mark."""
+    part = await _current_participation(db, user.id)
+    if part is None or part.status != "accepted":
+        raise NotFoundError("Нет активного сезона")
+    season = await db.get(CareerSeason, part.season_id)
+    config = await get_config(db)
+    state = season.state or {}
+    if not _duels_on(state, config):
+        return {"enabled": False}
+    fixtures = state.get("fixtures") or []
+    round_index = season.rounds_played
+    pair = next((m for m in fixtures[round_index] if part.team_index in m), None) if round_index < len(fixtures) else None
+    if pair is None:
+        return {"enabled": True, "attack": [], "defence": [], "hints": []}
+    opp_index = pair[1] if pair[0] == part.team_index else pair[0]
+    team = state["teams"][opp_index]
+    cards = await _career_cards(db, user.id, config)
+    mine = resolve_lineup(part, {c.id: c for c in cards}, round_index, [c for c in cards if _usable(c)],
+                          fill_any_position=True)
+    if team.get("user_id") is None:
+        theirs = _bot_cards(team, round_index, config)
+    else:
+        opp = next((p for p in season.participants if p.team_index == opp_index), None)
+        if opp is None:
+            theirs = []
+        else:
+            opp_cards = await _career_cards(db, opp.user_id, config)
+            theirs = resolve_lineup(opp, {c.id: c for c in opp_cards}, round_index,
+                                    [c for c in opp_cards if _usable(c)], fill_any_position=True)
+    book = await duel_service.load_book(
+        db, {c.player_id for c, _ in mine} | {c.player_id for c, _ in theirs}, getattr(config, "career_tactics_tuning", None),
+    )
+    attack = duel_service.flank_duels(book, mine, theirs)
+    defence = duel_service.flank_duels(book, theirs, mine)
+    centre = duel_service.centre_duels(book, mine, theirs)
+    star = (_scouting(season, part, config) or {}).get("star") or {}
+    flank = _my_tactic(part).get("flank", "both")
+    return {
+        "enabled": True, "opponent": team.get("name"), "flank": flank,
+        "attack": attack, "defence": defence, "centre": centre,
+        "hints": _duel_hints(attack, defence, centre, _my_tactic(part), star.get("player_id")),
+    }
+
+
+def _duel_hints(attack: list[dict], defence: list[dict], centre: list[dict], tactic: dict,
+                star_player_id: Optional[int]) -> list[dict]:
+    """What to do about the duels, each with the actions the card offers in
+    one tap: switch the flank of attack or the direction (wings / centre),
+    change the player (the squad screen) or man-mark their star. The centre
+    is offered only when our strikers aren't worse off there, and gets one
+    summary hint of its own."""
+    flank, direction = tactic.get("flank", "both"), tactic.get("direction")
+    centre_pp = sum(d["pp"] for d in centre) / len(centre) if centre else 0
+    centre_bad, centre_good = centre_pp <= -2, centre_pp >= 2
+    hints: list[dict] = []
+    hard = [d for d in attack if d["verdict"] == "hard"]
+    easy = [d for d in attack if d["verdict"] == "easy"]
+    hard_flanks = {d["flank"] for d in hard}
+    to_centre = {"kind": "direction", "value": "center", "label": "Играть через центр"}
+    to_wings = {"kind": "direction", "value": "wings", "label": "Играть по флангам"}
+    for d in hard:
+        other = "right" if d["flank"] == "left" else "left"
+        actions = [{"kind": "squad", "label": "Сменить игрока"}]
+        ways = []
+        if other not in hard_flanks:
+            ways.append(f"переведи атаки на {_FLANK_WHERE[other]} фланг")
+            if flank != other:
+                actions.insert(0, {"kind": "flank", "value": other, "label": f"Атаковать: {_FLANK_WHERE[other]}"})
+        if not centre_bad:
+            ways.append("сыграй через центр")
+            if hard_flanks == {"left", "right"} and direction != "center":
+                actions.insert(0, to_centre)
+        way = " или ".join(ways) + ", либо поставь другого игрока" if ways else "поставь другого игрока"
+        hints.append({"text": f"{d['attacker']} тяжело против {d['defender']} ({d['pp']} п.п.) — {way}.",
+                      "actions": actions})
+    for d in easy:
+        if d["flank"] not in hard_flanks:
+            actions = [] if flank == d["flank"] else [
+                {"kind": "flank", "value": d["flank"], "label": f"Атаковать: {_FLANK_WHERE[d['flank']]}"}]
+            hints.append({"text": f"{d['attacker']} выигрывает у {d['defender']} (+{d['pp']} п.п.) — "
+                                  f"нагружай {_FLANK_WHERE[d['flank']]} фланг.", "actions": actions})
+    for d in defence:
+        if d["verdict"] != "easy":
+            continue
+        actions = [{"kind": "squad", "label": "Сменить защитника"}]
+        text = f"Их {d['attacker']} неудобен для {d['defender']} (+{d['pp']} п.п. у соперника) — смени защитника"
+        if star_player_id is not None and d.get("attacker_player_id") == star_player_id:
+            actions.append({"kind": "marking", "label": "Персональная опека"})
+            text += " или поставь на их звезду персональную опеку."
+        else:
+            text += "."
+        hints.append({"text": text, "actions": actions})
+    if centre_bad:
+        hints.append({"text": f"В центре нашим нападающим тяжело против их защитников (в среднем {round(centre_pp)} п.п.) — "
+                              "играй по флангам.", "actions": [to_wings] if direction != "wings" else []})
+    elif centre_good and not easy:
+        hints.append({"text": f"В центре наши нападающие сильнее их защитников (в среднем +{round(centre_pp)} п.п.) — "
+                              "атакуй через центр.", "actions": [to_centre] if direction != "center" else []})
+    return hints
+
+
 def tactics_catalog(config) -> dict:
     """Axes, values, presets and interactions for the tactics UI — the
     client never keeps its own copy of these tables."""
@@ -2769,7 +3139,8 @@ def tactics_catalog(config) -> dict:
         "axes": [{"key": axis, "label": tactics.AXIS_LABELS[axis],
                   "values": [{"value": v, "label": tactics.VALUE_LABELS[axis][v], "hint": tactics.VALUE_HINTS[axis][v]}
                              for v in values]}
-                 for axis, values in tactics.AXES.items()],
+                 for axis, values in tactics.AXES.items()
+                 if axis != "flank" or getattr(config, "career_duels_enabled", False)],
         "presets": [{"code": code, "label": tactics.PRESET_LABELS[code], "tactic": axes}
                     for code, axes in tactics.PRESETS.items()],
         "interactions": [{"id": ix["id"], "label": ix["label"], "base": bool(ix.get("base"))} for ix in tactics.INTERACTIONS],
@@ -2796,6 +3167,8 @@ async def cup_match_events(db: AsyncSession, user: User, season_id: int, round_i
         "home_name": _cup_team(season.state, res["a"])["name"], "away_name": _cup_team(season.state, res["b"])["name"],
         "home_score": res["sa"], "away_score": res["sb"], "events": res.get("events") or [],
         "analysis": (res.get("analysis") or {}).get(str(me.team_index)) if my_side else None,
+        "duels": (res.get("duels") or {}).get(str(me.team_index)) if my_side else None,
+        "duel_stories": (res.get("duel_stories") or {}).get(str(me.team_index)) if my_side else None,
         "my_side": my_side, "pens": res.get("pens"), "kicks": res.get("kicks"),
     }
 
@@ -2816,6 +3189,11 @@ async def match_events(db: AsyncSession, user: User, season_id: int, round_index
         "home_score": m["hs"], "away_score": m["as"], "events": m.get("events") or [],
         # Only the viewer's own analysis (their plan/instructions stay private).
         "analysis": (m.get("analysis") or {}).get(str(me.team_index)) if my_side else None,
+        # «Ключевые дуэли»: the flank duels my players were in (duel_service).
+        "duels": (m.get("duels") or {}).get(str(me.team_index)) if my_side else None,
+        "duel_stories": (m.get("duel_stories") or {}).get(str(me.team_index)) if my_side else None,
+        # Team morale before / after the match and why (career_morale_service).
+        "morale": (m.get("morale") or {}).get(str(me.team_index)) if my_side else None,
         "my_side": my_side,
     }
 

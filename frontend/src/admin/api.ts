@@ -1504,6 +1504,71 @@ export async function revokeAdminAgent(userId: number, reason: string): Promise<
   return data;
 }
 
+// --- «Карьера»: flank duels (backend routers/admin_career.py, duel_service) ---
+export interface AdminRivalry {
+  id: number;
+  attacker: string;
+  defender: string;
+  attacker_key: string;
+  defender_key: string;
+  /** -3..+3: negative = the defender dominates the attacker. */
+  level: number;
+  note: string | null;
+}
+export interface AdminRivalriesOverview {
+  styles: { code: string; label: string }[];
+  rivalries: AdminRivalry[];
+  /** Pairs the global history made one-sided (fear / favourite opponent). */
+  history: { attacker_key: string; defender_key: string; level: number; record: [number, number] }[];
+}
+export interface AdminRivalryIn {
+  attacker_id: number;
+  defender_id: number;
+  level: number;
+  note: string | null;
+}
+export async function fetchAdminRivalries(): Promise<AdminRivalriesOverview> {
+  const { data } = await api.get<AdminRivalriesOverview>("/admin/career/rivalries");
+  return data;
+}
+export async function createAdminRivalry(payload: AdminRivalryIn): Promise<AdminRivalriesOverview> {
+  const { data } = await api.post<AdminRivalriesOverview>("/admin/career/rivalries", payload);
+  return data;
+}
+export async function updateAdminRivalry(id: number, level: number, note: string | null): Promise<AdminRivalriesOverview> {
+  const { data } = await api.put<AdminRivalriesOverview>(`/admin/career/rivalries/${id}`, { level, note });
+  return data;
+}
+export async function deleteAdminRivalry(id: number): Promise<AdminRivalriesOverview> {
+  const { data } = await api.delete<AdminRivalriesOverview>(`/admin/career/rivalries/${id}`);
+  return data;
+}
+export interface AdminRivalryBulkResult extends AdminRivalriesOverview {
+  bulk: { saved: number; errors: { line: number; text: string; error: string }[] };
+}
+/** Lines «атакующий; защитник; уровень; заметка». */
+export async function bulkAdminRivalries(text: string): Promise<AdminRivalryBulkResult> {
+  const { data } = await api.post<AdminRivalryBulkResult>("/admin/career/rivalries/bulk", { text });
+  return data;
+}
+export interface AdminDuelStats {
+  pairs: number;
+  duels: number;
+  /** Pairs with fear (-2, -1) or a favourite opponent (1, 2). */
+  levels: Record<string, number>;
+  matrix: {
+    attacker_type: string; defender_type: string; attacker_label: string; defender_label: string;
+    /** +1 the attacker should win more, -1 the defender, 0 even. */
+    expected: number; duels: number; attacker_win_pct: number | null;
+  }[];
+  players_explicit_style: number;
+  rivalries: number;
+}
+export async function fetchAdminDuelStats(): Promise<AdminDuelStats> {
+  const { data } = await api.get<AdminDuelStats>("/admin/career/duel-stats");
+  return data;
+}
+
 // «🎃 Ночь тыкв» (backend/app/routers/admin_halloween.py)
 export interface AdminHalloween {
   enabled: boolean;

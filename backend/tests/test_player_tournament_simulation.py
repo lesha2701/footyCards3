@@ -198,3 +198,49 @@ async def test_stadium_boost_only_applies_to_home_side(client, db_session, bot_t
     away_side = await _build_side(db_session, user.id, is_home=False)
     assert home_side is not None and away_side is not None
     assert home_side.side.profile.team_strength > away_side.side.profile.team_strength
+
+
+async def test_cursed_stadium_and_coach_hit_the_opponent(client, db_session, bot_token):
+    """«Проклятый стадион» and the coaches' OPP_* / TEAM_RATING act in the
+    personal tournament too (home and away), with Card Arena's numbers."""
+    from app.models.coach import Coach, CoachBoost
+    from app.models.enums import CardSource, CoachBoostType, Rarity
+    from app.models.stadium import Stadium
+    from app.models.user_coach_card import UserCoachCard
+    from app.models.user_stadium_card import UserStadiumCard
+    from app.services.coach_boost_service import match_rating_shifts
+    from app.services.personal_squad_service import active_staff, resolve_active_squad
+    from app.services.player_tournament_simulation_service import _build_side
+
+    cursed_owner = await make_ready_user(client, db_session, bot_token, 874000)
+    victim = await make_ready_user(client, db_session, bot_token, 874001)
+    stadium = Stadium(display_name="Cursed Test Stadium", rarity=Rarity.legendary, boost_pct=0, opp_malus=5)
+    coach = Coach(display_name="Dark Arts Test Coach", rarity=Rarity.legendary)
+    db_session.add_all([stadium, coach])
+    await db_session.flush()
+    db_session.add_all([
+        CoachBoost(coach_id=coach.id, boost_type=CoachBoostType.OPP_ATTACK, magnitude=4),
+        CoachBoost(coach_id=coach.id, boost_type=CoachBoostType.TEAM_RATING, magnitude=2),
+    ])
+    stadium_card = UserStadiumCard(user_id=cursed_owner.id, stadium_id=stadium.id, serial_number=1, source=CardSource.pack)
+    coach_card = UserCoachCard(user_id=cursed_owner.id, coach_id=coach.id, serial_number=1, source=CardSource.pack)
+    db_session.add_all([stadium_card, coach_card])
+    await db_session.flush()
+    squad, _pairs = await resolve_active_squad(db_session, cursed_owner.id)
+    squad.user_stadium_card_id = stadium_card.id
+    squad.user_coach_card_id = coach_card.id
+    await db_session.commit()
+
+    own_coach, own_stadium = await active_staff(db_session, cursed_owner.id)
+    assert own_coach.id == coach.id and own_stadium.opp_malus == 5
+    victim_shifts = match_rating_shifts(None, own_coach, own_stadium.opp_malus)
+    assert victim_shifts == {"GK": -5, "DEF": -5, "MID": -5, "FWD": -9}
+    assert match_rating_shifts(own_coach, None, 0) == {"GK": 2, "DEF": 2, "MID": 2, "FWD": 2}
+
+    plain = await _build_side(db_session, victim.id, is_home=False)
+    cursed = await _build_side(db_session, victim.id, is_home=False, rating_shifts=victim_shifts)
+    by_id = {c["club_card_id"]: c for c in plain.lineup}
+    for c in cursed.lineup:
+        assert c["rating"] == by_id[c["club_card_id"]]["rating"] + victim_shifts[c["category"]]
+    assert cursed.side.profile.team_strength < plain.side.profile.team_strength
+    assert cursed.side.profile.goalkeeping < plain.side.profile.goalkeeping

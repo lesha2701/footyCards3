@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
+from app.services import career_morale_service as morale
 from app.services import chemistry_service
 from app.services import club_tactical_matchup_service as matchup
 from app.services import club_tactical_profile_service as profile_service
@@ -53,10 +54,13 @@ AXES: dict[str, tuple[str, ...]] = {
     "on_win": ("fast", "keep"),
     "block": ("high", "mid", "low"),
     "tackling": ("normal", "hard", "soft"),
+    # Flank duels (duel_service): which side the flank attacks favour.
+    "flank": ("both", "left", "right"),
 }
 AXIS_LABELS = {
     "direction": "Направление атаки", "buildup": "Построение атаки", "on_loss": "После потери мяча",
     "on_win": "После отбора", "block": "Линия обороны и прессинга", "tackling": "Отбор мяча",
+    "flank": "Фланг атак",
 }
 VALUE_LABELS = {
     "direction": {"wings": "Фланги", "mixed": "Смешанно", "center": "Центр"},
@@ -65,6 +69,7 @@ VALUE_LABELS = {
     "on_win": {"fast": "Быстрая атака", "keep": "Сохранить мяч"},
     "block": {"high": "Высокий прессинг", "mid": "Средний блок", "low": "Низкий блок"},
     "tackling": {"normal": "Обычный", "hard": "Жёсткий", "soft": "Аккуратный"},
+    "flank": {"both": "Оба фланга", "left": "Левый фланг", "right": "Правый фланг"},
 }
 # One line per choice for the tactics screen: what it gives and what it costs.
 VALUE_HINTS = {
@@ -96,10 +101,19 @@ VALUE_HINTS = {
         "hard": "Идут в отбор на всё: чаще отбирают мяч, но больше фолов, пенальти, жёлтых и красных. Промах оставляет дыру сзади.",
         "soft": "Не идут в подкат, а сопровождают соперника: меньше фолов и карточек, но мяч отбирают реже.",
     },
+    "flank": {
+        "both": "Фланговые атаки идут по обеим бровкам поровну.",
+        "left": "Большинство фланговых атак — по левой бровке: туда, где наши дуэли выгоднее.",
+        "right": "Большинство фланговых атак — по правой бровке: в обход неудобного защитника на левой.",
+    },
 }
 NEUTRAL_TACTIC = {
     "direction": "mixed", "buildup": "mixed", "on_loss": "drop", "on_win": "keep", "block": "mid", "tackling": "normal",
+    "flank": "both",
 }
+# Axes added later: a tactic without them (older clients, presets, bots)
+# gets the neutral value. The presets don't carry "flank".
+LATE_AXES = ("tackling", "flank")
 
 PRESETS: dict[str, dict[str, str]] = {
     "WING_PLAY": {"direction": "wings", "buildup": "mixed", "on_loss": "drop", "on_win": "keep", "block": "mid",
@@ -255,6 +269,9 @@ PLAYER_EFFECT_LABELS = {
     "mark_star": "Персональная опека звезды",
     "mark_gap": "Опекун отвлечён: дыра в его зоне",
     "mark_marker_attack": "Опекун меньше помогает в атаке",
+    # Flank duels (duel_service): the attacker's edge over the full-back he met.
+    "duel_edge": "Дуэль на фланге: удобный соперник",
+    "duel_hard": "Дуэль на фланге: неудобный соперник",
 }
 
 
@@ -314,7 +331,7 @@ def clean_tactic(raw: Any, partial: bool = False) -> dict:
         if axis not in raw or raw[axis] is None:
             if partial:
                 continue
-            if axis == "tackling":  # added later: older clients don't send it
+            if axis in LATE_AXES:  # added later: older clients don't send it
                 out[axis] = NEUTRAL_TACTIC[axis]
                 continue
             raise TacticError(f"Не выбрано: {AXIS_LABELS[axis].lower()}")
@@ -328,8 +345,10 @@ def clean_tactic(raw: Any, partial: bool = False) -> dict:
 
 
 def preset_of(tactic: dict) -> str:
-    """The preset code whose axes match, or CUSTOM."""
-    return next((code for code, axes in PRESETS.items() if axes == tactic), CUSTOM)
+    """The preset code whose axes match, or CUSTOM (the flank doesn't count:
+    «Контратаки» down the right is still «Контратаки»)."""
+    axes_only = {k: v for k, v in tactic.items() if k != "flank"}
+    return next((code for code, axes in PRESETS.items() if axes == axes_only), CUSTOM)
 
 
 def tactic_for(raw_tactic: Optional[dict], playstyle: Optional[str]) -> dict:
@@ -337,11 +356,12 @@ def tactic_for(raw_tactic: Optional[dict], playstyle: Optional[str]) -> dict:
     playstyle's preset, else neutral."""
     if raw_tactic:
         return {**NEUTRAL_TACTIC, **raw_tactic}
-    return dict(PRESETS.get(playstyle or "", NEUTRAL_TACTIC))
+    # Presets don't carry the late axes (flank): neutral ones fill them in.
+    return {**NEUTRAL_TACTIC, **PRESETS.get(playstyle or "", NEUTRAL_TACTIC)}
 
 
 def describe(tactic: dict) -> str:
-    return " · ".join(VALUE_LABELS[axis][tactic[axis]] for axis in AXES)
+    return " · ".join(VALUE_LABELS[axis][tactic.get(axis, NEUTRAL_TACTIC[axis])] for axis in AXES)
 
 
 # --- the engine hook ----------------------------------------------------------------
@@ -380,6 +400,17 @@ class TacticAxes:
     roles_by_card: dict = field(default_factory=dict)
     # {"marker": my card id, "target": their player_id} while the marker plays.
     marking: Optional[dict] = None
+    # Flank duels (duel_service.DuelBook, shared by both sides; None = off)
+    # and card id -> "left"/"right" for the players on the pitch.
+    duels: Any = None
+    side_by_card: dict = field(default_factory=dict)
+    # card id -> "att" (striker / «десятка») / "def" (centre-back): centre duels.
+    centre_by_card: dict = field(default_factory=dict)
+
+    def flank_pick(self) -> str:
+        """Which flank a flank attack goes down (one RNG draw)."""
+        share = self.duels.tuning["flank_share"].get(self.tactic.get("flank", "both"), 0.5)
+        return "left" if random.random() < share else "right"
 
     def zone_weights(self) -> dict[str, float]:
         none = self.tuning["recycle"][self.tactic["buildup"]]
@@ -449,6 +480,16 @@ class TacticAxes:
         if self.marking and att_card is not None and att_card.id == self.marking["marker"]:
             value -= mark["marker_attack"]
             ids.append("mark_marker_attack")
+        if self.duels is not None:
+            edge = None
+            if zone == "wing_attack":
+                edge = self.duels.edge(att_card, def_card)
+            elif (zone == "central_attack" and att_card is not None and def_card is not None
+                  and self.centre_by_card.get(att_card.id) == "att" and defender.centre_by_card.get(def_card.id) == "def"):
+                edge = self.duels.edge(att_card, def_card, "centre")
+            if edge is not None and edge["bias"]:
+                value += edge["bias"]
+                ids.append("duel_edge" if edge["bias"] > 0 else "duel_hard")
         return value, tuple(ids)
 
 
@@ -542,9 +583,19 @@ def familiarity_for(stored: int, last_formation: Optional[str], last_tactic: Opt
         value = value * int(config.career_familiarity_keep_pct) // 100
     if last_tactic:
         for axis in AXES:
-            if last_tactic.get(axis) is not None and last_tactic.get(axis) != tactic.get(axis):
+            if axis == "flank":  # a matchday choice against one opponent, not a new system
+                continue
+            if last_tactic.get(axis) is not None and last_tactic.get(axis) != tactic.get(axis, NEUTRAL_TACTIC[axis]):
                 value = value * int(config.career_familiarity_axis_keep_pct) // 100
     return value
+
+
+def _axis_changes(tactic: dict, previous: dict) -> list[str]:
+    """Lowercase labels of the axes that changed (missing late axes = neutral)."""
+    def value(t: dict, axis: str) -> str:
+        return t.get(axis, NEUTRAL_TACTIC[axis])
+
+    return [VALUE_LABELS[axis][value(tactic, axis)].lower() for axis in AXES if value(tactic, axis) != value(previous, axis)]
 
 
 def familiarity_after_match(used: int, config, bonus_pct: int = 0) -> int:
@@ -594,7 +645,11 @@ def clean_halftime(raw: Any, on_ids: set[int], bench_ids: set[int], subs_left: i
         outs.add(out)
         ins.add(incoming)
         subs.append({"out": out, "in": incoming})
-    return {"mentality": mentality, "tactic": tactic, "subs": subs}
+    talk = raw.get("talk")
+    if talk is not None:
+        if talk not in morale.TALKS:
+            raise PlanError("Неизвестный разговор в перерыве")
+    return {"mentality": mentality, "tactic": tactic, "subs": subs, "talk": talk}
 
 
 def clean_plan(raw: Optional[dict], slot_codes: set[str], squad_ids: set[int], config) -> Optional[dict]:
@@ -786,6 +841,8 @@ class CareerSideRunner:
     # «Академия»: chemistry hooks of «Свой парень» / «Универсал» II
     # (path_talent_effects.TalentPlan.chemistry_hooks), frozen at kickoff.
     talent_hooks: Optional[dict] = None
+    # Flank duels (duel_service.DuelBook) for this match; None = off.
+    duels: Any = None
     events_meta: list[dict] = field(default_factory=list)  # rule/sub log for the analysis
     _subs_done: set = field(default_factory=set)
     _effective: tuple = ()
@@ -796,6 +853,23 @@ class CareerSideRunner:
     _tactic_memo: Any = None
     _subs_made: int = 0
     _halftime_done: bool = False
+    # «Профи» / «Легенда» bots: at the break, switch the flank of attack
+    # when its first-half flank duels went badly (duel_service.halftime_flank).
+    adaptive_flank: bool = False
+    _flank_checked: bool = False
+    # Team morale (career_morale_service): the mood and pre-match speech
+    # shifts of every player's rating (the mood through his character trait,
+    # traits_by_card), the morale value, the half-time talk whose
+    # second-half shift is set at the break, and the coach's «Оратор».
+    morale_mood: int = 0
+    morale_extra: int = 0
+    morale_value: float = 60
+    morale_cap: int = 3
+    traits_by_card: dict = field(default_factory=dict)
+    orator: int = 0
+    talk: Optional[str] = None
+    _talk_bonus: int = 0
+    _talk_checked: bool = False
 
     def __post_init__(self):
         self.tactic = {**NEUTRAL_TACTIC, **self.tactic}
@@ -804,6 +878,11 @@ class CareerSideRunner:
         self.chemistry_team, self.chemistry_max = 0, 0
         self.refresh_chemistry()
         self.chemistry_start = (self.chemistry_team, self.chemistry_max)
+
+    def set_flank(self, flank: str) -> None:
+        """A bot's flank of attack, chosen against its opponent before kick-off."""
+        self.tactic = {**self.tactic, "flank": flank}
+        self._effective = (self.mentality, tuple(sorted(self.tactic.items())))
 
     def refresh_chemistry(self) -> None:
         """Neighbour-link chemistry of the players on the pitch (the same
@@ -861,6 +940,10 @@ class CareerSideRunner:
             rating += self.tuning["sub_fresh"]
         # «Академия» static talents: after familiarity / fatigue / form.
         rating += p.talent_static
+        # Team morale, the pre-match speech and the half-time talk.
+        if self.morale_mood or self.morale_extra or self._talk_bonus:
+            mood = morale.player_mood(self.morale_mood, self.traits_by_card.get(p.card.id))
+            rating += max(-self.morale_cap, min(self.morale_cap, mood + self.morale_extra + self._talk_bonus))
         return max(1, min(99, round(rating)))
 
     def _apply_rules(self, minute: int, diff: int) -> list[dict]:
@@ -883,13 +966,13 @@ class CareerSideRunner:
             changes = []
             if mentality != previous_mentality:
                 changes.append(f"настрой «{MENTALITY_LABELS[mentality]}»")
-            changes += [VALUE_LABELS[axis][tactic[axis]].lower() for axis in AXES if tactic[axis] != previous[axis]]
+            changes += _axis_changes(tactic, previous)
             text = f"🗣 {self.name}: указания в перерыве — " + (", ".join(changes) or "без изменений")
         else:
             changes = []
             if mentality != self.mentality:
                 changes.append(f"настрой «{MENTALITY_LABELS[mentality]}»")
-            changes += [VALUE_LABELS[axis][tactic[axis]].lower() for axis in AXES if tactic[axis] != previous[axis]]
+            changes += _axis_changes(tactic, previous)
             text = f"📋 {self.name}: указание {active + 1} — " + (", ".join(changes) or "без изменений")
         payload = {"rule": active, "mentality": mentality, "tactic": tactic}
         halftime = active is not None and rules[active].get("score") == "any"
@@ -960,6 +1043,34 @@ class CareerSideRunner:
                       for p in self.bench if p.off_minute is None],
         }
 
+    def _apply_talk(self, minute: int, own: int, opp: int) -> list[dict]:
+        talk = self.talk
+        if not talk or self._talk_checked or minute <= HALF_TIME:
+            return []
+        self._talk_checked = True
+        self._talk_bonus = morale.talk_bonus(talk, self.morale_value, own, opp, self.orator)
+        effect = f"{self._talk_bonus:+d} к рейтингу во втором тайме" if self._talk_bonus else "без эффекта"
+        return [{"minute": minute, "event_type": "tactic_change", "team": self.label,
+                 "description": f"🗣 {self.name}: разговор в перерыве «{morale.TALKS[talk][0]}» — {effect}",
+                 "payload": {"talk": talk, "bonus": self._talk_bonus}}]
+
+    def _adapt_flank(self, minute: int) -> list[dict]:
+        if not self.adaptive_flank or self._flank_checked or self.duels is None or minute <= HALF_TIME:
+            return []
+        self._flank_checked = True
+        from app.services.duel_service import halftime_flank
+
+        keys = {info[0] for p in self.on_pitch if (info := self.duels.info(p.card))}
+        flank = halftime_flank(self.duels, keys, self.tactic.get("flank", "both"))
+        if flank is None:
+            return []
+        self.tactic = {**self.tactic, "flank": flank}
+        self._effective = (self._effective[0], tuple(sorted({**dict(self._effective[1]), "flank": flank}.items())))
+        where = {"left": "левый фланг", "right": "правый фланг", "both": "оба фланга"}[flank]
+        return [{"minute": minute, "event_type": "tactic_change", "team": self.label,
+                 "description": f"🔄 {self.name}: атаки переведены на {where} — дуэли первого тайма не пошли",
+                 "payload": {"flank": flank}}]
+
     def _apply_halftime(self, minute: int) -> list[dict]:
         """Half-time orders: direct substitutions (within the match limit)
         and, if given, one instruction that replaces the plan's rules for
@@ -987,7 +1098,8 @@ class CareerSideRunner:
             self._advance_fatigue(HALF_TIME)
             self._take_snapshot(own, opp)
         self._advance_fatigue(minute)
-        events = self._apply_halftime(minute) + self._apply_subs(minute) + self._apply_rules(minute, own - opp)
+        events = (self._adapt_flank(minute) + self._apply_talk(minute, own, opp) + self._apply_halftime(minute)
+                  + self._apply_subs(minute) + self._apply_rules(minute, own - opp))
         mentality = self._effective[0]
         tactic = self.effective_tactic
         fam_pct = self._per_tactic()[1]
@@ -1019,8 +1131,17 @@ class CareerSideRunner:
         by_slot = roles_by_slot(self.roles, [p.slot for p in self.on_pitch])
         on_ids = {p.card.id for p in self.on_pitch}
         marking = self.marking if self.marking and self.marking.get("marker") in on_ids else None
-        return {"roles_by_card": {p.card.id: by_slot[p.slot.code] for p in self.on_pitch if p.slot.code in by_slot},
-                "marking": marking}
+        levers = {"roles_by_card": {p.card.id: by_slot[p.slot.code] for p in self.on_pitch if p.slot.code in by_slot},
+                  "marking": marking}
+        if self.duels is not None:
+            from app.services.duel_service import centre_of, side_of
+
+            levers["duels"] = self.duels
+            levers["side_by_card"] = {p.card.id: side_of(p.slot.ideal_position) for p in self.on_pitch
+                                      if p.slot is not None and side_of(p.slot.ideal_position)}
+            levers["centre_by_card"] = {p.card.id: centre_of(p.slot.ideal_position) for p in self.on_pitch
+                                        if p.slot is not None and centre_of(p.slot.ideal_position)}
+        return levers
 
     def finish(self) -> None:
         self._advance_fatigue(90)

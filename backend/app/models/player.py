@@ -50,6 +50,12 @@ class Player(TimestampMixin, Base):
     path_talent_code: Mapped[Optional[str]] = mapped_column(
         String(32), ForeignKey("path_talents.code", ondelete="RESTRICT"), nullable=True, index=True
     )
+    # Flank duels of the career (duel_service.STYLES): speed / technique /
+    # power / reading. NULL = derived from the player (duel_service.style_of).
+    duel_style: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    # Career character trait (career_morale_service.TRAITS); NULL = derived,
+    # "none" = no trait.
+    character_trait: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
 
     @property
     def is_path(self) -> bool:

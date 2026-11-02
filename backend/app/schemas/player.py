@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -7,8 +7,12 @@ from app.models.enums import Position, Rarity
 _PLAYER_COLUMN_FIELDS = (
     "id", "first_name", "last_name", "display_name", "rating", "rarity",
     "country", "club", "position", "image_path", "quick_sell_price", "is_active",
-    "is_pack_droppable", "collection_id", "path_talent_code", "person_key",
+    "is_pack_droppable", "collection_id", "path_talent_code", "person_key", "duel_style", "character_trait",
 )
+# Flank duels of the career (services/duel_service.py STYLES).
+DuelStyle = Literal["speed", "technique", "power", "reading"]
+# Career character traits (career_morale_service.TRAITS) or "none".
+CharacterTrait = Literal["spark", "stoic", "emotional", "peacemaker", "grumbler", "none"]
 
 
 class PlayerOut(BaseModel):
@@ -37,6 +41,13 @@ class PlayerOut(BaseModel):
     path_talent_code: Optional[str] = None
     # «Один футболист» (services/player_identity.py); null = by display name.
     person_key: Optional[str] = None
+    # Career flank duels: set by the admin; null = derived (duel_style_auto).
+    duel_style: Optional[str] = None
+    duel_style_auto: Optional[str] = None
+    # Career character trait: set by the admin ("none" = no trait); null =
+    # derived (character_trait_auto, None = no trait).
+    character_trait: Optional[str] = None
+    character_trait_auto: Optional[str] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -57,6 +68,11 @@ class PlayerOut(BaseModel):
         result["collection_skin"] = getattr(collection, "card_skin", None) if collection is not None else None
         result["attack_rating"] = data.attack_rating if data.attack_rating is not None else data.rating
         result["defense_rating"] = data.defense_rating if data.defense_rating is not None else data.rating
+        from app.services.career_morale_service import trait_of
+        from app.services.duel_service import style_of  # schemas load before services
+
+        result["duel_style_auto"] = style_of(data)
+        result["character_trait_auto"] = trait_of(data)
         return result
 
 
@@ -107,6 +123,8 @@ class PlayerCreate(BaseModel):
     collection_id: Optional[int] = None
     path_talent_code: Optional[str] = None
     person_key: Optional[str] = Field(default=None, max_length=128)
+    duel_style: Optional[DuelStyle] = None
+    character_trait: Optional[CharacterTrait] = None
 
 
 class PlayerUpdate(BaseModel):
@@ -130,5 +148,7 @@ class PlayerUpdate(BaseModel):
     is_active: Optional[bool] = None
     is_pack_droppable: Optional[bool] = None
     person_key: Optional[str] = Field(default=None, max_length=128)
+    duel_style: Optional[DuelStyle] = None
+    character_trait: Optional[CharacterTrait] = None
     collection_id: Optional[int] = None
     path_talent_code: Optional[str] = None

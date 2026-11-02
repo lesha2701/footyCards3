@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import AdminCareerClubs from "@/admin/pages/AdminCareerClubs";
+import AdminCareerRivalries from "@/admin/pages/AdminCareerRivalries";
 
 import { fetchGameConfig, fetchNewbieFunnel, fetchSuspiciousMatches, fetchSuspiciousMemorySessions, updateGameConfig } from "@/admin/api";
 import AdminMagnateBoardEditor from "@/admin/pages/AdminMagnateBoardEditor";
@@ -215,6 +216,8 @@ export default function AdminGamesPage() {
       | "career_cup_enabled"
       | "career_offseason_auto"
       | "career_live_enabled"
+      | "career_duels_enabled"
+      | "career_morale_enabled"
       | "career_digest_enabled"
       | "my_player_enabled"
       | "player_career_enabled"
@@ -641,6 +644,8 @@ export default function AdminGamesPage() {
           {field("career_division_club_count", "Клубов в каталоге на дивизион")}
           <p className="col-span-2 mt-2 text-xs font-semibold text-slate-300">Live-матч, достижения, дайджест</p>
           {toggle("career_live_enabled", "Live-матч: перерыв для указаний")}
+          {toggle("career_duels_enabled", "Дуэли на флангах (с новых сезонов)")}
+          {toggle("career_morale_enabled", "Мораль команды, речи и характер (с новых сезонов)")}
           {field("career_halftime_minutes", "Перерыв: минут до второго тайма")}
           {field("career_achievement_reward", "Награда за достижение, монет")}
           {toggle("career_digest_enabled", "Недельный дайджест в Telegram")}
@@ -674,6 +679,7 @@ export default function AdminGamesPage() {
       </section>
 
       <AdminCareerClubs divisions={form.career_division_count ?? 5} />
+      <AdminCareerRivalries />
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-1 font-display text-base font-bold">Мой игрок</p>

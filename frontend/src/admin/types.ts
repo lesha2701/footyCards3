@@ -398,6 +398,8 @@ export interface GameConfig {
   career_tenure_max: number;
   career_division_club_count: number;
   career_live_enabled: boolean;
+  career_duels_enabled: boolean;
+  career_morale_enabled: boolean;
   career_halftime_minutes: number;
   career_achievement_reward: number;
   career_digest_enabled: boolean;

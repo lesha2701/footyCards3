@@ -114,3 +114,18 @@ async def test_coach_stadium_and_muse_sell_for_stars_and_complete_a_collection(c
 
     bad = await client.post(ADMIN, headers=admin, json={"coach_id": coach.id, "stadium_id": stadium.id, "stars_price": 5})
     assert bad.status_code == 409
+
+
+def test_tournament_shifts_and_rated_stand_ins():
+    mourinho = _coach((CoachBoostType.OPP_ATTACK, 4), (CoachBoostType.OPP_TEAM, 2), (CoachBoostType.TEAM_RATING, 1))
+    assert coach_boost_service.match_rating_shifts(mourinho, None, 0) == {"GK": 1, "DEF": 1, "MID": 1, "FWD": 1}
+    assert coach_boost_service.match_rating_shifts(None, mourinho, 5) == {"GK": -7, "DEF": -7, "MID": -7, "FWD": -11}
+    assert coach_boost_service.match_rating_shifts(None, None, 0) == {}
+
+    player = NS(display_name="X", position="ST", rating=98, rarity=Rarity.epic, club="c", country="n")
+    card = NS(id=7, player_id=3, player=player)
+    pairs = [(card, NS(category="FWD")), (card, NS(category="GK"))]
+    shifted = coach_boost_service.with_rating_shifts(pairs, {"FWD": 4})
+    assert shifted[0][0].player.rating == 99 and shifted[0][0].id == 7  # capped at 99
+    assert shifted[1][0] is card  # no shift → the card itself
+    assert coach_boost_service.with_rating_shifts(pairs, {"FWD": -200})[0][0].player.rating == 1

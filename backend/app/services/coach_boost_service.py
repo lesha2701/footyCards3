@@ -1,4 +1,6 @@
 from dataclasses import dataclass, field
+from types import SimpleNamespace
+from typing import Any
 
 from app.models.coach import Coach
 from app.models.enums import CoachBoostType, Rarity
@@ -165,6 +167,49 @@ def apply_opponent_malus(strength: int, lines: dict[str, int], malus: dict[str, 
     after = sum(new_lines.values()) / max(1, len(new_lines))
     scaled = round(strength * (after / before)) if before > 0 else strength
     return max(1, scaled), new_lines
+
+
+MATCH_LINES = ("GK", "DEF", "MID", "FWD")
+
+
+def match_rating_shifts(own_coach: "Coach | None", opp_coach: "Coach | None", opp_stadium_malus: int = 0) -> dict[str, int]:
+    """Tournaments (personal and club): rating points per line for one side
+    of a match — + its own coach's TEAM_RATING, − what the opponent's coach
+    (OPP_*) and stadium («Проклятый стадион») take off it. The same numbers
+    as Card Arena; lines without a change are left out."""
+    plus = arena_team_rating_bonus(own_coach)
+    minus = arena_opponent_malus(opp_coach, opp_stadium_malus)
+    shifts = {line: plus - minus.get(line, 0) for line in MATCH_LINES}
+    return {line: shift for line, shift in shifts.items() if shift}
+
+
+def shifted_rating(rating: int, shift: int) -> int:
+    return max(1, min(99, rating + shift))
+
+
+def with_rating_shifts(cards_with_slots: list[tuple[Any, Any]], shifts: dict[str, int]) -> list[tuple[Any, Any]]:
+    """The same (card, slot) pairs with each card's line shift folded into
+    player.rating, for engines that read the rating off the card (like
+    chemistry_service.with_match_ratings: a light stand-in keeps id /
+    player_id and the player fields the engine reads)."""
+    if not shifts:
+        return list(cards_with_slots)
+    out = []
+    for card, slot in cards_with_slots:
+        shift = shifts.get(slot.category, 0)
+        if not shift:
+            out.append((card, slot))
+            continue
+        p = card.player
+        out.append((SimpleNamespace(
+            id=card.id, player_id=card.player_id,
+            player=SimpleNamespace(
+                display_name=p.display_name, position=p.position, rating=shifted_rating(p.rating, shift),
+                rarity=p.rarity, club=p.club, country=p.country,
+                attack_rating=getattr(p, "attack_rating", None), defense_rating=getattr(p, "defense_rating", None),
+            ),
+        ), slot))
+    return out
 
 
 def arena_rarity_team_strength_bonus(coach: "Coach | None") -> int:

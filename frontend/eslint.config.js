@@ -7,7 +7,9 @@ import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 
 export default [
-  { ignores: ["dist/**", "node_modules/**", "coverage/**", "*.config.{js,ts}", "tsconfig.tsbuildinfo"] },
+  { ignores: ["dist/**", "node_modules/**", "coverage/**", "*.config.{js,ts}", "tsconfig.tsbuildinfo",
+    // Telegram's own SDK, vendored as is (index.html).
+    "public/telegram-web-app.js"] },
   js.configs.recommended,
   {
     files: ["**/*.{ts,tsx}"],

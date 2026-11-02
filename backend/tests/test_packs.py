@@ -448,3 +448,37 @@ async def test_daily_limited_pack_opens_once_a_day(client, db_session, bot_token
     assert resp.status_code == 409 and resp.json()["error"]["details"]["reason"] == "daily_limit"
     listed = next(p for p in (await client.get("/api/v1/packs", headers=headers)).json() if p["id"] == pack.id)
     assert listed["user_today_count"] == 1 and listed["daily_limit_per_user"] == 1
+
+
+async def test_daily_limit_counts_the_evening_before_utc_midnight(db_session, monkeypatch):
+    """Local midnight is compared in UTC: at 01:30 Moscow (22:30 UTC the day
+    before) an opening at 01:00 Moscow is already today's."""
+    from datetime import datetime as real_datetime, timezone
+    from zoneinfo import ZoneInfo
+
+    from app.core import timeutil
+    from app.models.pack import PackOpening
+    from app.models.user import User
+    from app.services import pack_service
+    from tests.factories import create_pack
+
+    monkeypatch.setattr(timeutil.settings, "timezone", "Europe/Moscow")
+    now = real_datetime(2026, 10, 31, 22, 30, tzinfo=timezone.utc)
+
+    class _Clock(real_datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now.astimezone(tz) if tz else now.replace(tzinfo=None)
+
+    monkeypatch.setattr(pack_service, "datetime", _Clock)
+    user = User(telegram_id=870902, first_name="Evening")
+    db_session.add(user)
+    pack = await create_pack(db_session, "evening", price=10, card_count=1, probabilities={}, daily_limit_per_user=1)
+    await db_session.flush()
+    db_session.add(PackOpening(user_id=user.id, pack_id=pack.id, price_paid=10,
+                               created_at=real_datetime(2026, 10, 31, 22, 0, tzinfo=timezone.utc)))
+    db_session.add(PackOpening(user_id=user.id, pack_id=pack.id, price_paid=10,
+                               created_at=real_datetime(2026, 10, 31, 20, 0, tzinfo=timezone.utc)))  # 23:00 Moscow: yesterday
+    await db_session.commit()
+    assert now.astimezone(ZoneInfo("Europe/Moscow")).day == 1
+    assert await pack_service.today_count(db_session, pack.id, user.id) == 1
