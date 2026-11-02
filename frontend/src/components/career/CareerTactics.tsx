@@ -26,6 +26,7 @@ import {
   axisValueLabel,
   presetOf,
   previewFamiliarity,
+  samePresetAxes,
   sameTactic,
   tacticLabel,
 } from "@/lib/careerTactics";
@@ -232,7 +233,7 @@ export function TacticsBoard({ season, catalog, onView, onError }: {
   const famPreview = fam
     ? previewFamiliarity(fam.stored_pct, fam.keep_pct, fam.axis_keep_pct, fam.last_formation, fam.last_tactic, formation, tactic)
     : 0;
-  const activePreset = catalog.presets.find((p) => sameTactic(p.tactic, tactic));
+  const activePreset = catalog.presets.find((p) => samePresetAxes(p.tactic, tactic));
 
   return (
     <Card>
@@ -269,7 +270,8 @@ export function TacticsBoard({ season, catalog, onView, onError }: {
               value={activePreset?.code ?? CUSTOM_PRESET}
               onChange={(e) => {
                 const preset = catalog.presets.find((p) => p.code === e.target.value);
-                if (preset) { setTactic({ ...preset.tactic }); haptic("light"); }
+                // A preset keeps the chosen flank of attack.
+                if (preset) { setTactic({ ...preset.tactic, ...(tactic.flank ? { flank: tactic.flank } : {}) }); haptic("light"); }
               }}
               className="rounded-xl bg-bg-raised px-2 py-2 text-xs text-ink-chalk outline-none"
             >

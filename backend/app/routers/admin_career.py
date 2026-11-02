@@ -11,7 +11,8 @@ from app.database import get_db
 from app.models.career import CareerClub
 from app.models.player import Player
 from app.models.user import User
-from app.services import career_league_service, career_tactics_service
+from app.models.duel import PlayerRivalry
+from app.services import career_league_service, career_tactics_service, duel_service
 from app.services.admin_log_service import log_action
 from app.services.club_formation_service import CLUB_FORMATIONS
 from app.services.game_config_service import get_config
@@ -98,3 +99,77 @@ async def update_club(
     await log_action(db, admin.id, "career_club_update", "career_club", entity_id=club.id, new_value=payload.model_dump())
     await db.commit()
     return await _out(db)
+
+
+# --- flank duels: known rivalries (duel_service) ---------------------------------------
+
+class RivalryIn(BaseModel):
+    attacker_id: int
+    defender_id: int
+    # -3..+3: negative = the defender dominates the attacker.
+    level: int = Field(ge=-3, le=3)
+    note: Optional[str] = Field(default=None, max_length=255)
+
+
+class RivalryUpdateIn(BaseModel):
+    level: int = Field(ge=-3, le=3)
+    note: Optional[str] = Field(default=None, max_length=255)
+
+
+@router.get("/rivalries")
+async def rivalries(db: AsyncSession = Depends(get_db)):
+    return await duel_service.admin_overview(db, (await get_config(db)).career_tactics_tuning)
+
+
+@router.post("/rivalries")
+async def create_rivalry(payload: RivalryIn, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)):
+    row = await duel_service.admin_save_rivalry(db, payload.attacker_id, payload.defender_id, payload.level, payload.note)
+    await log_action(db, admin.id, "career_rivalry_save", "player_rivalry", entity_id=row.id, new_value=payload.model_dump())
+    await db.commit()
+    return await duel_service.admin_overview(db, (await get_config(db)).career_tactics_tuning)
+
+
+@router.put("/rivalries/{rivalry_id}")
+async def update_rivalry(
+    rivalry_id: int, payload: RivalryUpdateIn, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin),
+):
+    row = await db.get(PlayerRivalry, rivalry_id)
+    if row is None:
+        raise NotFoundError("Противостояние не найдено")
+    row.level, row.note = payload.level, payload.note or None
+    await log_action(db, admin.id, "career_rivalry_save", "player_rivalry", entity_id=row.id, new_value=payload.model_dump())
+    await db.commit()
+    return await duel_service.admin_overview(db, (await get_config(db)).career_tactics_tuning)
+
+
+@router.delete("/rivalries/{rivalry_id}")
+async def delete_rivalry(rivalry_id: int, db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)):
+    row = await db.get(PlayerRivalry, rivalry_id)
+    if row is None:
+        raise NotFoundError("Противостояние не найдено")
+    await log_action(db, admin.id, "career_rivalry_delete", "player_rivalry", entity_id=row.id,
+                     new_value=duel_service.rivalry_out(row))
+    await db.delete(row)
+    await db.commit()
+    return await duel_service.admin_overview(db, (await get_config(db)).career_tactics_tuning)
+
+
+
+class RivalryBulkIn(BaseModel):
+    text: str = Field(max_length=20_000)
+
+
+@router.post("/rivalries/bulk")
+async def bulk_rivalries(payload: RivalryBulkIn, db: AsyncSession = Depends(get_db),
+                         admin: User = Depends(get_current_admin)):
+    """Many rivalries at once: «атакующий; защитник; уровень; заметка» per line."""
+    result = await duel_service.admin_bulk_rivalries(db, payload.text)
+    await log_action(db, admin.id, "career_rivalry_bulk", "player_rivalry", new_value={"saved": result["saved"]})
+    await db.commit()
+    return {**await duel_service.admin_overview(db, (await get_config(db)).career_tactics_tuning), "bulk": result}
+
+
+@router.get("/duel-stats")
+async def duel_stats(db: AsyncSession = Depends(get_db)):
+    """How the flank duels play out per style matchup (for tuning)."""
+    return await duel_service.admin_stats(db, (await get_config(db)).career_tactics_tuning)

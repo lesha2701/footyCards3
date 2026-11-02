@@ -22,6 +22,12 @@ const pic = (children: ReactNode, props: IconProps = {}) => <IconBase size={18} 
 
 /** The setting's own icon, by axis key. */
 export const AXIS_ICONS: Record<string, (p: IconProps) => ReactNode> = {
+  // Flank duels: a pitch with both touchlines, one flank marked.
+  flank: (p) => pic(<>
+    <rect x="4" y="4" width="16" height="16" rx="2" />
+    <path d="M8 18V7M16 18V7" strokeDasharray="1.6 1.8" />
+    <path d={arrowUp(8, 7)} />
+  </>, p),
   direction: (p) => pic(<>
     <path d="M12 20v-6M12 14L6 6M12 14l6-8" />
     <path d="M5 9.5L6 6l3.5.6M19 9.5L18 6l-3.5.6" />
@@ -49,6 +55,22 @@ export const AXIS_ICONS: Record<string, (p: IconProps) => ReactNode> = {
 
 /** Each value's pictogram, by axis then value. */
 export const VALUE_ICONS: Record<string, Record<string, ReactNode>> = {
+  flank: {
+    both: pic(<>
+      <path d="M7 20V4M17 20V4" />
+      <path d={arrowUp(7, 4)} /><path d={arrowUp(17, 4)} />
+    </>),
+    left: pic(<>
+      <path d="M7 20V4" />
+      <path d={arrowUp(7, 4)} />
+      <path d="M17 20v-6" strokeOpacity="0.4" />
+    </>),
+    right: pic(<>
+      <path d="M17 20V4" />
+      <path d={arrowUp(17, 4)} />
+      <path d="M7 20v-6" strokeOpacity="0.4" />
+    </>),
+  },
   direction: {
     wings: pic(<>
       <path d="M7 20C4 14 4.5 9 7 4M17 20c3-6 2.5-11 0-16" />

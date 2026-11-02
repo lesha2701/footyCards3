@@ -132,6 +132,8 @@ class CareerProfile(Base):
     # career_achievements_service: unlocked achievements, the trophy cabinet,
     # running streaks and the weekly digest bookkeeping.
     achievements: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # Coach skills (career_morale_service): {"xp": n, "skills": {code: level}}.
+    coach_skills: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 

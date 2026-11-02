@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, renderHook, screen } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import CardsSectionTabs from "@/components/layout/CardsSectionTabs";
+import TopBar from "@/components/layout/TopBar";
 import { usePersistentState } from "@/lib/usePersistentState";
 import { useTelegramBackButton } from "@/lib/useTelegramBackButton";
 
@@ -97,5 +98,36 @@ describe("useTelegramBackButton", () => {
     expect(backButton.show).toHaveBeenCalled();
     click();
     expect(path()).toBe("/collection");
+  });
+});
+
+describe("TopBar back arrow", () => {
+  function renderAt(url: string) {
+    let path = "";
+    function Probe() {
+      path = useLocation().pathname;
+      return <TopBar />;
+    }
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter initialEntries={[url]}>
+          <Routes>
+            <Route path="*" element={<Probe />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    return { path: () => path };
+  }
+
+  it("is not shown on bottom-nav roots", () => {
+    renderAt("/play");
+    expect(screen.queryByRole("button", { name: "Назад" })).toBeNull();
+  });
+
+  it("goes back to the section from an inner screen opened directly", () => {
+    const { path } = renderAt("/play/career/seasons/2/rounds/1/matches/0");
+    fireEvent.click(screen.getByRole("button", { name: "Назад" }));
+    expect(path()).toBe("/play");
   });
 });

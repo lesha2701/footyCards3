@@ -6,9 +6,12 @@ import {
   type CareerLive,
   type CareerLivePlayer,
   type CareerView,
+  type MoraleOption,
   type Tactic,
   type TacticsCatalog,
 } from "@/api/career";
+import { HalftimeDuelsPanel } from "@/components/career/FlankDuels";
+import { HalftimeTalk } from "@/components/career/Morale";
 import { Segmented } from "@/components/career/CareerTactics";
 import { VALUE_ICONS } from "@/components/career/TacticIcons";
 import { EnergyBar } from "@/components/career/EnergyBar";
@@ -140,8 +143,10 @@ function TacticsPanel({ catalog, mentality, setMentality, tactic, setTactic }: {
  * during the break (until second_half_at) the coach can change mentality,
  * tactical axes and make substitutions for the second half. With the 2D
  * viewer they are its "Замены" / "Тактика" tabs, next to the feed. */
-export function LiveMatchCenter({ live, catalog, seasonId, onView, onError }: {
+export function LiveMatchCenter({ live, catalog, seasonId, talks, onView, onError }: {
   live: CareerLive; catalog: TacticsCatalog | null;
+  /** «Разговор в перерыве» options (team morale seasons). */
+  talks?: MoraleOption[];
   /** With it (and live.match_index) the first half plays on the 2D pitch. */
   seasonId?: number;
 } & Handlers) {
@@ -156,6 +161,7 @@ export function LiveMatchCenter({ live, catalog, seasonId, onView, onError }: {
   const [mentality, setMentality] = useState<string>(saved?.mentality ?? live.mentality ?? "BALANCED");
   const [tactic, setTactic] = useState<Tactic>({ ...(live.tactic ?? {}), ...(saved?.tactic ?? {}) });
   const [subs, setSubs] = useState<Sub[]>(saved?.subs ?? []);
+  const [talk, setTalk] = useState<string | null>(saved?.talk ?? null);
   const withViewer = seasonId !== undefined && live.match_index !== undefined;
 
   const send = useMutation({
@@ -164,7 +170,7 @@ export function LiveMatchCenter({ live, catalog, seasonId, onView, onError }: {
       for (const [axis, value] of Object.entries(tactic)) {
         if (live.tactic?.[axis] !== value) changed[axis] = value;
       }
-      return setCareerHalftime({ mentality: mentality !== live.mentality ? mentality : null, tactic: changed, subs });
+      return setCareerHalftime({ mentality: mentality !== live.mentality ? mentality : null, tactic: changed, subs, talk });
     },
     onSuccess: (v) => { haptic("medium"); onView(v); },
     onError,
@@ -203,7 +209,12 @@ export function LiveMatchCenter({ live, catalog, seasonId, onView, onError }: {
   );
   const subsPanel = <SubsPanel live={live} subs={subs} setSubs={setSubs} />;
   const tacticsPanel = (
-    <TacticsPanel catalog={catalog} mentality={mentality} setMentality={setMentality} tactic={tactic} setTactic={setTactic} />
+    <>
+      {talks && <HalftimeTalk talks={talks} value={talk} onChange={setTalk} />}
+      <HalftimeDuelsPanel duels={live.duels} flank={tactic.flank}
+        onFlank={(flank) => { haptic("light"); setTactic({ ...tactic, flank }); }} />
+      <TacticsPanel catalog={catalog} mentality={mentality} setMentality={setMentality} tactic={tactic} setTactic={setTactic} />
+    </>
   );
   const tabs: ReplayTab[] | undefined = over ? undefined : [
     {

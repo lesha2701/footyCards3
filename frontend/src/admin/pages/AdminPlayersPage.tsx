@@ -33,7 +33,31 @@ const emptyForm = {
   path_talent_code: "",
   /** «Один футболист»: versions of one player share it ("" = by the name). */
   person_key: "",
+  /** Career flank duels ("" = derived automatically). */
+  duel_style: "",
+  /** Career character trait ("" = derived, "none" = no trait). */
+  character_trait: "",
 };
+
+// Career character traits (backend career_morale_service.TRAITS): only how
+// a player lives with the team's morale.
+const TRAITS: { value: string; label: string }[] = [
+  { value: "spark", label: "🎉 Заводила — победа с ним поднимает мораль сильнее" },
+  { value: "stoic", label: "🗿 Стоик — плохая мораль не снижает его рейтинг" },
+  { value: "emotional", label: "🎭 Эмоциональный — мораль влияет на него вдвое" },
+  { value: "peacemaker", label: "🕊️ Миротворец — поражение с ним бьёт по морали слабее" },
+  { value: "grumbler", label: "😤 Ворчун — без игры портит мораль" },
+  { value: "none", label: "Без черты" },
+];
+
+// Career flank duels (backend duel_service.STYLES): one field read as
+// attacker (скоростной / технарь / силовой) or defender (быстрый / силовой / читающий).
+const DUEL_STYLES: { value: string; label: string }[] = [
+  { value: "speed", label: "Скорость — скоростной вингер / быстрый защитник" },
+  { value: "technique", label: "Техника — технарь (в защите — читающий)" },
+  { value: "power", label: "Сила — силовой" },
+  { value: "reading", label: "Чтение игры — читающий защитник (в атаке — технарь)" },
+];
 
 export default function AdminPlayersPage() {
   const queryClient = useQueryClient();
@@ -60,6 +84,8 @@ export default function AdminPlayersPage() {
     defense_rating: form.defense_rating === "" ? null : form.defense_rating,
     path_talent_code: form.rarity === "diamond" && form.path_talent_code ? form.path_talent_code : null,
     person_key: form.person_key.trim() || null,
+    duel_style: form.duel_style || null,
+    character_trait: form.character_trait || null,
   });
 
   const createMutation = useMutation({
@@ -100,6 +126,8 @@ export default function AdminPlayersPage() {
       attack_rating: p.attack_rating, defense_rating: p.defense_rating,
       path_talent_code: p.path_talent_code ?? "",
       person_key: p.person_key ?? "",
+      duel_style: p.duel_style ?? "",
+      character_trait: p.character_trait ?? "",
     });
   };
 
@@ -212,6 +240,38 @@ export default function AdminPlayersPage() {
                 value={form.person_key}
                 onChange={(v) => setForm({ ...form, person_key: v })}
               />
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-slate-400">
+                  Стиль в дуэлях на флангах (карьера)
+                  {editing?.duel_style_auto && !form.duel_style
+                    ? ` — сейчас авто: ${DUEL_STYLES.find((s) => s.value === editing.duel_style_auto)?.label.split(" — ")[0] ?? editing.duel_style_auto}`
+                    : ""}
+                </span>
+                <select
+                  value={form.duel_style}
+                  onChange={(e) => setForm({ ...form, duel_style: e.target.value })}
+                  className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                >
+                  <option value="">Авто</option>
+                  {DUEL_STYLES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-slate-400">
+                  Характер (мораль в карьере)
+                  {editing && !form.character_trait
+                    ? ` — сейчас авто: ${TRAITS.find((t) => t.value === editing.character_trait_auto)?.label.split(" — ")[0] ?? "без черты"}`
+                    : ""}
+                </span>
+                <select
+                  value={form.character_trait}
+                  onChange={(e) => setForm({ ...form, character_trait: e.target.value })}
+                  className="rounded-lg bg-bg-surface px-3 py-2 outline-none"
+                >
+                  <option value="">Авто</option>
+                  {TRAITS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </label>
               <TextField label="Страна" value={form.country} onChange={(v) => setForm({ ...form, country: v })} />
               <TextField label="Клуб" value={form.club} onChange={(v) => setForm({ ...form, club: v })} />
               <div className="grid grid-cols-2 gap-2">

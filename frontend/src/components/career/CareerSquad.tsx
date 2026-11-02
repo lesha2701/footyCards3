@@ -5,6 +5,8 @@ import { setCareerLineup, type CareerSeason, type CareerSlot, type CareerSquadCa
 import { ChemistryDiamonds, ChemistryLinksOverlay, ChemistrySummary } from "@/components/squad/Chemistry";
 import { SquadBuilder } from "@/components/career/Offseason";
 import { EnergyBar } from "@/components/career/EnergyBar";
+import { DuelStyleBadge } from "@/components/career/FlankDuels";
+import { TraitBadge } from "@/components/career/Morale";
 import { PlayerTile } from "@/components/career/PlayerTile";
 import { SquadTacticLayer } from "@/components/career/SquadTacticLayer";
 import { VALUE_ICONS } from "@/components/career/TacticIcons";
@@ -42,7 +44,8 @@ function PitchCard({ slot, entry, chemPoints, chemMax, onClick, target = false, 
       } ${dimmed ? "opacity-35" : ""}`}
       aria-label={info ? `${slot.code}: ${info.name}` : `${slot.code}: пусто`}
     >
-
+      {info && <DuelStyleBadge style={entry?.duel_style} className="absolute -left-0.5 -top-0.5 z-10" />}
+      {info && <TraitBadge trait={entry?.trait} className="absolute -left-0.5 top-3 z-10" />}
       {info ? (
         <PlayerTile info={info} entry={entry} width="w-[42px] min-[400px]:w-[47px]" offPosition={!!off}>
           {chemPoints && <ChemistryDiamonds points={chemPoints.points} max={chemMax} onPosition={chemPoints.on_position} />}
@@ -75,6 +78,8 @@ function BenchCard({ entry, onClick, gain, selected, onPitch = false }: {
           на поле
         </span>
       )}
+      <DuelStyleBadge style={entry.duel_style} className="absolute -left-0.5 -top-0.5 z-10" />
+      <TraitBadge trait={entry.trait} className="absolute -left-0.5 top-3 z-10" />
       <PlayerTile info={info} entry={entry}>
         <EnergyBar fatigue={entry.fatigue} card />
         {gain != null && gain !== 0 && (

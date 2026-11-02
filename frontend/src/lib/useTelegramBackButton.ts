@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { getTelegramWebApp } from "@/lib/telegram";
@@ -6,7 +6,7 @@ import { useMatchGuardStore } from "@/store/matchGuardStore";
 
 // Bottom-nav roots: no native back button there, Telegram shows "Закрыть".
 const ROOTS = new Set(["/", "/packs", "/play", "/collection", "/profile"]);
-const isRoot = (pathname: string) => ROOTS.has(pathname) || pathname.startsWith("/admin");
+export const isRoot = (pathname: string) => ROOTS.has(pathname) || pathname.startsWith("/admin");
 
 /** Fallback when the screen was opened directly (deep link / reload) and
  * there is no in-app history to go back to: the section it belongs to. */
@@ -18,12 +18,29 @@ function parentOf(pathname: string): string {
   return "/";
 }
 
-/** Telegram's native header BackButton on every inner screen, so players
- * can go back the way every Mini App works instead of hunting for a
- * "Назад" link. A live match keeps its guard: back asks before forfeiting. */
-export function useTelegramBackButton() {
+/** "Back" from an inner screen: the previous in-app screen, or the section
+ * it belongs to. A live match keeps its guard: back asks before forfeiting. */
+export function useGoBack() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  return useCallback(() => {
+    const guard = useMatchGuardStore.getState();
+    if (guard.active) {
+      guard.requestNavigate(parentOf(pathname));
+      return;
+    }
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    if (idx > 0) navigate(-1);
+    else navigate(parentOf(pathname), { replace: true });
+  }, [pathname, navigate]);
+}
+
+/** Telegram's native header BackButton on every inner screen, so players
+ * can go back the way every Mini App works instead of hunting for a
+ * "Назад" link. */
+export function useTelegramBackButton() {
+  const { pathname } = useLocation();
+  const goBack = useGoBack();
 
   useEffect(() => {
     const backButton = getTelegramWebApp()?.BackButton;
@@ -32,18 +49,8 @@ export function useTelegramBackButton() {
       backButton.hide();
       return;
     }
-    const onBack = () => {
-      const guard = useMatchGuardStore.getState();
-      if (guard.active) {
-        guard.requestNavigate(parentOf(pathname));
-        return;
-      }
-      const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
-      if (idx > 0) navigate(-1);
-      else navigate(parentOf(pathname), { replace: true });
-    };
     backButton.show();
-    backButton.onClick(onBack);
-    return () => backButton.offClick(onBack);
-  }, [pathname, navigate]);
+    backButton.onClick(goBack);
+    return () => backButton.offClick(goBack);
+  }, [pathname, goBack]);
 }

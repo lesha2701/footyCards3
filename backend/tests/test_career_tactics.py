@@ -60,6 +60,11 @@ def _card(n, position, rating):
                                        club=f"C{n}", country=f"N{n}", attack_rating=None, defense_rating=None))
 
 
+def _axes(tactic: dict) -> dict:
+    """A tactic without the flank (presets don't carry it)."""
+    return {k: v for k, v in tactic.items() if k != "flank"}
+
+
 def _runner(label="a", tactic=None, plan=None, fatigue=0, bench_positions=(), config=None,
             familiarity=0, offset=0, rating=75):
     config = config or _defaults()
@@ -75,7 +80,12 @@ def _runner(label="a", tactic=None, plan=None, fatigue=0, bench_positions=(), co
 
 def test_presets_and_tactic_validation():
     for code, axes in tactics.PRESETS.items():
-        assert tactics.clean_tactic(axes) == axes and tactics.preset_of(axes) == code
+        # A preset has no flank: validation adds the neutral one, and the
+        # flank never makes a preset custom.
+        assert tactics.clean_tactic(axes) == {**axes, "flank": "both"} and tactics.preset_of(axes) == code
+        assert tactics.preset_of({**axes, "flank": "right"}) == code
+    with pytest.raises(tactics.TacticError):
+        tactics.clean_tactic({**PRESS, "flank": "middle"})
     assert tactics.preset_of({**PRESS, "direction": "wings"}) == tactics.CUSTOM
     with pytest.raises(tactics.TacticError):
         tactics.clean_tactic({**PRESS, "block": "sky_high"})
@@ -85,7 +95,7 @@ def test_presets_and_tactic_validation():
         tactics.clean_tactic({**PRESS, "tiki_taka": "yes"})
     assert tactics.clean_tactic({"block": "high"}, partial=True) == {"block": "high"}
     # Old seasons' playstyles map onto presets.
-    assert tactics.tactic_for(None, "COUNTER_ATTACK") == COUNTER
+    assert tactics.tactic_for(None, "COUNTER_ATTACK") == {**COUNTER, "flank": "both"}
 
 
 def test_every_axis_value_is_a_real_lever_with_a_cost():
@@ -303,7 +313,7 @@ def test_bots_by_difficulty():
     history = [{"round": 0, "formation": "4-3-3", "mentality": "BALANCED", "tactic": PRESS}]
     best = max(tactics.PRESETS.values(), key=lambda t: tactics.matchup_report(t, PRESS, config)["score"])
     amateur = tactics.bot_tactics_for_round(_bot_team(), "amateur", history, {}, config, 0.0)
-    assert amateur["tactic"] == tactics.PRESETS["WING_PLAY"] and not amateur["adapted"] and amateur["plan"] is None
+    assert _axes(amateur["tactic"]) == tactics.PRESETS["WING_PLAY"] and not amateur["adapted"] and amateur["plan"] is None
     pro = tactics.bot_tactics_for_round(_bot_team(), "pro", history, {}, config, 0.59)
     assert pro["adapted"] and pro["tactic"] == best
     assert not tactics.bot_tactics_for_round(_bot_team(), "pro", history, {}, config, 0.6)["adapted"]
@@ -318,7 +328,7 @@ def test_bots_by_difficulty():
         _bot_team(), "legend", history, {"tactic": tactics.PRESETS["WING_PLAY"], "familiarity": 0}, legend_cfg, 0.0,
     )
     assert fresh["adapted"] and fresh["tactic"] == best
-    assert not drilled["adapted"] and drilled["tactic"] == tactics.PRESETS["WING_PLAY"]
+    assert not drilled["adapted"] and _axes(drilled["tactic"]) == tactics.PRESETS["WING_PLAY"]
     assert drilled["plan"] == tactics.LEGEND_BOT_PLAN == fresh["plan"]
 
 
@@ -389,7 +399,7 @@ async def test_scouting_tactics_deadline_and_round_history(client, db_session, b
     resp = await client.put(f"{API}/career/lineup", headers=headers, json=_lineup(season, PRESS, 0, "ATTACKING"))
     assert resp.status_code == 200, resp.text
     view = resp.json()["season"]
-    assert view["tactic"] == PRESS and view["playstyle"] == "HIGH_PRESS"
+    assert _axes(view["tactic"]) == PRESS and view["playstyle"] == "HIGH_PRESS"
     assert view["scouting"]["matchup"] == tactics.matchup_report(PRESS, scout["tactic"], config)
 
     # Preview of an unsaved tactic: the same report.
@@ -410,10 +420,11 @@ async def test_scouting_tactics_deadline_and_round_history(client, db_session, b
     # Round 1 stays recorded with the tactic in force at kick-off.
     row = await _season_row(db_session, season["id"])
     my = row.state["played_tactics"]["0"]
-    assert my == [{"round": 0, "formation": "4-3-3", "mentality": "ATTACKING", "tactic": PRESS, "preset": "HIGH_PRESS"}]
+    assert my == [{"round": 0, "formation": "4-3-3", "mentality": "ATTACKING", "tactic": {**PRESS, "flank": "both"},
+                   "preset": "HIGH_PRESS"}]
     part = (await db_session.execute(select(CareerParticipant).where(
         CareerParticipant.user_id == user_id, CareerParticipant.season_id == season["id"]))).scalar_one()
-    assert part.familiarity == 20 and part.familiar_tactic == PRESS
+    assert part.familiarity == 20 and _axes(part.familiar_tactic) == PRESS
     # One axis changed keeps 80%.
     assert view["familiarity"]["stored_pct"] == 2 and view["familiarity"]["current_pct"] == 1.6
     scout = view["scouting"]
@@ -422,7 +433,7 @@ async def test_scouting_tactics_deadline_and_round_history(client, db_session, b
 
     match_index = next(i for i, m in enumerate(row.state["results"][0]) if 0 in (m["home"], m["away"]))
     data = (await client.get(f"{API}/career/seasons/{season['id']}/rounds/0/matches/{match_index}", headers=headers)).json()
-    assert data["my_side"] in ("a", "b") and data["analysis"]["tactic"] == PRESS
+    assert data["my_side"] in ("a", "b") and _axes(data["analysis"]["tactic"]) == PRESS
     assert data["analysis"]["mentality"] == "ATTACKING"
 
 
@@ -494,13 +505,13 @@ async def test_pro_bot_counters_only_already_played_tactics(client, db_session, 
     bot_index = match["away"] if match["home"] == 0 else match["home"]
     defaults = _defaults()
     best_vs_possession = max(tactics.PRESETS.values(), key=lambda t: tactics.matchup_report(t, POSSESSION, defaults)["score"])
-    assert match["tactics"][str(bot_index)]["tactic"] == best_vs_possession  # answer to the last PLAYED tactic
-    assert match["tactics"]["0"]["tactic"] == COUNTER
+    assert _axes(match["tactics"][str(bot_index)]["tactic"]) == best_vs_possession  # answer to the last PLAYED tactic
+    assert _axes(match["tactics"]["0"]["tactic"]) == COUNTER
     # Bot-vs-bot matches never adapt (no human history to read).
     for m in row.state["results"][1]:
         if 0 not in (m["home"], m["away"]):
             for index in (m["home"], m["away"]):
-                assert m["tactics"][str(index)]["tactic"] == row.state["teams"][index]["tactic"]
+                assert _axes(m["tactics"][str(index)]["tactic"]) == row.state["teams"][index]["tactic"]
 
 
 async def test_old_seasons_play_on_the_original_path(client, db_session, bot_token):
@@ -573,7 +584,9 @@ async def test_divisions_set_difficulty_and_move_between_seasons(client, db_sess
     assert (await client.post(f"{API}/career/leave", headers=headers)).status_code == 204
 
     profile = (await db_session.execute(select(CareerProfile).where(CareerProfile.user_id == user_id))).scalar_one()
-    assert profile.division == expected
+    # Leaving a started season counts as last place (leave_season): from the
+    # bottom division that changes nothing, after a promotion it's relegation.
+    assert profile.division == career_service.division_after(expected, career_service.TEAMS, config)
     profile.division = count - 1  # force a promotion to check the next season
     await db_session.commit()
     second = (await client.post(f"{API}/career/seasons", headers=headers, json={"difficulty": "amateur"})).json()["season"]

@@ -67,6 +67,12 @@ export interface Player {
   path_talent_code?: string | null;
   /** «Один футболист» key; null = by the display name. */
   person_key?: string | null;
+  /** Career flank duels: set by the admin (null = derived, see duel_style_auto). */
+  duel_style?: string | null;
+  duel_style_auto?: string | null;
+  /** Career character trait (null = derived, see character_trait_auto; "none" = no trait). */
+  character_trait?: string | null;
+  character_trait_auto?: string | null;
 }
 
 export type CoachBoostType =

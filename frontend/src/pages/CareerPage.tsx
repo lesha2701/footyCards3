@@ -23,6 +23,8 @@ import { PlanEditor, ScoutingCard, TacticsBoard } from "@/components/career/Care
 import { SetPiecesCard, SquadWarnings } from "@/components/career/SetPiecesCard";
 import { CoachProfileCard, ObjectiveCard, TrainingCard } from "@/components/career/CareerManagement";
 import CupCard from "@/components/career/CupCard";
+import { FlankDuelsCard } from "@/components/career/FlankDuels";
+import { CoachSpecCard, MoraleCard } from "@/components/career/Morale";
 import { LiveMatchCenter } from "@/components/career/CareerLive";
 import { PostMatchCard, PreMatchCard } from "@/components/career/MatchScreens";
 import { CoachExtras } from "@/components/career/CoachExtras";
@@ -92,6 +94,7 @@ export default function CareerPage() {
       {!data.season || data.season.status === "finished" || data.season.my_status === "left" ? (
         <>
           {data.profile && <CoachProfileCard profile={data.profile} />}
+          {data.profile?.coach && <CoachSpecCard coach={data.profile.coach} onView={onView} onError={onError} />}
           {data.profile && <CoachExtras achievements={data.profile.achievements} />}
           {data.season?.status === "finished" && <FinishedCard season={data.season} catalog={data.tactics_catalog ?? null} />}
           {data.season?.my_status === "left" && data.season.status !== "finished" && (
@@ -110,6 +113,7 @@ export default function CareerPage() {
           coach={data.profile && (
             <>
               <CoachProfileCard profile={data.profile} />
+              {data.profile.coach && <CoachSpecCard coach={data.profile.coach} onView={onView} onError={onError} />}
               <CoachExtras achievements={data.profile.achievements} />
             </>
           )}
@@ -323,7 +327,8 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
 
   return (
     <>
-      {season.live && <LiveMatchCenter live={season.live} catalog={catalog} seasonId={season.id} onView={onView} onError={onError} />}
+      {season.live && <LiveMatchCenter live={season.live} catalog={catalog} seasonId={season.id} talks={season.morale?.talks}
+        onView={onView} onError={onError} />}
       {season.second_half && (
         <button
           type="button"
@@ -417,7 +422,9 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
           {prep === "tactic" && season.scouting && !season.live && hasTactics && catalog && (
             <>
               <SquadWarnings warnings={season.squad_warnings} />
+              <MoraleCard season={season} onView={onView} onError={onError} />
               <ScoutingCard scouting={season.scouting} catalog={catalog} difficultyLabel={season.difficulty_label} />
+              <FlankDuelsCard season={season} onView={onView} onError={onError} onSquad={() => setPrep("squad")} />
               <TacticsBoard season={season} catalog={catalog} onView={onView} onError={onError} />
               <RolesCard season={season} catalog={catalog} onView={onView} onError={onError} />
               <MarkingCard season={season} onView={onView} onError={onError} />

@@ -98,7 +98,7 @@ export function ObjectiveCard({ season, onView, onError }: { season: CareerSeaso
   );
 }
 
-const TRAINING_ICON: Record<string, string> = { recovery: "🧘", tactical: "📋", opponent: "🔍", set_pieces: "🚩" };
+const TRAINING_ICON: Record<string, string> = { recovery: "🧘", tactical: "📋", opponent: "🔍", set_pieces: "🚩", team_building: "🤝" };
 
 /** Training focus before the next round (kept until changed). */
 export function TrainingCard({ season, onView, onError }: { season: CareerSeason } & Handlers) {

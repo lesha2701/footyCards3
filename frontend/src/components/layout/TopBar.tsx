@@ -1,18 +1,21 @@
 import AnimatedNumber from "@/components/common/AnimatedNumber";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { fetchMyPlayer } from "@/api/myPlayer";
 import HelpModal from "@/components/common/HelpModal";
-import { IconCoin, IconHelp, IconProfile } from "@/components/icons";
+import { IconChevronLeft, IconCoin, IconHelp, IconProfile } from "@/components/icons";
 import PlayerAvatar from "@/components/myPlayer/PlayerAvatar";
+import { isRoot, useGoBack } from "@/lib/useTelegramBackButton";
 import { useAuthStore } from "@/store/authStore";
 import { useMatchGuardStore } from "@/store/matchGuardStore";
 
 export default function TopBar() {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const goBack = useGoBack();
   const [helpOpen, setHelpOpen] = useState(false);
   const guardActive = useMatchGuardStore((s) => s.active);
   const requestNavigate = useMatchGuardStore((s) => s.requestNavigate);
@@ -24,15 +27,28 @@ export default function TopBar() {
   return (
     <header className="safe-top sticky top-0 z-30 border-b border-white/5 bg-bg-base/85 backdrop-blur">
       <div className="mx-auto flex max-w-lg items-center justify-between px-4 py-2.5">
-        <button
-          onClick={() => (guardActive ? requestNavigate("/") : navigate("/"))}
-          className="flex items-center gap-2"
-        >
-          <img decoding="async" src="/brand/victor-fc-crest.jpg" alt="" className="h-7 w-7 rounded-full ring-1 ring-white/10" />
-          <span className="font-display text-sm font-bold tracking-wide text-ink-chalk">
-            VICTOR <span className="text-accent-lime">FC</span>
-          </span>
-        </button>
+        <div className="flex items-center gap-1.5">
+          {/* Inner screens: back to where the player came from (Telegram's
+              header arrow does the same, but not every client shows it). */}
+          {!isRoot(pathname) && (
+            <button
+              onClick={goBack}
+              aria-label="Назад"
+              className="-ml-1.5 flex h-9 w-9 items-center justify-center rounded-full text-ink-mist active:scale-95 active:bg-white/5"
+            >
+              <IconChevronLeft size={20} />
+            </button>
+          )}
+          <button
+            onClick={() => (guardActive ? requestNavigate("/") : navigate("/"))}
+            className="flex items-center gap-2"
+          >
+            <img decoding="async" src="/brand/victor-fc-crest.jpg" alt="" className="h-7 w-7 rounded-full ring-1 ring-white/10" />
+            <span className="font-display text-sm font-bold tracking-wide text-ink-chalk">
+              VICTOR <span className="text-accent-lime">FC</span>
+            </span>
+          </button>
+        </div>
         <div className="flex items-center gap-2">
           {myPlayer?.enabled && (
             <button

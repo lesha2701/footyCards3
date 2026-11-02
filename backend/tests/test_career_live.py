@@ -143,6 +143,8 @@ async def test_live_round_first_half_break_and_second_half(client, db_session, b
     live = (await client.get(f"{API}/career", headers=headers)).json()["season"]["live"]
     assert live and len(live["on"]) == 11 and live["bench"] and live["subs_left"] == 3
     assert all(e["minute"] <= 45 for e in live["events"])
+    # «Дуэли первого тайма» for the break (flank duels are on by default).
+    assert set(live["duels"]) == {"duels", "hints"}
     # A second kick-off pass is a no-op (the first half is kept).
     await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=2))
     assert (await _season_row(db_session, season["id"])).state["live"]["matches"] == row.state["live"]["matches"]

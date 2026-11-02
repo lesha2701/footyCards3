@@ -427,6 +427,14 @@ class GameConfig(TimestampMixin, Base):
     # Live match centre: the second half of a round with a human waits this
     # many minutes after kick-off for half-time instructions.
     career_live_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Flank duels (duel_service): left/right flanks, duel styles, known
+    # rivalries and the global duel history. Applies to seasons started while
+    # it is on (state["duels"]); the numbers are career_tactics_tuning["duels"].
+    career_duels_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Team morale, pre-match speeches, half-time talks, character traits and
+    # the coach's skills (career_morale_service). Seasons started while it
+    # is on (state["morale"]); numbers in career_tactics_tuning["morale"/"coach"].
+    career_morale_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     career_halftime_minutes: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     # Coins for each career achievement unlocked; weekly Telegram digest.
     career_achievement_reward: Mapped[int] = mapped_column(Integer, default=150, nullable=False)

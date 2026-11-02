@@ -12,7 +12,7 @@ export const HINT_TEXT: Record<MatchupHint, { label: string; tone: string }> = {
 
 /** Phases of play the axes are grouped into on the tactics screen. */
 export const AXIS_PHASES: { title: string; axes: string[] }[] = [
-  { title: "С мячом", axes: ["direction", "buildup"] },
+  { title: "С мячом", axes: ["direction", "flank", "buildup"] },
   { title: "Переходы", axes: ["on_loss", "on_win"] },
   { title: "Без мяча", axes: ["block", "tackling"] },
 ];
@@ -26,10 +26,20 @@ export function axisLabel(catalog: TacticsCatalog | null | undefined, axis: stri
   return catalog?.axes.find((a) => a.key === axis)?.label ?? axis;
 }
 
+/** Axes a preset doesn't fix: the flank of attack (flank duels) is a
+ * matchday choice on top of any preset, and costs no familiarity. */
+const FREE_AXES = new Set(["flank"]);
+
 export function presetOf(catalog: TacticsCatalog | null | undefined, tactic: Tactic | null | undefined): string | null {
   if (!catalog || !tactic) return null;
-  const preset = catalog.presets.find((p) => catalog.axes.every((a) => p.tactic[a.key] === tactic[a.key]));
+  const preset = catalog.presets.find((p) =>
+    catalog.axes.every((a) => FREE_AXES.has(a.key) || p.tactic[a.key] === tactic[a.key]));
   return preset ? preset.label : null;
+}
+
+/** Same tactic as far as a preset goes (ignores the flank). */
+export function samePresetAxes(preset: Tactic, tactic: Tactic): boolean {
+  return Object.keys({ ...preset, ...tactic }).every((k) => FREE_AXES.has(k) || preset[k] === tactic[k]);
 }
 
 export function sameTactic(a: Tactic | null | undefined, b: Tactic | null | undefined): boolean {
@@ -49,6 +59,7 @@ export function previewFamiliarity(
   if (lastFormation && formation !== lastFormation) value = (value * keepPct) / 100;
   if (lastTactic) {
     for (const [axis, v] of Object.entries(lastTactic)) {
+      if (FREE_AXES.has(axis)) continue;
       if (tactic[axis] !== undefined && tactic[axis] !== v) value = (value * axisKeepPct) / 100;
     }
   }

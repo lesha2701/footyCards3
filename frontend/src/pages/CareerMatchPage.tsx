@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 
 import { fetchCareer, fetchCareerCupMatch, fetchCareerFriendly, fetchCareerMatch } from "@/api/career";
+import { PlayedDuels } from "@/components/career/FlankDuels";
+import { MatchMorale } from "@/components/career/Morale";
 import CareerMatchAnalysis from "@/components/career/CareerMatchAnalysis";
 import { CareerMatchViewer } from "@/components/career/MatchViewer";
 import { TournamentMatchReplay } from "@/components/clubs/TournamentMatchReplay";
@@ -73,6 +75,8 @@ export default function CareerMatchPage() {
       {data.analysis && (onAir
         ? <p className="rounded-3xl bg-bg-surface p-4 text-caption text-ink-mist">Тактический разбор — после финального свистка.</p>
         : <CareerMatchAnalysis analysis={data.analysis} catalog={view?.tactics_catalog ?? null} />)}
+      {!onAir && <MatchMorale morale={data.morale} />}
+      {!onAir && <PlayedDuels duels={data.duels} stories={data.duel_stories} />}
     </div>
   );
 }

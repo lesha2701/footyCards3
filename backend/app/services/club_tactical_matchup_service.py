@@ -645,6 +645,33 @@ def _pick_defender(defender: ClubTacticalSide, defence_zone: str, exclude_ids: f
     return weighted_pick(pool, defence_zone, exclude_ids=exclude_ids)
 
 
+def _flank_duelists(attacker: ClubTacticalSide, defender: ClubTacticalSide, flank: str, zone: str,
+                    defence_zone: str) -> tuple[Any, Any]:
+    """Flank duels (career, duel_service): the attacker from the chosen
+    flank, the defender from the opposite flank of the other side — the
+    right winger meets the left back. Either side without anyone there falls
+    back to the usual pick."""
+    att_pool = [c for c in attacker.cards if attacker.career.side_by_card.get(c.id) == flank]
+    attacker_duelist = weighted_pick(att_pool or attacker.cards, zone)
+    facing = "right" if flank == "left" else "left"
+    pool = defensive_pool(defender.cards, defender.mentality, defender.playstyle, _pool_mult(defender))
+    sides = defender.career.side_by_card if defender.career is not None else {}
+    def_pool = [c for c in pool if sides.get(c.id) == facing] or [c for c in defender.cards if sides.get(c.id) == facing]
+    defender_duelist = weighted_pick(def_pool, defence_zone) if def_pool else _pick_defender(defender, defence_zone)
+    return attacker_duelist, defender_duelist
+
+
+def _record_duel(duels: Any, attacker: ClubTacticalSide, defender: ClubTacticalSide, att_card: Any, def_card: Any,
+                 outcome: str, minute: int, flank: str | None) -> None:
+    """A flank duel, or a centre one when a striker met a centre-back."""
+    if flank is not None:
+        duels.record(att_card, def_card, outcome, minute, flank)
+    elif (attacker.career.centre_by_card.get(getattr(att_card, "id", None)) == "att"
+          and defender.career is not None
+          and defender.career.centre_by_card.get(getattr(def_card, "id", None)) == "def"):
+        duels.record(att_card, def_card, outcome, minute, "centre")
+
+
 def _resolve_progression_and_duel(
     attacker: ClubTacticalSide, defender: ClubTacticalSide, attacking_side: str, minute: int, config,
     tracker: dict | None = None,
@@ -672,12 +699,21 @@ def _resolve_progression_and_duel(
     # merely stalled (didn't lose the ball) gets one fresh re-attempt with
     # newly picked duelists, extending how many real Stage-2 attempts a won
     # initiative produces. Every other playstyle always gets exactly 1.
-    attacker_duelist = weighted_pick(attacker.cards, zone)
-    defender_duelist = _pick_defender(defender, defence_zone)
+    # Flank duels (career seasons with duels on): one flank per attack;
+    # in the centre the striker vs centre-back duels are only recorded.
+    duels = getattr(attacker.career, "duels", None) if attacker.career is not None else None
+    flank = attacker.career.flank_pick() if duels is not None and zone == "wing_attack" else None
+    if flank is not None:
+        attacker_duelist, defender_duelist = _flank_duelists(attacker, defender, flank, zone, defence_zone)
+    else:
+        attacker_duelist = weighted_pick(attacker.cards, zone)
+        defender_duelist = _pick_defender(defender, defence_zone)
     ratio_1 = zone_ratio(attacker_duelist, zone, defender_duelist, defence_zone, ratio_shift)
     stage1_notes: list = []
     player_bias, player_ids = career_player_shift(attacker, defender, attacker_duelist, defender_duelist, zone)
     outcome_1 = _resolve_stage1_for(ratio_1, attacker_duelist, stage1_notes, bias=axis_bias + player_bias)
+    if duels is not None:
+        _record_duel(duels, attacker, defender, attacker_duelist, defender_duelist, outcome_1, minute, flank)
 
     if attacker.career is not None:
         retry = outcome_1 == "stall" and random.random() < attacker.career.retry_chance(attacker.profile.midfield_control)
@@ -688,13 +724,18 @@ def _resolve_progression_and_duel(
             and random.random() < possession_retry_chance(attacker.profile.midfield_control)
         )
     if retry:
-        attacker_duelist = weighted_pick(attacker.cards, zone)
-        defender_duelist = _pick_defender(defender, defence_zone)
+        if flank is not None:
+            attacker_duelist, defender_duelist = _flank_duelists(attacker, defender, flank, zone, defence_zone)
+        else:
+            attacker_duelist = weighted_pick(attacker.cards, zone)
+            defender_duelist = _pick_defender(defender, defence_zone)
         ratio_1 = zone_ratio(attacker_duelist, zone, defender_duelist, defence_zone, ratio_shift)
         # Only the duel that actually decides the phase keeps its notes.
         stage1_notes = []
         player_bias, player_ids = career_player_shift(attacker, defender, attacker_duelist, defender_duelist, zone)
         outcome_1 = _resolve_stage1_for(ratio_1, attacker_duelist, stage1_notes, bias=axis_bias + player_bias)
+        if duels is not None:
+            _record_duel(duels, attacker, defender, attacker_duelist, defender_duelist, outcome_1, minute, flank)
 
     _track(tracker, attacking_side, outcome_1)
     _track_interactions(tracker, attacking_side, axis_ids + player_ids, outcome_1 == "advance")

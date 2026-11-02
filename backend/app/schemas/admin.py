@@ -409,6 +409,8 @@ class GameConfigOut(BaseModel):
     career_tenure_max: int = 2
     career_division_club_count: int = 10
     career_live_enabled: bool = True
+    career_duels_enabled: bool = True
+    career_morale_enabled: bool = True
     career_halftime_minutes: int = 10
     career_achievement_reward: int = 150
     career_digest_enabled: bool = True
@@ -1204,6 +1206,8 @@ class GameConfigUpdate(BaseModel):
     career_tenure_max: Optional[int] = Field(default=None, ge=0, le=10)
     career_division_club_count: Optional[int] = Field(default=None, ge=7, le=40)
     career_live_enabled: Optional[bool] = None
+    career_duels_enabled: Optional[bool] = None
+    career_morale_enabled: Optional[bool] = None
     career_halftime_minutes: Optional[int] = Field(default=None, ge=3, le=120)
     career_achievement_reward: Optional[int] = Field(default=None, ge=0, le=100000)
     career_digest_enabled: Optional[bool] = None

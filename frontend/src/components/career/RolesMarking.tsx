@@ -69,7 +69,7 @@ export function MarkingCard({ season, onView, onError }: { season: CareerSeason 
   const marker = scouting.marking?.marker ?? null;
 
   return (
-    <section className="flex flex-col gap-2 rounded-3xl bg-bg-surface p-4">
+    <section id="career-marking" className="flex flex-col gap-2 rounded-3xl bg-bg-surface p-4">
       <p className="font-display text-base font-bold text-ink-chalk">Персональная опека</p>
       {scouting.star && (
         <>

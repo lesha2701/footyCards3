@@ -68,12 +68,20 @@ class CareerMarkingIn(BaseModel):
     round_index: Optional[int] = None
 
 
+class CareerSpeechIn(BaseModel):
+    # «Речь перед матчем» (career_morale_service.SPEECHES); None = no speech.
+    speech: Optional[str] = None
+    round_index: Optional[int] = None
+
+
 class CareerHalftimeIn(BaseModel):
     """Live match centre, during the break: mentality / some axes for the
     second half and substitutions [{out, in}] (card ids)."""
     mentality: Optional[str] = None
     tactic: Optional[dict[str, str]] = None
     subs: list[dict] = Field(default_factory=list)
+    # Team morale: «Разговор в перерыве» (career_morale_service.TALKS).
+    talk: Optional[str] = None
 
 
 class CareerPlanIn(BaseModel):
@@ -244,6 +252,8 @@ class CareerSquadCardOut(BaseModel):
     yellows: int = 0
     form: int = 0
     owned: bool
+    duel_style: Optional[str] = None
+    trait: Optional[str] = None
 
 
 class CareerSlotOut(BaseModel):
@@ -309,6 +319,8 @@ class CareerSeasonOut(BaseModel):
     familiarity: Optional[CareerFamiliarityOut] = None
     match_plan: Optional[CareerPlanOut] = None
     plan_limits: dict[str, int] = {}
+    # Team morale card (career_morale_service.view); None = season without it.
+    morale: Optional[dict] = None
 
 
 class CareerInviteOut(BaseModel):
@@ -346,6 +358,11 @@ class CareerMatchEventsOut(BaseModel):
     # Cup ties level after 90': penalty shootout score and kicks.
     pens: Optional[list[int]] = None
     kicks: Optional[list[dict]] = None
+    # «Ключевые дуэли» (duel_service) and their stories; team morale before /
+    # after the match and why (career_morale_service). Viewer's side only.
+    duels: Optional[list[dict]] = None
+    duel_stories: Optional[list[str]] = None
+    morale: Optional[dict] = None
 
 
 class CareerReplayOut(BaseModel):
