@@ -307,6 +307,17 @@ class GameConfig(TimestampMixin, Base):
     hangman_reward_correct: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     hangman_max_wrong: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
 
+    # «Атака 1 на 1» (one_on_one_service): attacks in a series, the daily cap
+    # of rewarded series (the hourly cap is the shared hourly_game_limit),
+    # coins for a goal, bonuses for a goal after a feint the keeper bit on
+    # and for a chip over a keeper who came out, a little for a save or the post.
+    one_on_one_attacks: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    one_on_one_daily_limit: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
+    one_on_one_goal_coins: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    one_on_one_feint_bonus: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    one_on_one_chip_bonus: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    one_on_one_near_coins: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+
     pairs_daily_limit: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
     pairs_reward_perfect: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
     pairs_reward_min: Mapped[int] = mapped_column(Integer, default=10, nullable=False)

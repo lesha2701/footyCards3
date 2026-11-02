@@ -603,6 +603,12 @@ class GameConfigOut(BaseModel):
     hangman_daily_limit: int
     hangman_reward_correct: int
     hangman_max_wrong: int
+    one_on_one_attacks: int = 5
+    one_on_one_daily_limit: int = 8
+    one_on_one_goal_coins: int = 20
+    one_on_one_feint_bonus: int = 10
+    one_on_one_chip_bonus: int = 15
+    one_on_one_near_coins: int = 3
     pairs_daily_limit: int
     pairs_reward_perfect: int
     pairs_reward_min: int
@@ -1405,6 +1411,12 @@ class GameConfigUpdate(BaseModel):
     hangman_daily_limit: Optional[int] = Field(default=None, ge=0)
     hangman_reward_correct: Optional[int] = Field(default=None, ge=0)
     hangman_max_wrong: Optional[int] = Field(default=None, ge=1)
+    one_on_one_attacks: Optional[int] = Field(default=None, ge=1, le=10)
+    one_on_one_daily_limit: Optional[int] = Field(default=None, ge=0)
+    one_on_one_goal_coins: Optional[int] = Field(default=None, ge=0)
+    one_on_one_feint_bonus: Optional[int] = Field(default=None, ge=0)
+    one_on_one_chip_bonus: Optional[int] = Field(default=None, ge=0)
+    one_on_one_near_coins: Optional[int] = Field(default=None, ge=0)
     pairs_daily_limit: Optional[int] = Field(default=None, ge=0)
     pairs_reward_perfect: Optional[int] = Field(default=None, ge=0)
     pairs_reward_min: Optional[int] = Field(default=None, ge=0)

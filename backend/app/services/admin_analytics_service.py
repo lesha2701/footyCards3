@@ -54,6 +54,7 @@ GAME_TYPE_LABELS: dict[str, str] = {
     "football_hangman": "Футбольные буквы",
     "card_pairs": "Пары",
     "fut_draft": "FUT Draft",
+    "one_on_one": "Атака 1 на 1",
     "club_sequence": "Клубные мини-игры",
     "club_missing_item": "Клубные мини-игры",
     "club_penalty": "Клубные мини-игры",

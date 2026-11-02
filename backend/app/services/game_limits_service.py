@@ -17,6 +17,7 @@ _COLUMNS = {
     "memory": "memory", "arena": "match", "saboteur": "saboteur", "penalty": "penalty",
     "free_kick": "free_kick", "hangman": "hangman", "tactico": "tactico", "pairs": "pairs",
     "stratego": "stratego", "magnate": "magnate", "mordoboi": "mordoboi", "kontra": "kontra",
+    "one_on_one": "one_on_one",
 }
 
 
@@ -52,4 +53,5 @@ def get_remaining_plays(user: User, config: GameConfig) -> GameLimitsOut:
         magnate=_remaining(user.magnate_hourly_attempts, user.magnate_hour_started_at, limit),
         mordoboi=_remaining(user.mordoboi_hourly_attempts, user.mordoboi_hour_started_at, limit),
         kontra=_remaining(user.kontra_hourly_attempts, user.kontra_hour_started_at, limit),
+        one_on_one=_remaining(user.one_on_one_hourly_attempts, user.one_on_one_hour_started_at, limit),
     )

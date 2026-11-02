@@ -1,5 +1,6 @@
 import { api } from "@/lib/api";
 import type { QuantizedDive, QuantizedSwipe } from "@/lib/freeKick3d/trajectory";
+import type { EpisodeTimeline } from "@/lib/oneOnOne/engine";
 import type {
   FreeKick3DRefill,
   FreeKickChallenge,
@@ -24,6 +25,9 @@ import type {
   HangmanClaimResult,
   HangmanGuessResult,
   HangmanStartResult,
+  OneOnOneClaimResult,
+  OneOnOneResult,
+  OneOnOneStartResult,
   MatchActionKind,
   MemoryClaimResult,
   MemoryLeaderboardEntry,
@@ -216,6 +220,30 @@ export async function savePenalty3D(sessionId: number, dive: QuantizedDive | nul
 
 export async function claimFreeKickReward(sessionId: number): Promise<FreeKickClaimResult> {
   const { data } = await api.post<FreeKickClaimResult>(`/games/free-kick/${sessionId}/claim`);
+  return data;
+}
+
+// --- «Атака 1 на 1» ---
+
+export async function startOneOnOne(userCardId: number): Promise<OneOnOneStartResult> {
+  const { data } = await api.post<OneOnOneStartResult>("/games/one-on-one/start", { user_card_id: userCardId });
+  return data;
+}
+
+/** Only the input timeline goes up; the server replays it and decides. */
+export async function playOneOnOneAttack(sessionId: number, tl: EpisodeTimeline): Promise<OneOnOneResult> {
+  const { data } = await api.post<OneOnOneResult>(`/games/one-on-one/${sessionId}/attack`, {
+    controls: tl.controls,
+    feint: tl.feint,
+    shot: tl.shot
+      ? { tick: tl.shot.tick, dx: tl.shot.dx, dy: tl.shot.dy, curve: tl.shot.curve, duration_ms: tl.shot.durationMs }
+      : null,
+  });
+  return data;
+}
+
+export async function claimOneOnOneReward(sessionId: number): Promise<OneOnOneClaimResult> {
+  const { data } = await api.post<OneOnOneClaimResult>(`/games/one-on-one/${sessionId}/claim`);
   return data;
 }
 

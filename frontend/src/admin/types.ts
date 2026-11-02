@@ -586,6 +586,12 @@ export interface GameConfig {
   hangman_daily_limit: number;
   hangman_reward_correct: number;
   hangman_max_wrong: number;
+  one_on_one_attacks: number;
+  one_on_one_daily_limit: number;
+  one_on_one_goal_coins: number;
+  one_on_one_feint_bonus: number;
+  one_on_one_chip_bonus: number;
+  one_on_one_near_coins: number;
   pairs_daily_limit: number;
   pairs_reward_perfect: number;
   pairs_reward_min: number;

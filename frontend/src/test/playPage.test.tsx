@@ -9,7 +9,7 @@ vi.mock("@/api/matches", () => ({ fetchArenaStats: vi.fn(async () => ({ arena_ra
 vi.mock("@/api/games", () => ({
   fetchPenaltyStats: vi.fn(async () => ({ penalty_rating: 0 })),
   fetchGameLimits: vi.fn(async () => ({
-    hourly_limit: 5, free_kick_hourly_limit: 1, memory: 5, arena: 3, saboteur: 5, penalty: 0, free_kick: 5, hangman: 5, tactico: 5, pairs: 5, stratego: 5, magnate: 5, mordoboi: 5,
+    hourly_limit: 5, free_kick_hourly_limit: 1, memory: 5, arena: 3, saboteur: 5, penalty: 0, free_kick: 5, hangman: 5, tactico: 5, pairs: 5, stratego: 5, magnate: 5, mordoboi: 5, one_on_one: 5,
   })),
 }));
 vi.mock("@/api/tactico", () => ({
@@ -66,6 +66,12 @@ describe("вкладка «Играть»", () => {
     expect(await screen.findByText("Рейтинг 12")).toBeInTheDocument();
     expect(screen.getByText("Контратака")).toBeInTheDocument();
     expect(screen.getByText("Арена 1040")).toBeInTheDocument();
+  });
+
+  it("lists «Атака 1 на 1» among the quick games", async () => {
+    show();
+    fireEvent.click(await screen.findByRole("tab", { name: /Быстрые/ }));
+    expect(screen.getByText("Атака 1 на 1")).toBeInTheDocument();
   });
 
   it("shows the week's cup and the match of the day", async () => {

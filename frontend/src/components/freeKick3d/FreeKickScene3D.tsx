@@ -148,7 +148,7 @@ export default function FreeKickScene3D({
 
 /** Night match: a cool sky fill plus a floodlight key that casts the only
  * shadows (high quality only, fitted to the ball → goal area). */
-function Lights({ quality }: { quality: Quality }) {
+export function Lights({ quality }: { quality: Quality }) {
   const key = useRef<THREE.DirectionalLight>(null);
   useEffect(() => {
     const l = key.current;
@@ -644,7 +644,8 @@ function Tube({ a, b, r = 0.028 }: { a: [number, number, number]; b: [number, nu
   );
 }
 
-function GoalFrame({ stage }: { stage: MutableRefObject<Stage> }) {
+/** Also the goal of «Атака 1 на 1»: only the net ripple is read. */
+export function GoalFrame({ stage }: { stage: MutableRefObject<Pick<Stage, "ripple">> }) {
   const w = GOAL_HALF_WIDTH * 2;
   const backNet = useNet(w, NET_SLOPE_LEN);
   const roofNet = useNet(w, NET_TOP_DEPTH);
@@ -784,7 +785,7 @@ function CameraRig({ setup, shot, stage }: StageProps) {
   return null;
 }
 
-function FpsMeter({ fpsRef }: { fpsRef: MutableRefObject<HTMLSpanElement | null> }) {
+export function FpsMeter({ fpsRef }: { fpsRef: MutableRefObject<HTMLSpanElement | null> }) {
   const acc = useRef({ frames: 0, time: 0 });
   useFrame((_, delta) => {
     acc.current.frames += 1;
