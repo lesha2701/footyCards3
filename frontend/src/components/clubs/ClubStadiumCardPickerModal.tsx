@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 
+import { stadiumEffectText } from "@/lib/stadiums";
 import EmptyState from "@/components/common/EmptyState";
 import { IconCollection } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
@@ -79,7 +80,7 @@ export default function ClubStadiumCardPickerModal({ open, cards, onSelect, onCl
                       <p className="truncate text-sm font-semibold text-ink-chalk">{c.stadium.display_name}</p>
                       <p className="text-micro text-ink-mist-dim">{RARITY_LABELS[c.stadium.rarity]}</p>
                       <p className="mt-0.5 truncate text-micro text-ink-mist">
-                        +{Math.round(c.stadium.boost_pct * 100)}% к силе
+                        {stadiumEffectText(c.stadium)}
                       </p>
                     </div>
                   </button>

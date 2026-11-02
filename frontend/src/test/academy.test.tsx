@@ -37,6 +37,7 @@ vi.mock("@/api/career", () => ({ fetchCareer: vi.fn(async () => ({ enabled: true
 vi.mock("@/api/myPlayer", () => ({ fetchMyPlayer: vi.fn(async () => ({ enabled: true, player: null })) }));
 vi.mock("@/api/matches", () => ({ fetchArenaStats: vi.fn(async () => ({ arena_rating: 1000, division: null })) }));
 vi.mock("@/api/personalTournament", () => ({ fetchPlayerTournamentCurrent: vi.fn(async () => ({ status: "not_queued" })) }));
+vi.mock("@/api/manager", () => ({ fetchManager: vi.fn(async () => ({ enabled: false })) }));
 
 function wrap(node: React.ReactNode) {
   return render(<QueryClientProvider client={new QueryClient()}><MemoryRouter>{node}</MemoryRouter></QueryClientProvider>);

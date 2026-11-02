@@ -713,7 +713,7 @@ class GameConfig(TimestampMixin, Base):
     manager_league_size: Mapped[int] = mapped_column(Integer, default=16, nullable=False)
     manager_divisions: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     manager_promote: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
-    manager_preseason_hours: Mapped[int] = mapped_column(Integer, default=72, nullable=False)
+    manager_preseason_hours: Mapped[int] = mapped_column(Integer, default=48, nullable=False)
     manager_style_edge_pct: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
     manager_formation_effect_pct: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
     manager_wage_pct: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
@@ -738,6 +738,11 @@ class GameConfig(TimestampMixin, Base):
     manager_merch_cap_eur: Mapped[int] = mapped_column(Integer, default=15000000, nullable=False)
     manager_pro_stars: Mapped[int] = mapped_column(Integer, default=299, nullable=False)
     manager_pro_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    # «Кабинет президента» (manager_finance): sponsors, the bank loan, deals
+    # (shirt sponsor, tours, TV rights, deposit, venture fund, farm club), the
+    # club value. Only the overridden numbers are stored; manager_finance.DEFAULTS
+    # fills the rest.
+    manager_finance: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     manager_value_ratings: Mapped[list] = mapped_column(JSON, default=lambda: [45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95], nullable=False)
     manager_value_eur: Mapped[list] = mapped_column(JSON, default=lambda: [50000, 80000, 150000, 400000, 1000000, 3500000, 12000000, 35000000, 80000000, 160000000, 220000000], nullable=False)
     manager_division_budget: Mapped[list] = mapped_column(JSON, default=lambda: [120000000, 70000000, 40000000, 22000000, 12000000, 7000000, 4500000, 3000000, 2500000, 2000000], nullable=False)
@@ -935,6 +940,20 @@ class GameConfig(TimestampMixin, Base):
     kontra_gear_drop_arena_pct: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     kontra_chest_coins: Mapped[int] = mapped_column(Integer, default=1500, nullable=False)
     kontra_chest_stars: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
+    # «🎃 Ночь тыкв» (services/halloween_service.py): one switch, the dates and
+    # every number of the event (pumpkin drops, shop, doors, boss) in
+    # halloween_settings — halloween_service.DEFAULT_SETTINGS fills missing keys.
+    halloween_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    halloween_starts_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    halloween_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    halloween_settings: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # «⚔️ Битва фанатов» (services/fan_battle_service.py): the same shape —
+    # one switch, the dates and every number (points, daily battles, final,
+    # milestones, sides, boss) in fan_battle_settings.
+    fan_battle_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    fan_battle_starts_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    fan_battle_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    fan_battle_settings: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
 
     # «Топ недели» (weekly_top_service.py): every Monday the top places of
     # each ranking get the reward of their place. weekly_top_rewards is one

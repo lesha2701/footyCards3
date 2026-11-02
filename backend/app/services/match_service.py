@@ -1147,6 +1147,19 @@ class _ArenaOpponent:
     formation: str = "4-3-3"
 
 
+def _apply_maluses(lineup: LineupOut, opponent: _ArenaOpponent, user_strength: int, user_lines: dict) -> tuple[int, dict, dict, dict]:
+    """My coach / stadium weaken the opponent and theirs weaken me
+    (coach_boost_service.arena_opponent_malus): the opponent object is
+    updated in place; returns my (strength, lines) and both maluses."""
+    from app.services.coach_boost_service import apply_opponent_malus
+
+    mine = dict(lineup.opponent_malus or {})
+    theirs = dict((opponent.lineup.opponent_malus if opponent.lineup else None) or {})
+    opponent.strength, opponent.lines = apply_opponent_malus(opponent.strength, opponent.lines, mine)
+    user_strength, user_lines = apply_opponent_malus(user_strength, user_lines, theirs)
+    return user_strength, user_lines, mine, theirs
+
+
 async def _resolve_opponent(db: AsyncSession, pending: dict, user_strength: int, user_lines: dict) -> _ArenaOpponent:
     """The real opponent's current squad when it's still complete, else a
     bot of `bot_ratio` x your strength (under the found player's name)."""
@@ -1200,8 +1213,9 @@ async def preview_opponent(db: AsyncSession, user: User) -> ArenaPreviewOut:
 
     user_lines = _lines_of(lineup)
     opponent = await _resolve_opponent(db, pending, lineup.team_strength, user_lines)
+    user_strength, user_lines, opponent_malus, user_malus = _apply_maluses(lineup, opponent, lineup.team_strength, user_lines)
     balance = arena_tactics.compute_balance(
-        lineup.team_strength, lineup.tactic, opponent.strength, opponent.style, config,
+        user_strength, lineup.tactic, opponent.strength, opponent.style, config,
         user_formation=lineup.formation, opponent_formation=opponent.formation,
     )
     division = arena_ladder_service.division_info(locked_user, config)
@@ -1214,7 +1228,7 @@ async def preview_opponent(db: AsyncSession, user: User) -> ArenaPreviewOut:
         opponent_strength=opponent.strength,
         opponent_style=opponent.style,
         opponent_formation=opponent.formation,
-        user_strength=lineup.team_strength,
+        user_strength=user_strength,
         user_style=balance["user_style"],
         user_formation=lineup.formation,
         matchup=balance["matchup"],
@@ -1227,6 +1241,8 @@ async def preview_opponent(db: AsyncSession, user: User) -> ArenaPreviewOut:
         chances=win_chances(balance["strength_ratio"]),
         points_at_stake=arena_ladder_service.points_preview(locked_user.arena_points, opponent.points, config),
         division=ArenaDivisionOut(**division),
+        opponent_malus=opponent_malus,
+        user_malus=user_malus,
     )
 
 
@@ -1261,6 +1277,7 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
     user_strength = lineup.team_strength
     user_lines = _lines_of(lineup)
     opponent = await _resolve_opponent(db, pending, user_strength, user_lines)
+    user_strength, user_lines, _mine, _theirs = _apply_maluses(lineup, opponent, user_strength, user_lines)
     opponent_strength = opponent.strength
     opponent_lineup = opponent.lineup
     user_fwd, user_def, user_gk = user_lines["FWD"], user_lines["DEF"], user_lines["GK"]

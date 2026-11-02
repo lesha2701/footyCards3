@@ -5,6 +5,7 @@ import AdminCareerRivalries from "@/admin/pages/AdminCareerRivalries";
 
 import { fetchGameConfig, fetchNewbieFunnel, fetchSuspiciousMatches, fetchSuspiciousMemorySessions, updateGameConfig } from "@/admin/api";
 import AdminMagnateBoardEditor from "@/admin/pages/AdminMagnateBoardEditor";
+import ManagerFinanceFields from "@/admin/components/ManagerFinanceFields";
 import RewardBundleEditor from "@/admin/components/RewardBundleEditor";
 import { EMPTY_BUNDLE, type GameConfig } from "@/admin/types";
 
@@ -870,7 +871,7 @@ export default function AdminGamesPage() {
           {field("manager_league_size", "Клубов в лиге (чётное; туров = клубов − 1)")}
           {field("manager_divisions", "Дивизионов, максимум (пирамида ×2)")}
           {field("manager_promote", "Повышаются из лиги при заполненной пирамиде (вылетают вдвое больше)")}
-          {field("manager_preseason_hours", "Предсезонка (трансферное окно): часов от понедельника 00:00 (72 = старт в четверг)")}
+          {field("manager_preseason_hours", "Предсезонка (трансферное окно): часов от понедельника 00:00 (48 = окно пн–ср, сезон ср–вс)")}
           {field("manager_style_edge_pct", "Тактика: бонус к рейтингам стилю, который бьёт стиль соперника, %")}
           {field("manager_formation_effect_pct", "Тактика: сила крена схем в атаку/защиту, %")}
           {field("manager_wage_pct", "Зарплата футболиста за сезон, % стоимости (база)")}
@@ -906,6 +907,7 @@ export default function AdminGamesPage() {
           {jsonField("manager_slots", "Время туров (местное), по порядку")}
           {jsonField("manager_cosmetics", "Магазин стиля клуба: kind = shape | symbol | kit | frame | theme | stadium_name; coins / stars 0 = не продаётся за них, оба 0 = бесплатно")}
           {jsonField("manager_merch", "Мерч для болельщиков: coins сгорают, eur идут в бюджет клуба")}
+          <ManagerFinanceFields value={form.manager_finance} onChange={(next) => setForm({ ...form, manager_finance: next })} />
         </div>
       </section>
 

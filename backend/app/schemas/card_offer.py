@@ -6,11 +6,26 @@ from pydantic import BaseModel, Field
 from app.schemas.player import PlayerOut
 
 
+class OfferItemOut(BaseModel):
+    """A coach, stadium or Muse on sale (footballers come as `player`)."""
+
+    kind: str  # "coach" | "stadium" | "muse"
+    id: int
+    name: str
+    rarity: str
+    image_path: Optional[str] = None
+    icon: Optional[str] = None  # a Muse's emoji when she has no photo
+    effects: list[str] = []
+
+
 class CardOfferOut(BaseModel):
-    """A card on sale for Stars, as the shop shows it."""
+    """A card on sale for Stars, as the shop shows it: a footballer
+    (`player`) or a coach / stadium / Muse (`item`)."""
 
     id: int
-    player: PlayerOut
+    kind: str = "player"
+    player: Optional[PlayerOut] = None
+    item: Optional[OfferItemOut] = None
     stars_price: int
     title: Optional[str] = None
     ends_at: Optional[datetime] = None
@@ -23,7 +38,11 @@ class CardOfferOut(BaseModel):
 
 
 class CardOfferAdminIn(BaseModel):
-    player_id: int
+    # Exactly one of the four.
+    player_id: Optional[int] = None
+    coach_id: Optional[int] = None
+    stadium_id: Optional[int] = None
+    muse_id: Optional[int] = None
     stars_price: int = Field(ge=1, le=100_000)
     title: Optional[str] = Field(default=None, max_length=64)
     starts_at: Optional[datetime] = None
@@ -36,7 +55,9 @@ class CardOfferAdminIn(BaseModel):
 
 class CardOfferAdminOut(BaseModel):
     id: int
-    player: PlayerOut
+    kind: str = "player"
+    player: Optional[PlayerOut] = None
+    item: Optional[OfferItemOut] = None
     stars_price: int
     title: Optional[str] = None
     starts_at: Optional[datetime] = None

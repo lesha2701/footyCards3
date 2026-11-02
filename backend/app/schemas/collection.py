@@ -250,3 +250,19 @@ class AlbumCollectionDetailOut(BaseModel):
     is_complete: bool
     reward_claimed: bool
     players: List[AlbumPlayerOut]
+    # Coaches and stadiums of the collection (they count toward it too).
+    staff: List["AlbumStaffOut"] = []
+
+
+class AlbumStaffOut(BaseModel):
+    kind: str  # "coach" | "stadium"
+    id: int
+    name: str
+    rarity: str
+    image_path: Optional[str] = None
+    owned: bool
+    # What it does, short: «−5 к рейтингу соперника», «+8 Защита в центре», …
+    effects: List[str] = []
+
+
+AlbumCollectionDetailOut.model_rebuild()

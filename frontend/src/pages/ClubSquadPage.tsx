@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { stadiumEffectText } from "@/lib/stadiums";
 import { useNavigate } from "react-router-dom";
 import { useRef, useState } from "react";
 import { isClubManager } from "@/lib/clubRoles";
@@ -19,7 +20,7 @@ import {
   setClubStadiumTemplate, setClubTacticsTemplate,
 } from "@/api/clubSquad";
 import { staticUrl } from "@/lib/api";
-import { BOOST_TYPE_LABELS } from "@/lib/coaches";
+import { boostText } from "@/lib/coaches";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, type FormationSlot } from "@/lib/formation";
 import { inRow, pitchRows, PITCH_STYLE } from "@/lib/formationLayout";
 import PitchBackground from "@/components/squad/PitchBackground";
@@ -321,9 +322,16 @@ export default function ClubSquadPage() {
                           alt="" className="h-full w-full object-cover" loading="lazy"
                         />
                       </div>
-                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-accent-cyan">
-                        +{Math.round(lineup.stadium.boost_pct * 100)}%
-                      </span>
+                      {lineup.stadium.boost_pct > 0 && (
+                        <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-accent-cyan">
+                          +{Math.round(lineup.stadium.boost_pct * 100)}%
+                        </span>
+                      )}
+                      {!!lineup.stadium.opp_malus && (
+                        <span className="rounded-full bg-red-600/80 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-white">
+                          ☠ −{lineup.stadium.opp_malus}
+                        </span>
+                      )}
                     </>
                   ) : (
                     <>
@@ -387,14 +395,14 @@ export default function ClubSquadPage() {
           <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
             <p className="text-xs font-semibold text-ink-chalk">{lineup.coach.display_name}</p>
             <p className="mt-0.5 text-caption text-ink-mist">
-              {lineup.coach.boosts.map((b) => `${BOOST_TYPE_LABELS[b.boost_type]} +${b.magnitude}`).join(" · ")}
+              {lineup.coach.boosts.map((b) => boostText(b)).join(" · ")}
             </p>
           </div>
         )}
         {lineup?.stadium && (
           <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
             <p className="text-xs font-semibold text-ink-chalk">{lineup.stadium.display_name}</p>
-            <p className="mt-0.5 text-caption text-ink-mist">+{Math.round(lineup.stadium.boost_pct * 100)}% к силе</p>
+            <p className="mt-0.5 text-caption text-ink-mist">{stadiumEffectText(lineup.stadium)}</p>
           </div>
         )}
       </section>

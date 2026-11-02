@@ -8,16 +8,24 @@ from app.core.rate_limit import check_rate_limit
 from app.database import get_db
 from app.models.user import User
 from app.schemas.manager import (
+    ManagerBondBuyIn,
+    ManagerBondIssueIn,
     ManagerClubUpdateIn,
+    ManagerDealIn,
     ManagerFoundIn,
+    ManagerLoanIn,
     ManagerLookIn,
     ManagerMarketIn,
     ManagerNpcIn,
     ManagerOfferIn,
+    ManagerRepayIn,
     ManagerRespondIn,
+    ManagerShareListIn,
+    ManagerSharesIn,
+    ManagerTicketsIn,
     ManagerStadiumNameIn,
 )
-from app.services import manager_service, manager_shop
+from app.services import manager_exchange, manager_finance, manager_service, manager_shop
 
 router = APIRouter(prefix="/manager", tags=["manager"])
 
@@ -34,6 +42,12 @@ async def get_manager(db: AsyncSession = Depends(get_db), user: User = Depends(g
 async def get_market(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     """Users' «Мои игроки»: free agents, friends and players of other clubs."""
     return await manager_service.market(db, user)
+
+
+@router.get("/moves")
+async def get_moves(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """My club's transfer log: who came, who left, fees, the window's totals."""
+    return await manager_service.moves(db, user)
 
 
 @router.get("/npc")
@@ -153,3 +167,101 @@ async def get_popular(db: AsyncSession = Depends(get_db), user: User = Depends(g
 async def get_scout(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     """«Менеджер Pro»: the market's biggest value risers."""
     return await manager_shop.scout(db, user)
+
+
+# --- «Кабинет президента» (manager_finance) -------------------------------------------------------
+
+@router.get("/office")
+async def get_office(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """The club's finances: value, the report by seasons, sponsors, the bank,
+    deals for the coming season."""
+    return await manager_finance.view(db, user)
+
+
+@router.post("/office/deals/{kind}")
+async def sign_deal(kind: str, payload: ManagerDealIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """A sponsor, a shirt sponsor, a tour, TV rights, a deposit, the venture fund or a farm club
+    for the coming season (one of each kind a season)."""
+    await check_rate_limit(f"manager_office:{user.id}", max_calls=20, window_seconds=60)
+    return await manager_finance.sign(db, user, kind, payload.option, payload.seasons, payload.amount)
+
+
+@router.post("/office/tickets")
+async def set_tickets(payload: ManagerTicketsIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """The ticket price of the coming season, % of the base."""
+    await check_rate_limit(f"manager_office:{user.id}", max_calls=20, window_seconds=60)
+    return await manager_finance.set_tickets(db, user, payload.pct)
+
+
+@router.get("/office/rating")
+async def president_rating(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """«Лучший президент»: the season's profit and the capital."""
+    return await manager_finance.rating(db, user)
+
+
+@router.post("/office/loan")
+async def take_loan(payload: ManagerLoanIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_office:{user.id}", max_calls=20, window_seconds=60)
+    return await manager_finance.take_loan(db, user, payload.amount, payload.seasons)
+
+
+@router.post("/office/loan/repay")
+async def repay_loan(payload: ManagerRepayIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_office:{user.id}", max_calls=20, window_seconds=60)
+    return await manager_finance.repay_loan(db, user, payload.amount)
+
+
+@router.get("/exchange")
+async def get_exchange(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """The club exchange: listed clubs, my stock and portfolio, bonds, the tape."""
+    return await manager_exchange.view(db, user)
+
+
+@router.post("/exchange/ipo")
+async def float_shares(payload: ManagerSharesIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_exchange:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_exchange.ipo(db, user, payload.shares)
+
+
+@router.post("/exchange/buyback")
+async def buy_back(payload: ManagerSharesIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_exchange:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_exchange.buyback(db, user, payload.shares)
+
+
+@router.post("/exchange/{club_id}/buy")
+async def buy_shares(club_id: int, payload: ManagerSharesIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_exchange:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_exchange.buy(db, user, club_id, payload.shares)
+
+
+@router.post("/exchange/{club_id}/sell")
+async def sell_shares(club_id: int, payload: ManagerSharesIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_exchange:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_exchange.sell(db, user, club_id, payload.shares)
+
+
+@router.post("/exchange/{club_id}/list")
+async def list_exchange_shares(club_id: int, payload: ManagerShareListIn, db: AsyncSession = Depends(get_db),
+                               user: User = Depends(get_current_user)):
+    """Offer `shares` of my holding to other clubs at `price` (0 shares = withdraw the ask)."""
+    await check_rate_limit(f"manager_exchange:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_exchange.list_shares(db, user, club_id, payload.shares, payload.price)
+
+
+@router.post("/bonds")
+async def issue_bond(payload: ManagerBondIssueIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_exchange:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_exchange.issue_bond(db, user, payload.units, payload.rate_pct, payload.seasons)
+
+
+@router.post("/bonds/{bond_id}/buy")
+async def buy_bond(bond_id: int, payload: ManagerBondBuyIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_exchange:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_exchange.buy_bond(db, user, bond_id, payload.units)
+
+
+@router.post("/bonds/{bond_id}/repay")
+async def repay_bond(bond_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_exchange:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_exchange.repay_bond(db, user, bond_id)

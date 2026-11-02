@@ -11,6 +11,7 @@ import { fetchMyPlayer } from "@/api/myPlayer";
 import { fetchPlayerTournamentCurrent } from "@/api/personalTournament";
 import { ClubLogo } from "@/components/clubs/ClubLogo";
 import NewBadge from "@/components/common/NewBadge";
+import ManagerFeature from "@/components/home/ManagerFeature";
 import { IconBall, IconCampus, IconProfile, IconTrophy, IconUsers, IconWhistle } from "@/components/icons";
 import { artOf } from "@/lib/gameArt";
 import { hapticNotify } from "@/lib/telegram";
@@ -82,6 +83,7 @@ export default function ModesGrid() {
   return (
     <section>
       <h2 className="mb-2 font-display text-base font-bold text-ink-chalk">Режимы</h2>
+      <ManagerFeature />
       <div className="grid grid-cols-3 gap-2">
         {career?.enabled !== false && (
           <ModeTile

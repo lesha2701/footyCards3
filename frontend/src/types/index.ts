@@ -63,6 +63,8 @@ export interface Player {
   is_pack_droppable: boolean;
   collection_id: number | null;
   collection_name: string | null;
+  /** The collection's special frame («Ночь живых Легенд»: "zombie" / "vampire"). */
+  collection_skin?: string | null;
   /** «Академия»: set = a path card with this talent. */
   path_talent_code?: string | null;
   /** «Один футболист» key; null = by the display name. */
@@ -79,7 +81,9 @@ export type CoachBoostType =
   | "attack_central" | "attack_wing" | "midfield_control"
   | "defence_central" | "defence_wing" | "goalkeeping"
   | "passing_accuracy" | "ball_control" | "defensive_discipline"
-  | "counter_mastery" | "squad_stability";
+  | "counter_mastery" | "squad_stability"
+  // Card Arena: +N to the own XI; −N to the opponent.
+  | "team_rating" | "opp_attack" | "opp_defence" | "opp_goalkeeping" | "opp_team";
 
 export interface CoachBoost {
   id: number;
@@ -98,6 +102,8 @@ export interface Coach {
   is_active: boolean;
   is_pack_droppable: boolean;
   boosts: CoachBoost[];
+  /** A themed card collection it counts toward (null = none). */
+  collection_id?: number | null;
 }
 
 export interface Stadium {
@@ -111,6 +117,9 @@ export interface Stadium {
   is_active: boolean;
   is_pack_droppable: boolean;
   boost_pct: number;
+  /** «Проклятый стадион»: −N rating to every opponent player (Card Arena). */
+  opp_malus?: number;
+  collection_id?: number | null;
 }
 
 export interface UserCard {
@@ -647,6 +656,8 @@ export interface Lineup {
   stadium: EquippedStadium | null;
   slots: LineupSlot[];
   chemistry?: ChemistryOut;
+  /** Card Arena: what my coach and stadium take off the opponent's lines. */
+  opponent_malus?: Partial<Record<"FWD" | "MID" | "DEF" | "GK", number>>;
 }
 
 export type ChemistryLinkLevel = "strong" | "medium" | "none";
@@ -837,6 +848,9 @@ export interface ArenaPreview {
   chances: ArenaChances;
   points_at_stake: Record<MatchResult, number>;
   division: ArenaDivision;
+  /** Already applied to the strengths and lines: what coaches / stadiums take off each side. */
+  opponent_malus?: Partial<Record<"FWD" | "MID" | "DEF" | "GK", number>>;
+  user_malus?: Partial<Record<"FWD" | "MID" | "DEF" | "GK", number>>;
 }
 
 export interface ArenaStats {
@@ -1997,6 +2011,18 @@ export interface AlbumCollectionDetail {
   is_complete: boolean;
   reward_claimed: boolean;
   players: AlbumPlayer[];
+  /** Coaches and stadiums of the collection (they count toward it too). */
+  staff?: AlbumStaff[];
+}
+
+export interface AlbumStaff {
+  kind: "coach" | "stadium";
+  id: number;
+  name: string;
+  rarity: Rarity;
+  image_path: string | null;
+  owned: boolean;
+  effects: string[];
 }
 
 export interface ApiError {
@@ -2697,6 +2723,7 @@ export interface EquippedStadium {
   image_path: string | null;
   club?: string | null;
   boost_pct: number;
+  opp_malus?: number;
 }
 
 export interface ClubStadiumCard {
@@ -3830,9 +3857,22 @@ export interface WeeklyTopInfo {
 }
 
 /** «Карты за звёзды»: a footballer card on sale for Telegram Stars. */
+/** A coach, stadium or Muse on sale (footballers come as `player`). */
+export interface CardOfferItem {
+  kind: "coach" | "stadium" | "muse";
+  id: number;
+  name: string;
+  rarity: Rarity;
+  image_path: string | null;
+  icon?: string | null;
+  effects: string[];
+}
+
 export interface CardOffer {
   id: number;
-  player: Player;
+  kind?: "player" | "coach" | "stadium" | "muse";
+  player: Player | null;
+  item?: CardOfferItem | null;
   stars_price: number;
   title: string | null;
   ends_at: string | null;
@@ -3845,7 +3885,11 @@ export interface CardOffer {
 }
 
 export interface CardOfferAdminInput {
-  player_id: number;
+  /** Exactly one of the four ids. */
+  player_id?: number | null;
+  coach_id?: number | null;
+  stadium_id?: number | null;
+  muse_id?: number | null;
   stars_price: number;
   title: string | null;
   starts_at: string | null;
@@ -3858,7 +3902,9 @@ export interface CardOfferAdminInput {
 
 export interface CardOfferAdmin extends Omit<CardOfferAdminInput, "player_id"> {
   id: number;
-  player: Player;
+  kind?: "player" | "coach" | "stadium" | "muse";
+  player: Player | null;
+  item?: CardOfferItem | null;
   sold_count: number;
   live: boolean;
   announced_at: string | null;
@@ -3917,4 +3963,170 @@ export interface NewbieFunnel {
   started: number;
   completed: number;
   steps: { code: string; label: string; players: number }[];
+}
+
+// «🎃 Ночь тыкв» (backend/app/services/halloween_service.py)
+export interface HalloweenShopItem {
+  code: string;
+  kind: "pack" | "coins" | "skill_tokens" | "badge";
+  title: string;
+  price: number;
+  amount: number;
+  limit: number;
+  bought: number;
+  available: boolean;
+  pack_id: number | null;
+  pack_name: string | null;
+  badge: Badge | null;
+}
+
+export interface HalloweenDoorResult {
+  door: number;
+  outcome: "treat" | "trick";
+  kind: "coins" | "pumpkins" | "pack" | "zombie_frame" | "joke";
+  amount: number;
+  title: string;
+  text: string;
+  pack_name: string | null;
+  cards: UserCard[];
+  zombie_player_name: string | null;
+  zombie_until: string | null;
+}
+
+export interface HalloweenState {
+  enabled: boolean;
+  active: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  pumpkins: number;
+  earned_total: number;
+  pumpkins_per_game: number;
+  games_pumpkins_today: number;
+  games_daily_cap: number;
+  pumpkins_per_task: number;
+  pumpkins_per_daily_chest: number;
+  pumpkins_per_weekly_chest: number;
+  boss_multiplier: number;
+  boss_name: string | null;
+  shop: HalloweenShopItem[];
+  door_today: HalloweenDoorResult | null;
+  door_resets_at: string | null;
+  zombie_player_id: number | null;
+  zombie_until: string | null;
+  pack_id: number | null;
+  collection: {
+    id: number; name: string; owned: number; total: number; reward_coins: number;
+    reward_pack_name: string | null; completed: boolean;
+  } | null;
+}
+
+export interface HalloweenBuyResult {
+  item_code: string;
+  pumpkins: number;
+  new_balance: number;
+  coins: number;
+  pack_name: string | null;
+  cards: UserCard[];
+  skill_code: string | null;
+  skill_tokens: number;
+  badge: Badge | null;
+}
+
+// «⚔️ Битва фанатов» (backend/app/services/fan_battle_service.py)
+export interface FanSide {
+  code: string;
+  name: string;
+  emoji: string;
+  color: string;
+  members: number;
+  points: number;
+  today_points: number;
+  underdog_bonus_pct: number;
+}
+
+export interface FanTop {
+  user_id: number;
+  name: string;
+  points: number;
+}
+
+export interface FanDay {
+  day: string;
+  finished: boolean;
+  points: Record<string, number>;
+  winner: string | null; // side code, "draw", or null while the day runs
+  my_points: number;
+  reward_coins: number;
+  claimed: boolean;
+}
+
+export interface FanMilestone {
+  points: number;
+  kind: "coins" | "skill_tokens" | "pack" | "badge";
+  amount: number;
+  title: string;
+  reached: boolean;
+  claimed: boolean;
+  badge: Badge | null;
+  pack_name: string | null;
+}
+
+export interface FanFinal {
+  winner: string | null;
+  my_rank: number | null;
+  eligible: boolean;
+  coins: number;
+  pack_name: string | null;
+  badge: Badge | null;
+  claimed: boolean;
+}
+
+export interface FanBattleState {
+  enabled: boolean;
+  active: boolean;
+  finished: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  claim_until: string | null;
+  can_join: boolean;
+  teaser_days: number;
+  sides: FanSide[];
+  my_side: string | null;
+  my_points: number;
+  my_today_points: number;
+  my_rank: number | null;
+  points_per_game: number;
+  games_points_today: number;
+  games_daily_cap: number;
+  points_per_task: number;
+  points_per_daily_chest: number;
+  points_per_weekly_chest: number;
+  boss_name: string | null;
+  boss_multiplier: number;
+  daily_min_points: number;
+  daily_win_coins: number;
+  daily_lose_coins: number;
+  day_resets_at: string | null;
+  days: FanDay[];
+  milestones: FanMilestone[];
+  final: FanFinal | null;
+  final_win_coins: number;
+  final_lose_coins: number;
+  final_min_points: number;
+  top_n: number;
+  top_bonus_coins: number;
+  top: Record<string, FanTop[]>;
+  claimable: number;
+  collection: HalloweenState["collection"];
+}
+
+export interface FanClaimResult {
+  claimed: number;
+  coins: number;
+  skill_tokens: { code: string; amount: number }[];
+  badges: Badge[];
+  pack_names: string[];
+  cards: UserCard[];
+  titles: string[];
+  new_balance: number;
 }

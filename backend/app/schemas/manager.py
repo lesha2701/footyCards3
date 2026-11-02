@@ -53,3 +53,41 @@ class ManagerLookIn(BaseModel):
 
 class ManagerStadiumNameIn(BaseModel):
     name: Optional[str] = Field(default=None, max_length=64)
+
+
+class ManagerDealIn(BaseModel):
+    option: Optional[str] = Field(default=None, max_length=32)
+    seasons: int = Field(default=1, ge=1, le=10)
+    amount: Optional[int] = Field(default=None, ge=0)
+
+
+class ManagerTicketsIn(BaseModel):
+    pct: int = Field(ge=0, le=1000)
+
+
+class ManagerLoanIn(BaseModel):
+    amount: int = Field(ge=0)
+    seasons: int = Field(default=1, ge=1, le=10)
+
+
+class ManagerRepayIn(BaseModel):
+    amount: Optional[int] = Field(default=None, ge=0)
+
+
+class ManagerSharesIn(BaseModel):
+    shares: int = Field(ge=1, le=100_000)
+
+
+class ManagerShareListIn(BaseModel):
+    shares: int = Field(ge=0, le=100_000)
+    price: int = Field(ge=0, le=10_000_000_000)
+
+
+class ManagerBondIssueIn(BaseModel):
+    units: int = Field(ge=1, le=10_000)
+    rate_pct: float = Field(ge=0, le=100)
+    seasons: int = Field(default=1, ge=1, le=10)
+
+
+class ManagerBondBuyIn(BaseModel):
+    units: int = Field(ge=1, le=10_000)

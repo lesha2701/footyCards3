@@ -18,6 +18,7 @@ from app.services import chemistry_service, tournament_match_engine, tournament_
 from app.services.club_budget_service import credit_club_budget
 from app.services.club_formation_service import get_formation_slots
 from app.services.chemistry_service import ChemistryRules
+from app.services.coach_boost_service import match_rating_shifts, with_rating_shifts
 from app.services.club_tactical_matchup_service import build_side
 from app.services.game_config_service import get_config
 from app.services.lineup_service import CATEGORY_POSITIONS, FormationSlot, calculate_base_strength
@@ -356,6 +357,18 @@ async def simulate_next_round(db: AsyncSession, slot_key: str | None = None) -> 
             )
             coach_a = club_lineup_a.club_coach_card.coach if club_lineup_a.club_coach_card else None
             coach_b = club_lineup_b.club_coach_card.coach if club_lineup_b.club_coach_card else None
+            # Coaches' TEAM_RATING / OPP_* and «Проклятый стадион» (home and
+            # away): the same points per line as Card Arena, on the ratings.
+            stadium_a = club_lineup_a.club_stadium_card.stadium if club_lineup_a.club_stadium_card else None
+            stadium_b = club_lineup_b.club_stadium_card.stadium if club_lineup_b.club_stadium_card else None
+            shifts_a = match_rating_shifts(coach_a, coach_b, stadium_b.opp_malus if stadium_b else 0)
+            shifts_b = match_rating_shifts(coach_b, coach_a, stadium_a.opp_malus if stadium_a else 0)
+            cards_with_slots_a = with_rating_shifts(cards_with_slots_a, shifts_a)
+            cards_with_slots_b = with_rating_shifts(cards_with_slots_b, shifts_b)
+            if shifts_a:
+                lineup_a = [_card_to_actor(card, slot.category) for card, slot in cards_with_slots_a]
+            if shifts_b:
+                lineup_b = [_card_to_actor(card, slot.category) for card, slot in cards_with_slots_b]
             # club_a is always the home side for this fixture row (see
             # tournament_fixture_service.generate_fixtures) — only the home
             # club's stadium boosts strength; the away side gets no stadium

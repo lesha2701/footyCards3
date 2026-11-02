@@ -16,7 +16,7 @@ import ShareButton from "@/components/common/ShareButton";
 import MatchPitchView from "@/components/match/MatchPitchView";
 import MatchSheet from "@/components/match/MatchSheet";
 import MatchStatsTable from "@/components/match/MatchStatsTable";
-import { ArenaDivisionCard, ArenaMatchReport, ArenaMatchupLine, ArenaOpponentCard } from "@/components/arena/ArenaPanels";
+import { ArenaDivisionCard, ArenaMatchReport, ArenaMatchupLine, ArenaOpponentCard, OpponentMalusNote } from "@/components/arena/ArenaPanels";
 import BenchUpgradeHints from "@/components/squad/BenchUpgradeHints";
 import { ChemistryDiamonds, ChemistryHints, ChemistryLinksOverlay, ChemistrySummary } from "@/components/squad/Chemistry";
 import { chemistryGain, chemistrySwapHints, equipmentChemistryOf, type ChemistrySwapHint } from "@/lib/chemistry";
@@ -44,7 +44,7 @@ import {
 } from "@/api/lineups";
 import { actMatch, fetchArenaOpponent, fetchArenaStats, fetchMatchHistory, forfeitMatch, playMatch } from "@/api/matches";
 import { staticUrl } from "@/lib/api";
-import { BOOST_TYPE_LABELS } from "@/lib/coaches";
+import { boostText } from "@/lib/coaches";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, TACTIC_LABELS, TACTICS, type FormationSlot } from "@/lib/formation";
 import { formatGameError } from "@/lib/errors";
 import { FORMATION_LABELS, formationLabel, inRow, pitchRows } from "@/lib/formationLayout";
@@ -561,9 +561,16 @@ export default function ArenaPage() {
                           alt="" className="h-full w-full object-cover" loading="lazy"
                         />
                       </div>
-                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-accent-cyan">
-                        +{Math.round(lineup.stadium.boost_pct * 100)}%
-                      </span>
+                      {lineup.stadium.boost_pct > 0 && (
+                        <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-accent-cyan">
+                          +{Math.round(lineup.stadium.boost_pct * 100)}%
+                        </span>
+                      )}
+                      {!!lineup.stadium.opp_malus && (
+                        <span className="rounded-full bg-red-600/80 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-white">
+                          ☠ −{lineup.stadium.opp_malus}
+                        </span>
+                      )}
                     </>
                   ) : (
                     <>
@@ -580,16 +587,22 @@ export default function ArenaPage() {
           <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
             <p className="text-xs font-semibold text-ink-chalk">{lineup.coach.display_name}</p>
             <p className="mt-0.5 text-caption text-ink-mist">
-              {lineup.coach.boosts.map((b) => `${BOOST_TYPE_LABELS[b.boost_type]} +${b.magnitude}`).join(" · ")}
+              {lineup.coach.boosts.map((b) => boostText(b)).join(" · ")}
             </p>
           </div>
         )}
         {lineup?.stadium && (
           <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
             <p className="text-xs font-semibold text-ink-chalk">{lineup.stadium.display_name}</p>
-            <p className="mt-0.5 text-caption text-ink-mist">+{Math.round(lineup.stadium.boost_pct * 100)}% к силе</p>
+            <p className="mt-0.5 text-caption text-ink-mist">
+              {[
+                lineup.stadium.boost_pct > 0 ? `+${Math.round(lineup.stadium.boost_pct * 100)}% к силе` : null,
+                lineup.stadium.opp_malus ? `−${lineup.stadium.opp_malus} к рейтингу соперника` : null,
+              ].filter(Boolean).join(" · ") || "без бонусов"}
+            </p>
           </div>
         )}
+        <OpponentMalusNote malus={lineup?.opponent_malus} />
       </section>
 
       <section ref={tacticsRef} className="rounded-2xl bg-bg-surface p-4">

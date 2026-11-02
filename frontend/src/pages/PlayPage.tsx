@@ -299,10 +299,12 @@ export default function PlayPage() {
   if (weeklyCup?.unclaimed_coins) {
     now.push({ key: "wc", kicker: "Приз недели", title: `Забрать ${weeklyCup.unclaimed_coins} монет`, tone: "bg-amber-400/15 text-amber-200 ring-amber-400/30", to: "/weekly-cup" });
   }
+  const unguessed = (matchDay?.matches ?? []).filter((m) => m.open && !m.prediction);
   if (matchDay?.unclaimed) {
     now.push({ key: "mdc", kicker: "Матч дня", title: "Награда ждёт", tone: "bg-emerald-500/15 text-emerald-200 ring-emerald-400/30", to: "/match-day" });
-  } else if (matchDay?.enabled && matchDay.current?.open && !matchDay.current.prediction) {
-    now.push({ key: "md", kicker: "Матч дня", title: `${matchDay.current.home} — ${matchDay.current.away}`, tone: "bg-emerald-500/15 text-emerald-200 ring-emerald-400/30", to: "/match-day" });
+  } else if (matchDay?.enabled && unguessed.length > 0) {
+    const title = unguessed.length > 1 ? `${unguessed.length} ${matchesWord(unguessed.length)} без прогноза` : `${unguessed[0].home} — ${unguessed[0].away}`;
+    now.push({ key: "md", kicker: "Матч дня", title, tone: "bg-emerald-500/15 text-emerald-200 ring-emerald-400/30", to: "/match-day" });
   }
   const last = games.find((g) => g.path === lastGame);
   if (last && !exhausted(last)) {
@@ -359,7 +361,9 @@ export default function PlayPage() {
               onClick={() => navigate("/match-day")}
               className="flex min-w-0 flex-col gap-1 rounded-2xl bg-gradient-to-br from-emerald-600/25 to-bg-surface p-3 text-left ring-1 ring-emerald-400/25 active:scale-[0.98]"
             >
-              <span className="text-micro font-bold uppercase tracking-wider text-emerald-200">⚽ Матч дня</span>
+              <span className="text-micro font-bold uppercase tracking-wider text-emerald-200">
+                ⚽ Матч дня{(matchDay.matches?.length ?? 0) > 1 ? ` · ${matchDay.matches.length} ${matchesWord(matchDay.matches.length)}` : ""}
+              </span>
               <span className="line-clamp-2 font-display text-sm font-bold leading-tight text-ink-chalk">
                 {matchDay.current ? `${matchDay.current.home} — ${matchDay.current.away}` : "Скоро"}
               </span>
@@ -483,4 +487,10 @@ function GameRow({
       </button>
     </div>
   );
+}
+
+/** 2–4 «матча», 5+ «матчей» (the count is always at least 2 here). */
+function matchesWord(n: number): string {
+  const d = n % 10;
+  return d >= 2 && d <= 4 && (n % 100 < 12 || n % 100 > 14) ? "матча" : "матчей";
 }

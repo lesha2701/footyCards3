@@ -26,6 +26,9 @@ class CardCollection(TimestampMixin, Base):
     reward_pack_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("packs.id", ondelete="SET NULL"), nullable=True
     )
+    # Special frame of every card of this collection ("zombie" / "vampire" —
+    # the «Ночь живых Легенд»); null = the regular rarity frame.
+    card_skin: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
 
     players: Mapped[list["Player"]] = relationship(back_populates="collection")
 

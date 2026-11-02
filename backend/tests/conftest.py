@@ -41,6 +41,10 @@ app.dependency_overrides[get_db] = _override_get_db
 
 @pytest_asyncio.fixture(autouse=True)
 async def _fresh_schema():
+    from app.services import club_league_service
+
+    # In-process caches must not carry one test's data into the next.
+    club_league_service._table_cache.clear()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield

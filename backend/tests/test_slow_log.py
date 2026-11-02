@@ -48,3 +48,28 @@ async def test_blocked_event_loop_is_logged(caplog):
     await asyncio.sleep(0.05)
     watcher.cancel()
     assert "event loop blocked" in caplog.text
+
+
+def _crunch(seconds: float) -> None:
+    """Stands for a request computing without awaiting."""
+    end = time.perf_counter() + seconds
+    while time.perf_counter() < end:
+        pass
+
+
+async def test_stall_sampler_names_the_blocking_code(caplog):
+    import threading
+
+    from app.core.slow_log import StallSampler
+
+    caplog.set_level(logging.WARNING, logger="app.slow")
+    sampler = StallSampler(threading.get_ident(), stuck_after=0.05, poll=0.01).start()
+    watcher = asyncio.create_task(watch_event_loop(tick=0.01, blocked=0.1, sampler=sampler))
+    await asyncio.sleep(0.03)
+    _crunch(0.3)
+    await asyncio.sleep(0.03)
+    watcher.cancel()
+    sampler.stop()
+    stuck = [r.getMessage() for r in caplog.records if "event loop stuck at" in r.getMessage()]
+    assert len(stuck) == 1  # once per stall
+    assert "_crunch" in stuck[0]

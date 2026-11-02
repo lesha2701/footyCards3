@@ -236,7 +236,10 @@ async def buy_merch(db: AsyncSession, user: User, club_id: int, code: str) -> di
             db, locked, item["coins"], TransactionType.manager_merch, f"Мерч «{club.name}»: {item['name']}",
             related_object_type="manager_club", related_object_id=club.id,
         )
-    club.budget += eur
+    if eur:
+        from app.services import manager_finance
+
+        await manager_finance.book(db, club, "merch", eur, await manager_finance.club_key(db, club), note=item["name"])
     club.merch_eur += eur
     await notify(
         db, club.owner_id, NotificationType.manager_event, f"Болельщик купил {item['name'].lower()} {item['emoji']}",
@@ -250,7 +253,7 @@ async def buy_merch(db: AsyncSession, user: User, club_id: int, code: str) -> di
 async def club_card(db: AsyncSession, user: User, club_id: int) -> dict:
     """A club's public card (from the league table): style, division,
     trophies, fans and what the viewer already bought."""
-    from app.services.manager_service import _name, division_name, squad_view
+    from app.services.manager_service import _kit_sponsor, _name, division_name, squad_view
 
     config = await get_config(db)
     club = await db.get(ManagerClub, club_id)
@@ -259,6 +262,7 @@ async def club_card(db: AsyncSession, user: User, club_id: int) -> dict:
     owner = await db.get(User, club.owner_id)
     squad = await squad_view(db, club, config)
     fans = (await db.execute(select(func.count(func.distinct(ManagerMerch.user_id))).where(ManagerMerch.club_id == club.id))).scalar_one()
+    fans += int(club.fans_bonus or 0)  # supporters won on preseason tours
     bought = set((await db.execute(
         select(ManagerMerch.code).where(ManagerMerch.club_id == club.id, ManagerMerch.user_id == user.id)
     )).scalars().all())
@@ -266,6 +270,7 @@ async def club_card(db: AsyncSession, user: User, club_id: int) -> dict:
         "id": club.id, "name": club.name, "owner_name": _name(owner), "division": club.division,
         "division_name": division_name(club.division), "titles": club.titles, "seasons_played": club.seasons_played,
         "look": resolve_look(club), "stadium_name": club.stadium_name, "pro": is_pro(club),
+        "kit_sponsor": await _kit_sponsor(db, club),
         "rating": squad["rating"], "fans": fans, "is_mine": club.owner_id == user.id,
         "xi": [{k: p[k] for k in ("slot", "kind", "name", "position", "rating")} for p in squad["xi"]],
         "merch": [{**i, "bought": i["code"] in bought} for i in merch_items(config)],

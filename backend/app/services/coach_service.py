@@ -19,7 +19,38 @@ _BASE_UNIT_BY_BOOST_TYPE: dict[CoachBoostType, float] = {
     CoachBoostType.DEFENCE_CENTRAL: 2, CoachBoostType.DEFENCE_WING: 2, CoachBoostType.GOALKEEPING: 2,
     CoachBoostType.PASSING_ACCURACY: 1, CoachBoostType.SQUAD_STABILITY: 1,
     CoachBoostType.BALL_CONTROL: 0.03, CoachBoostType.DEFENSIVE_DISCIPLINE: 0.01, CoachBoostType.COUNTER_MASTERY: 0.1,
+    # Card Arena rating points (legendary: +2 to the own XI, −4 / −2 to the opponent).
+    CoachBoostType.TEAM_RATING: 0.5,
+    CoachBoostType.OPP_ATTACK: 1, CoachBoostType.OPP_DEFENCE: 1, CoachBoostType.OPP_GOALKEEPING: 1,
+    CoachBoostType.OPP_TEAM: 0.5,
 }
+
+
+# Short player-facing labels (frontend lib/coaches.ts mirrors them).
+BOOST_LABELS: dict[CoachBoostType, str] = {
+    CoachBoostType.ATTACK_CENTRAL: "Атака в центре", CoachBoostType.ATTACK_WING: "Атака на флангах",
+    CoachBoostType.MIDFIELD_CONTROL: "Контроль полузащиты", CoachBoostType.DEFENCE_CENTRAL: "Защита в центре",
+    CoachBoostType.DEFENCE_WING: "Защита на флангах", CoachBoostType.GOALKEEPING: "Игра вратаря",
+    CoachBoostType.PASSING_ACCURACY: "Точность передач", CoachBoostType.BALL_CONTROL: "Контроль мяча",
+    CoachBoostType.DEFENSIVE_DISCIPLINE: "Дисциплина в обороне", CoachBoostType.COUNTER_MASTERY: "Мастерство контратак",
+    CoachBoostType.SQUAD_STABILITY: "Стабильность состава", CoachBoostType.TEAM_RATING: "к рейтингу всей команды",
+    CoachBoostType.OPP_ATTACK: "к атаке соперника", CoachBoostType.OPP_DEFENCE: "к обороне соперника",
+    CoachBoostType.OPP_GOALKEEPING: "к вратарю соперника", CoachBoostType.OPP_TEAM: "к рейтингу соперника",
+}
+OPPONENT_BOOSTS = frozenset({
+    CoachBoostType.OPP_ATTACK, CoachBoostType.OPP_DEFENCE, CoachBoostType.OPP_GOALKEEPING, CoachBoostType.OPP_TEAM,
+})
+
+
+def coach_effect_lines(coach: Coach) -> list[str]:
+    """«−4 к атаке соперника», «+8 Защита в центре», … (magnitudes rounded)."""
+    lines = []
+    for b in coach.boosts:
+        value = float(b.magnitude)
+        shown = f"{value:g}" if value < 1 else f"{round(value)}"
+        sign = "−" if b.boost_type in OPPONENT_BOOSTS else "+"
+        lines.append(f"{sign}{shown} {BOOST_LABELS.get(b.boost_type, b.boost_type.value)}")
+    return lines
 
 
 def magnitude_for(boost_type: CoachBoostType, rarity: Rarity) -> float:

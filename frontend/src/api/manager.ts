@@ -108,6 +108,8 @@ export interface ManagerClub {
   division_name: string;
   /** Its league is running — no transfers. */
   playing: boolean;
+  /** No deals now: its league runs, or the season is on for everybody. */
+  trade_locked: boolean;
   seasons_played: number;
   titles: number;
   best_division: number | null;
@@ -120,12 +122,19 @@ export interface ManagerClub {
   /** Other clubs asking for my players. */
   incoming: ManagerContract[];
   npcs: ManagerNpc[];
+  /** Wages the next season start takes for the squad already signed — set aside. */
   wages_per_season: number;
+  /** A bank loan the next season start collects — set aside too. */
+  loan_due: number;
+  /** The budget above those wages and the loan due: what the window's deals may spend. */
+  free_budget: number;
   squad_value: number;
   /** The next league match (during a season). */
   next_match: ManagerNextMatch | null;
   live_count: number;
   academy_card_id: number | null;
+  /** The brand on the shirt («Кабинет президента», this or the coming season). */
+  kit_sponsor: string | null;
   academy_options: { card_id: number; name: string; position: string; rating: number }[];
   look: ManagerLook;
   owned_cosmetics: string[];
@@ -244,7 +253,7 @@ export interface ManagerView {
   my_rating: number | null;
   my_trend_pct: number | null;
   season: {
-    key: string; phase: "preseason" | "season"; preseason_ends_at: string; first_round_at: string; slots: string[]; rounds: number;
+    key: string; phase: "preseason" | "season" | "offseason"; transfers_open: boolean; preseason_ends_at: string; first_round_at: string; slots: string[]; rounds: number;
   };
   pyramid: { division: number; name: string; clubs: number; capacity: number | null; grant: number; rating: number }[];
   rules: ManagerRules;
@@ -299,6 +308,7 @@ export interface ManagerClubCard {
   seasons_played: number;
   look: ManagerLook;
   stadium_name: string | null;
+  kit_sponsor: string | null;
   pro: boolean;
   rating: number;
   fans: number;
@@ -314,6 +324,38 @@ export async function fetchManager(): Promise<ManagerView> {
 
 export async function fetchManagerMarket(): Promise<{ players: ManagerMarketPlayer[] }> {
   const { data } = await api.get<{ players: ManagerMarketPlayer[] }>("/manager/market");
+  return data;
+}
+
+export type ManagerMoveKind =
+  | "sign" | "transfer" | "loan" | "buy" | "auto" | "loan_back"
+  | "sold" | "loaned_out" | "release" | "expired" | "unpaid";
+
+export interface ManagerMove {
+  id: number;
+  season_key: string;
+  direction: "in" | "out";
+  kind: ManagerMoveKind;
+  who: string;
+  position: string | null;
+  rating: number | null;
+  fee: number;
+  other_club: string | null;
+  at: string;
+}
+
+export interface ManagerMoves {
+  /** The season of the open window (or the running one). */
+  season_key: string;
+  spent: number;
+  earned: number;
+  came: number;
+  left: number;
+  moves: ManagerMove[];
+}
+
+export async function fetchManagerMoves(): Promise<ManagerMoves> {
+  const { data } = await api.get<ManagerMoves>("/manager/moves");
   return data;
 }
 
@@ -425,5 +467,290 @@ export async function setManagerStadiumName(name: string): Promise<ManagerView> 
 
 export async function buyManagerMerch(clubId: number, code: string): Promise<ManagerClubCard> {
   const { data } = await api.post<ManagerClubCard>(`/manager/clubs/${clubId}/merch/${code}`);
+  return data;
+}
+
+// --- «Кабинет президента» (manager_finance) -----------------------------------------------------
+
+export type ManagerDealKind = "sponsor" | "kit" | "tour" | "tv" | "deposit" | "venture" | "farm" | "insurance";
+
+export interface ManagerReportLine {
+  kind: string;
+  label: string;
+  group: "income" | "expense" | "finance";
+  amount: number;
+}
+
+/** One season of the club's money (key = ISO week, "2026-W45"). */
+export interface ManagerReportSeason {
+  key: string;
+  income: number;
+  /** Negative. */
+  expense: number;
+  /** Loans, deposits, the venture fund — money in and out, not profit. */
+  finance: number;
+  profit: number;
+  lines: ManagerReportLine[];
+}
+
+export interface ManagerSponsorOffer {
+  code: string;
+  name: string;
+  emoji: string;
+  brand: string;
+  upfront: number;
+  per_win: number;
+  /** By place, index 0 = champion. */
+  places: number[];
+  rest: number;
+  relegated: number;
+}
+
+export interface ManagerTourOption {
+  code: string;
+  name: string;
+  emoji: string;
+  revenue: number;
+  cost: number;
+  fans: number;
+  fatigue_pct: number;
+  fatigue_rounds: number;
+}
+
+export interface ManagerDeal {
+  id: number;
+  kind: ManagerDealKind;
+  season_key: string;
+  seasons: number;
+  option: string | null;
+  amount: number;
+  result: number;
+  status: "active" | "done" | "lost";
+  data: Record<string, unknown>;
+}
+
+export interface ManagerOffice {
+  enabled: boolean;
+  club_id: number;
+  name: string;
+  look: ManagerLook;
+  division: number;
+  budget: number;
+  /** The budget above the next start's wages and loan due — what spending deals may use. */
+  free_budget: number;
+  grant: number;
+  /** Deals are signed while the club does not play (for `season_key`). */
+  window_open: boolean;
+  season_key: string;
+  current_key: string;
+  value: { total: number; parts: Record<"squad" | "budget" | "invested" | "base" | "fans" | "titles" | "debt", number> };
+  fans: number;
+  levels: Record<"stadium" | "hotel" | "media" | "marketing" | "accounting" | "training" | "shop", number>;
+  report: ManagerReportSeason[];
+  sponsors: { taken: boolean; offers: ManagerSponsorOffer[]; marketing_pct: number };
+  loan: {
+    open: { id: number; principal: number; debt: number; rate_pct: number; seasons_total: number; seasons_left: number; status: "active" | "overdue" } | null;
+    limit: number;
+    min: number;
+    rate_pct: number;
+    base_rate_pct: number;
+    seasons_max: number;
+    penalty_pct: number;
+  };
+  offers: {
+    /** Shirt sponsor: `worn` = the brand on the shirt now (this or the coming season). */
+    kit: { taken: boolean; shop: number; brands: string[]; worn: string | null; prices: number[] };
+    tour: { taken: boolean; options: ManagerTourOption[]; hotel_cut_pct: number; media_fans_pct: number };
+    tv: { taken: boolean; estimate: number; discount_pct: number; advance: number };
+    deposit: { taken: boolean; rate_pct: number; min: number; max: number; blocked: boolean };
+    venture: { taken: boolean; win_pct: number; multiplier: number; min: number; max: number; max_pct: number };
+    farm: { taken: boolean; fee: number; loan_cut_pct: number; kid_bonus: number };
+    /** Injury insurance for the coming season: the premium, the share of treatments it pays. */
+    insurance: { taken: boolean; premium: number; cover_pct: number; medical: number; chance_pct: number; treatment_pct: number; rounds: [number, number] };
+  };
+  deals: ManagerDeal[];
+  /** The ticket price (% of the base) for the coming season and the curve's numbers. */
+  tickets: {
+    pct: number; min: number; max: number; elasticity: number; attendance_min: number; attendance_max: number;
+    support_per_pct: number; fans_per_pct: number; base_per_match: number; capacity: number;
+  };
+  /** Players out injured now. */
+  injuries: { name: string; rounds_left: number; cost: number }[];
+}
+
+export interface ManagerRatingRow {
+  place: number;
+  club_id: number;
+  name: string;
+  division: number;
+  look: ManagerLook;
+  score: number;
+  mine: boolean;
+}
+
+export interface ManagerRatingTable {
+  rows: ManagerRatingRow[];
+  my_place: number | null;
+  my_score: number;
+  total: number;
+}
+
+export interface ManagerRating {
+  season_key: string;
+  profit: ManagerRatingTable;
+  capital: ManagerRatingTable;
+}
+
+export async function setManagerTickets(pct: number): Promise<ManagerOffice> {
+  const { data } = await api.post<ManagerOffice>("/manager/office/tickets", { pct });
+  return data;
+}
+
+export async function fetchManagerRating(): Promise<ManagerRating> {
+  const { data } = await api.get<ManagerRating>("/manager/office/rating");
+  return data;
+}
+
+export async function fetchManagerOffice(): Promise<ManagerOffice> {
+  const { data } = await api.get<ManagerOffice>("/manager/office");
+  return data;
+}
+
+export async function signManagerDeal(kind: ManagerDealKind, body: { option?: string; seasons?: number; amount?: number } = {}): Promise<ManagerOffice> {
+  const { data } = await api.post<ManagerOffice>(`/manager/office/deals/${kind}`, body);
+  return data;
+}
+
+export async function takeManagerLoan(amount: number, seasons: number): Promise<ManagerOffice> {
+  const { data } = await api.post<ManagerOffice>("/manager/office/loan", { amount, seasons });
+  return data;
+}
+
+export async function repayManagerLoan(amount?: number): Promise<ManagerOffice> {
+  const { data } = await api.post<ManagerOffice>("/manager/office/loan/repay", amount == null ? {} : { amount });
+  return data;
+}
+
+// --- «Кабинет президента»: the exchange and bonds ---------------------------------------
+
+export interface ManagerStockRow {
+  club_id: number;
+  name: string;
+  division: number;
+  division_name: string;
+  look: ManagerLook;
+  /** € per share — changes only after a round / at a season start. */
+  price: number;
+  change_pct: number | null;
+  cap: number;
+  /** Shares I can buy now: holders' asks + unsold IPO + the exchange's pool. */
+  available: number;
+  /** Offers, cheapest first: holders' asks pay the seller, the IPO pays the club, the pool pays nobody. */
+  offers: { price: number; shares: number; kind: "ask" | "ipo" | "pool" }[];
+  /** What the exchange pays at once for a share (price − spread). */
+  bid: number;
+  /** The asks allowed now: [min, max] € a share. */
+  band: [number, number];
+  /** My ask on this club: shares offered and € a share. */
+  listed: number;
+  ask: number;
+  floated: number;
+  history: number[];
+  mine: boolean;
+  held: number;
+  holder_cap: number;
+  dividends_paid: number;
+}
+
+export interface ManagerBondRow {
+  id: number;
+  club_id: number;
+  name: string;
+  division: number | null;
+  rate_pct: number;
+  unit_eur: number;
+  units_total: number;
+  units_sold: number;
+  seasons_total: number;
+  seasons_left: number;
+  status: "selling" | "active" | "default" | "repaid";
+  season_key: string;
+  mine: boolean;
+  held: number;
+  received: number;
+  holder_cap: number;
+}
+
+export interface ManagerExchange {
+  enabled: boolean;
+  club_id: number;
+  window_open: boolean;
+  budget: number;
+  free_budget: number;
+  rules: Record<
+    "shares_total" | "ipo_max_pct" | "holder_max_pct" | "exchange_fee_pct" | "buyback_premium_pct" | "ipo_season_cap_pct"
+    | "exchange_spread_pct" | "ask_band_pct"
+    | "dividend_pct" | "bond_rate_min_pct" | "bond_rate_max_pct" | "bond_unit_eur" | "bond_seasons_max" | "bond_holder_max_pct",
+    number
+  >;
+  my_stock: {
+    listed: boolean;
+    shares_total: number;
+    floated: number;
+    unsold: number;
+    pool: number;
+    held_by_others: number;
+    price: number;
+    history: number[];
+    ipo_left: number;
+    raised_this_season: number;
+    raise_cap: number;
+    dividends_paid: number;
+    buyback_price: number;
+    holders: { name: string; shares: number }[];
+  };
+  market: ManagerStockRow[];
+  portfolio: { club_id: number; name: string; shares: number; price: number; value: number; cost: number; dividends: number }[];
+  bonds: { limit: number; owed: number; market: ManagerBondRow[]; mine: ManagerBondRow[]; held: ManagerBondRow[] };
+  tape: { id: number; club: string; side: "ipo" | "buy" | "sell" | "buyback"; shares: number; price: number; at: string | null }[];
+}
+
+export async function fetchManagerExchange(): Promise<ManagerExchange> {
+  const { data } = await api.get<ManagerExchange>("/manager/exchange");
+  return data;
+}
+
+export async function floatManagerShares(shares: number): Promise<ManagerExchange> {
+  const { data } = await api.post<ManagerExchange>("/manager/exchange/ipo", { shares });
+  return data;
+}
+
+export async function buyBackManagerShares(shares: number): Promise<ManagerExchange> {
+  const { data } = await api.post<ManagerExchange>("/manager/exchange/buyback", { shares });
+  return data;
+}
+
+export async function tradeManagerShares(clubId: number, side: "buy" | "sell", shares: number): Promise<ManagerExchange> {
+  const { data } = await api.post<ManagerExchange>(`/manager/exchange/${clubId}/${side}`, { shares });
+  return data;
+}
+
+export async function listManagerShares(clubId: number, shares: number, price: number): Promise<ManagerExchange> {
+  const { data } = await api.post<ManagerExchange>(`/manager/exchange/${clubId}/list`, { shares, price });
+  return data;
+}
+
+export async function issueManagerBond(body: { units: number; rate_pct: number; seasons: number }): Promise<ManagerExchange> {
+  const { data } = await api.post<ManagerExchange>("/manager/bonds", body);
+  return data;
+}
+
+export async function buyManagerBond(bondId: number, units: number): Promise<ManagerExchange> {
+  const { data } = await api.post<ManagerExchange>(`/manager/bonds/${bondId}/buy`, { units });
+  return data;
+}
+
+export async function repayManagerBond(bondId: number): Promise<ManagerExchange> {
+  const { data } = await api.post<ManagerExchange>(`/manager/bonds/${bondId}/repay`, {});
   return data;
 }

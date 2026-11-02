@@ -501,7 +501,7 @@ async def _lineup_to_out(db: AsyncSession, club_id: int, template_index: int | N
     stadium_out = None
     if lineup and lineup.club_stadium_card:
         s = lineup.club_stadium_card.stadium
-        stadium_out = EquippedStadiumOut(id=s.id, display_name=s.display_name, rarity=s.rarity.value, image_path=s.image_path, boost_pct=float(s.boost_pct), club=s.club)
+        stadium_out = EquippedStadiumOut(id=s.id, display_name=s.display_name, rarity=s.rarity.value, image_path=s.image_path, boost_pct=float(s.boost_pct), club=s.club, opp_malus=s.opp_malus or 0)
 
     attack, midfield, defence, goalkeeping = _category_line_stats(cards_with_slots)
     return ClubLineupOut(

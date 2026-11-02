@@ -55,7 +55,11 @@ Main features:
   preseason transfer window, then `ensure_season` (once, `manager_seasons`
   PK) pays wages, auto-loans footballers into empty slots, freezes the XIs
   and draws leagues by strength; rounds at `manager_slots`, one evening
-  digest a day, `_settle` moves clubs when every league is over. Runs lazily
+  digest a day, `_settle` moves clubs when every league is over. Window
+  deals spend only the budget above `wage_bill` (the wages the next start
+  takes for the squad already signed — `free_budget` in the view); every
+  move in or out goes to the club's transfer log `manager_moves` (`_move`,
+  `GET /manager/moves`, «Трансферы» → «Сделки»). Runs lazily
   and from the bot's manager sweep (`/internal/manager/sweep`). A club whose
   league runs can't trade. Users' wages are coins, capped per season.
   Tactics (`manager_tactics.py`): a club formation plus one of four styles
@@ -66,7 +70,23 @@ Main features:
   /player-tournaments/tactics` shows the next opponent's style); its old
   mentality / playstyle columns are kept but no longer played.
   The style shop / merchandise / «Менеджер Pro» are cosmetics and
-  convenience only (Stars via my_player_service, key "manager:<code>");
+  convenience only (Stars via my_player_service, key "manager:<code>").
+  «💼 Кабинет президента» (`manager_finance.py`, docs/president-office.md):
+  every budget change goes through `manager_finance.book` into
+  `manager_ledger` (report by seasons; `ref` = pay once); the club value;
+  season sponsors, a bank loan (overdue → no transfers) and season deals
+  (shirt sponsor, tour, TV rights, deposit, venture fund, farm club) in
+  `manager_deals` / `manager_loans`, frozen into the league team at the
+  season start and settled in `_settle`. «📈 Биржа» (`manager_exchange.py`):
+  IPO up to 49% of a club's shares (buyers of IPO shares pay the club,
+  holders resell to each other through asks or to the exchange at a spread) at a
+  price set by club value × form after each round (trades never move it),
+  25% holder cap, burnt fee, dividends and bond coupons at season end, bond
+  default blocks transfers. «🎟 Матчдей»: the ticket price (attendance ×
+  price, the home crowd's %, fans), injuries after league matches
+  (`state["injuries"]`, treatment cost) and a season insurance deal;
+  «🏆 Лучший президент» by season profit and capital. Numbers: GameConfig.manager_finance
+  over `manager_finance.DEFAULTS`;
 - «Мой игрок» extras (`my_player_extras.py`): a weekly «Спонсор» (one of
   three brands of `my_player_sponsors`, goals counted by hooks in the
   training, duels, `player_career_cups.record_match` and the rewarded-game

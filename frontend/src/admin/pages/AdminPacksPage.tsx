@@ -32,7 +32,7 @@ interface PackForm {
   skill_token_drop_chance: number;
   muse_drop_chance: number;
   /** "path" = the «Академия» pack: diamond slots drop only path cards. */
-  player_pool: "default" | "path";
+  player_pool: "default" | "path" | `collection:${number}`;
   guaranteed_min_rarity: Rarity | "";
   /** Counts for the legendary pity (GameConfig.pity_packs). */
   pity_enabled: boolean;
@@ -221,6 +221,9 @@ export default function AdminPacksPage() {
                 >
                   <option value="default">Обычный — карты «Академии» не выпадают</option>
                   <option value="path">«Академия» — бриллиантовый слот = карта пути</option>
+                  {form.player_pool.startsWith("collection:") && (
+                    <option value={form.player_pool}>Только коллекция #{form.player_pool.slice(11)} (тематический пак)</option>
+                  )}
                 </select>
               </label>
               {form.coach_drop_chance + form.stadium_drop_chance + form.skill_token_drop_chance + form.muse_drop_chance > 100 && (

@@ -178,7 +178,12 @@ async def pick_random_player(db: AsyncSession, rarity: Rarity, pool: str = "defa
     """A random active, pack-droppable player of `rarity`. pool="default"
     (every source except the «Академия» pack) never drops a «Академия»
     card; pool="path" (Pack.player_pool) drops ONLY «Академия» cards in a
-    diamond slot — other rarities stay regular players."""
+    diamond slot — other rarities stay regular players. pool="collection:<id>"
+    (a themed pack, e.g. «Ночь живых Легенд») drops only that collection's
+    active players — pack-droppable or not, so they can stay out of the
+    regular packs — the rolled rarity first, any of them when it has none."""
+    if pool.startswith("collection:"):
+        return await _pick_collection_player(db, rarity, int(pool.split(":", 1)[1] or 0))
     path_slot = pool == "path" and rarity == Rarity.diamond
     path_filter = Player.path_talent_code.is_not(None) if path_slot else Player.path_talent_code.is_(None)
     result = await db.execute(
@@ -209,6 +214,18 @@ async def pick_random_player(db: AsyncSession, rarity: Rarity, pool: str = "defa
         player = result.scalar_one_or_none()
     if player is None:
         raise ConflictError("No active players configured; cannot open packs")
+    return player
+
+
+async def _pick_collection_player(db: AsyncSession, rarity: Rarity, collection_id: int) -> Player:
+    base = select(Player).where(
+        Player.collection_id == collection_id, Player.is_active.is_(True), Player.path_talent_code.is_(None),
+    )
+    player = (await db.execute(base.where(Player.rarity == rarity).order_by(func.random()).limit(1))).scalar_one_or_none()
+    if player is None:
+        player = (await db.execute(base.order_by(func.random()).limit(1))).scalar_one_or_none()
+    if player is None:
+        raise ConflictError("В этом паке пока нет карточек")
     return player
 
 
@@ -673,7 +690,10 @@ async def open_pack(
     )
     await track_pack_opened_tasks(db, locked_user, dup_counts)
     collection_rewards = await collection_service.grant_collection_rewards_for_new_cards(
-        db, locked_user, [item.card.player.id for item in opened_items]
+        db, locked_user, [item.card.player.id for item in opened_items],
+        collection_ids=await collection_service.staff_collection_ids(
+            db, [i.card.coach.id for i in opened_coach_items], [i.card.stadium.id for i in opened_stadium_items],
+        ),
     )
 
     # Referral rewards come from the friend's activity now (referral_service), not packs.
@@ -855,7 +875,10 @@ async def open_pack_bulk(
 
     await track_pack_opened_tasks(db, locked_user, dup_counts)
     collection_rewards = await collection_service.grant_collection_rewards_for_new_cards(
-        db, locked_user, [item.card.player.id for item in all_opened_items]
+        db, locked_user, [item.card.player.id for item in all_opened_items],
+        collection_ids=await collection_service.staff_collection_ids(
+            db, [i.card.coach.id for i in all_opened_coach_items], [i.card.stadium.id for i in all_opened_stadium_items],
+        ),
     )
 
     # Referral rewards come from the friend's activity now (referral_service), not packs.

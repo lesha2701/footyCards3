@@ -41,15 +41,28 @@ export default function Emblem({ look, size = 48, className = "" }: {
 }
 
 /** A small shirt in the club kit. */
-export function KitShirt({ look, size = 40 }: { look: Pick<ManagerLook, "kit" | "kit_color" | "kit_color2">; size?: number }) {
+export function KitShirt({ look, size = 40, sponsor }: {
+  look: Pick<ManagerLook, "kit" | "kit_color" | "kit_color2">; size?: number;
+  /** A shirt sponsor's brand across the chest («Кабинет президента»). */
+  sponsor?: string | null;
+}) {
   return (
     <span
-      className="inline-block shrink-0"
+      className="relative inline-flex shrink-0 items-center justify-center"
       style={{
         width: size, height: size, background: kitBackground(look),
         clipPath: "polygon(25% 0, 40% 8%, 60% 8%, 75% 0, 100% 18%, 88% 38%, 80% 32%, 80% 100%, 20% 100%, 20% 32%, 12% 38%, 0 18%)",
       }}
       aria-hidden="true"
-    />
+    >
+      {sponsor && (
+        <span
+          className="mt-[18%] max-w-[58%] truncate rounded-sm bg-white/90 px-0.5 text-center font-black uppercase leading-none text-slate-900"
+          style={{ fontSize: Math.max(5, size * 0.12) }}
+        >
+          {sponsor.split(" ")[0]}
+        </span>
+      )}
+    </span>
   );
 }

@@ -24,6 +24,14 @@ class CoachBoostType(str, enum.Enum):
     DEFENSIVE_DISCIPLINE = "defensive_discipline"
     COUNTER_MASTERY = "counter_mastery"
     SQUAD_STABILITY = "squad_stability"
+    # Card Arena: +N rating to every player of the own XI.
+    TEAM_RATING = "team_rating"
+    # Card Arena, against the opponent: −N rating to their attack / defence /
+    # keeper / every player (coach_boost_service.arena_opponent_malus).
+    OPP_ATTACK = "opp_attack"
+    OPP_DEFENCE = "opp_defence"
+    OPP_GOALKEEPING = "opp_goalkeeping"
+    OPP_TEAM = "opp_team"
 
 
 class Position(str, enum.Enum):
@@ -166,6 +174,12 @@ class TransactionType(str, enum.Enum):
     auction_refund = "auction_refund"
     auction_buy_now = "auction_buy_now"
     auction_sale = "auction_sale"
+    # «🎃 Ночь тыкв» (services/halloween_service.py): coins from the pumpkin
+    # shop and the «Кошелёк или жизнь» doors.
+    halloween_reward = "halloween_reward"
+    # «⚔️ Битва фанатов» (services/fan_battle_service.py): daily battles,
+    # milestones and the final.
+    fan_battle_reward = "fan_battle_reward"
 
 
 class GiftKind(str, enum.Enum):

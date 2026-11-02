@@ -40,7 +40,7 @@ export default function ClubCardSheet({ clubId, onClose, onError }: { clubId: nu
               <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-3">
                   <Emblem look={data.look} size={60} />
-                  <KitShirt look={data.look} size={44} />
+                  <KitShirt look={data.look} size={44} sponsor={data.kit_sponsor} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-display text-lg font-bold text-ink-chalk">
                       {data.name}

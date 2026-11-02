@@ -146,6 +146,27 @@ async def test_match_day_predict_until_kickoff_and_claim_tiers(client, db_sessio
     assert recent["claimed"] and recent["reward_kind"] == "diff" and recent["home_score"] == 3
 
 
+async def test_match_day_shows_every_match_an_admin_entered(client, db_session, bot_token):
+    a_h, _a = await _register(client, db_session, 920024, bot_token)
+    (await get_config(db_session)).match_day_enabled = True
+    now = datetime.now(timezone.utc)
+    db_session.add_all([
+        MatchDayFixture(home="Зенит", away="Локомотив", league="РПЛ", kickoff_at=now + timedelta(hours=5)),
+        MatchDayFixture(home="Спартак", away="ЦСКА", league="РПЛ", kickoff_at=now + timedelta(hours=2)),
+        MatchDayFixture(home="Динамо", away="Ростов", league="РПЛ", kickoff_at=now - timedelta(minutes=30)),  # waiting for the score
+        MatchDayFixture(home="Урал", away="Сочи", league="РПЛ", kickoff_at=now - timedelta(days=3)),  # forgotten long ago
+    ])
+    await db_session.commit()
+    view = (await client.get(f"{API}/match-day", headers=a_h)).json()
+    assert [m["home"] for m in view["matches"]] == ["Динамо", "Спартак", "Зенит"]
+    assert [m["open"] for m in view["matches"]] == [False, True, True]
+    assert view["current"]["home"] == "Спартак"
+    second = view["matches"][2]["id"]
+    resp = await client.put(f"{API}/match-day/{second}/prediction", headers=a_h, json={"home": 1, "away": 1})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["matches"][2]["prediction"] == {"home": 1, "away": 1}
+
+
 # --- «Клубный рейд» -----------------------------------------------------------------------------
 
 async def _club(client, headers, name):

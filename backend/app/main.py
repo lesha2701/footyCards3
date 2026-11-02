@@ -1,4 +1,5 @@
 import asyncio
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.database import get_db
 from app.core.exceptions import register_exception_handlers
-from app.core.slow_log import SlowRequestMiddleware, watch_event_loop
+from app.core.slow_log import SlowRequestMiddleware, StallSampler, watch_event_loop
 from app.routers import (
     admin_badges,
     admin_bingo,
@@ -51,6 +52,10 @@ from app.routers import (
     admin_trophies,
     admin_users,
     admin_wheel,
+    admin_fan_battle,
+    admin_halloween,
+    fan_battle,
+    halloween,
     announcement,
     auth,
     bingo,
@@ -128,11 +133,13 @@ _docs_enabled = settings.environment != "production"
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    watcher = asyncio.create_task(watch_event_loop())
+    sampler = StallSampler(threading.get_ident()).start()
+    watcher = asyncio.create_task(watch_event_loop(sampler=sampler))
     try:
         yield
     finally:
         watcher.cancel()
+        sampler.stop()
 
 
 app = FastAPI(
@@ -239,6 +246,10 @@ app.include_router(admin_leagues.router, prefix=API_PREFIX)
 app.include_router(admin_lifestyle.router, prefix=API_PREFIX)
 app.include_router(admin_club_base.router, prefix=API_PREFIX)
 app.include_router(admin_wheel.router, prefix=API_PREFIX)
+app.include_router(admin_halloween.router, prefix=API_PREFIX)
+app.include_router(admin_fan_battle.router, prefix=API_PREFIX)
+app.include_router(fan_battle.router, prefix=API_PREFIX)
+app.include_router(halloween.router, prefix=API_PREFIX)
 app.include_router(admin_games.router, prefix=API_PREFIX)
 app.include_router(admin_career.router, prefix=API_PREFIX)
 app.include_router(admin_log.router, prefix=API_PREFIX)

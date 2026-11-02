@@ -6,7 +6,7 @@ else the right outcome (GameConfig.match_day_*_coins).
 The reward is fixed at claim time under the user and prediction row locks
 (`claimed_at` set once). A result can be corrected only while nobody has
 claimed."""
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import delete, func, select
@@ -20,7 +20,9 @@ from app.services.game_config_service import get_config
 from app.services.notification_service import notify
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
-RECENT = 5
+RECENT = 10
+# A match that kicked off longer ago than this and still has no result leaves the list.
+WAITING_FOR = timedelta(hours=24)
 MAX_GOALS = 20
 
 
@@ -80,18 +82,23 @@ def _fixture_out(f: MatchDayFixture, pred: Optional[MatchDayPrediction], split: 
 async def get_view(db: AsyncSession, user: User) -> dict:
     config = await get_config(db)
     now = _now()
-    # The match of the day: the nearest not started; else the latest still waiting for its result.
-    current = (await db.execute(
-        select(MatchDayFixture).where(MatchDayFixture.kickoff_at > now, MatchDayFixture.home_score.is_(None))
-        .order_by(MatchDayFixture.kickoff_at).limit(1)
-    )).scalar_one_or_none() or (await db.execute(
-        select(MatchDayFixture).where(MatchDayFixture.home_score.is_(None)).order_by(MatchDayFixture.kickoff_at.desc()).limit(1)
-    )).scalar_one_or_none()
+    # Every match without a result: open for guesses (several an admin entered
+    # by hand and the bot's one) and the ones just started, waiting for the score.
+    matches = list((await db.execute(
+        select(MatchDayFixture).where(MatchDayFixture.home_score.is_(None), MatchDayFixture.kickoff_at > now - WAITING_FOR)
+        .order_by(MatchDayFixture.kickoff_at)
+    )).scalars())
+    if not matches:  # nothing fresh: the latest one still waiting for its result
+        matches = list((await db.execute(
+            select(MatchDayFixture).where(MatchDayFixture.home_score.is_(None)).order_by(MatchDayFixture.kickoff_at.desc()).limit(1)
+        )).scalars())
+    # The match of the day: the nearest not started; else the latest started.
+    current = next((f for f in matches if _aware(f.kickoff_at) > now), matches[-1] if matches else None)
     recent = list((await db.execute(
         select(MatchDayFixture).where(MatchDayFixture.home_score.is_not(None))
         .order_by(MatchDayFixture.kickoff_at.desc()).limit(RECENT)
     )).scalars())
-    ids = [f.id for f in ([current] if current else []) + recent]
+    ids = [f.id for f in matches + recent]
     preds = {p.fixture_id: p for p in (await db.execute(
         select(MatchDayPrediction).where(MatchDayPrediction.user_id == user.id, MatchDayPrediction.fixture_id.in_(ids or [0]))
     )).scalars()}
@@ -100,10 +107,12 @@ async def get_view(db: AsyncSession, user: User) -> dict:
         if (p := preds.get(f.id)) is not None and p.claimed_at is None
         and reward_for(p.home, p.away, f.home_score, f.away_score, config)[0] > 0
     )
+    shown = [_fixture_out(f, preds.get(f.id), await _split(db, f.id), config, now) for f in matches]
     return {
         "enabled": bool(config.match_day_enabled),
         "rewards": {"exact": config.match_day_exact_coins, "diff": config.match_day_diff_coins, "outcome": config.match_day_outcome_coins},
-        "current": _fixture_out(current, preds.get(current.id), await _split(db, current.id), config, now) if current else None,
+        "current": next((m for m in shown if m["id"] == current.id), None) if current else None,
+        "matches": shown,
         "recent": [_fixture_out(f, preds.get(f.id), None, config, now) for f in recent],
         "unclaimed": unclaimed,
     }
