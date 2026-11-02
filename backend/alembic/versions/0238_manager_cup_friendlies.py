@@ -1,7 +1,7 @@
 """«Менеджер»: «Кубок менеджеров» (manager_cups) and friendlies (manager_friendlies).
 
-Revision ID: 0236
-Revises: 0235
+Revision ID: 0238
+Revises: 0237
 Create Date: 2026-11-01
 """
 from typing import Sequence, Union
@@ -9,8 +9,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0236"
-down_revision: Union[str, None] = "0235"
+revision: str = "0238"
+down_revision: Union[str, None] = "0237"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

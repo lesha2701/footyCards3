@@ -1,8 +1,8 @@
 """«Менеджер»: «Установка на матч» and the club's form from events
 (manager_clubs.match_plan / buffs), «События клуба» (manager_events).
 
-Revision ID: 0235
-Revises: 0234
+Revision ID: 0237
+Revises: 0236
 Create Date: 2026-11-01
 """
 from typing import Sequence, Union
@@ -10,8 +10,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0235"
-down_revision: Union[str, None] = "0234"
+revision: str = "0237"
+down_revision: Union[str, None] = "0236"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
