@@ -1,7 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchManagerCup, fetchManagerNews, type ManagerCupMatch } from "@/api/manager";
+import cupArt from "@/assets/manager/cup.webp";
+import newsArt from "@/assets/manager/news.webp";
 import ShareButton from "@/components/common/ShareButton";
+import SectionTitle from "@/components/manager/SectionTitle";
 import { eur } from "@/lib/managerMoney";
 
 function when(iso: string | null): string {
@@ -29,7 +32,7 @@ export function CupPanel() {
   return (
     <section className="flex flex-col gap-2.5 rounded-2xl bg-gradient-to-br from-amber-400/25 via-bg-surface to-bg-surface p-4 ring-1 ring-amber-300/40" data-testid="manager-cup">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="font-display text-base font-bold text-ink-chalk">🏆 Кубок менеджеров</h2>
+        <h2><SectionTitle art={cupArt}>Кубок менеджеров</SectionTitle></h2>
         <span className="shrink-0 rounded-full bg-black/30 px-2 py-0.5 text-micro font-bold text-amber-100">{cup.clubs} клубов</span>
       </div>
       <p className="-mt-1 text-xs text-ink-mist">
@@ -70,7 +73,9 @@ export function NewsPanel() {
   return (
     <section className="flex flex-col gap-2 rounded-2xl bg-[#f3eee2] p-4 text-[#1b1a17] shadow-[0_10px_30px_-12px_rgba(0,0,0,0.8)]" data-testid="manager-news">
       <div className="flex items-baseline justify-between border-b-2 border-[#1b1a17] pb-1">
-        <span className="font-display text-lg font-black tracking-tight">ГАЗЕТА ЛИГИ</span>
+        <span className="flex items-center gap-2 font-display text-lg font-black tracking-tight">
+          <img src={newsArt} alt="" width={32} height={32} className="rounded-lg" />ГАЗЕТА ЛИГИ
+        </span>
         <span className="text-micro font-semibold">{data.league} · {data.date}</span>
       </div>
       <p className="font-display text-xl font-black leading-tight">{data.headline}</p>

@@ -44,7 +44,7 @@ describe("CupPanel / NewsPanel", () => {
   it("shows my cup match with the penalties, prizes and past winners", async () => {
     fetchManagerCup.mockResolvedValue(CUP);
     wrap(<CupPanel />);
-    expect(await screen.findByText("🏆 Кубок менеджеров")).toBeInTheDocument();
+    expect(await screen.findByText("Кубок менеджеров")).toBeInTheDocument();
     expect(screen.getByText(/пен\. 4:3/)).toBeInTheDocument();
     expect(screen.getByText(/Призовые: победитель/)).toBeInTheDocument();
     expect(screen.getByText(/«Старые»/)).toBeInTheDocument();

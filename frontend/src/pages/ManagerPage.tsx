@@ -32,6 +32,9 @@ import {
 } from "@/api/manager";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
+import leagueArt from "@/assets/manager/league.webp";
+import squadArt from "@/assets/manager/squad.webp";
+import transfersArt from "@/assets/manager/transfers.webp";
 import ShareButton from "@/components/common/ShareButton";
 import { CupPanel, NewsPanel } from "@/components/manager/CupNewsPanel";
 import { ListSkeleton } from "@/components/common/Skeleton";
@@ -39,6 +42,7 @@ import { IconCoin, IconProfile, IconSearch, IconTrophy } from "@/components/icon
 import ClubCardSheet from "@/components/manager/ClubCardSheet";
 import AnalyticsPanel from "@/components/manager/AnalyticsPanel";
 import MatchPlanPanel from "@/components/manager/MatchPlanPanel";
+import SectionTitle from "@/components/manager/SectionTitle";
 import Stadium from "@/components/manager/Stadium";
 import TodayPanel, { Timeline } from "@/components/manager/TodayPanel";
 import Emblem, { KitShirt } from "@/components/manager/Emblem";
@@ -264,6 +268,10 @@ function ClubTab({ view, club, onView, onError }: TabProps & { club: ManagerClub
         </div>
       </section>
 
+      <div className="-mb-2 flex items-center justify-between gap-2 px-1">
+        <h2><SectionTitle art={squadArt}>Состав · {club.squad.formation}</SectionTitle></h2>
+        <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-micro font-bold text-ink-chalk">рейтинг {club.squad.rating}</span>
+      </div>
       <ManagerPitch xi={club.squad.xi} formation={club.squad.formation} />
       {club.squad.kids > 0 && (
         <p className="-mt-2 rounded-xl bg-amber-400/10 px-3 py-2 text-caption text-amber-300">
@@ -451,6 +459,12 @@ function TransfersTab({ view, club, onView, onError }: TabProps & { club: Manage
   ];
   return (
     <div className="flex flex-col gap-3" data-testid="manager-transfers">
+      <div className="flex items-center justify-between gap-2 px-1">
+        <h2><SectionTitle art={transfersArt}>Трансферы</SectionTitle></h2>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-micro font-bold ${club.trade_locked ? "bg-amber-400/15 text-amber-300" : "bg-accent-lime/15 text-accent-lime"}`}>
+          {club.trade_locked ? "окно закрыто" : "окно открыто"}
+        </span>
+      </div>
       <div className="grid grid-cols-2 gap-1 rounded-xl bg-bg-surface p-1">
         {sections.map(([id, label]) => (
           <button key={id} onClick={() => setSection(id)}
@@ -867,8 +881,10 @@ function LeagueTable({ league, onClub }: { league: ManagerLeague; onClub: (id: n
   return (
     <section className="flex flex-col gap-3 rounded-2xl bg-bg-surface p-4" data-testid="manager-league">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="font-display text-base font-bold text-ink-chalk">
-          {league.status === "finished" ? `Сезон завершён${league.champion ? ` · 🏆 ${league.champion}` : ""}` : `Тур ${league.rounds_played + 1} из ${league.total_rounds}`}
+        <h2 className="min-w-0">
+          <SectionTitle art={leagueArt}>
+            {league.status === "finished" ? `Сезон завершён${league.champion ? ` · 🏆 ${league.champion}` : ""}` : `Тур ${league.rounds_played + 1} из ${league.total_rounds}`}
+          </SectionTitle>
         </h2>
         <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-micro font-bold text-ink-chalk">{league.division_name}</span>
       </div>

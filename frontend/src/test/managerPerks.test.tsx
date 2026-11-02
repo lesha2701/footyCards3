@@ -50,7 +50,7 @@ describe("AnalyticsPanel", () => {
       },
     });
     wrap(<AnalyticsPanel pass={{ ...PASS, active: true }} onError={() => {}} />);
-    expect(await screen.findByText("📊 Разбор: «Ястребы»")).toBeInTheDocument();
+    expect(await screen.findByText("Разбор: «Ястребы»")).toBeInTheDocument();
     expect(screen.getByText(/Его стиль бьёт твой/)).toBeInTheDocument();
     expect(screen.getByText("Защита")).toBeInTheDocument();
     expect(screen.getByText(/Соперник: 7:3 · 🩹 2/)).toBeInTheDocument();

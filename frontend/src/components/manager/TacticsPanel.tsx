@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from "react";
 
 import type { ManagerLine, ManagerStyle, ManagerTacticsRules } from "@/api/manager";
+import tacticsArt from "@/assets/manager/tactics.webp";
+import SectionTitle from "@/components/manager/SectionTitle";
 import { formationLabel } from "@/lib/formationLayout";
 
 const LINE_LABEL: Record<ManagerLine, string> = { FWD: "Атака", MID: "Полузащита", DEF: "Защита", GK: "Вратарь" };
@@ -37,7 +39,7 @@ export default function TacticsPanel({ style, formation, rules, next, busy, onCh
   return (
     <section className="flex flex-col gap-3 rounded-2xl bg-bg-surface p-4" data-testid="tactics">
       <div className="flex items-center justify-between">
-        <h2 className="font-display text-base font-bold text-ink-chalk">Тактика</h2>
+        <h2><SectionTitle art={tacticsArt}>Тактика</SectionTitle></h2>
         <button onClick={() => setHelpOpen(!helpOpen)} className="text-micro text-ink-mist underline">Как считается матч?</button>
       </div>
 

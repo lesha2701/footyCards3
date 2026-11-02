@@ -2,6 +2,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { fetchManagerAnalytics, type ManagerPass } from "@/api/manager";
+import analyticsArt from "@/assets/manager/analytics.webp";
+import SectionTitle from "@/components/manager/SectionTitle";
 import { payMyPlayerWithStars } from "@/lib/myPlayerStars";
 import { hapticNotify } from "@/lib/telegram";
 
@@ -40,7 +42,7 @@ export default function AnalyticsPanel({ pass, onError }: { pass: ManagerPass | 
     };
     return (
       <section className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-sky-500/15 to-bg-surface p-3.5 ring-1 ring-sky-300/25" data-testid="analytics-teaser">
-        <span className="text-2xl">📊</span>
+        <img src={analyticsArt} alt="" width={44} height={44} className="shrink-0 rounded-xl ring-1 ring-white/10" />
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-bold text-ink-chalk">Аналитика Pro</span>
           <span className="block text-micro text-ink-mist">Разбор соперника, алерты по акциям, спонсор и напоминания до окна</span>
@@ -56,7 +58,7 @@ export default function AnalyticsPanel({ pass, onError }: { pass: ManagerPass | 
   return (
     <section className="flex flex-col gap-2.5 rounded-2xl bg-gradient-to-br from-sky-500/20 via-bg-surface to-bg-surface p-4 ring-1 ring-sky-300/30" data-testid="analytics">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="font-display text-base font-bold text-ink-chalk">📊 Разбор: «{o.name}»</h2>
+        <h2 className="min-w-0"><SectionTitle art={analyticsArt}>Разбор: «{o.name}»</SectionTitle></h2>
         <span className="shrink-0 rounded-full bg-black/30 px-2 py-0.5 text-micro font-bold text-sky-200">{o.home ? "дома" : "в гостях"}</span>
       </div>
       <p className="-mt-1 text-xs text-ink-mist">{o.formation} · {EDGE_TEXT[o.edge]}</p>

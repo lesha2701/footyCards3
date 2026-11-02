@@ -11,6 +11,8 @@ import {
   type ManagerLook,
   type ManagerView,
 } from "@/api/manager";
+import analyticsArt from "@/assets/manager/analytics.webp";
+import standsArt from "@/assets/manager/stands.webp";
 import ShareButton from "@/components/common/ShareButton";
 import { IconCoin } from "@/components/icons";
 import { FRAME_COLORS, themeClass } from "@/lib/managerLook";
@@ -18,6 +20,7 @@ import { payMyPlayerWithStars } from "@/lib/myPlayerStars";
 import { hapticNotify } from "@/lib/telegram";
 
 import Emblem, { KitShirt } from "./Emblem";
+import SectionTitle from "./SectionTitle";
 import Stadium from "./Stadium";
 
 const POSTER_COLORS: Record<string, [string, string]> = { classic: ["#3ed17e", "#c6e63a"], neon: ["#d946ef", "#22d3ee"], gold: ["#d4a017", "#fad65c"] };
@@ -30,7 +33,7 @@ const SECTIONS: { kind: ManagerCosmetic["kind"]; field: keyof ManagerLook; title
   { kind: "kit", field: "kit", title: "Рисунок формы" },
   { kind: "frame", field: "frame", title: "Рамка карточек «Поделиться»" },
   { kind: "theme", field: "theme", title: "Цветовая тема клуба" },
-  { kind: "stands", field: "stands", title: "🏟 Трибуны стадиона" },
+  { kind: "stands", field: "stands", title: "Трибуны стадиона" },
   { kind: "poster", field: "poster", title: "🏆 Постер чемпиона" },
 ];
 
@@ -90,7 +93,8 @@ export default function StyleTab({ view, club, onView, onError }: {
 
       {SECTIONS.map(({ kind, field, title }) => (
         <section key={kind} className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4">
-          <h2 className="font-display text-sm font-bold text-ink-chalk">{title}</h2>
+          {kind === "stands" ? <h2><SectionTitle art={standsArt}>{title}</SectionTitle></h2>
+            : <h2 className="font-display text-sm font-bold text-ink-chalk">{title}</h2>}
           {kind === "poster" && <ChampionShare titles={club.titles} />}
           <div className={`grid gap-2 ${kind === "stands" ? "grid-cols-2" : "grid-cols-3"}`}>
             {shop.cosmetics.filter((c) => c.kind === kind).map((c) => {
@@ -183,7 +187,7 @@ export default function StyleTab({ view, club, onView, onError }: {
 
       {(shop.passes ?? []).filter((p) => p.stars > 0).map((p) => (
         <section key={p.code} className="flex flex-col gap-2 rounded-2xl bg-gradient-to-br from-sky-400/15 to-bg-surface p-4 ring-1 ring-sky-300/30" data-testid={`pass-${p.code}`}>
-          <h2 className="font-display text-base font-bold text-ink-chalk">📊 {p.name}</h2>
+          <h2><SectionTitle art={analyticsArt}>{p.name}</SectionTitle></h2>
           <ul className="flex flex-col gap-1 text-caption text-ink-mist">
             {[
               "Разбор следующего соперника: линии, форма, голы, травмы", "Уведомления о скачках курса твоих акций",
