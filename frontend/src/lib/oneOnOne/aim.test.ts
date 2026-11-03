@@ -123,6 +123,19 @@ describe("the finesse: a swipe off the button", () => {
   });
 });
 
+describe("the swipe with the stick upright", () => {
+  it("is a straight shot: no bend, struck with the laces", () => {
+    for (const steer of [0, -600, 600]) {
+      const rec = runFor(9, 55, steer);
+      rec.state.kz = 0.6;
+      const swipe = { dx: 0, dy: -180, curve: 0, durationMs: 110 };
+      expect(resolveShot(rec.setup, rec.state, { kind: "finesse", swipe, aim: 0.1 }).curve).toBe(0);
+      rec.step(1, 0, 0, { kind: "finesse", swipe, aim: 0.1 });
+      expect(techniqueOf(rec.state, rec.timeline)!.kind).toBe("instep");
+    }
+  });
+});
+
 describe("the chip button", () => {
   it("lifts it over a keeper who came out", () => {
     let over = 0;

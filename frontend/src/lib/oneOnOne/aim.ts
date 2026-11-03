@@ -43,6 +43,8 @@ const FINESSE_HARD = 27;
 const FINESSE_LOW = 0.5;
 const FINESSE_HIGH = 1.6;
 const FINESSE_CURVE = 320;
+/** The stick leaning less than this: the swipe is a straight shot, no bend. */
+const FINESSE_STRAIGHT = 0.3;
 /** Closer to a post than this (m across): the finesse into that near post
  * bends in from outside it; else it bends away from the keeper into the far one. */
 const NEAR_SIDE = 1;
@@ -175,7 +177,8 @@ export function resolveShot(setup: EpisodeSetup, s: EpisodeState, intent: ShotIn
     const pace = up / (sw.durationMs / 1000);
     const power = clamp((pace - THUMB_SOFT) / (THUMB_HARD - THUMB_SOFT), 0, 1);
     const height = clamp((up - THUMB_LOW) / (THUMB_HIGH - THUMB_LOW), 0, 1);
-    const curve = finesseBend(s, tx) * FINESSE_CURVE;
+    // Into a corner it is bent; with the stick upright, struck straight.
+    const curve = Math.abs(intent.aim) < FINESSE_STRAIGHT ? 0 : finesseBend(s, tx) * FINESSE_CURVE;
     return strike(setup, s, tx, lerp(FINESSE_SOFT, FINESSE_HARD, power), lerp(FINESSE_LOW, FINESSE_HIGH, height), curve);
   }
   // The tap: over a keeper standing on top of him, else low to the side

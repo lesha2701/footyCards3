@@ -46,6 +46,14 @@ describe("how the shot looks", () => {
     expect(bent).toEqual({ foot: "right", kind: "outside" });
   });
 
+  it("the outside is the right foot's only: bent left off the left foot, it is the right instep", () => {
+    // Cutting left he'd strike with the left — but a ball bending left is
+    // wrapped with the right foot's inside.
+    expect(shotTechnique(flight({ x: -4, y: 2, z: -20 }, 75), { ...RUN, side: 3 }, false)).toEqual({ foot: "right", kind: "curl" });
+    // Bending right off the left foot: its inside.
+    expect(shotTechnique(flight({ x: 4, y: 2, z: -20 }, -75), { ...RUN, side: 3 }, false)).toEqual({ foot: "left", kind: "curl" });
+  });
+
   it("a bent ball is the finesse, not a chip — steep from close in, or over a keeper off his line", () => {
     expect(shotTechnique(flight({ x: -2, y: 9, z: -14 }, 75), RUN, false).kind).toBe("curl");
     expect(shotTechnique(flight({ x: -4, y: 3, z: -20 }, 75), RUN, true).kind).toBe("curl");

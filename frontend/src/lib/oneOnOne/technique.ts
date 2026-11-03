@@ -68,9 +68,13 @@ export function shotTechnique(f: ShotFlight, run: RunAtShot, chip: boolean): Tec
   else foot = "right";
 
   // A ball struck clean is the laces (side-footed only when soft); a bent
-  // one is curled with the inside, or with the outside when it bends away.
+  // one is curled with the inside, or with the outside of the right foot
+  // when it bends away (wrapped into the near post from outside it). The
+  // left foot never takes the outside: a ball bending left is the right
+  // foot's inside.
   let kind: ShotKind;
   const bend = bendOf(f, run.hx, run.hz);
+  if (foot === "left" && bend > 0) foot = "right";
   // The inside of the right foot wraps it to the left, the outside away.
   const inside = bend === 0 || (foot === "right") === bend > 0;
   const hardSpin = Math.abs(f.kick.spin.y) >= OUTSIDE_SPIN;
