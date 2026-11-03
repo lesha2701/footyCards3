@@ -305,7 +305,7 @@ function AttackRun({
     if (homeStick.current) homeStick.current.style.opacity = stick.current.down ? "0" : "1";
     if (knob.current) {
       knob.current.style.opacity = stick.current.down ? "1" : "0";
-      knob.current.style.transform = `translate(${st.knob.x - 22}px, ${st.knob.y - 22}px)`;
+      knob.current.style.transform = `translate(${st.knob.x - 20}px, ${st.knob.y - 20}px)`;
     }
   };
   const syncStick = () => {
@@ -462,36 +462,39 @@ function AttackRun({
         />
         <div
           ref={knob}
-          className="pointer-events-none absolute left-0 top-0 h-11 w-11 rounded-full border-2 border-black/50 bg-accent-lime opacity-0 shadow-lg"
+          className="pointer-events-none absolute left-0 top-0 h-10 w-10 rounded-full border-2 border-black/50 bg-accent-lime opacity-0 shadow-lg"
         />
         {playing && (
           // Where the thumbs go: shown the whole attack, dark enough to read
           // over the pitch; the labels only until the first touch.
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-between px-6 pb-24 text-center text-caption font-semibold text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.9)]">
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-between px-5 text-center text-caption font-semibold text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.9)]"
+            style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 36px)" }}
+          >
             <div
               ref={homeStick}
-              className="flex h-28 w-28 flex-col items-center justify-center rounded-full border-[3px] border-white/70 bg-black/45 shadow-lg transition-opacity"
+              className="flex h-24 w-24 flex-col items-center justify-center rounded-full border-[3px] border-white/70 bg-black/45 shadow-lg transition-opacity"
             >
               {started ? (
-                <div className="h-11 w-11 rounded-full border-2 border-black/50 bg-accent-lime/80" />
+                <div className="h-10 w-10 rounded-full border-2 border-black/50 bg-accent-lime/80" />
               ) : (
                 <>
                   Бег
-                  <span className="font-normal text-white/80">до края — спринт</span>
+                  <span className="px-2 font-normal leading-tight text-white/80">край — спринт</span>
                 </>
               )}
             </div>
-            <div className="relative h-28 w-28">
+            <div className="relative h-24 w-24">
               <PowerRing barRef={shotBar} />
               <div className="flex h-full w-full flex-col items-center justify-center rounded-full border-[3px] border-accent-lime/90 bg-accent-lime/25 shadow-lg">
                 Удар
-                <span className="font-normal text-white/80">{started ? "держи · ↑" : "держи — сила, ↑ — закрутка"}</span>
+                <span className="px-2 font-normal leading-tight text-white/80">{started ? "держи · ↑" : "держи, ↑ — закрутка"}</span>
               </div>
               {/* The chip: a small button, an arc for a sign. */}
-              <div ref={chipBtn} className="absolute -left-3 -top-16 h-14 w-14" aria-label="Парашют">
+              <div ref={chipBtn} className="absolute -left-3 -top-14 h-12 w-12" aria-label="Парашют">
                 <PowerRing barRef={chipBar} />
                 <div className="flex h-full w-full items-center justify-center rounded-full border-[3px] border-white/80 bg-black/50 shadow-lg">
-                  <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="#fff" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="#fff" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
                     <path d="M4 18 Q12 1 20 18" />
                     <path d="M16.5 15.5 L20 18 L20.8 13.8" />
                   </svg>
