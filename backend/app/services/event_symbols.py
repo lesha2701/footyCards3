@@ -6,7 +6,15 @@ from datetime import datetime
 from typing import Optional
 
 # symbol value -> event («fan_battle» | «halloween»)
-EVENT_SYMBOLS: dict[str, str] = {}
+EVENT_SYMBOLS: dict[str, str] = {
+    # «🎃 Ночь тыкв»
+    "img_jack_o_lantern": "halloween",
+    "img_hw_bat": "halloween",
+    "img_witch_hat": "halloween",
+    "img_ghost_keeper": "halloween",
+    "img_skull_ball": "halloween",
+    "img_reaper": "halloween",
+}
 
 
 def _event_module(event: str):
