@@ -21,7 +21,7 @@ const SHAPES: Record<string, string> = {
  * band), the symbol, and the «Обводка» / «Эффект» bought in «Стиль» (shared drawing with
  * the clubs' ClubLogo). */
 export default function Emblem({ look, size = 48, className = "" }: {
-  look: Pick<ManagerLook, "shape" | "symbol" | "color" | "color2"> & Partial<Pick<ManagerLook, "rim" | "fx">>;
+  look: Pick<ManagerLook, "shape" | "symbol" | "color" | "color2"> & Partial<Pick<ManagerLook, "rim" | "fx" | "finish">>;
   size?: number;
   className?: string;
 }) {
@@ -44,7 +44,7 @@ export default function Emblem({ look, size = 48, className = "" }: {
             <path d={path} fill="none" stroke={paintFill(look.color2, `band-${uid}`)} strokeWidth={12} strokeLinejoin="round" />
           </>
         )}
-        mark={<SymbolGlyph symbol={look.symbol} fill={look.color2} cx={50} cy={52} size={54} />}
+        mark={<SymbolGlyph symbol={look.symbol} fill={look.color2} cx={50} cy={52} size={54} metal={look.finish === "metal"} />}
       />
     </span>
   );
@@ -52,9 +52,13 @@ export default function Emblem({ look, size = 48, className = "" }: {
 
 /** The emblem symbol in SVG space: a picture symbol tinted with `fill`
  * («img_<key>», see ClubLogo.ImageSymbol), an emoji (the older symbols) or nothing («none»). */
-export function SymbolGlyph({ symbol, fill, cx, cy, size }: { symbol: string; fill: string; cx: number; cy: number; size: number }) {
+export function SymbolGlyph({ symbol, fill, cx, cy, size, metal = false }: {
+  symbol: string; fill: string; cx: number; cy: number; size: number; metal?: boolean;
+}) {
   if (!symbol || symbol === "none") return null;
-  if (isImageSymbol(symbol)) return <ImageSymbol symbol={symbol} fill={fill} x={cx - size / 2} y={cy - size / 2} size={size} />;
+  if (isImageSymbol(symbol)) {
+    return <ImageSymbol symbol={symbol} fill={fill} x={cx - size / 2} y={cy - size / 2} size={size} metal={metal} />;
+  }
   return <text x={cx} y={cy + size * 0.06} textAnchor="middle" dominantBaseline="middle" fontSize={size * 0.83}>{symbol}</text>;
 }
 

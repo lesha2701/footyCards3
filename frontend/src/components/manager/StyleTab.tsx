@@ -31,6 +31,7 @@ const SECTIONS: { kind: ManagerCosmetic["kind"]; field: keyof ManagerLook; title
   { kind: "shape", field: "shape", title: "Форма эмблемы" },
   { kind: "paint", field: "color", title: "Особый цвет — на эмблему, символ и форму" },
   { kind: "symbol", field: "symbol", title: "Символ" },
+  { kind: "finish", field: "finish", title: "Покрытие символа" },
   { kind: "rim", field: "rim", title: "Обводка эмблемы" },
   { kind: "fx", field: "fx", title: "Эффект эмблемы" },
   { kind: "kit", field: "kit", title: "Рисунок формы" },
@@ -126,6 +127,7 @@ export default function StyleTab({ view, club, onView, onError }: {
                     {kind === "shape" && <Emblem look={{ ...club.look, shape: c.value }} size={40} />}
                     {kind === "paint" && <Emblem look={{ ...club.look, color: c.value }} size={40} />}
                     {kind === "symbol" && <Emblem look={{ ...club.look, symbol: c.value }} size={40} />}
+                    {kind === "finish" && <Emblem look={{ ...club.look, finish: c.value }} size={40} />}
                     {kind === "rim" && <Emblem look={{ ...club.look, rim: c.value }} size={40} />}
                     {kind === "fx" && <Emblem look={{ ...club.look, fx: c.value }} size={40} />}
                     {kind === "kit" && <KitShirt look={{ ...club.look, kit: c.value }} size={40} />}

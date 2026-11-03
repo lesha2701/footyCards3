@@ -707,3 +707,16 @@ async def test_paint_goes_on_every_colour_once_bought(client, db_session, bot_to
     r = await client.patch(f"{API}/manager/look", json={"color2": "brand", "kit_color": "brand"}, headers=headers)
     assert r.status_code == 200 and r.json()["club"]["look"]["kit_color"] == "brand"
     assert (await client.patch(f"{API}/manager/look", json={"kit_color2": "lemon"}, headers=headers)).status_code == 409
+
+
+async def test_metal_finish_for_stars_then_on_the_symbol(client, db_session, bot_token):
+    _id, headers = await _player(client, db_session, bot_token, 894303)
+    view = await _club(client, headers)
+    shop = {c["code"]: c for c in view["shop"]["cosmetics"]}
+    assert shop["finish_metal"]["stars"] == 99 and shop["finish_none"]["usable"]
+    assert view["club"]["look"]["finish"] == "none"
+    assert (await client.patch(f"{API}/manager/look", json={"finish": "metal"}, headers=headers)).status_code == 409
+    db_session.add(ManagerCosmetic(club_id=view["club"]["id"], code="finish_metal"))
+    await db_session.commit()
+    r = await client.patch(f"{API}/manager/look", json={"finish": "metal"}, headers=headers)
+    assert r.status_code == 200 and r.json()["club"]["look"]["finish"] == "metal"

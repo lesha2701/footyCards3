@@ -90,8 +90,11 @@ function Pattern({ kind, fill }: { kind: string; fill: string }) {
 const SYMBOLS_VERSION = 2;
 
 /** A picture symbol (lib/emblemSymbols) as a mask, so it takes any colour — a paint
- * gradient too (lib/emblemPaint) — with a soft drop shadow. */
-export function ImageSymbol({ symbol, fill, x, y, size }: { symbol: string; fill: string; x: number; y: number; size: number }) {
+ * gradient too (lib/emblemPaint) — with a soft drop shadow. `metal` («Металл» in
+ * «Стиль»): the colour turns into polished metal of that colour with a running glint. */
+export function ImageSymbol({ symbol, fill, x, y, size, metal = false }: {
+  symbol: string; fill: string; x: number; y: number; size: number; metal?: boolean;
+}) {
   const id = `sym${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   // ?v= busts the week-long /static cache when a symbol's picture is redrawn under the same name.
   const href = staticUrl(`emblems/symbols/${symbol.slice(4)}.webp?v=${SYMBOLS_VERSION}`);
@@ -101,10 +104,32 @@ export function ImageSymbol({ symbol, fill, x, y, size }: { symbol: string; fill
         <image href={href} x={x} y={y} width={size} height={size} />
       </mask>
       <PaintGradient id={`${id}p`} color={fill} x={x} y={y} w={size} h={size} />
+      {metal && (
+        <>
+          <linearGradient id={`${id}m`} gradientUnits="userSpaceOnUse" x1={x} y1={y} x2={x + size} y2={y + size}>
+            <stop offset="0%" stopColor={shade(solidPaint(fill), 0.7)} />
+            <stop offset="35%" stopColor={solidPaint(fill)} />
+            <stop offset="62%" stopColor={shade(solidPaint(fill), -0.55)} />
+            <stop offset="100%" stopColor={shade(solidPaint(fill), 0.5)} />
+          </linearGradient>
+          <linearGradient id={`${id}g`} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#fff" stopOpacity="0" />
+            <stop offset="50%" stopColor="#fff" stopOpacity="0.85" />
+            <stop offset="100%" stopColor="#fff" stopOpacity="0" />
+          </linearGradient>
+        </>
+      )}
       <g transform="translate(0.6 1.2)">
         <rect x={x - 2} y={y - 2} width={size + 4} height={size + 4} fill="rgba(0,0,0,0.35)" mask={`url(#${id})`} />
       </g>
-      <rect x={x - 2} y={y - 2} width={size + 4} height={size + 4} fill={paintFill(fill, `${id}p`)} mask={`url(#${id})`} />
+      <rect x={x - 2} y={y - 2} width={size + 4} height={size + 4} fill={metal ? `url(#${id}m)` : paintFill(fill, `${id}p`)} mask={`url(#${id})`} />
+      {metal && (
+        <g mask={`url(#${id})`}>
+          <g transform={`skewX(-20) translate(${x + size * 0.1} 0)`}>
+            <rect className="emblem-shine-band" x={-size * 0.3} y={y - size} width={size * 0.35} height={size * 3} fill={`url(#${id}g)`} />
+          </g>
+        </g>
+      )}
     </g>
   );
 }
