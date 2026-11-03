@@ -85,18 +85,28 @@ function KitPattern({ kit, b, uid }: { kit: string; b: string; uid: string }) {
 }
 
 /** The shirt sponsor printed across the chest like a real kit: the brand's first word
- * big, the rest small under it, squeezed to the chest width instead of cut off. */
-function SponsorPrint({ brand, fill }: { brand: string; fill: string }) {
+ * big, the rest small under it, squeezed to the chest width instead of cut off. The
+ * letters are edged in the kit's main colour `edge` (and a thin dark rim), so they read
+ * on stripes and checks in their own colour too. */
+function SponsorPrint({ brand, fill, edge }: { brand: string; fill: string; edge: string }) {
   const [main, ...rest] = brand.trim().toUpperCase().split(/\s+/);
   const tail = rest.join(" ");
   const fit = (text: string, fontSize: number, max: number) =>
     text.length * fontSize * 0.62 > max ? { textLength: max, lengthAdjust: "spacingAndGlyphs" as const } : {};
-  const print = { textAnchor: "middle" as const, fontWeight: 900, fill, stroke: "#0b0f14", strokeOpacity: 0.55,
-    strokeLinejoin: "round" as const, paintOrder: "stroke" as const };
+  const line = (text: string, y: number, fontSize: number, spacing: number, max: number, width: number) => {
+    const base = { x: 50, y, fontSize, letterSpacing: spacing, textAnchor: "middle" as const, fontWeight: 900,
+      strokeLinejoin: "round" as const, ...fit(text, fontSize, max) };
+    return (
+      <>
+        <text {...base} fill="none" stroke="#0b0f14" strokeOpacity={0.45} strokeWidth={width + 1.2}>{text}</text>
+        <text {...base} fill={fill} stroke={edge} strokeWidth={width} paintOrder="stroke">{text}</text>
+      </>
+    );
+  };
   return (
     <g>
-      <text x={50} y={tail ? 61 : 63} fontSize={11} strokeWidth={1.4} letterSpacing={0.4} {...fit(main, 11, 46)} {...print}>{main}</text>
-      {tail && <text x={50} y={69} fontSize={5.2} strokeWidth={0.8} letterSpacing={1.2} {...fit(tail, 5.2, 34)} {...print}>{tail}</text>}
+      {line(main, tail ? 61 : 63, 11, 0.4, 46, 2.2)}
+      {tail && line(tail, 69, 5.2, 1.2, 34, 1.3)}
     </g>
   );
 }
@@ -143,7 +153,7 @@ export function KitShirt({ look, size = 40, sponsor, back }: {
         <path d={back ? "M37 7 Q50 11 63 7" : "M37 7 Q50 19 63 7"} fill="none" stroke={b} strokeWidth={4.5} strokeLinecap="round" />
         {!back && <path d="M40 8.5 Q50 15 60 8.5" fill="none" stroke="#000" strokeOpacity={0.35} strokeWidth={1.2} />}
         <path d={shirt} fill="none" stroke="#000" strokeOpacity={0.4} strokeWidth={1.4} strokeLinejoin="round" />
-        {sponsor && !back && <SponsorPrint brand={sponsor} fill={b} />}
+        {sponsor && !back && <SponsorPrint brand={sponsor} fill={b} edge={a} />}
         {back && (
           <>
             <text x={50} y={28} textAnchor="middle" fontSize={8.5} fontWeight={900} fill={b} stroke="#0b0f14" strokeOpacity={0.85}
