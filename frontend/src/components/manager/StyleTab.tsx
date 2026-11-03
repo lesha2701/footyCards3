@@ -16,6 +16,7 @@ import standsArt from "@/assets/manager/stands.webp";
 import LimitedBadge from "@/components/common/LimitedBadge";
 import ShareButton from "@/components/common/ShareButton";
 import { IconCoin } from "@/components/icons";
+import { paintCss } from "@/lib/emblemPaint";
 import { FRAME_COLORS, themeClass } from "@/lib/managerLook";
 import { payMyPlayerWithStars } from "@/lib/myPlayerStars";
 import { hapticNotify } from "@/lib/telegram";
@@ -28,6 +29,7 @@ const POSTER_COLORS: Record<string, [string, string]> = { classic: ["#3ed17e", "
 
 const SECTIONS: { kind: ManagerCosmetic["kind"]; field: keyof ManagerLook; title: string }[] = [
   { kind: "shape", field: "shape", title: "Форма эмблемы" },
+  { kind: "paint", field: "color", title: "Особый цвет — на эмблему, символ и форму" },
   { kind: "symbol", field: "symbol", title: "Символ" },
   { kind: "rim", field: "rim", title: "Обводка эмблемы" },
   { kind: "fx", field: "fx", title: "Эффект эмблемы" },
@@ -88,6 +90,9 @@ export default function StyleTab({ view, club, onView, onError }: {
   const shop = view.shop;
   const owns = (code: string) => club.owned_cosmetics.includes(code);
   const stadiumItem = shop.cosmetics.find((c) => c.kind === "stadium_name");
+  // A bought «Особый цвет» goes on any colour: the emblem, its symbol and the kit.
+  const paints = shop.cosmetics.filter((c) => c.kind === "paint" && c.usable).map((c) => c.value);
+  const colours = [...shop.palette, ...paints];
 
   return (
     <div className="flex flex-col gap-4" data-testid="manager-style">
@@ -119,6 +124,7 @@ export default function StyleTab({ view, club, onView, onError }: {
                     {kind === "stands" && <Stadium look={{ ...club.look, stands: c.value }} height={64} label={c.name} />}
                     {kind === "poster" && <PosterChip value={c.value} />}
                     {kind === "shape" && <Emblem look={{ ...club.look, shape: c.value }} size={40} />}
+                    {kind === "paint" && <Emblem look={{ ...club.look, color: c.value }} size={40} />}
                     {kind === "symbol" && <Emblem look={{ ...club.look, symbol: c.value }} size={40} />}
                     {kind === "rim" && <Emblem look={{ ...club.look, rim: c.value }} size={40} />}
                     {kind === "fx" && <Emblem look={{ ...club.look, fx: c.value }} size={40} />}
@@ -150,11 +156,11 @@ export default function StyleTab({ view, club, onView, onError }: {
             })}
           </div>
           {kind === "shape" && (
-            <Palette label="Цвета эмблемы" palette={shop.palette} a={club.look.color} b={club.look.color2}
+            <Palette label="Цвета эмблемы" palette={colours} a={club.look.color} b={club.look.color2}
               onA={(color) => look.mutate({ color })} onB={(color2) => look.mutate({ color2 })} />
           )}
           {kind === "kit" && (
-            <Palette label="Цвета формы" palette={shop.palette} a={club.look.kit_color} b={club.look.kit_color2}
+            <Palette label="Цвета формы" palette={colours} a={club.look.kit_color} b={club.look.kit_color2}
               onA={(kit_color) => look.mutate({ kit_color })} onB={(kit_color2) => look.mutate({ kit_color2 })} />
           )}
         </section>
@@ -243,7 +249,7 @@ function Palette({ label, palette, a, b, onA, onB }: {
           {palette.map((color) => (
             <button key={color} onClick={() => pick(color)} aria-label={color}
               className={`h-6 w-6 rounded-full ${current === color ? "ring-2 ring-white ring-offset-2 ring-offset-bg-surface" : ""}`}
-              style={{ background: color }} />
+              style={{ background: paintCss(color) }} />
           ))}
         </div>
       ))}

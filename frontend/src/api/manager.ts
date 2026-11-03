@@ -219,7 +219,7 @@ export interface ManagerRules {
 
 export interface ManagerCosmetic {
   code: string;
-  kind: "shape" | "symbol" | "rim" | "fx" | "kit" | "frame" | "theme" | "stadium_name" | "stands" | "poster";
+  kind: "shape" | "symbol" | "rim" | "fx" | "kit" | "frame" | "theme" | "stadium_name" | "stands" | "poster" | "paint";
   name: string;
   value: string;
   coins: number;

@@ -34,7 +34,7 @@ from app.services import event_symbols, manager_perks, wallet_service
 from app.services.game_config_service import get_config
 from app.services.notification_service import notify
 
-KINDS = ("shape", "symbol", "rim", "fx", "kit", "frame", "theme", "stadium_name", "stands", "poster")
+KINDS = ("shape", "symbol", "rim", "fx", "kit", "frame", "theme", "stadium_name", "stands", "poster", "paint")
 PALETTE = (
     "#1f8a4c", "#0f5132", "#c62828", "#8e0000", "#1565c0", "#0d2b6b", "#6a1b9a", "#f9a825",
     "#ef6c00", "#212121", "#f5f5f5", "#00838f", "#ad1457", "#4e342e", "#9e9e9e", "#c6e63a",
@@ -195,7 +195,13 @@ async def set_look(db: AsyncSession, user: User, look: dict) -> dict:
         current[field] = item["value"]
     for field in ("color", "color2", "kit_color", "kit_color2"):
         if field in look:
-            if look[field] not in PALETTE:
+            # Any colour may also be a bought «Особый цвет» (kind "paint"): one purchase
+            # goes on the emblem, its symbol and the kit.
+            paint = by_kind_value.get(("paint", str(look[field])))
+            if paint is not None:
+                if not _usable(paint, have, pro):
+                    raise ConflictError("Этот цвет ещё не куплен")
+            elif look[field] not in PALETTE:
                 raise ConflictError("Такого цвета нет в палитре")
             current[field] = look[field]
     club.look = current

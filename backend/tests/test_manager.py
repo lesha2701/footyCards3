@@ -691,3 +691,19 @@ async def test_event_limited_symbol_sells_only_while_its_event_runs(client, db_s
     assert shop["symbol_img_tower"]["owned"] and shop["symbol_img_tower"]["limited_until"] is None
     assert "symbol_img_compass" not in shop
     assert (await client.post(f"{API}/manager/shop/symbol_img_compass", headers=headers)).status_code == 409
+
+
+async def test_paint_goes_on_every_colour_once_bought(client, db_session, bot_token):
+    _id, headers = await _player(client, db_session, bot_token, 894302)
+    view = await _club(client, headers)
+    assert {c["code"]: c for c in view["shop"]["cosmetics"]}["paint_brand"]["stars"] == 99
+    assert (await client.patch(f"{API}/manager/look", json={"color": "brand"}, headers=headers)).status_code == 409
+
+    db_session.add(ManagerCosmetic(club_id=view["club"]["id"], code="paint_brand"))
+    await db_session.commit()
+    r = await client.patch(f"{API}/manager/look", json={"color": "brand"}, headers=headers)
+    assert r.status_code == 200 and r.json()["club"]["look"]["color"] == "brand"
+    # One purchase goes on every colour: the symbol and the kit too; a paint not bought doesn't.
+    r = await client.patch(f"{API}/manager/look", json={"color2": "brand", "kit_color": "brand"}, headers=headers)
+    assert r.status_code == 200 and r.json()["club"]["look"]["kit_color"] == "brand"
+    assert (await client.patch(f"{API}/manager/look", json={"kit_color2": "lemon"}, headers=headers)).status_code == 409

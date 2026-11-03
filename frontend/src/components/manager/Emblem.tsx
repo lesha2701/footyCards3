@@ -2,6 +2,8 @@ import { useId } from "react";
 
 import type { ManagerLook } from "@/api/manager";
 import { EmblemArt, ImageSymbol } from "@/components/clubs/ClubLogo";
+import PaintGradient from "@/components/common/PaintGradient";
+import { paintFill, solidPaint } from "@/lib/emblemPaint";
 import { isImageSymbol } from "@/lib/emblemSymbols";
 
 const SHAPES: Record<string, string> = {
@@ -23,6 +25,7 @@ export default function Emblem({ look, size = 48, className = "" }: {
   size?: number;
   className?: string;
 }) {
+  const uid = useId().replace(/:/g, "");
   const path = SHAPES[look.shape] ?? SHAPES.shield;
   const rim = look.rim && look.rim !== "none" ? look.rim : null;
   const fx = look.fx && look.fx !== "none" ? look.fx : null;
@@ -34,8 +37,13 @@ export default function Emblem({ look, size = 48, className = "" }: {
         size={size}
         outline={rim}
         effect={fx}
-        glow={look.color2}
-        inside={<path d={path} fill="none" stroke={look.color2} strokeWidth={12} strokeLinejoin="round" />}
+        glow={solidPaint(look.color2)}
+        inside={(
+          <>
+            <defs><PaintGradient id={`band-${uid}`} color={look.color2} /></defs>
+            <path d={path} fill="none" stroke={paintFill(look.color2, `band-${uid}`)} strokeWidth={12} strokeLinejoin="round" />
+          </>
+        )}
         mark={<SymbolGlyph symbol={look.symbol} fill={look.color2} cx={50} cy={52} size={54} />}
       />
     </span>
@@ -84,6 +92,38 @@ function KitPattern({ kit, b, uid }: { kit: string; b: string; uid: string }) {
   }
 }
 
+/** The club name over the back number: one line while it fits between the shoulders,
+ * a long name of several words on two smaller lines (split near the middle), one long
+ * word squeezed to the width — never cut off. */
+function BackName({ name, fill }: { name: string; fill: string }) {
+  const text = name.trim().toUpperCase();
+  const words = text.split(/\s+/);
+  const MAX = 46;
+  const wide = (t: string, fontSize: number) => t.length * fontSize * 0.68;
+  let lines: string[] = [text];
+  if (wide(text, 8.5) > MAX && words.length > 1) {
+    let best = 1;
+    for (let i = 1; i < words.length; i++) {
+      const gap = (k: number) => Math.abs(words.slice(0, k).join(" ").length - words.slice(k).join(" ").length);
+      if (gap(i) < gap(best)) best = i;
+    }
+    lines = [words.slice(0, best).join(" "), words.slice(best).join(" ")];
+  }
+  const fontSize = lines.length > 1 ? 6.6 : 8.5;
+  const ys = lines.length > 1 ? [22, 30] : [28];
+  return (
+    <>
+      {lines.map((line, i) => (
+        <text key={i} x={50} y={ys[i]} textAnchor="middle" fontSize={fontSize} fontWeight={900} fill={fill} stroke="#0b0f14"
+          strokeOpacity={0.85} strokeWidth={1.5} strokeLinejoin="round" paintOrder="stroke" letterSpacing={0.5}
+          {...(wide(line, fontSize) > MAX ? { textLength: MAX, lengthAdjust: "spacingAndGlyphs" as const } : {})}>
+          {line}
+        </text>
+      ))}
+    </>
+  );
+}
+
 /** The shirt sponsor printed across the chest like a real kit: the brand's first word
  * big, the rest small under it, squeezed to the chest width instead of cut off. The
  * letters are edged in the kit's main colour `edge` (and a thin dark rim), so they read
@@ -122,8 +162,8 @@ export function KitShirt({ look, size = 40, sponsor, back }: {
   back?: { name: string; number: number };
 }) {
   const uid = useId().replace(/:/g, "");
-  const a = look.kit_color;
-  const b = look.kit_color2;
+  const a = paintFill(look.kit_color, `kit-a-${uid}`);
+  const b = paintFill(look.kit_color2, `kit-b-${uid}`);
   const shirt = SHIRT.replace("{neck}", back ? "11" : "19");
   const emblem = !back && size >= 40 && look.shape && look.symbol && look.color && look.color2;
   return (
@@ -131,8 +171,10 @@ export function KitShirt({ look, size = 40, sponsor, back }: {
       <svg viewBox="0 0 100 100" width={size} height={size} className="overflow-visible">
         <defs>
           <clipPath id={`kit-clip-${uid}`}><path d={shirt} /></clipPath>
+          <PaintGradient id={`kit-a-${uid}`} color={look.kit_color} />
+          <PaintGradient id={`kit-b-${uid}`} color={look.kit_color2} />
           <linearGradient id={`kit-grad-${uid}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor={a} /><stop offset="1" stopColor={b} />
+            <stop offset="0" stopColor={solidPaint(look.kit_color)} /><stop offset="1" stopColor={solidPaint(look.kit_color2)} />
           </linearGradient>
           <linearGradient id={`kit-light-${uid}`} x1="0" y1="0" x2="1" y2="1">
             <stop offset="0" stopColor="#fff" stopOpacity={0.22} />
@@ -156,10 +198,7 @@ export function KitShirt({ look, size = 40, sponsor, back }: {
         {sponsor && !back && <SponsorPrint brand={sponsor} fill={b} edge={a} />}
         {back && (
           <>
-            <text x={50} y={28} textAnchor="middle" fontSize={8.5} fontWeight={900} fill={b} stroke="#0b0f14" strokeOpacity={0.85}
-              strokeWidth={1.6} strokeLinejoin="round" paintOrder="stroke" letterSpacing={0.6} style={{ textTransform: "uppercase" }}>
-              {back.name.slice(0, 12)}
-            </text>
+            <BackName name={back.name} fill={b} />
             <text x={50} y={70} textAnchor="middle" fontSize={38} fontWeight={900} fill={b} stroke="#0b0f14" strokeOpacity={0.85}
               strokeWidth={3.2} strokeLinejoin="round" paintOrder="stroke">
               {back.number}

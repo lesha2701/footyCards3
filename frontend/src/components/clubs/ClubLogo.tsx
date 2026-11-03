@@ -3,6 +3,8 @@ import { useId, type ReactNode } from "react";
 import { staticUrl } from "@/lib/api";
 import { isImageSymbol } from "@/lib/emblemSymbols";
 import type { ClubEmblem, ClubLogoShape } from "@/types";
+import { paintFill, paintOf, solidPaint } from "@/lib/emblemPaint";
+import PaintGradient from "@/components/common/PaintGradient";
 
 const SHAPE_PATHS: Record<ClubLogoShape, string> = {
   shield: "M50 5 L90 20 V50 C90 75 70 90 50 95 C30 90 10 75 10 50 V20 Z",
@@ -85,20 +87,24 @@ function Pattern({ kind, fill }: { kind: string; fill: string }) {
   }
 }
 
-/** A picture symbol (lib/emblemSymbols) as a mask, so it takes any colour
- * (with a soft drop shadow). */
+const SYMBOLS_VERSION = 2;
+
+/** A picture symbol (lib/emblemSymbols) as a mask, so it takes any colour — a paint
+ * gradient too (lib/emblemPaint) — with a soft drop shadow. */
 export function ImageSymbol({ symbol, fill, x, y, size }: { symbol: string; fill: string; x: number; y: number; size: number }) {
   const id = `sym${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
-  const href = staticUrl(`emblems/symbols/${symbol.slice(4)}.webp`);
+  // ?v= busts the week-long /static cache when a symbol's picture is redrawn under the same name.
+  const href = staticUrl(`emblems/symbols/${symbol.slice(4)}.webp?v=${SYMBOLS_VERSION}`);
   return (
     <g>
       <mask id={id} maskUnits="userSpaceOnUse" x={x - 2} y={y - 2} width={size + 4} height={size + 4}>
         <image href={href} x={x} y={y} width={size} height={size} />
       </mask>
+      <PaintGradient id={`${id}p`} color={fill} x={x} y={y} w={size} h={size} />
       <g transform="translate(0.6 1.2)">
         <rect x={x - 2} y={y - 2} width={size + 4} height={size + 4} fill="rgba(0,0,0,0.35)" mask={`url(#${id})`} />
       </g>
-      <rect x={x - 2} y={y - 2} width={size + 4} height={size + 4} fill={fill} mask={`url(#${id})`} />
+      <rect x={x - 2} y={y - 2} width={size + 4} height={size + 4} fill={paintFill(fill, `${id}p`)} mask={`url(#${id})`} />
     </g>
   );
 }
@@ -312,12 +318,14 @@ function EffectFront({ effect, path }: { effect: string | null | undefined; path
  * to the shape), `mark` (symbol / letters / emoji on top), an outline and an effect.
  * Shared by the clubs (ClubLogo) and «Менеджер» (manager/Emblem). */
 export function EmblemArt({
-  path, color, size, inside, mark, outline, outlineThin, effect, glow,
+  path, color: paint, size, inside, mark, outline, outlineThin, effect, glow,
 }: {
   path: string; color: string; size: number; inside?: ReactNode; mark?: ReactNode;
   outline?: string | null; outlineThin?: boolean; effect?: string | null; glow?: string;
 }) {
   const uid = useId().replace(/:/g, "");
+  const special = paintOf(paint);
+  const color = solidPaint(paint);
   const stops = outline ? OUTLINE_STOPS[outline] : undefined;
   const outlineWidth = outlineThin ? 2.5 : 5;
   return (
@@ -326,10 +334,14 @@ export function EmblemArt({
         <clipPath id={`clip-${uid}`}>
           <path d={path} />
         </clipPath>
-        <linearGradient id={`base-${uid}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={shade(color, 0.22)} />
-          <stop offset="55%" stopColor={color} />
-          <stop offset="100%" stopColor={shade(color, -0.28)} />
+        <linearGradient id={`base-${uid}`} x1="0" y1="0" x2={special?.diagonal ? 1 : 0} y2="1">
+          {special ? special.stops.map((c, i) => <stop key={c} offset={`${[8, 50, 92][i]}%`} stopColor={c} />) : (
+            <>
+              <stop offset="0%" stopColor={shade(color, 0.22)} />
+              <stop offset="55%" stopColor={color} />
+              <stop offset="100%" stopColor={shade(color, -0.28)} />
+            </>
+          )}
         </linearGradient>
         <linearGradient id={`gloss-${uid}`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#fff" stopOpacity="0.38" />
