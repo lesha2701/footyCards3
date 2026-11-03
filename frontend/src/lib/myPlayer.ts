@@ -43,6 +43,7 @@ export const COSMETIC_GROUPS: { kind: MyPlayerCosmeticKind; title: string }[] = 
   { kind: "ball", title: "Мяч (штрафной и пенальти)" },
   { kind: "boots", title: "Бутсы (штрафной и пенальти)" },
   { kind: "gloves", title: "Перчатки вратаря (пенальти)" },
+  { kind: "feint", title: "Финт (атака 1 на 1)" },
   { kind: "walkout", title: "Выход на поле" },
   { kind: "showcase", title: "Шкаф трофеев" },
 ];

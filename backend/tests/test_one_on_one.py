@@ -202,3 +202,43 @@ async def test_someone_elses_session_is_forbidden(client, db_session, bot_token)
         f"/api/v1/games/one-on-one/{session_id}/attack", headers=telegram_headers(870008, bot_token), json=ATTACK,
     )
     assert resp.status_code == 403
+
+
+async def test_start_carries_the_worn_feint(client, db_session, bot_token):
+    from app.models.my_player import MyPlayer
+    from app.services import my_player_service
+
+    user = await _register(client, db_session, 870020, bot_token)
+    card = await _grant_card(db_session, user.id)
+    headers = telegram_headers(870020, bot_token)
+    plain = await client.post("/api/v1/games/one-on-one/start", headers=headers, json={"user_card_id": card.id})
+    assert plain.status_code == 200, plain.text
+    assert plain.json()["feint"] is None
+
+    db_session.add(MyPlayer(
+        user_id=user.id, name="Тест", number=10, position=my_player_service.Position.ST, appearance={},
+        attributes={"atk": 60, "def": 40}, points_spent=0,
+        cosmetics={"owned": ["feint_roulette"], "feint": "feint_roulette"},
+    ))
+    await db_session.commit()
+    worn = await client.post("/api/v1/games/one-on-one/start", headers=headers, json={"user_card_id": card.id})
+    assert worn.status_code == 200, worn.text
+    assert worn.json()["feint"] == "feint_roulette"
+
+
+async def test_the_roulette_is_sold_for_stars_only(client, db_session, bot_token):
+    from app.models.my_player import MyPlayer
+    from app.services import my_player_service
+
+    user = await _register(client, db_session, 870021, bot_token)
+    db_session.add(MyPlayer(
+        user_id=user.id, name="Тест", number=10, position=my_player_service.Position.ST, appearance={},
+        attributes={"atk": 60, "def": 40}, points_spent=0, cosmetics={},
+    ))
+    await db_session.commit()
+    headers = telegram_headers(870021, bot_token)
+    view = (await client.get("/api/v1/my-player", headers=headers)).json()
+    item = next(i for i in view["cosmetics"]["catalog"] if i["code"] == "feint_roulette")
+    assert (item["kind"], item["price"], item["stars_price"] > 0) == ("feint", 0, True)
+    coins = await client.post("/api/v1/my-player/cosmetics/buy", headers=headers, json={"code": "feint_roulette"})
+    assert coins.status_code == 409

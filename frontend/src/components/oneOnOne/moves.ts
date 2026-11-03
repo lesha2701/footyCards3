@@ -17,7 +17,7 @@ export const ONE_ON_ONE_MOVES_URL = "/one-on-one-3d/moves.glb";
 
 const STRIKES = ["shot_r", "shot_l", "power_r", "power_l", "pass_r", "pass_l", "chip_r", "chip_l"] as const;
 const OTHERS = [
-  "strafe_l", "strafe_r", "trip", "cheer_knees", "cheer_arms", "cheer_leap", "gk_set",
+  "strafe_l", "strafe_r", "trip", "cheer_knees", "cheer_arms", "cheer_leap", "gk_set", "roulette_r", "roulette_l",
   "gk_scoop", "gk_catch_high", "gk_catch_low", "gk_block_l", "gk_block_r", "gk_miss", "gk_getup",
 ] as const;
 export type Strike = (typeof STRIKES)[number];

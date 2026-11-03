@@ -16,6 +16,7 @@ import { CELEBRATION_EMOJI, COSMETIC_GROUPS, SHOWCASE_STYLE, WALKOUT_EMOJI } fro
 import { cabinetArt } from "@/lib/trophyArt";
 import { payMyPlayerWithStars } from "@/lib/myPlayerStars";
 import { haptic, hapticNotify } from "@/lib/telegram";
+import { FEINTS } from "@/lib/oneOnOne/feints";
 
 import CardEffect from "./CardEffect";
 import PlayerAvatar from "./PlayerAvatar";
@@ -117,6 +118,11 @@ export default function MyPlayerStyleShop({ view, player, preview, onPreview, on
                       {kind === "celebration" && (
                         <span className="absolute inset-0 flex items-center justify-center bg-black/40 text-5xl">
                           {CELEBRATION_EMOJI[item.code] ?? "🎉"}
+                        </span>
+                      )}
+                      {kind === "feint" && (
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/40 text-5xl">
+                          {FEINTS[item.code]?.emoji ?? "↔"}
                         </span>
                       )}
                       {(kind === "ball" || kind === "boots" || kind === "gloves") && (

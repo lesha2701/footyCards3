@@ -398,6 +398,8 @@ class OneOnOneStartOut(BaseModel):
     ball: Optional[str] = None
     boots: Optional[str] = None
     gloves: Optional[str] = None
+    # How his feint looks (None = the plain sidestep).
+    feint: Optional[str] = None
 
 
 class OneOnOneFeintIn(BaseModel):

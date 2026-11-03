@@ -45,6 +45,7 @@ import {
 import { AIM_POST, driveHeight, type ShotIntent } from "@/lib/oneOnOne/aim";
 import type { EpisodeRecorder } from "@/lib/oneOnOne/recorder";
 
+import { FEINTS } from "@/lib/oneOnOne/feints";
 import { CELEBRATIONS, ONE_ON_ONE_MOVES_URL, addMoves, play, prepareMoves, strikePlan, type Moves, type StrikePlan, type StrikeTiming } from "./moves";
 
 /** What the finger does right now (the page writes it, the scene reads it
@@ -83,6 +84,8 @@ type Props = {
   onReady: () => void;
   fpsRef: MutableRefObject<HTMLSpanElement | null>;
   ball?: string | null;
+  /** How his feint looks (lib/oneOnOne/feints.ts; null = the sidestep). */
+  feint?: string | null;
 };
 
 type Snap = Pick<EpisodeState, "x" | "z" | "hx" | "hz" | "speed" | "lead" | "kx" | "kz" | "kMode" | "feintTicks" | "feintDir" | "lungeDir">;
@@ -115,6 +118,8 @@ type Stage = {
   ripple: { x: number; y: number; at: number } | null;
   /** How long he has been running (s) — the defenders fall behind with it. */
   run: number;
+  /** When (s of `run`) the feint began. */
+  feintAt: number | null;
 };
 
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
@@ -160,13 +165,14 @@ function Episode({
   onDecided,
   onReady,
   ball,
+  feint,
   quality,
   hype,
 }: Omit<Props, "fpsRef"> & { quality: Quality; hype: MutableRefObject<number> }) {
   const stage = useRef<Stage>({
     acc: 0, prev: snap(recorder.state), cur: snap(recorder.state), end: null, t: 0, decided: false, dt: 0,
     tech: null, plan: null, take: null, hands: new THREE.Vector3(), holdFrom: Infinity,
-    ball: new THREE.Vector3(), shake: 0, ripple: null, run: 0,
+    ball: new THREE.Vector3(), shake: 0, ripple: null, run: 0, feintAt: null,
   });
   const [confetti, setConfetti] = useState(0);
   const [flight, setFlight] = useState<ShotFlight | null>(null);
@@ -176,7 +182,7 @@ function Episode({
     const s0 = snap(recorder.state);
     Object.assign(stage.current, {
       acc: 0, prev: s0, cur: s0, end: null, t: 0, decided: false, ripple: null, tech: null, plan: null, take: null, holdFrom: Infinity,
-      run: 0,
+      run: 0, feintAt: null,
     });
     setFlight(null);
   }, [recorder]);
@@ -198,6 +204,7 @@ function Episode({
         recorder.step(inp.hold, inp.steer, inp.feint, inp.shot);
         inp.feint = 0;
         s.cur = snap(recorder.state);
+        if (s.cur.feintTicks > 0 && s.prev.feintTicks === 0) s.feintAt = s.run;
         s.acc -= TICK;
         steps += 1;
       }
@@ -261,7 +268,7 @@ function Episode({
     <>
       <GoalFrame stage={stage} />
       <Suspense fallback={null}>
-        <Players setup={setup} stage={stage} input={input} flight={flight} quality={quality} onReady={onReady} />
+        <Players setup={setup} stage={stage} input={input} feint={feint} flight={flight} quality={quality} onReady={onReady} />
       </Suspense>
       <Ball stage={stage} flight={flight} skin={ball} quality={quality} />
       <CameraRig stage={stage} flight={flight} />
@@ -481,6 +488,7 @@ function Players({
   setup,
   stage,
   input,
+  feint,
   flight,
   quality,
   onReady,
@@ -488,6 +496,7 @@ function Players({
   setup: EpisodeSetup;
   stage: StageRef;
   input: MutableRefObject<LiveInput>;
+  feint?: string | null;
   flight: ShotFlight | null;
   quality: Quality;
   onReady: () => void;
@@ -497,6 +506,7 @@ function Players({
   });
   const asset = useMemo<FootballerAsset>(() => prepareFootballer(gltf, extra), [gltf, extra]);
   const moves = useMemo<Moves>(() => prepareMoves(gltf, movesGltf), [gltf, movesGltf]);
+  const style = feint ? FEINTS[feint] : undefined;
   const materials = useMemo(() => new MaterialCache("standard"), []);
   const attacker = useMemo(() => {
     const p = makePlayer(asset, ATTACKER_LOOK, materials);
@@ -542,6 +552,7 @@ function Players({
     const end = s.end;
 
     // --- Attacker ---
+    const styleMove = style && s.feintAt !== null ? (`${style.clip}_${s.cur.feintDir > 0 ? "r" : "l"}` as const) : null;
     const runYaw = Math.atan2(a.hx, a.hz);
     attacker.root.rotation.set(0, runYaw, 0);
     if (end?.flight && s.plan) {
@@ -589,6 +600,13 @@ function Players({
       attacker.root.position.set(a.x, 0, a.z);
     } else if (end) {
       play(attacker, "idle", false, 0.3);
+      attacker.root.position.set(a.x, 0, a.z);
+    } else if (styleMove && s.run - (s.feintAt ?? 0) < (moves.clips[styleMove]?.duration ?? 0)) {
+      // A style feint (the roulette): the same sidestep in the engine, the
+      // whole move played through it and on into the run.
+      const move = play(attacker, styleMove, true, 0.06);
+      move.time = s.run - (s.feintAt ?? 0);
+      move.paused = true;
       attacker.root.position.set(a.x, 0, a.z);
     } else if (s.cur.feintTicks > 0) {
       // The feint: a quick sidestep with the ball, leaning into it.

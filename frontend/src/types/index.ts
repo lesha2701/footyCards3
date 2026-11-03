@@ -1706,6 +1706,8 @@ export interface OneOnOneStartResult {
   ball?: string | null;
   boots?: string | null;
   gloves?: string | null;
+  /** How his feint looks (a «Мой игрок» style code; null = the sidestep). */
+  feint?: string | null;
 }
 
 export type OneOnOneOutcome = "goal" | "save" | "tackle" | "miss" | "lost";

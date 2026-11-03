@@ -54,7 +54,8 @@ export type MyPlayerCosmeticKind =
   | "boots"
   | "gloves"
   | "walkout"
-  | "showcase";
+  | "showcase"
+  | "feint";
 export type MyPlayerDrill = "shot" | "pass" | "tackle" | "save";
 
 export interface MyPlayerTrophy {
@@ -222,6 +223,7 @@ export interface MyPlayerView {
     gloves?: string | null;
     walkout?: string | null;
     showcase?: string | null;
+    feint?: string | null;
     catalog: MyPlayerCosmeticItem[];
   };
   freshness: {

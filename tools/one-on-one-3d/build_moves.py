@@ -20,12 +20,13 @@ rig's empty take, and `gltf-transform optimize ... --compress meshopt
 public/one-on-one-3d/moves.glb. inspect_pack.py prints what each clip of the
 pack does (foot, contact frame, travel).
 """
+import math
 import os
 import re
 import sys
 
 import bpy
-from mathutils import Matrix
+from mathutils import Matrix, Vector
 
 sys.path.insert(0, '/work')
 from retarget_rokoko import rokoko_action  # noqa: E402
@@ -170,10 +171,114 @@ for clip, (fname, flip) in CLIPS.items():
     track.mute = True
     print('CLIP', clip, tuple(act.frame_range), 'mirrored' if flip else '')
 
+
+
+# --- Composed moves: keyed from poses of the pack's clips -------------------
+# (frame of ours at 30 fps, [(pack clip, its frame, weight), ...], body
+# turned about the vertical (deg, + to his left)).
+ROULETTE = [
+    (1, [('jog forward', 10, 1)], 0),
+    # The right sole on the ball...
+    (5, [('stall soccerball (2)', 16, 1)], -25),
+    # ...rolling it back as he pivots on the left, his back to the defender...
+    (9, [('stall soccerball (2)', 22, 0.5), ('offensive idle', 1, 0.5)], -110),
+    (12, [('offensive idle', 1, 1)], -180),
+    # ...the left sole takes it on round...
+    (16, [('stall soccerball', 16, 1)], -255),
+    (19, [('stall soccerball', 22, 0.5), ('offensive idle', 1, 0.5)], -320),
+    # ...and away.
+    (22, [('jog forward', 10, 1)], -360),
+]
+COMPOSED = {'roulette_r': (ROULETTE, False), 'roulette_l': (ROULETTE, True)}
+
+
+def pose_of(act, frame):
+    """Each bone's local rotation and location at that frame of the action."""
+    arm.animation_data.action = act
+    scene.frame_set(frame)
+    return {pb.name: (pb.rotation_quaternion.copy(), pb.location.copy()) for pb in arm.pose.bones}
+
+
+def mixed(poses):
+    """A weighted mix of poses (slerped one into the next)."""
+    out, total = {}, 0.0
+    for pose, w in poses:
+        total += w
+        for name, (q, loc) in pose.items():
+            if name not in out:
+                out[name] = (q.copy(), loc.copy())
+            else:
+                q0, l0 = out[name]
+                out[name] = (q0.slerp(q, w / total), l0.lerp(loc, w / total))
+    return out
+
+
+def composed(name, keys):
+    sources = {}
+    for _, parts, _ in keys:
+        for clip, _, _ in parts:
+            if clip not in sources:
+                sources[clip] = load(clip)
+                sources[clip].name = '_src_' + clip
+    # The vertical in the rig's own (armature) space.
+    w = arm.matrix_world.to_3x3().normalized()
+    up = (w.inverted() @ Vector((0, 0, 1))).normalized()
+    hips = arm.pose.bones[prefix + 'Hips']
+    # First every key's pose, with no action on the rig (an action would
+    # override the pose on each update)...
+    posed = []
+    for frame, parts, turn in keys:
+        pose = mixed([(pose_of(sources[c], f), wt) for c, f, wt in parts])
+        arm.animation_data.action = None
+        for pb in arm.pose.bones:
+            q, loc = pose[pb.name]
+            pb.rotation_mode = 'QUATERNION'
+            pb.rotation_quaternion = q
+            pb.location = loc
+        bpy.context.view_layer.update()
+        # On the spot (the scene moves him): only the height of the hips.
+        m = hips.matrix.copy()
+        rest = hips.bone.matrix_local.translation
+        m.translation = rest - up * rest.dot(up) + up * m.translation.dot(up)
+        hips.matrix = Matrix.Rotation(math.radians(turn), 4, up) @ m
+        bpy.context.view_layer.update()
+        posed.append((frame, {pb.name: (pb.rotation_quaternion.copy(), pb.location.copy()) for pb in arm.pose.bones}))
+    # ...then the keys.
+    act = bpy.data.actions.new(name)
+    arm.animation_data.action = act
+    last = {}
+    for frame, pose in posed:
+        for pb in arm.pose.bones:
+            if FINGERS.search(pb.name):
+                continue
+            q, loc = pose[pb.name]
+            # Keys interpolate component-wise: stay on one side of the sphere.
+            if pb.name in last and last[pb.name].dot(q) < 0:
+                q.negate()
+            last[pb.name] = q
+            pb.rotation_quaternion = q
+            pb.keyframe_insert('rotation_quaternion', frame=frame, group=pb.name)
+            if pb == hips:
+                pb.location = loc
+                pb.keyframe_insert('location', frame=frame, group=pb.name)
+    arm.animation_data.action = None
+    return act
+
+
+for clip, (keys, flip) in COMPOSED.items():
+    act = composed(clip + '_src' if flip else clip, keys)
+    act = mirrored(act, clip) if flip else act
+    act.use_fake_user = True
+    track = arm.animation_data.nla_tracks.new()
+    track.name = clip
+    track.strips.new(clip, int(act.frame_range[0]), act)
+    track.mute = True
+    print('CLIP', clip, tuple(act.frame_range), 'composed', 'mirrored' if flip else '')
+
 arm.animation_data.action = None
 # A mirrored clip's source (a second copy of a take) would go out too.
 for act in list(bpy.data.actions):
-    if act.name not in CLIPS:
+    if act.name not in CLIPS and act.name not in COMPOSED:
         bpy.data.actions.remove(act)
 bpy.ops.export_scene.gltf(
     filepath=f'{out}/one-on-one-moves.glb', export_format='GLB',

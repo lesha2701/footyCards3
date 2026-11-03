@@ -9,6 +9,7 @@ import ErrorBoundary from "@/components/common/ErrorBoundary";
 import GameHero from "@/components/common/GameHero";
 import { IconCoin } from "@/components/icons";
 import SceneCrash from "@/components/freeKick3d/SceneCrash";
+import FeintPicker from "@/components/oneOnOne/FeintPicker";
 import OneOnOneScene3D, { type LiveInput } from "@/components/oneOnOne/OneOnOneScene3D";
 import { formatGameError } from "@/lib/errors";
 import { useCrashLog } from "@/lib/freeKick3d/crashLog";
@@ -169,6 +170,7 @@ export default function OneOnOnePage() {
       onBack={async () => {
         if (await showConfirm("Серия не закончена — оставшиеся атаки сгорят. Выйти?")) navigate("/play");
       }}
+      onFeint={(feint) => setSeries((s) => (s ? { ...s, feint } : s))}
       onResult={(r) => setResults((prev) => [...prev, r])}
       onNext={(r) => {
         if (r.next_attack) setAttack(r.next_attack);
@@ -216,6 +218,7 @@ function AttackRun({
   attack,
   total,
   onBack,
+  onFeint,
   onResult,
   onNext,
 }: {
@@ -223,6 +226,7 @@ function AttackRun({
   attack: OneOnOneAttack;
   total: number;
   onBack: () => void;
+  onFeint: (code: string | null) => void;
   onResult: (r: OneOnOneResult) => void;
   onNext: (r: OneOnOneResult) => void;
 }) {
@@ -444,6 +448,7 @@ function AttackRun({
           onReady={onReady}
           fpsRef={fpsRef}
           ball={series.ball}
+          feint={series.feint}
         />
       </ErrorBoundary>
 
@@ -547,6 +552,11 @@ function AttackRun({
             </>
           ) : (
             "Загружаем…"
+          )}
+          {ready && (
+            <div className="mt-3 flex justify-center">
+              <FeintPicker value={series.feint ?? null} onChange={onFeint} />
+            </div>
           )}
         </div>
       )}

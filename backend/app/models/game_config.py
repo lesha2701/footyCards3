@@ -557,6 +557,7 @@ class GameConfig(TimestampMixin, Base):
             "ball_gold": 60, "ball_neon": 40, "ball_retro": 40,
             "boots_red": 30, "boots_neon": 40, "boots_gold": 60,
             "gloves_lime": 30, "gloves_pink": 30, "gloves_gold": 60,
+            "feint_roulette": 75,
             "cel_shush": 60, "cel_flex": 60, "cel_knee": 75, "cel_calma": 90, "cel_flip": 120, "cel_siu_gold": 300,
             "walk_smoke": 60, "walk_fireworks": 100, "walk_legend": 250,
             "sc_gold": 75, "sc_crystal": 150, "sc_stadium": 120, "sc_velvet": 150, "sc_neon": 100,

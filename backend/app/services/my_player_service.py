@@ -132,6 +132,9 @@ COSMETICS = {
     "gloves_lime": ("gloves", "Перчатки «Лайм»"),
     "gloves_pink": ("gloves", "Перчатки «Розовые»"),
     "gloves_gold": ("gloves", "Перчатки «Золото»"),
+    # «Атака 1 на 1»: how his feint looks (the same sidestep in the engine;
+    # no item = the plain sidestep). Frontend: OneOnOneScene3D.
+    "feint_roulette": ("feint", "Финт «Рулетка»"),
     "cel_fist": ("celebration", "Празднование «Кулак вверх»"),
     "cel_shush": ("celebration", "Празднование «Тсс!»"),
     "cel_flex": ("celebration", "Празднование «Бицепс»"),
@@ -155,6 +158,7 @@ COSMETICS = {
 }
 COSMETIC_KINDS = (
     "accessory", "background", "effect", "hair", "celebration", "ball", "boots", "gloves", "walkout", "showcase",
+    "feint",
 )
 # Premium hairstyles: wearing one sets appearance["hair"] to this index
 # (PlayerAvatar draws 14+ as these styles); the free choices stay 0..13.
@@ -800,11 +804,12 @@ def _cosmetics_view(
 
 
 async def game_gear(db: AsyncSession, user_id: int) -> dict:
-    """What the player wears in the 3D free kick / penalty: the goal
-    celebration, ball, boots and keeper's gloves (codes, None = default)."""
+    """What the player wears in the 3D free kick / penalty / «Атака 1 на 1»:
+    the goal celebration, ball, boots, keeper's gloves and the look of his
+    feint (codes, None = default)."""
     mp = await get_my_player(db, user_id)
     state = cosmetics_of(mp) if mp else {}
-    return {kind: state.get(kind) for kind in ("celebration", "ball", "boots", "gloves")}
+    return {kind: state.get(kind) for kind in ("celebration", "ball", "boots", "gloves", "feint")}
 
 
 async def public_view(db: AsyncSession, user_id: int) -> dict:
