@@ -309,6 +309,12 @@ function runAt(p: SkinnedPlayer, speed: number, asset: FootballerAsset) {
   clip.timeScale = THREE.MathUtils.clamp(speed / (sprint ? asset.timing.sprintSpeed : asset.timing.runSpeed), STRIDE_MIN, STRIDE_MAX);
 }
 
+/** After the contact he carries his pace on, slowing to a stop over this
+ * (s); once the strike clip is over he runs the rest out down to this
+ * speed (m/s). */
+const FOLLOW_THROUGH_S = 0.9;
+const RUN_OUT_FROM = 0.6;
+
 /** The ball settles into the keeper's hands over this (s). */
 const INTO_HANDS = 0.08;
 const wrapAngle =(a: number) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -406,12 +412,28 @@ function Players({
       const turn = THREE.MathUtils.smoothstep(t + plan.lead, 0, plan.lead * 0.8);
       const yaw = runYaw + wrapAngle(shotYaw - runYaw) * turn;
       attacker.root.rotation.set(-plan.lean * turn, yaw, 0);
-      const kick = play(attacker, plan.clip, true, 0.15);
-      kick.time = THREE.MathUtils.clamp(strike.contact + t * plan.timeScale, 0, kick.getClip().duration);
-      kick.paused = true;
+      // The strike is in the run, not from a standstill: past the ball he
+      // carries on at the pace he hit it, slowing over the follow-through,
+      // and the last of it he runs out.
+      const pace = s.cur.speed;
+      const ft = Math.max(0, t);
+      const carry = ft < FOLLOW_THROUGH_S ? pace * (ft - (ft * ft) / (2 * FOLLOW_THROUGH_S)) : (pace * FOLLOW_THROUGH_S) / 2;
+      const left = pace * Math.max(0, 1 - ft / FOLLOW_THROUGH_S);
+      const clipT = strike.contact + t * plan.timeScale;
+      if (clipT < moves.clips[plan.clip].duration - 0.05) {
+        const kick = play(attacker, plan.clip, true, 0.15);
+        kick.time = THREE.MathUtils.clamp(clipT, 0, kick.getClip().duration);
+        kick.paused = true;
+      } else if (left > RUN_OUT_FROM) runAt(attacker, left, asset);
+      else play(attacker, "idle", false, 0.3);
       const toe = tmp.v.set(strike.toe.x, 0, strike.toe.z).applyAxisAngle(THREE.Object3D.DEFAULT_UP, yaw);
       const step = THREE.MathUtils.smoothstep(t + plan.lead, 0, plan.lead);
-      attacker.root.position.set(lerp(a.x, f.from.x - toe.x, step), 0, lerp(a.z, f.from.z - toe.z, step));
+      const hl = Math.hypot(a.hx, a.hz) || 1;
+      attacker.root.position.set(
+        lerp(a.x, f.from.x - toe.x, step) + (a.hx / hl) * carry,
+        0,
+        lerp(a.z, f.from.z - toe.z, step) + (a.hz / hl) * carry,
+      );
       if (end.outcome === "goal" && t > f.end.t + 0.6) {
         attacker.root.rotation.x = 0;
         play(attacker, "celebrate", true, 0.3).paused = false;

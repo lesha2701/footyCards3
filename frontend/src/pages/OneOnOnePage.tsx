@@ -84,9 +84,9 @@ export default function OneOnOnePage() {
       <div className="flex flex-col gap-5">
         <GameHero game="one-on-one" title="Атака 1 на 1" />
         <p className="text-sm text-ink-mist">
-          Выход один на один с вратарём. Держи палец — игрок бежит с мячом, веди влево-вправо — меняет направление.
-          Быстрый свайп в сторону — финт: поймаешь вратаря на нём — он провалится. Удар — свайп вверх с отпусканием, как
-          в штрафном: быстрее — сильнее, длиннее — выше, дугой — закрутка.
+          Выход один на один с вратарём. Левый палец — джойстик: веди игрока с мячом, до края — спринт. Правый палец:
+          резкий рывок вбок — финт (поймаешь вратаря на нём — он провалится), свайп вверх — удар на ходу, как в
+          штрафном: быстрее — сильнее, длиннее — выше, дугой — закрутка.
         </p>
         {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
         <CardPickerModal
@@ -205,6 +205,7 @@ function AttackRun({
   const pad = useRef(new Finger(window.innerWidth, window.innerHeight, SHOT_AIM));
   const knob = useRef<HTMLDivElement | null>(null);
   const anchor = useRef<HTMLDivElement | null>(null);
+  const homeStick = useRef<HTMLDivElement | null>(null);
   const fpsRef = useRef<HTMLSpanElement | null>(null);
   const crashLog = useCrashLog();
   const [ready, setReady] = useState(false);
@@ -264,8 +265,10 @@ function AttackRun({
       anchor.current.style.opacity = stick.current.down ? "1" : "0";
       anchor.current.style.width = anchor.current.style.height = `${r * 2}px`;
       anchor.current.style.transform = `translate(${st.anchor.x - r}px, ${st.anchor.y - r}px)`;
-      anchor.current.style.borderColor = st.hold === 2 ? "rgba(198,230,58,0.9)" : "rgba(255,255,255,0.3)";
+      anchor.current.style.borderColor = st.hold === 2 ? "rgba(198,230,58,1)" : "rgba(255,255,255,0.85)";
     }
+    // The resting stick steps aside while the thumb holds the live one.
+    if (homeStick.current) homeStick.current.style.opacity = stick.current.down ? "0" : "1";
     if (knob.current) {
       knob.current.style.opacity = stick.current.down ? "1" : "0";
       knob.current.style.transform = `translate(${st.knob.x - 22}px, ${st.knob.y - 22}px)`;
@@ -364,22 +367,32 @@ function AttackRun({
       >
         <div
           ref={anchor}
-          className="pointer-events-none absolute left-0 top-0 rounded-full border-2 border-white/30 bg-black/15 opacity-0"
+          className="pointer-events-none absolute left-0 top-0 rounded-full border-[3px] border-white/85 bg-black/45 opacity-0 shadow-lg"
         />
         <div
           ref={knob}
-          className="pointer-events-none absolute left-0 top-0 h-11 w-11 rounded-full bg-accent-lime/75 opacity-0 shadow"
+          className="pointer-events-none absolute left-0 top-0 h-11 w-11 rounded-full border-2 border-black/50 bg-accent-lime opacity-0 shadow-lg"
         />
-        {!started && ready && (
-          // Where the thumbs go.
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-between px-6 pb-24 text-center text-caption text-ink-chalk/90">
-            <div className="flex h-28 w-28 flex-col items-center justify-center rounded-full border-2 border-dashed border-white/40 bg-black/20">
-              Бег
-              <span className="text-ink-mist">до края — спринт</span>
+        {playing && (
+          // Where the thumbs go: shown the whole attack, dark enough to read
+          // over the pitch; the labels only until the first touch.
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-between px-6 pb-24 text-center text-caption font-semibold text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.9)]">
+            <div
+              ref={homeStick}
+              className="flex h-28 w-28 flex-col items-center justify-center rounded-full border-[3px] border-white/70 bg-black/45 shadow-lg transition-opacity"
+            >
+              {started ? (
+                <div className="h-11 w-11 rounded-full border-2 border-black/50 bg-accent-lime/80" />
+              ) : (
+                <>
+                  Бег
+                  <span className="font-normal text-white/80">до края — спринт</span>
+                </>
+              )}
             </div>
-            <div className="flex h-28 w-28 flex-col items-center justify-center rounded-full border-2 border-dashed border-accent-lime/60 bg-black/20">
+            <div className="flex h-28 w-28 flex-col items-center justify-center rounded-full border-[3px] border-accent-lime/80 bg-black/45 shadow-lg">
               Удар ↑
-              <span className="text-ink-mist">рывок вбок — финт</span>
+              {!started && <span className="font-normal text-white/80">рывок вбок — финт</span>}
             </div>
           </div>
         )}
