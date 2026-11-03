@@ -92,10 +92,17 @@ function KitPattern({ kit, b, uid }: { kit: string; b: string; uid: string }) {
   }
 }
 
+function isDark(hex: string): boolean {
+  const n = parseInt(hex.replace("#", "").slice(0, 6), 16);
+  if (Number.isNaN(n)) return false;
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  return 0.299 * r + 0.587 * g + 0.114 * b < 110;
+}
+
 /** The club name over the back number: one line while it fits between the shoulders,
  * a long name of several words on two smaller lines (split near the middle), one long
  * word squeezed to the width — never cut off. */
-function BackName({ name, fill }: { name: string; fill: string }) {
+function BackName({ name, fill, edge }: { name: string; fill: string; edge: string }) {
   const text = name.trim().toUpperCase();
   const words = text.split(/\s+/);
   const MAX = 46;
@@ -114,8 +121,8 @@ function BackName({ name, fill }: { name: string; fill: string }) {
   return (
     <>
       {lines.map((line, i) => (
-        <text key={i} x={50} y={ys[i]} textAnchor="middle" fontSize={fontSize} fontWeight={900} fill={fill} stroke="#0b0f14"
-          strokeOpacity={0.85} strokeWidth={1.5} strokeLinejoin="round" paintOrder="stroke" letterSpacing={0.5}
+        <text key={i} x={50} y={ys[i]} textAnchor="middle" fontSize={fontSize} fontWeight={900} fill={fill} stroke={edge}
+          strokeOpacity={0.9} strokeWidth={1.8} strokeLinejoin="round" paintOrder="stroke" letterSpacing={0.5}
           {...(wide(line, fontSize) > MAX ? { textLength: MAX, lengthAdjust: "spacingAndGlyphs" as const } : {})}>
           {line}
         </text>
@@ -165,6 +172,9 @@ export function KitShirt({ look, size = 40, sponsor, back }: {
   const a = paintFill(look.kit_color, `kit-a-${uid}`);
   const b = paintFill(look.kit_color2, `kit-b-${uid}`);
   const shirt = SHIRT.replace("{neck}", back ? "11" : "19");
+  // The back print's edge: dark under light letters, light under dark ones, so a black
+  // name still reads on dark stripes.
+  const edge = isDark(solidPaint(look.kit_color2)) ? "#f5f5f5" : "#0b0f14";
   const emblem = !back && size >= 40 && look.shape && look.symbol && look.color && look.color2;
   return (
     <span className="relative inline-flex shrink-0" style={{ width: size, height: size }} aria-hidden="true">
@@ -198,9 +208,9 @@ export function KitShirt({ look, size = 40, sponsor, back }: {
         {sponsor && !back && <SponsorPrint brand={sponsor} fill={b} edge={a} />}
         {back && (
           <>
-            <BackName name={back.name} fill={b} />
-            <text x={50} y={70} textAnchor="middle" fontSize={38} fontWeight={900} fill={b} stroke="#0b0f14" strokeOpacity={0.85}
-              strokeWidth={3.2} strokeLinejoin="round" paintOrder="stroke">
+            <BackName name={back.name} fill={b} edge={edge} />
+            <text x={50} y={70} textAnchor="middle" fontSize={38} fontWeight={900} fill={b} stroke={edge} strokeOpacity={0.9}
+              strokeWidth={3.6} strokeLinejoin="round" paintOrder="stroke">
               {back.number}
             </text>
           </>
