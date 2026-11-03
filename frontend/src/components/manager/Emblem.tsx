@@ -28,7 +28,7 @@ export default function Emblem({ look, size = 48, className = "" }: {
     <span className={`inline-flex shrink-0 ${className}`} aria-hidden="true">
       <EmblemArt
         path={path}
-        color={look.color}
+        color={look.color ?? "#1f8a4c"}
         size={size}
         outline={rim}
         effect={fx}

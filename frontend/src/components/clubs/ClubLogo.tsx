@@ -34,7 +34,7 @@ const SUNBURST = Array.from({ length: 12 }, (_, i) => {
 
 /** `hex` lighter (amount > 0) or darker (< 0), amount in -1…1; non-hex colours pass through. */
 function shade(hex: string, amount: number): string {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  const m = /^#?([0-9a-f]{6})$/i.exec((hex ?? "").trim());
   if (!m) return hex;
   const n = parseInt(m[1], 16);
   const mix = (c: number) => Math.round(amount >= 0 ? c + (255 - c) * amount : c * (1 + amount));
