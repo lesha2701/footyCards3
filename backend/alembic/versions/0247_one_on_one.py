@@ -1,8 +1,8 @@
 """«Атака 1 на 1»: the game type, users' hourly/daily counters and the
 GameConfig settings (attacks per series, daily cap, coins and bonuses).
 
-Revision ID: 0243
-Revises: 0242
+Revision ID: 0247
+Revises: 0246
 Create Date: 2026-11-03
 """
 from typing import Sequence, Union
@@ -10,8 +10,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0243"
-down_revision: Union[str, None] = "0242"
+revision: str = "0247"
+down_revision: Union[str, None] = "0246"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

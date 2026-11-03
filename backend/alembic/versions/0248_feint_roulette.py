@@ -1,7 +1,7 @@
 """«Мой игрок»: the «Рулетка» feint for «Атака 1 на 1», for Stars
 
-Revision ID: 0244
-Revises: 0243
+Revision ID: 0248
+Revises: 0247
 Create Date: 2026-11-03
 
 Adds its Stars price to game_config.my_player_cosmetic_stars_prices,
@@ -11,8 +11,8 @@ from typing import Sequence, Union
 
 from alembic import op
 
-revision: str = "0244"
-down_revision: Union[str, None] = "0243"
+revision: str = "0248"
+down_revision: Union[str, None] = "0247"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
