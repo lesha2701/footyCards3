@@ -2108,7 +2108,8 @@ export interface ClubEmblemState {
   logo_shape: ClubLogoShape;
   logo_color: string;
   emblem: ClubEmblem;
-  items: (ClubEmblemItem & { unlocked: boolean })[];
+  /** `limited_until`: a running event's limited symbol, on sale until then. */
+  items: (ClubEmblemItem & { unlocked: boolean; limited_until?: string | null })[];
   budget: number;
   star_balance: number;
   can_edit: boolean;

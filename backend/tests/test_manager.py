@@ -665,3 +665,29 @@ async def test_window_waits_for_last_weeks_leagues(client, db_session, bot_token
     await db_session.commit()
     resp = await client.post(f"{API}/manager/npc", headers=headers, json={"player_id": keeper.id, "kind": "loan"})
     assert resp.status_code == 200, resp.text
+
+
+async def test_event_limited_symbol_sells_only_while_its_event_runs(client, db_session, bot_token, monkeypatch):
+    from app.services import event_symbols
+
+    monkeypatch.setitem(event_symbols.EVENT_SYMBOLS, "img_tower", "fan_battle")
+    monkeypatch.setitem(event_symbols.EVENT_SYMBOLS, "img_compass", "fan_battle")
+    config = await get_config(db_session)
+    now = datetime.now(timezone.utc)
+    config.fan_battle_enabled = True
+    config.fan_battle_starts_at, config.fan_battle_ends_at = now - timedelta(days=1), now + timedelta(days=3)
+    await db_session.commit()
+    _id, headers = await _player(client, db_session, bot_token, 894301)
+    view = await _club(client, headers)
+    shop = {c["code"]: c for c in view["shop"]["cosmetics"]}
+    assert shop["symbol_img_tower"]["limited_until"] and shop["symbol_img_crown"]["limited_until"] is None
+    assert (await client.post(f"{API}/manager/shop/symbol_img_tower", headers=headers)).status_code == 200
+
+    # The event is over: the bought one stays, the other leaves the shop and can't be bought.
+    config = await get_config(db_session)
+    config.fan_battle_ends_at = now - timedelta(hours=1)
+    await db_session.commit()
+    shop = {c["code"]: c for c in (await client.get(f"{API}/manager", headers=headers)).json()["shop"]["cosmetics"]}
+    assert shop["symbol_img_tower"]["owned"] and shop["symbol_img_tower"]["limited_until"] is None
+    assert "symbol_img_compass" not in shop
+    assert (await client.post(f"{API}/manager/shop/symbol_img_compass", headers=headers)).status_code == 409

@@ -13,6 +13,7 @@ import {
 } from "@/api/manager";
 import analyticsArt from "@/assets/manager/analytics.webp";
 import standsArt from "@/assets/manager/stands.webp";
+import LimitedBadge from "@/components/common/LimitedBadge";
 import ShareButton from "@/components/common/ShareButton";
 import { IconCoin } from "@/components/icons";
 import { FRAME_COLORS, themeClass } from "@/lib/managerLook";
@@ -36,6 +37,17 @@ const SECTIONS: { kind: ManagerCosmetic["kind"]; field: keyof ManagerLook; title
   { kind: "stands", field: "stands", title: "Трибуны стадиона" },
   { kind: "poster", field: "poster", title: "🏆 Постер чемпиона" },
 ];
+
+/** Symbols in price order (free, then coins, then Stars — new ones join their price, not
+ * the end); the other kinds keep the catalog's order. */
+function byPrice(kind: ManagerCosmetic["kind"], items: ManagerCosmetic[]): ManagerCosmetic[] {
+  if (kind !== "symbol") return items;
+  const rank = (c: ManagerCosmetic) => (c.coins === 0 && c.stars === 0 ? [0, 0] : c.coins > 0 ? [1, c.coins] : [2, c.stars]);
+  return [...items].sort((x, y) => {
+    const [a, b] = [rank(x), rank(y)];
+    return a[0] - b[0] || a[1] - b[1];
+  });
+}
 
 /** A poster style chip: the frame and the trophy colour. */
 function PosterChip({ value }: { value: string }) {
@@ -98,7 +110,7 @@ export default function StyleTab({ view, club, onView, onError }: {
             : <h2 className="font-display text-sm font-bold text-ink-chalk">{title}</h2>}
           {kind === "poster" && <ChampionShare titles={club.titles} />}
           <div className={`grid gap-2 ${kind === "stands" ? "grid-cols-2" : "grid-cols-3"}`}>
-            {shop.cosmetics.filter((c) => c.kind === kind).map((c) => {
+            {byPrice(kind, shop.cosmetics.filter((c) => c.kind === kind)).map((c) => {
               const on = club.look[field] === c.value;
               return (
                 <div key={c.code} className={`flex flex-col items-center gap-1 rounded-xl p-2 ${on ? "bg-accent-lime/15 ring-2 ring-accent-lime" : "bg-bg-raised"}`}>
@@ -115,6 +127,7 @@ export default function StyleTab({ view, club, onView, onError }: {
                     {kind === "theme" && <span className={`h-10 w-full rounded-lg bg-gradient-to-br ${themeClass(c.value)} ring-1 ring-white/10`} />}
                   </button>
                   <span className="text-center text-micro text-ink-chalk">{c.name}</span>
+                  {!c.owned && <LimitedBadge until={c.limited_until} />}
                   {!c.usable && (
                     <span className="flex w-full flex-col gap-1">
                       {c.coins > 0 && (

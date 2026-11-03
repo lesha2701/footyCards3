@@ -27,6 +27,7 @@ from app.schemas.club_emblem import (
     ClubEmblemStateOut,
     ClubEmblemUpdateIn,
 )
+from app.services import event_symbols
 from app.services.club_budget_service import debit_club_budget
 from app.services.game_config_service import get_config
 
@@ -155,6 +156,11 @@ async def ensure_catalog(db: AsyncSession) -> None:
             pass  # a concurrent request inserted it first
 
 
+def _selling(item: ClubEmblemItem, config) -> bool:
+    """Switched on by the admin, and a limited symbol only while its event runs."""
+    return item.is_active and event_symbols.on_sale(item.style_key, config)
+
+
 async def _catalog(db: AsyncSession) -> list[ClubEmblemItem]:
     await ensure_catalog(db)
     return list((await db.execute(
@@ -197,10 +203,12 @@ async def get_state(db: AsyncSession, user: User) -> ClubEmblemStateOut:
         enabled=config.club_emblems_enabled, club_id=club.id, logo_shape=club.logo_shape, logo_color=club.logo_color,
         emblem=emblem_out(club),
         items=[
-            ClubEmblemCatalogItemOut(**ClubEmblemItemOut.model_validate(i).model_dump(), unlocked=i.id in unlocked)
+            ClubEmblemCatalogItemOut(**ClubEmblemItemOut.model_validate(i).model_dump(), unlocked=i.id in unlocked,
+                                     limited_until=event_symbols.limited_until(i.style_key, config))
             for i in items
-            # Switched-off items only stay visible to a club that already owns them.
-            if i.is_active or i.id in unlocked
+            # Items off sale (switched off, an event's limited symbol after it) stay visible
+            # only to a club that already owns them.
+            if _selling(i, config) or i.id in unlocked
         ],
         budget=club.budget, star_balance=club.star_balance, can_edit=_can_edit(membership),
         can_spend_budget=_can_spend_budget(membership, club),
@@ -227,7 +235,7 @@ async def buy_with_budget(db: AsyncSession, user: User, item_id: int) -> ClubEmb
     item = await db.get(ClubEmblemItem, item_id)
     if item is None:
         raise NotFoundError("Элемент не найден")
-    if not item.is_active:
+    if not _selling(item, config):
         raise ConflictError("Этот элемент не продаётся")
     if item.coins_price <= 0:
         raise ConflictError("Этот элемент продаётся только за звёзды")
@@ -298,7 +306,7 @@ async def buy_with_club_stars(db: AsyncSession, user: User, item_id: int) -> Clu
     item = await db.get(ClubEmblemItem, item_id)
     if item is None:
         raise NotFoundError("Элемент не найден")
-    if not item.is_active or item.stars_price <= 0:
+    if not _selling(item, config) or item.stars_price <= 0:
         raise ConflictError("Этот элемент не продаётся за звёзды")
     club = await _lock_club(db, membership.club_id)
     require_budget_spender(membership, club)
@@ -326,7 +334,7 @@ async def stars_order(db: AsyncSession, user: User, item_id: int) -> tuple[str, 
     item = await db.get(ClubEmblemItem, item_id)
     if item is None:
         raise NotFoundError("Элемент не найден")
-    if not item.is_active or item.stars_price <= 0:
+    if not _selling(item, config) or item.stars_price <= 0:
         raise ConflictError("Этот элемент не продаётся за звёзды")
     if item.id in await unlocked_item_ids(db, club.id):
         raise ConflictError("Уже открыто")
@@ -345,7 +353,8 @@ async def validate_stars(db: AsyncSession, user_id: int, arg: str, stars_amount:
     club_id, item_id = _parse(arg)
     config = await get_config(db)
     item = await db.get(ClubEmblemItem, item_id)
-    if not config.club_emblems_enabled or item is None or not item.is_active or item.stars_price != stars_amount:
+    if (not config.club_emblems_enabled or item is None or not _selling(item, config)
+            or item.stars_price != stars_amount):
         return False, "Этот элемент больше не продаётся"
     club = await db.get(Club, club_id)
     if club is None or club.is_disbanded:

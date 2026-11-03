@@ -36,6 +36,8 @@ class ClubEmblemItemOut(BaseModel):
 
 class ClubEmblemCatalogItemOut(ClubEmblemItemOut):
     unlocked: bool
+    # A limited symbol of a running event: on sale until then («Лимитка»).
+    limited_until: Optional[datetime] = None
 
 
 class ClubEmblemStateOut(BaseModel):

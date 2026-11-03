@@ -337,3 +337,31 @@ async def test_patron_tops_up_club_stars_and_spenders_buy_stars_layers(client, d
     # Coin-priced items are never sold for club stars.
     checker = await _item(db_session, "pattern", "checker")
     assert (await client.post(f"/api/v1/clubs/me/emblem/items/{checker.id}/buy-club-stars", headers=cap_h)).status_code == 409
+
+
+async def test_event_limited_symbol_leaves_the_builder_after_its_event(client, db_session, bot_token, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    from app.services import event_symbols
+
+    monkeypatch.setitem(event_symbols.EVENT_SYMBOLS, "img_tower", "fan_battle")
+    monkeypatch.setitem(event_symbols.EVENT_SYMBOLS, "img_compass", "fan_battle")
+    config = await get_config(db_session)
+    now = datetime.now(timezone.utc)
+    config.fan_battle_enabled = True
+    config.fan_battle_starts_at, config.fan_battle_ends_at = now - timedelta(days=1), now + timedelta(days=3)
+    await db_session.commit()
+    club_id, cap_h, *_ = await _club_with_member(client, db_session, bot_token, 860500)
+    body = (await client.get("/api/v1/clubs/me/emblem", headers=cap_h)).json()
+    tower = next(i for i in body["items"] if i["style_key"] == "img_tower")
+    assert tower["limited_until"] is not None
+    await _set_budget(db_session, club_id, 10_000)
+    assert (await client.post(f"/api/v1/clubs/me/emblem/items/{tower['id']}/buy", headers=cap_h)).status_code == 200
+
+    config = await get_config(db_session)
+    config.fan_battle_ends_at = now - timedelta(hours=1)
+    await db_session.commit()
+    items = {i["style_key"]: i for i in (await client.get("/api/v1/clubs/me/emblem", headers=cap_h)).json()["items"]}
+    assert items["img_tower"]["unlocked"] and "img_compass" not in items
+    compass = await _item(db_session, "symbol", "img_compass")
+    assert (await client.post(f"/api/v1/clubs/me/emblem/items/{compass.id}/buy", headers=cap_h)).status_code == 409

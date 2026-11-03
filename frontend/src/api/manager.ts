@@ -226,6 +226,8 @@ export interface ManagerCosmetic {
   stars: number;
   owned: boolean;
   usable: boolean;
+  /** A running event's limited symbol: on sale until then («Лимитка»). */
+  limited_until?: string | null;
 }
 
 export interface ManagerMerchItem {

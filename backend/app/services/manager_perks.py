@@ -105,7 +105,7 @@ async def gift_check(db: AsyncSession, giver_id: int, club_id: int, item: Option
         raise NotFoundError("Клуб не найден")
     if club.owner_id == giver_id:
         raise ConflictError("Себе подарок не дарят — купи в «Стиле»")
-    if item is None or item["stars"] <= 0:
+    if item is None or item["stars"] <= 0 or not item["on_sale"]:
         raise ConflictError("Этот предмет не дарится")
     if item["code"] in await manager_shop.owned(db, club.id):
         raise ConflictError("У этого клуба он уже есть")
@@ -136,7 +136,7 @@ async def giftable(db: AsyncSession, user: User, club_id: int) -> dict:
     if club is None:
         raise NotFoundError("Клуб не найден")
     have = await manager_shop.owned(db, club.id)
-    items = [i for i in manager_shop.catalog(config) if i["stars"] > 0 and i["code"] not in have and i["kind"] != "stadium_name"]
+    items = [i for i in manager_shop.catalog(config) if i["stars"] > 0 and i["on_sale"] and i["code"] not in have and i["kind"] != "stadium_name"]
     return {"club_id": club.id, "club_name": club.name, "look": manager_shop.resolve_look(club),
             "items": sorted(items, key=lambda i: (i["stars"], i["kind"]))}
 
