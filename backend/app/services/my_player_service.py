@@ -206,6 +206,7 @@ TROPHY_CODES = (
     "player_career_champion", "player_career_top_scorer", "player_career_mvp",
     "player_career_cl_winner", "player_career_national_winner", "player_career_golden_ball",
     "player_career_golden_boot", "player_career_top_assist", "player_career_golden_glove", "player_career_best_defender",
+    "player_career_friends_champion",
 )
 
 NAME_RE = re.compile(r"^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё .'\-]{1,19}$")

@@ -25,9 +25,30 @@ export function TrophyImage({ code, icon, imagePath, className = "h-16 w-16" }: 
   return <span className={`${className} flex items-center justify-center text-5xl drop-shadow-[0_6px_10px_rgba(0,0,0,0.55)]`}>{icon}</span>;
 }
 
+/** One kind of cup: the newest grant stands for all of them, the rest only
+ * add to the counter. */
+interface TrophyGroup { trophy: MyPlayerTrophy; all: MyPlayerTrophy[] }
+
+/** Folds repeat cups (three league titles) into one with a «×N» counter, in
+ * the order each kind was first won (newest first). */
+function groupTrophies(trophies: MyPlayerTrophy[]): TrophyGroup[] {
+  const groups = new Map<string, TrophyGroup>();
+  for (const t of trophies) {
+    const g = groups.get(t.code);
+    if (g) g.all.push(t);
+    else groups.set(t.code, { trophy: t, all: [t] });
+  }
+  return [...groups.values()];
+}
+
+function tooltip({ trophy, all }: TrophyGroup): string {
+  const lines = all.map((t) => [t.message, season(t.granted_at)].filter(Boolean).join(" · "));
+  return [all.length > 1 ? `${trophy.name} ×${all.length}` : trophy.name, ...lines].join("\n");
+}
+
 /** One cabinet: its art (or gradient with drawn shelves) and up to nine
- * cups standing on the three shelves. */
-function Cabinet({ code, trophies }: { code: string; trophies: MyPlayerTrophy[] }) {
+ * kinds of cups standing on the three shelves. */
+function Cabinet({ code, groups }: { code: string; groups: TrophyGroup[] }) {
   const style = SHOWCASE_STYLE[code] ?? SHOWCASE_STYLE.wood;
   const art = cabinetArt(code);
   return (
@@ -43,15 +64,21 @@ function Cabinet({ code, trophies }: { code: string; trophies: MyPlayerTrophy[] 
               style={{ top: `${top}%` }} />
           )}
           <div className="absolute inset-x-[11%] grid grid-cols-3 items-end gap-1" style={{ bottom: `${100 - top - 0.8}%` }}>
-            {trophies.slice(shelf * PER_SHELF, shelf * PER_SHELF + PER_SHELF).map((t) => (
-              <div key={t.id} className="relative flex flex-col items-center" title={[t.name, t.message, season(t.granted_at)].filter(Boolean).join(" · ")}>
-                <TrophyImage code={t.code} icon={t.icon} imagePath={t.image_path} className="h-[4.6rem] w-[4.6rem]" />
+            {groups.slice(shelf * PER_SHELF, shelf * PER_SHELF + PER_SHELF).map((g) => (
+              <div key={g.trophy.code} className="relative flex flex-col items-center" title={tooltip(g)}>
+                <TrophyImage code={g.trophy.code} icon={g.trophy.icon} imagePath={g.trophy.image_path} className="h-[4.6rem] w-[4.6rem]" />
+                {g.all.length > 1 && (
+                  <span className="absolute right-0 top-0 rounded-full bg-amber-400 px-1.5 text-[11px] font-black leading-5 text-black shadow ring-1 ring-black/40"
+                    data-testid="trophy-count">
+                    ×{g.all.length}
+                  </span>
+                )}
               </div>
             ))}
           </div>
           <div className="absolute inset-x-[11%] grid grid-cols-3 gap-1" style={{ top: `${top + 2.6}%` }}>
-            {trophies.slice(shelf * PER_SHELF, shelf * PER_SHELF + PER_SHELF).map((t) => (
-              <p key={t.id} className="mx-auto line-clamp-2 max-w-full rounded bg-black/60 px-1 text-center text-[9px] font-bold leading-tight text-amber-300">
+            {groups.slice(shelf * PER_SHELF, shelf * PER_SHELF + PER_SHELF).map(({ trophy: t }) => (
+              <p key={t.code} className="mx-auto line-clamp-2 max-w-full rounded bg-black/60 px-1 text-center text-[9px] font-bold leading-tight text-amber-300">
                 {t.name}
               </p>
             ))}
@@ -71,8 +98,9 @@ export default function TrophyShowcase({ trophies, emptyHint, cabinet }: {
   const code = cabinet?.showcase ?? "wood";
   const style = SHOWCASE_STYLE[code] ?? SHOWCASE_STYLE.wood;
   const totals = cabinet ? TOTALS.filter(([k]) => (cabinet.totals[k] ?? 0) > 0) : [];
-  const cabinets: MyPlayerTrophy[][] = [];
-  for (let i = 0; i < Math.max(trophies.length, 1); i += PER_CABINET) cabinets.push(trophies.slice(i, i + PER_CABINET));
+  const groups = groupTrophies(trophies);
+  const cabinets: TrophyGroup[][] = [];
+  for (let i = 0; i < Math.max(groups.length, 1); i += PER_CABINET) cabinets.push(groups.slice(i, i + PER_CABINET));
   return (
     <section className="rounded-2xl bg-bg-surface p-4" data-testid="trophy-showcase">
       <div className="flex items-center justify-between gap-2">
@@ -90,7 +118,7 @@ export default function TrophyShowcase({ trophies, emptyHint, cabinet }: {
       )}
       {trophies.length === 0 && emptyHint && <p className="mt-2 text-caption text-ink-mist">{emptyHint}</p>}
       <div className="mt-3 flex flex-col gap-3">
-        {cabinets.map((chunk, i) => <Cabinet key={i} code={code} trophies={chunk} />)}
+        {cabinets.map((chunk, i) => <Cabinet key={i} code={code} groups={chunk} />)}
       </div>
       <p className="mt-2 text-micro text-ink-mist-dim">{style.label}</p>
     </section>

@@ -84,6 +84,13 @@ describe("«Мой игрок» extras", () => {
     expect(screen.getByText("Золотая витрина")).toBeInTheDocument();
   });
 
+  it("stacks repeat cups into one with a counter", () => {
+    const cup = (id: number, code: string) => ({ id, code, name: code, icon: "🏆", image_path: null, message: null, granted_at: "2026-10-01T10:00:00Z" });
+    render(<TrophyShowcase trophies={[cup(1, "player_career_champion"), cup(2, "player_career_mvp"), cup(3, "player_career_champion"), cup(4, "player_career_champion")]} />);
+    expect(screen.getAllByText("player_career_champion")).toHaveLength(1);
+    expect(screen.getByTestId("trophy-count")).toHaveTextContent("×3");
+  });
+
   it("lists the hall of fame by the chosen metric", async () => {
     fetchMyPlayerHallOfFame.mockResolvedValue({
       metric: "goals", entries: [{ place: 1, user_id: 5, user_name: "Коля", value: 42, player }], me: { place: 7, value: 12 },
