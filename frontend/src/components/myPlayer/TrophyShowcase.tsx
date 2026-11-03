@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { MyPlayerCabinet, MyPlayerTrophy } from "@/api/myPlayer";
 import { staticUrl } from "@/lib/api";
 import { SHOWCASE_STYLE } from "@/lib/myPlayer";
@@ -18,9 +19,14 @@ const PER_CABINET = PER_SHELF * SHELF_TOPS.length;
 export function TrophyImage({ code, icon, imagePath, className = "h-16 w-16" }: {
   code: string; icon: string; imagePath?: string | null; className?: string;
 }) {
-  const src = (imagePath && staticUrl(imagePath)) || trophyArt(code);
+  // An uploaded image that fails to load falls back to the built-in art, then
+  // to the emoji — a broken file never leaves an empty spot on the shelf.
+  const sources = [imagePath && staticUrl(imagePath), trophyArt(code)].filter((s): s is string => !!s);
+  const [failed, setFailed] = useState(0);
+  const src = sources[failed];
   if (src) {
-    return <img src={src} alt="" className={`${className} object-contain drop-shadow-[0_6px_10px_rgba(0,0,0,0.55)]`} loading="lazy" decoding="async" />;
+    return <img key={src} src={src} alt="" className={`${className} object-contain drop-shadow-[0_6px_10px_rgba(0,0,0,0.55)]`}
+      decoding="async" onError={() => setFailed((n) => n + 1)} />;
   }
   return <span className={`${className} flex items-center justify-center text-5xl drop-shadow-[0_6px_10px_rgba(0,0,0,0.55)]`}>{icon}</span>;
 }
