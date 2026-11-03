@@ -82,6 +82,7 @@ export default function StyleTab({ view, club, onView, onError }: {
       <section className={`flex items-center gap-4 rounded-2xl bg-gradient-to-br ${themeClass(club.look.theme)} p-4`}>
         <Emblem look={club.look} size={72} />
         <KitShirt look={club.look} size={56} sponsor={club.kit_sponsor} />
+        <KitShirt look={club.look} size={56} back={{ name: club.name, number: 10 }} />
         <span className="min-w-0 flex-1">
           <span className="block truncate font-display text-lg font-bold text-ink-chalk">
             {club.name}
