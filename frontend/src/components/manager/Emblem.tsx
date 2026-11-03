@@ -1,5 +1,6 @@
 import type { ManagerLook } from "@/api/manager";
-import { EmblemArt } from "@/components/clubs/ClubLogo";
+import { EmblemArt, ImageSymbol } from "@/components/clubs/ClubLogo";
+import { isImageSymbol } from "@/lib/emblemSymbols";
 import { kitBackground } from "@/lib/managerLook";
 
 const SHAPES: Record<string, string> = {
@@ -34,10 +35,17 @@ export default function Emblem({ look, size = 48, className = "" }: {
         effect={fx}
         glow={look.color2}
         inside={<path d={path} fill="none" stroke={look.color2} strokeWidth={12} strokeLinejoin="round" />}
-        mark={<text x="50" y="56" textAnchor="middle" dominantBaseline="middle" fontSize="40">{look.symbol}</text>}
+        mark={<SymbolGlyph symbol={look.symbol} fill={look.color2} cx={50} cy={52} size={54} />}
       />
     </span>
   );
+}
+
+/** The emblem symbol in SVG space: a picture symbol tinted with `fill`
+ * («img_<key>», see ClubLogo.ImageSymbol), or an emoji (the older symbols). */
+export function SymbolGlyph({ symbol, fill, cx, cy, size }: { symbol: string; fill: string; cx: number; cy: number; size: number }) {
+  if (isImageSymbol(symbol)) return <ImageSymbol symbol={symbol} fill={fill} x={cx - size / 2} y={cy - size / 2} size={size} />;
+  return <text x={cx} y={cy + size * 0.06} textAnchor="middle" dominantBaseline="middle" fontSize={size * 0.83}>{symbol}</text>;
 }
 
 /** A small shirt in the club kit. */

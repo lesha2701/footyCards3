@@ -106,7 +106,7 @@ export default function StyleTab({ view, club, onView, onError }: {
                     {kind === "stands" && <Stadium look={{ ...club.look, stands: c.value }} height={64} label={c.name} />}
                     {kind === "poster" && <PosterChip value={c.value} />}
                     {kind === "shape" && <Emblem look={{ ...club.look, shape: c.value }} size={40} />}
-                    {kind === "symbol" && <span className="text-3xl">{c.value}</span>}
+                    {kind === "symbol" && <Emblem look={{ ...club.look, symbol: c.value }} size={40} />}
                     {kind === "rim" && <Emblem look={{ ...club.look, rim: c.value }} size={40} />}
                     {kind === "fx" && <Emblem look={{ ...club.look, fx: c.value }} size={40} />}
                     {kind === "kit" && <KitShirt look={{ ...club.look, kit: c.value }} size={40} />}

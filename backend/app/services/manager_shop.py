@@ -40,7 +40,7 @@ PALETTE = (
     "#ef6c00", "#212121", "#f5f5f5", "#00838f", "#ad1457", "#4e342e", "#9e9e9e", "#c6e63a",
 )
 DEFAULT_LOOK = {
-    "shape": "shield", "symbol": "⚽", "color": "#1f8a4c", "color2": "#f5f5f5",
+    "shape": "shield", "symbol": "img_ball", "color": "#1f8a4c", "color2": "#f5f5f5",
     "kit": "plain", "kit_color": "#1f8a4c", "kit_color2": "#f5f5f5", "frame": "classic", "theme": "night", "rim": "none", "fx": "none",
     "stands": "classic", "poster": "classic",
 }
