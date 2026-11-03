@@ -9,6 +9,7 @@ import ErrorBoundary from "@/components/common/ErrorBoundary";
 import GameHero from "@/components/common/GameHero";
 import { IconCoin } from "@/components/icons";
 import SceneCrash from "@/components/freeKick3d/SceneCrash";
+import { OutcomeCaption, ScoreBug } from "@/components/oneOnOne/Broadcast";
 import FeintPicker from "@/components/oneOnOne/FeintPicker";
 import OneOnOneScene3D, { type LiveInput } from "@/components/oneOnOne/OneOnOneScene3D";
 import { formatGameError } from "@/lib/errors";
@@ -167,6 +168,7 @@ export default function OneOnOnePage() {
       series={series}
       attack={attack}
       total={total}
+      results={results.map((r) => r.outcome)}
       onBack={async () => {
         if (await showConfirm("Серия не закончена — оставшиеся атаки сгорят. Выйти?")) navigate("/play");
       }}
@@ -217,6 +219,7 @@ function AttackRun({
   series,
   attack,
   total,
+  results,
   onBack,
   onFeint,
   onResult,
@@ -225,6 +228,7 @@ function AttackRun({
   series: Series;
   attack: OneOnOneAttack;
   total: number;
+  results: OneOnOneOutcome[];
   onBack: () => void;
   onFeint: (code: string | null) => void;
   onResult: (r: OneOnOneResult) => void;
@@ -518,26 +522,20 @@ function AttackRun({
         >
           ← Выйти
         </button>
-        <div className="text-right">
-          <div className="font-display text-sm">
-            Атака {attack.attack_index + 1} / {series.total_attacks}
-          </div>
-          <div className="flex items-center justify-end gap-1 text-caption text-ink-mist">
-            {series.card.player.display_name} · {series.rating} ·
-            <span className="inline-flex items-center gap-0.5 font-mono text-accent-lime">
-              {total}
-              <IconCoin size={11} />
-            </span>
-          </div>
-          {started && !ended && (
-            <div
-              className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-caption font-semibold ${
-                feintUsed ? "bg-white/10 text-ink-mist" : "bg-accent-lime/20 text-accent-lime"
-              }`}
-            >
-              {feintUsed ? "Финт сделан" : "Финт готов"}
-            </div>
-          )}
+        <div>
+          <ScoreBug
+            index={attack.attack_index}
+            total={series.total_attacks}
+            results={results}
+            coins={total}
+            name={series.card.player.display_name}
+            rating={series.rating}
+            extra={
+              started && !ended ? (
+                <span className={feintUsed ? "text-white/40" : "text-accent-lime"}>· {feintUsed ? "финт сделан" : "финт готов"}</span>
+              ) : null
+            }
+          />
           <span ref={fpsRef} className="hidden" />
         </div>
       </div>
@@ -576,9 +574,10 @@ function AttackRun({
         </div>
       )}
 
+      <OutcomeCaption outcome={local} />
+
       {outcome && verdict && (
         <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 bg-gradient-to-t from-bg-base/90 to-transparent p-6 pb-10 pt-16">
-          <div className={`font-display text-4xl drop-shadow ${OUTCOME[outcome].className}`}>{OUTCOME[outcome].label}</div>
           {technique && (
             <div className="text-sm text-ink-chalk">
               {FOOT_LABEL[technique.foot]} {KIND_LABEL[technique.kind]}
