@@ -36,6 +36,8 @@ export type StrikeTiming = {
   plantAt: { x: number; z: number };
 };
 
+/** The striking toe meets the ball below this (m; the ball is 0.22 high). */
+const CONTACT_HEIGHT = 0.2;
 /** The plant foot has come down when within this of its lowest (m). */
 const PLANT_DOWN = 0.02;
 /** The plant is looked for this long before the contact (s). */
@@ -54,7 +56,12 @@ const SAMPLE = 1 / 60;
 function sample(gltf: GLTF, clip: THREE.AnimationClip, read: (bones: Record<string, THREE.Bone>, t: number) => void) {
   const model = cloneSkinned(gltf.scene);
   const mixer = new THREE.AnimationMixer(model);
-  mixer.clipAction(clip).play();
+  // Once, held at the end: looped, its last sample would jump back to the
+  // first (the fastest "move" of all).
+  const action = mixer.clipAction(clip);
+  action.setLoop(THREE.LoopOnce, 1);
+  action.clampWhenFinished = true;
+  action.play();
   const bones = bonesOf(model);
   for (let t = 0; t <= clip.duration + 1e-6; t += SAMPLE) {
     mixer.setTime(t);
@@ -64,7 +71,8 @@ function sample(gltf: GLTF, clip: THREE.AnimationClip, read: (bones: Record<stri
   mixer.stopAllAction();
 }
 
-/** The contact is when the striking toe moves fastest; the plant, the
+/** The contact is when the striking toe moves fastest low over the grass
+ * (through the ball, not up in the follow-through); the plant, the
  * other foot coming down to its lowest before it (the toe: the heel lifts
  * as he goes over it). */
 function strikeTiming(gltf: GLTF, clip: THREE.AnimationClip, foot: Foot): StrikeTiming {
@@ -81,7 +89,7 @@ function strikeTiming(gltf: GLTF, clip: THREE.AnimationClip, foot: Foot): Strike
     const b = bones[name];
     if (!b) return;
     b.getWorldPosition(p);
-    if (t > 0) {
+    if (t > 0 && p.y < CONTACT_HEIGHT) {
       const speed = p.distanceTo(prev);
       if (speed > best) {
         best = speed;
