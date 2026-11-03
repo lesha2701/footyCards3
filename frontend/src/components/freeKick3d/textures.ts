@@ -25,7 +25,7 @@ function srgb(tex: THREE.Texture) {
 /** Transparent layer over the grass photo: mowing stripes (both ways, a
  * light check) and the darker advert track behind the line. The markings
  * are geometry (Stadium.tsx `PitchLines`): a texture this size blurs them. */
-export function pitchOverlayTexture() {
+export function pitchOverlayTexture(stripes = 0.08) {
   const [c, ctx] = canvas(PITCH_WIDTH * PX_PER_M, PITCH_DEPTH * PX_PER_M);
   // World z → canvas px: the plane is rotated −90° about x, so with the
   // default flipY the canvas's top row lands on the far (−z) edge.
@@ -33,11 +33,11 @@ export function pitchOverlayTexture() {
 
   const stripe = 5.5 * PX_PER_M;
   for (let i = 0; i * stripe < c.height; i += 2) {
-    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.fillStyle = `rgba(255,255,255,${stripes})`;
     ctx.fillRect(0, i * stripe, c.width, stripe);
   }
   for (let i = 0; i * stripe < c.width; i += 2) {
-    ctx.fillStyle = "rgba(0,0,0,0.05)";
+    ctx.fillStyle = `rgba(0,0,0,${stripes * 0.6})`;
     ctx.fillRect(i * stripe, 0, stripe, c.height);
   }
 
@@ -140,6 +140,22 @@ export function skyTexture() {
   g.addColorStop(0.5, "#1d3557");
   g.addColorStop(0.53, "#2a3f5f");
   g.addColorStop(1, "#05080f");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 4, 256);
+  return srgb(new THREE.CanvasTexture(c));
+}
+
+/** Day match: a clear blue overhead, paling to a warm haze at the horizon,
+ * the ground below it a soft grey-green (seen only past the stands). */
+export function daySkyTexture() {
+  const [c, ctx] = canvas(4, 256);
+  const g = ctx.createLinearGradient(0, 0, 0, 256);
+  g.addColorStop(0, "#3d7fd1");
+  g.addColorStop(0.3, "#7fb3ea");
+  g.addColorStop(0.47, "#cfe2f3");
+  g.addColorStop(0.5, "#f1ece0");
+  g.addColorStop(0.53, "#9aa79a");
+  g.addColorStop(1, "#56604f");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 4, 256);
   return srgb(new THREE.CanvasTexture(c));

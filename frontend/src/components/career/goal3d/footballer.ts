@@ -227,16 +227,42 @@ export interface SkinnedPlayer {
   current: ClipName | null;
 }
 
-/** Materials cached by part and colour: one per kit colour, not per player
- * (Lambert: cheaper than the model's standard material on a phone). */
+/** What a part of the model is, for its material. */
+export type PartKind = "kit" | "skin" | "hair" | "other";
+
+/** The model's skin is already painted skin-coloured on its texture:
+ * multiplied by a skin tone in full it came out muddy and dark, so only
+ * this much of the tone goes on (the rest stays the texture's). */
+const SKIN_TINT = 0.6;
+/** The kit's texture is a light grey with its folds: lifted this much so a
+ * colour on it reads as that colour, not a shade darker. */
+const KIT_LIFT = 1.18;
+
+/** Materials cached by part and colour: one per kit colour, not per player.
+ * "lambert" (the default, the 22 of a goal replay): cheap on a phone.
+ * "standard" (a mini-game's few players up close): the model's PBR
+ * material — the cloth's sheen, a soft highlight on the skin. */
 export class MaterialCache {
   private cache = new Map<string, THREE.Material>();
-  get(base: THREE.Material, colour: string): THREE.Material {
-    const key = `${base.uuid}:${colour}`;
+  constructor(private readonly quality: "lambert" | "standard" = "lambert") {}
+  get(base: THREE.Material, colour: string, part: PartKind = "other"): THREE.Material {
+    const key = `${base.uuid}:${colour}:${part}`;
     let mat = this.cache.get(key);
     if (!mat) {
       const src = base as THREE.MeshStandardMaterial;
-      mat = new THREE.MeshLambertMaterial({ map: src.map ?? null, color: colour });
+      const tint = new THREE.Color(colour);
+      if (part === "skin") tint.lerp(new THREE.Color("#ffffff"), 1 - SKIN_TINT);
+      if (part === "kit") tint.multiplyScalar(KIT_LIFT);
+      mat =
+        this.quality === "standard"
+          ? new THREE.MeshStandardMaterial({
+              map: src.map ?? null,
+              color: tint,
+              roughness: part === "skin" ? 0.55 : part === "hair" ? 0.65 : 0.78,
+              metalness: 0,
+              envMapIntensity: part === "skin" ? 0.6 : 0.45,
+            })
+          : new THREE.MeshLambertMaterial({ map: src.map ?? null, color: tint });
       this.cache.set(key, mat);
     }
     return mat;
@@ -253,6 +279,7 @@ export function makePlayer(asset: FootballerAsset, look: PlayerLook, materials: 
     const mesh = o as THREE.SkinnedMesh;
     if (!mesh.isMesh) return;
     mesh.frustumCulled = false;
+    const kit = /Shirt|Shorts|Socks/i.test(mesh.name);
     const colour = /Shirt/i.test(mesh.name) ? look.shirt
       : /Shorts/i.test(mesh.name) ? look.shorts
         : /Socks/i.test(mesh.name) ? look.socks
@@ -263,7 +290,8 @@ export function makePlayer(asset: FootballerAsset, look: PlayerLook, materials: 
       mesh.visible = false;
       return;
     }
-    mesh.material = materials.get(mesh.material as THREE.Material, colour);
+    const part: PartKind = kit ? "kit" : /Body/i.test(mesh.name) ? "skin" : /Hair/i.test(mesh.name) ? "hair" : "other";
+    mesh.material = materials.get(mesh.material as THREE.Material, colour, part);
   });
   const root = new THREE.Group();
   root.add(model);

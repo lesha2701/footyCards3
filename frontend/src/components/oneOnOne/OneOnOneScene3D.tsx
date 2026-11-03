@@ -1,6 +1,7 @@
 /** «Атака 1 на 1» in 3D. The free kick's stadium, goal, lights, ball and
- * crowd; the footballers are the career replay's skinned model (it has the
- * run and the sprint). The scene steps the pure episode engine at its fixed
+ * crowd — in the afternoon sun, as a match on TV looks; the footballers are
+ * the career replay's skinned model (it has the run and the sprint), with
+ * the beaten defenders, a teammate and the referee around the breakaway. The scene steps the pure episode engine at its fixed
  * 60 Hz from the finger (`input`) through the recorder — so what is shown is
  * exactly what the server will replay — and then plays the shot's flight.
  * Everything else here is presentation and never feeds back. */
@@ -109,6 +110,8 @@ type Stage = {
   ball: THREE.Vector3;
   shake: number;
   ripple: { x: number; y: number; at: number } | null;
+  /** How long he has been running (s) — the defenders fall behind with it. */
+  run: number;
 };
 
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
@@ -131,15 +134,15 @@ export default function OneOnOneScene3D(props: Props) {
       style={{ touchAction: "none" }}
     >
       <PerformanceMonitor onDecline={() => setQuality("low")} />
-      <fog attach="fog" args={["#0b1830", 70, 170]} />
-      <Lights quality={quality} />
+      <fog attach="fog" args={["#c4d6e6", 90, 230]} />
+      <Lights quality={quality} time="day" />
       <Environment resolution={64} frames={1}>
-        <Lightformer intensity={3} position={[0, 12, -20]} scale={[40, 6, 1]} />
-        <Lightformer intensity={2} position={[-25, 10, 10]} rotation-y={Math.PI / 2} scale={[30, 4, 1]} />
-        <Lightformer intensity={2} position={[25, 10, 10]} rotation-y={-Math.PI / 2} scale={[30, 4, 1]} />
-        <Lightformer intensity={0.6} color="#2c8a47" position={[0, -5, 0]} rotation-x={Math.PI / 2} scale={[60, 60, 1]} />
+        <Lightformer intensity={2.2} color="#cfe3ff" position={[0, 30, 0]} rotation-x={Math.PI / 2} scale={[80, 80, 1]} />
+        <Lightformer intensity={3} color="#fff1d6" position={[-30, 34, 18]} scale={[20, 20, 1]} />
+        <Lightformer intensity={1.2} position={[25, 10, 10]} rotation-y={-Math.PI / 2} scale={[30, 4, 1]} />
+        <Lightformer intensity={0.8} color="#3f8a3a" position={[0, -5, 0]} rotation-x={Math.PI / 2} scale={[60, 60, 1]} />
       </Environment>
-      <Stadium quality={quality} hype={hype} />
+      <Stadium quality={quality} hype={hype} time="day" />
       <Episode {...props} quality={quality} hype={hype} />
       <FpsMeter fpsRef={props.fpsRef} />
     </Canvas>
@@ -160,7 +163,7 @@ function Episode({
   const stage = useRef<Stage>({
     acc: 0, prev: snap(recorder.state), cur: snap(recorder.state), end: null, t: 0, decided: false, dt: 0,
     tech: null, plan: null, take: null, hands: new THREE.Vector3(), holdFrom: Infinity,
-    ball: new THREE.Vector3(), shake: 0, ripple: null,
+    ball: new THREE.Vector3(), shake: 0, ripple: null, run: 0,
   });
   const [confetti, setConfetti] = useState(0);
   const [flight, setFlight] = useState<ShotFlight | null>(null);
@@ -170,6 +173,7 @@ function Episode({
     const s0 = snap(recorder.state);
     Object.assign(stage.current, {
       acc: 0, prev: s0, cur: s0, end: null, t: 0, decided: false, ripple: null, tech: null, plan: null, take: null, holdFrom: Infinity,
+      run: 0,
     });
     setFlight(null);
   }, [recorder]);
@@ -183,6 +187,7 @@ function Episode({
     if (!s.end) {
       if (!input.current.live) return;
       s.acc += dt;
+      s.run += dt;
       let steps = 0;
       while (s.acc >= TICK && steps < 8 && !recorder.state.ended) {
         const inp = input.current;
@@ -331,6 +336,30 @@ function keeperAt(s: Stage) {
 
 const ATTACKER_LOOK = { shirt: "#2fbf71", shorts: "#f8fafc", socks: "#2fbf71", skin: "#e6b896", hair: "#3a2a20" };
 const KEEPER_LOOK = { shirt: "#facc15", shorts: "#111827", socks: "#facc15", skin: "#c98f68", hair: "#1c1612" };
+const DEFENDER_LOOK = { shirt: "#dc2626", shorts: "#1f2937", socks: "#dc2626", skin: "#d9a57f", hair: "#2a1d15" };
+const DEFENDER_LOOK_2 = { ...DEFENDER_LOOK, skin: "#8d5a3c", hair: "#0f0b08" };
+const MATE_LOOK = { ...ATTACKER_LOOK, skin: "#b98262", hair: "#151010" };
+const REFEREE_LOOK = { shirt: "#111827", shorts: "#111827", socks: "#111827", skin: "#e2b08c", hair: "#5a4632" };
+
+/** The others on the pitch — presentation only, they follow the attacker
+ * and never touch the engine: a defender he has just gone past, at his
+ * shoulder and dropping off as he runs (`gapRate`, m/s), a covering one
+ * coming across from wide who is passed too, a teammate up in support and
+ * the referee out wide ahead of play. Where each wants to be is off the
+ * attacker along the line to goal: `side` across it (m, + to his right),
+ * `back` behind him (− ahead). A portrait frame is narrow: the ones out
+ * wide are seen when they are ahead. */
+type ExtraRole = "defender" | "mate" | "ref";
+const EXTRAS: { role: ExtraRole; look: typeof ATTACKER_LOOK; side: number; back: number; gapRate: number; top: number; low: boolean }[] = [
+  { role: "defender", look: DEFENDER_LOOK, side: 1.6, back: -1.2, gapRate: 0.55, top: 8.6, low: true },
+  { role: "defender", look: DEFENDER_LOOK_2, side: -3.2, back: -8, gapRate: 1.4, top: 8.4, low: false },
+  { role: "mate", look: MATE_LOOK, side: 4.2, back: -9, gapRate: 0.2, top: 8.2, low: false },
+  { role: "ref", look: REFEREE_LOOK, side: -7.5, back: -12, gapRate: 0.4, top: 6.8, low: true },
+];
+/** They don't follow him into the box's middle (m off the line). */
+const EXTRAS_MIN_Z = 7;
+/** After the end they pull up over this (s). */
+const EXTRAS_STOP_S = 1.4;
 
 function hipsOf(p: SkinnedPlayer): THREE.Object3D | null {
   let hips: THREE.Object3D | null = null;
@@ -407,7 +436,7 @@ function Players({
   });
   const asset = useMemo<FootballerAsset>(() => prepareFootballer(gltf, extra), [gltf, extra]);
   const moves = useMemo<Moves>(() => prepareMoves(gltf, movesGltf), [gltf, movesGltf]);
-  const materials = useMemo(() => new MaterialCache(), []);
+  const materials = useMemo(() => new MaterialCache("standard"), []);
   const attacker = useMemo(() => {
     const p = makePlayer(asset, ATTACKER_LOOK, materials);
     addMoves(p, moves);
@@ -583,11 +612,103 @@ function Players({
     <>
       <primitive object={attacker.root} />
       <primitive object={keeper.root} position={[0, 0, KEEPER_START_Z]} />
+      <Others asset={asset} moves={moves} materials={materials} stage={stage} quality={quality} />
       {/* The line the keeper starts from, for the scale of how far he came. */}
       <mesh rotation-x={-Math.PI / 2} position={[setup.start.x, 0.01, setup.start.z]}>
         <ringGeometry args={[0.5, 0.62, 28]} />
         <meshBasicMaterial color="#c6e63a" transparent opacity={0.35} depthWrite={false} />
       </mesh>
+    </>
+  );
+}
+
+type Other = { p: SkinnedPlayer; spec: (typeof EXTRAS)[number]; pos: THREE.Vector3; vel: THREE.Vector3; since: number };
+
+/** The defenders, the teammate and the referee (see EXTRAS): each steers for
+ * his spot off the attacker, no faster than he can run, and pulls up once
+ * the attack is over — on a goal the defenders' hands go to their heads and
+ * the teammate celebrates. Fewer of them on a slow phone. */
+function Others({ asset, moves, materials, stage, quality }: {
+  asset: FootballerAsset;
+  moves: Moves;
+  materials: MaterialCache;
+  stage: StageRef;
+  quality: Quality;
+}) {
+  const others = useMemo<Other[]>(
+    () =>
+      EXTRAS.filter((e) => quality === "high" || e.low).map((spec) => {
+        const p = makePlayer(asset, spec.look, materials);
+        addMoves(p, moves);
+        p.root.traverse((o) => {
+          if ((o as THREE.Mesh).isMesh) o.castShadow = quality === "high";
+        });
+        return { p, spec, pos: new THREE.Vector3(), vel: new THREE.Vector3(), since: 0 };
+      }),
+    [asset, moves, materials, quality],
+  );
+  useEffect(() => () => others.forEach((o) => o.p.mixer.stopAllAction()), [others]);
+  const want = useMemo(() => new THREE.Vector3(), []);
+  const placed = useRef(false);
+
+  useFrame((_, delta) => {
+    const s = stage.current;
+    const a = attackerAt(s);
+    const dt = s.dt;
+    // Along the line to goal (more settled than his heading, which a feint jerks).
+    const len = Math.hypot(a.x, a.z) || 1;
+    const fx = -a.x / len;
+    const fz = -a.z / len;
+    const fresh = s.run === 0 && !s.end;
+    for (const o of others) {
+      const { spec } = o;
+      // Ahead of him only while there is room: nearing the box they are
+      // drawn level, and out wide rather than into the keeper's way.
+      const room = THREE.MathUtils.clamp((a.z - EXTRAS_MIN_Z) / 14, 0, 1);
+      const back = (spec.back < 0 ? spec.back * room : spec.back) + spec.gapRate * s.run;
+      const side = spec.side * lerp(1.6, 1, room);
+      want.set(a.x - fz * side - fx * back, 0, a.z + fx * side - fz * back);
+      if (want.z < EXTRAS_MIN_Z) {
+        want.x += Math.sign(side) * (EXTRAS_MIN_Z - want.z);
+        want.z = EXTRAS_MIN_Z;
+      }
+      if (fresh || !placed.current) {
+        o.pos.copy(want);
+        o.vel.set(0, 0, 0);
+        o.since = 0;
+      } else {
+        if (s.end) o.since += delta;
+        const top = spec.top * Math.max(0, 1 - o.since / EXTRAS_STOP_S);
+        const dx = want.x - o.pos.x;
+        const dz = want.z - o.pos.z;
+        const d = Math.hypot(dx, dz);
+        const v = Math.min(top, d * 2.2);
+        const k = 1 - Math.exp(-4 * delta);
+        o.vel.x += ((d > 0.01 ? (dx / d) * v : 0) - o.vel.x) * k;
+        o.vel.z += ((d > 0.01 ? (dz / d) * v : 0) - o.vel.z) * k;
+        o.pos.addScaledVector(o.vel, delta);
+      }
+      const speed = Math.hypot(o.vel.x, o.vel.z);
+      // Running: where he runs; standing: watching the ball.
+      const yaw = speed > 0.6 ? Math.atan2(o.vel.x, o.vel.z) : Math.atan2(s.ball.x - o.pos.x, s.ball.z - o.pos.z);
+      o.p.root.rotation.y += wrapAngle(yaw - o.p.root.rotation.y) * (1 - Math.exp(-10 * delta));
+      o.p.root.position.copy(o.pos);
+      const f = s.end?.flight;
+      const scored = s.end?.outcome === "goal" && (!f || s.t > f.end.t + 0.4);
+      if (scored && speed < 1.5 && spec.role === "defender") play(o.p, "gk_miss", true, 0.35);
+      else if (scored && spec.role === "mate") play(o.p, "celebrate", true, 0.3).paused = false;
+      else if (speed < 0.4) play(o.p, "idle", false, 0.3);
+      else runAt(o.p, speed, asset);
+      o.p.mixer.update(dt);
+    }
+    placed.current = true;
+  }, -0.4);
+
+  return (
+    <>
+      {others.map((o, i) => (
+        <primitive key={i} object={o.p.root} />
+      ))}
     </>
   );
 }
@@ -690,6 +811,14 @@ function Ball({ stage, flight, skin: skinCode, quality }: { stage: StageRef; fli
 // holds and follows the ball a little. A portrait phone gets a wider view.
 // ---------------------------------------------------------------------------
 
+/** The camera behind him: this far (m) and this high near the goal and far
+ * from it — far enough back that the players read as small as on a TV
+ * broadcast, the goal and the defenders round him in the frame. */
+const CAM_BACK_NEAR = 5.4;
+const CAM_BACK_FAR = 7.6;
+const CAM_UP_NEAR = 2.6;
+const CAM_UP_FAR = 3.4;
+
 function CameraRig({ stage, flight }: { stage: StageRef; flight: ShotFlight | null }) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const aspect = useThree((s) => s.size.width / s.size.height);
@@ -717,7 +846,7 @@ function CameraRig({ stage, flight }: { stage: StageRef; flight: ShotFlight | nu
       const bz = lerp(-a.z / len, a.hz, 0.35);
       const bl = Math.hypot(bx, bz) || 1;
       const near = Math.min(1, Math.max(0, (a.z - 6) / 14));
-      tmp.want.set(a.x - (bx / bl) * lerp(3.8, 5.6, near), lerp(2.0, 2.7, near), a.z - (bz / bl) * lerp(3.8, 5.6, near));
+      tmp.want.set(a.x - (bx / bl) * lerp(CAM_BACK_NEAR, CAM_BACK_FAR, near), lerp(CAM_UP_NEAR, CAM_UP_FAR, near), a.z - (bz / bl) * lerp(CAM_BACK_NEAR, CAM_BACK_FAR, near));
       tmp.look.set(a.x, 0.9, a.z).lerp(tmp.goal, 0.5);
       if (!placed.current) {
         camera.position.copy(tmp.want);
