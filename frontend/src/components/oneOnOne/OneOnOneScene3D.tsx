@@ -45,7 +45,7 @@ import {
 import { AIM_POST, driveHeight, type ShotIntent } from "@/lib/oneOnOne/aim";
 import type { EpisodeRecorder } from "@/lib/oneOnOne/recorder";
 
-import { ONE_ON_ONE_MOVES_URL, addMoves, play, prepareMoves, strikePlan, type Moves, type StrikePlan } from "./moves";
+import { CELEBRATIONS, ONE_ON_ONE_MOVES_URL, addMoves, play, prepareMoves, strikePlan, type Moves, type StrikePlan } from "./moves";
 
 /** What the finger does right now (the page writes it, the scene reads it
  * every tick). `feint` is consumed by the tick that takes it. */
@@ -532,7 +532,7 @@ function Players({
       );
       if (end.outcome === "goal" && t > f.end.t + 0.6) {
         attacker.root.rotation.x = 0;
-        play(attacker, "celebrate", true, 0.3).paused = false;
+        play(attacker, CELEBRATIONS[setup.seed % CELEBRATIONS.length], true, 0.3).paused = false;
       }
     } else if (end?.outcome === "tackle") {
       // Into the keeper at his feet: he goes over.
@@ -607,7 +607,8 @@ function Players({
     } else if (!end && k.speed > 0.6) {
       runAt(keeper, k.speed, asset);
     } else if (!end?.flight || t < (dive?.reaction ?? 0)) {
-      play(keeper, "gk_idle", false, 0.25);
+      // Set on his toes (mocap), or the model's own stance without it.
+      play(keeper, moves.clips.gk_set ? "gk_set" : "gk_idle", false, 0.25);
     }
     keeper.mixer.update(s.dt);
     pinHips(keeper, bones.keeper, pinX, k.z, tmp.v);

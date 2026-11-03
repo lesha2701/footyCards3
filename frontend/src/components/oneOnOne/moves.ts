@@ -1,8 +1,9 @@
 /** The extra moves of «Атака 1 на 1» on the career footballer's rig
  * (public/one-on-one-3d/moves.glb, tools/one-on-one-3d/build_moves.py):
- * strikes with either foot (the left ones mirrored), a chip, sidesteps for
- * the feint, and the keeper's scoop, catches, body blocks, beaten and
- * getting-up. Their timing (when the foot meets the ball, where the toe is
+ * strikes with either foot, a chip, sidesteps for the feint, goal
+ * celebrations, and the keeper's set stance, scoop, catches, body blocks,
+ * beaten and getting-up (the power strikes, the side-foot, the
+ * celebrations and the stance are mocap — Anderson Rohr's soccer pack). Their timing (when the foot meets the ball, where the toe is
  * then, when the keeper's hands reach the ground) is read off the clips. */
 import * as THREE from "three";
 import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -16,7 +17,7 @@ export const ONE_ON_ONE_MOVES_URL = "/one-on-one-3d/moves.glb";
 
 const STRIKES = ["shot_r", "shot_l", "power_r", "power_l", "pass_r", "pass_l", "chip_r", "chip_l"] as const;
 const OTHERS = [
-  "strafe_l", "strafe_r", "trip",
+  "strafe_l", "strafe_r", "trip", "cheer_knees", "cheer_arms", "cheer_leap", "gk_set",
   "gk_scoop", "gk_catch_high", "gk_catch_low", "gk_block_l", "gk_block_r", "gk_miss", "gk_getup",
 ] as const;
 export type Strike = (typeof STRIKES)[number];
@@ -121,6 +122,9 @@ export function addMoves(p: SkinnedPlayer, moves: Moves) {
 export function play(p: SkinnedPlayer, name: ClipName | Move, oneOff: boolean, fade = 0.15): THREE.AnimationAction {
   return setClip(p, (p.actions[name as ClipName] ? name : "idle") as ClipName, oneOff, fade);
 }
+
+/** His goal celebrations: one of them per attack (by its seed). */
+export const CELEBRATIONS = ["celebrate", "cheer_knees", "cheer_arms", "cheer_leap"] as const;
 
 /** The strike that shows a technique, and how it is played. */
 export type StrikePlan = {

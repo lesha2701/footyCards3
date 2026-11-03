@@ -4,7 +4,10 @@
 
 Mounts: the Mixamo "Soccer" pack at /pack (its Ch38_nonPBR.fbx is the rig
 of public/career-3d/footballer.glb, so its clips need no retargeting), this
-folder at /work. Docker: see tools/free-kick-3d/README.md (same image,
+folder at /work, and Anderson Rohr's «Free mocap pack 05: Soccer»
+(mocap/Rokoko_Default) at /mocap: its strikes, celebrations and the
+keeper's set stance are real mocap, retargeted by retarget_rokoko.py (a
+source "rk:<take>:<first>:<last>" — frames of the 60 fps take). Docker: see tools/free-kick-3d/README.md (same image,
 `pip install bpy`).
 
 Only the skeleton and the clips go out (no mesh); the scene plays them on
@@ -19,9 +22,13 @@ pack does (foot, contact frame, travel).
 """
 import os
 import re
+import sys
 
 import bpy
 from mathutils import Matrix
+
+sys.path.insert(0, '/work')
+from retarget_rokoko import rokoko_action  # noqa: E402
 
 src, out = '/pack', '/work/out'
 os.makedirs(out, exist_ok=True)
@@ -31,16 +38,22 @@ CLIPS = {
     # The attacker.
     'shot_r': ('strike foward jog', False),
     'shot_l': ('strike foward jog', True),
-    # Struck with everything: the full swing off a run-up.
-    'power_r': ('soccer penalty kick', False),
-    'power_l': ('soccer penalty kick', True),
-    'pass_r': ('kick soccerball (2)', False),
-    'pass_l': ('kick soccerball', False),
+    # Struck with everything: the full swing off a run-up (mocap: a real
+    # left foot, not the right one mirrored).
+    'power_r': ('rk:10_Penalty_Kick_01:360:444', False),
+    'power_l': ('rk:09_Power_Kick:120:205', False),
+    # Side-footed: the inside of the foot through the ball.
+    'pass_r': ('rk:08_Side_Foot_Kick:45:135', False),
+    'pass_l': ('rk:08_Side_Foot_Kick:45:135', True),
     'chip_l': ('kick up soccerball', False),
     'chip_r': ('kick up soccerball', True),
     'strafe_l': ('jog strafe left', False),
     'strafe_r': ('jog strafe right', False),
     'trip': ('soccer trip', False),
+    # Goal celebrations: down on his knees, arms up on the run, the leap.
+    'cheer_knees': ('rk:12_Goal_Celebration_01:1:210', False),
+    'cheer_arms': ('rk:13_Goal_Celebration_02:1:213', False),
+    'cheer_leap': ('rk:14_Goal_Celebration_03:1:192', False),
     # The keeper.
     'gk_scoop': ('goalkeeper scoop', False),
     'gk_catch_high': ('goalkeeper catch (4)', False),
@@ -49,6 +62,8 @@ CLIPS = {
     'gk_block_r': ('goalkeeper body block (2)', False),
     'gk_miss': ('goalkeeper miss', False),
     'gk_getup': ('standing up', False),
+    # Set, on his toes, as the attacker comes in (looped there and back).
+    'gk_set': ('rk:15_Goalkeeper_Save_01:60:280:pingpong', False),
 }
 FINGERS = re.compile(r'Hand(Thumb|Index|Middle|Ring|Pinky)\d')
 
@@ -78,6 +93,12 @@ arm.select_set(True)
 
 def load(fname):
     """The pack file's action, its channels on our rig's bone names."""
+    if fname.startswith('rk:'):
+        _, take, f0, f1, *opt = fname.split(':')
+        act = rokoko_action(arm, prefix, take, int(f0), int(f1), pingpong='pingpong' in opt)
+        bpy.context.view_layer.objects.active = arm
+        arm.select_set(True)
+        return act
     before = set(bpy.data.objects)
     bpy.ops.import_scene.fbx(filepath=f'{src}/{fname}.fbx')
     new = [o for o in bpy.data.objects if o not in before]
@@ -150,6 +171,10 @@ for clip, (fname, flip) in CLIPS.items():
     print('CLIP', clip, tuple(act.frame_range), 'mirrored' if flip else '')
 
 arm.animation_data.action = None
+# A mirrored clip's source (a second copy of a take) would go out too.
+for act in list(bpy.data.actions):
+    if act.name not in CLIPS:
+        bpy.data.actions.remove(act)
 bpy.ops.export_scene.gltf(
     filepath=f'{out}/one-on-one-moves.glb', export_format='GLB',
     export_animations=True, export_animation_mode='ACTIONS',
