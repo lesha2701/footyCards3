@@ -16,7 +16,7 @@ down_revision: Union[str, None] = "0247"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-NEW = '{"feint_roulette": 75}'
+NEW = '{"feint_roulette": 300}'
 
 
 def upgrade() -> None:
