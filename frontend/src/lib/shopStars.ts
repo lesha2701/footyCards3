@@ -8,7 +8,7 @@ import type { StarsInvoiceCreate } from "@/types";
  * it. Resolves to "paid" or "cancelled"; throws with a user-facing message. */
 export async function payShopWithStars(createInvoice: () => Promise<StarsInvoiceCreate>): Promise<"paid" | "cancelled"> {
   const invoice = await createInvoice();
-  const status = await openTelegramInvoice(invoice.invoice_link);
+  const status = await openTelegramInvoice(invoice.invoice_link, invoice.payload_token);
   if (status === "cancelled") return "cancelled";
   if (status === "failed") throw new Error("Платёж не прошёл");
   for (let attempt = 0; attempt < 20; attempt++) {

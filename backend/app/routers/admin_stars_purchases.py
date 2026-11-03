@@ -1,6 +1,7 @@
-from typing import Literal
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, Request
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -18,7 +19,7 @@ from app.schemas.admin import (
     TopSupporterOut,
 )
 from app.models.user import User as AdminUser
-from app.services import stars_receipt_service
+from app.services import admin_stars_gift_service, stars_receipt_service
 from app.services.admin_log_service import log_action
 
 router = APIRouter(prefix="/admin/stars-purchases", tags=["admin"], dependencies=[Depends(get_current_admin)])
@@ -133,6 +134,29 @@ async def refund_payment_receipt(
     out = await stars_receipt_service.admin_refund(db, receipt_id)
     await _log(db, admin, request, "stars_payment_refund", out)
     return out
+
+
+class FreeDeliverIn(BaseModel):
+    # Player to gift it to: id, Telegram id or @username; empty = the admin himself.
+    recipient: Optional[str] = Field(default=None, max_length=64)
+
+
+class FreeDeliverOut(BaseModel):
+    recipient_id: int
+    recipient_name: str
+    stars: int
+
+
+@router.post("/free/{payload_token}", response_model=FreeDeliverOut)
+async def free_deliver(
+    payload_token: str, body: FreeDeliverIn, request: Request,
+    admin: AdminUser = Depends(get_current_admin), db: AsyncSession = Depends(get_db),
+):
+    """An admin takes the Stars product of his own pending invoice without
+    paying — for himself or as a gift to another player."""
+    return await admin_stars_gift_service.free_deliver(
+        db, admin, payload_token, body.recipient, ip_address=request.client.host if request.client else None,
+    )
 
 
 async def _log(db: AsyncSession, admin: AdminUser, request: Request, action: str, out: StarsPaymentReceiptOut) -> None:

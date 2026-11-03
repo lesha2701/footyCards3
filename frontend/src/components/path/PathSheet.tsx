@@ -247,7 +247,7 @@ export default function PathSheet({
   const starsMutation = useMutation({
     mutationFn: async () => {
       const invoice = await createPathStarsInvoice(cardId);
-      const status = await openTelegramInvoice(invoice.invoice_link);
+      const status = await openTelegramInvoice(invoice.invoice_link, invoice.payload_token);
       if (status === "cancelled") return null;
       if (status === "failed") throw new Error("Платёж не прошёл");
       await waitForInvoice(invoice.payload_token);

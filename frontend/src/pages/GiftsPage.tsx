@@ -472,7 +472,7 @@ function CollectiblePurchasePanel({ giftSet, onDone }: { giftSet: GiftSet; onDon
     setBusy(true);
     try {
       const invoice = await createGiftInvoice(giftSet.id, recipientId, message || undefined);
-      const paymentStatus = await openTelegramInvoice(invoice.invoice_link);
+      const paymentStatus = await openTelegramInvoice(invoice.invoice_link, invoice.payload_token);
       if (paymentStatus === "cancelled") {
         setBusy(false);
         return;
@@ -606,7 +606,7 @@ function BundleShop({ giftSets }: { giftSets: GiftSet[] }) {
     setBusy(true);
     try {
       const invoice = await createGiftInvoice(selectedSet.id, target.id, message || undefined);
-      const paymentStatus = await openTelegramInvoice(invoice.invoice_link);
+      const paymentStatus = await openTelegramInvoice(invoice.invoice_link, invoice.payload_token);
       if (paymentStatus === "cancelled") {
         setBusy(false);
         return;

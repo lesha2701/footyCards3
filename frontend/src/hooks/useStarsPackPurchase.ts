@@ -28,7 +28,7 @@ export function useStarsPackPurchase(packId: number, onPurchased: (result: PackO
       const invoice = await createStarsInvoice(packId);
 
       setPhase("waiting");
-      const paymentStatus = await openTelegramInvoice(invoice.invoice_link);
+      const paymentStatus = await openTelegramInvoice(invoice.invoice_link, invoice.payload_token);
       if (paymentStatus === "cancelled") {
         setPhase("idle");
         return;

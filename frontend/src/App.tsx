@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-
 
 import AppLayout from "@/components/layout/AppLayout";
 import HomePage from "@/pages/HomePage";
+import AdminPaySheet from "@/components/common/AdminPaySheet";
 import LoadingScreen from "@/components/common/LoadingScreen";
 import ErrorScreen from "@/components/common/ErrorScreen";
 import NewbieTaskWatcher from "@/components/newbie/NewbieTaskWatcher";
@@ -250,6 +251,7 @@ export default function App() {
     <Suspense fallback={<LoadingScreen />}>
     <TelegramBackButton />
     <NewbieTaskWatcher />
+    <AdminPaySheet />
     {!window.location.pathname.startsWith("/admin") && <StreakRewardPopup />}
     <Routes>
       <Route path="/admin" element={<AdminGuard><AdminLayout /></AdminGuard>}>
