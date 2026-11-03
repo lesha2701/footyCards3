@@ -84,9 +84,10 @@ export default function OneOnOnePage() {
       <div className="flex flex-col gap-5">
         <GameHero game="one-on-one" title="Атака 1 на 1" />
         <p className="text-sm text-ink-mist">
-          Выход один на один с вратарём. Левый палец — джойстик: веди игрока с мячом, до края — спринт. Правый палец:
-          резкий рывок вбок — финт (поймаешь вратаря на нём — он провалится), свайп вверх — удар на ходу, как в
-          штрафном: быстрее — сильнее, длиннее — выше, дугой — закрутка.
+          Выход один на один с вратарём. Левый палец — джойстик: веди игрока с мячом, до края — спринт; куда он
+          наклонён в момент удара — туда и летит мяч. Правый палец: свайп вверх — удар (быстрее — сильнее, длиннее —
+          выше, дугой — закрутка), просто тап — игрок сам выберет угол и удар, резкий рывок вбок — финт (поймаешь
+          вратаря на нём — он провалится).
         </p>
         {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
         <CardPickerModal
@@ -178,10 +179,6 @@ export default function OneOnOnePage() {
   );
 }
 
-/** The thumb's sideways flick is sharper than the free kick's whole-screen
- * swipe: it leans the shot this much. */
-const SHOT_AIM = 0.6;
-
 /** One attack: the 3D episode, the two thumbs, the server's verdict. */
 function AttackRun({
   series,
@@ -200,9 +197,9 @@ function AttackRun({
 }) {
   const setup = useMemo(() => createEpisode(attack.seed, series.rating), [attack.seed, series.rating]);
   const recorder = useMemo(() => new EpisodeRecorder(setup), [setup]);
-  const input = useRef<LiveInput>({ live: false, hold: 0, steer: 0, feint: 0, shot: null });
+  const input = useRef<LiveInput>({ live: false, hold: 0, steer: 0, feint: 0, shot: null, aiming: false, aim: 0 });
   const stick = useRef(new Stick(window.innerWidth, window.innerHeight));
-  const pad = useRef(new Finger(window.innerWidth, window.innerHeight, SHOT_AIM));
+  const pad = useRef(new Finger(window.innerWidth, window.innerHeight));
   const knob = useRef<HTMLDivElement | null>(null);
   const anchor = useRef<HTMLDivElement | null>(null);
   const homeStick = useRef<HTMLDivElement | null>(null);
@@ -277,7 +274,10 @@ function AttackRun({
   const syncStick = () => {
     const st = stick.current.read();
     input.current.hold = st.hold;
-    input.current.steer = st.steer;
+    // While the right thumb is down the lean aims the shot and no longer
+    // turns him (else aiming at a corner runs him off towards it).
+    input.current.aim = st.steer;
+    input.current.steer = input.current.aiming ? 0 : st.steer;
     placeStick();
   };
   // Which finger is which: the one that came down on the left half is the
@@ -302,6 +302,8 @@ function AttackRun({
     } else if (!left && !pad.current.down) {
       fingers.current.set(e.pointerId, "pad");
       pad.current.start({ x: e.clientX, y: e.clientY, t: e.timeStamp });
+      input.current.aiming = true;
+      syncStick();
     }
   };
   const feint = (dir: number) => {
@@ -327,11 +329,16 @@ function AttackRun({
       stick.current.end();
       syncStick();
     } else if (role === "pad") {
+      input.current.aiming = false;
+      syncStick();
       if (cancelled) return pad.current.cancel();
       const intent = pad.current.end({ x: e.clientX, y: e.clientY, t: e.timeStamp });
       if (!playing) return;
-      if (intent.shot) {
-        input.current.shot = intent.shot;
+      // The swipe gives the power, the height and the bend; where it goes is
+      // the left stick's lean. A tap leaves all of it to the striker.
+      const shot = intent.shot ? { swipe: intent.shot, aim: input.current.aim / 1000 } : intent.tap ? { auto: true as const } : null;
+      if (shot) {
+        input.current.shot = shot;
         haptic("medium");
         crowdTension(true);
       } else feint(intent.feint);
@@ -390,9 +397,9 @@ function AttackRun({
                 </>
               )}
             </div>
-            <div className="flex h-28 w-28 flex-col items-center justify-center rounded-full border-[3px] border-accent-lime/80 bg-black/45 shadow-lg">
-              Удар ↑
-              {!started && <span className="font-normal text-white/80">рывок вбок — финт</span>}
+            <div className="flex h-28 w-28 flex-col items-center justify-center rounded-full border-[3px] border-accent-lime/90 bg-accent-lime/25 shadow-lg">
+              Удар
+              <span className="font-normal text-white/80">{started ? "↑ / тап" : "тап — авто, ↑ — свайп"}</span>
             </div>
           </div>
         )}
@@ -434,9 +441,9 @@ function AttackRun({
         <div className="pointer-events-none absolute inset-x-0 top-24 px-6 text-center text-sm text-ink-chalk/90 drop-shadow">
           {ready ? (
             <>
-              Левый палец — джойстик: веди игрока, до края — спринт.
+              Левый палец — джойстик: веди игрока, до края — спринт, наклон — угол удара.
               <br />
-              Правый палец: резкий рывок вбок — финт, свайп вверх — удар.
+              Правый палец: свайп вверх — удар, тап — автоудар, рывок вбок — финт.
             </>
           ) : (
             "Загружаем…"
@@ -486,7 +493,7 @@ function AttackRun({
             type="button"
             onClick={() => {
               // Same scene, next attack: no WebGL context churn between attacks.
-              input.current = { live: false, hold: 0, steer: 0, feint: 0, shot: null };
+              input.current = { live: false, hold: 0, steer: 0, feint: 0, shot: null, aiming: false, aim: 0 };
               stick.current.end();
               pad.current.cancel();
               fingers.current.clear();

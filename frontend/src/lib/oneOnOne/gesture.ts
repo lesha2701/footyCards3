@@ -19,18 +19,22 @@ const FEINT_SLOPE = 1.6;
  * of the height) and no older than SHOT_MS. */
 const SHOT_MIN = 0.07;
 const SHOT_MS = 600;
+/** A tap: down and up within TAP_MS, moving less than TAP_DIST (share of
+ * the height). */
+const TAP_MS = 260;
+const TAP_DIST = 0.025;
 
-export type FingerIntent = { feint: number; shot: QuantizedSwipe | null };
+export type FingerIntent = { feint: number; shot: QuantizedSwipe | null; tap?: boolean };
 
 export class Finger {
   private points: SwipePoint[] = [];
   private anchorX = 0;
   private feintFrom = 0;
+  private downAt: SwipePoint = { x: 0, y: 0, t: 0 };
+  private wander = 0;
   down = false;
 
-  /** `aim` scales the shot's sideways lean (a thumb's flick on a phone is
-   * sharper sideways than the free kick's whole-screen swipe). */
-  constructor(private width: number, private height: number, private aim = 1) {}
+  constructor(private width: number, private height: number) {}
 
   resize(width: number, height: number) {
     this.width = width;
@@ -40,6 +44,8 @@ export class Finger {
   start(p: SwipePoint) {
     this.down = true;
     this.points = [p];
+    this.downAt = p;
+    this.wander = 0;
     this.anchorX = p.x;
     this.feintFrom = 0;
   }
@@ -48,6 +54,7 @@ export class Finger {
   move(p: SwipePoint): number {
     if (!this.down) return 0;
     this.points.push(p);
+    this.wander = Math.max(this.wander, Math.hypot(p.x - this.downAt.x, p.y - this.downAt.y));
     // Keep about a second of path: the shot only looks at the last stretch.
     while (this.points.length > 2 && p.t - this.points[0].t > 1000) this.points.shift();
     const dir = this.flick(p);
@@ -73,6 +80,8 @@ export class Finger {
     this.points.push(p);
     const shot = this.shot();
     if (shot) return { feint: 0, shot };
+    const wander = Math.max(this.wander, Math.hypot(p.x - this.downAt.x, p.y - this.downAt.y));
+    if (p.t - this.downAt.t <= TAP_MS && wander < this.height * TAP_DIST) return { feint: 0, shot: null, tap: true };
     return { feint: this.flick(p), shot: null };
   }
 
@@ -109,7 +118,7 @@ export class Finger {
     if (q.dy >= 0) return null;
     // Within what the server accepts (the engine plays the same integers).
     const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
-    return { dx: clamp(Math.round(q.dx * this.aim), -1500, 1500), dy: clamp(q.dy, -1500, -1), curve: clamp(q.curve, -500, 500), durationMs: q.durationMs };
+    return { dx: clamp(q.dx, -1500, 1500), dy: clamp(q.dy, -1500, -1), curve: clamp(q.curve, -500, 500), durationMs: q.durationMs };
   }
 }
 

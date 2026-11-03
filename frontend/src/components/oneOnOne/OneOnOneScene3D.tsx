@@ -41,6 +41,7 @@ import {
   type KeeperMode,
   type ShotFlight,
 } from "@/lib/oneOnOne/engine";
+import { AIM_POST, type ShotIntent } from "@/lib/oneOnOne/aim";
 import type { EpisodeRecorder } from "@/lib/oneOnOne/recorder";
 
 import { ONE_ON_ONE_MOVES_URL, addMoves, play, prepareMoves, strikePlan, type Moves, type StrikePlan } from "./moves";
@@ -48,7 +49,17 @@ import { ONE_ON_ONE_MOVES_URL, addMoves, play, prepareMoves, strikePlan, type Mo
 /** What the finger does right now (the page writes it, the scene reads it
  * every tick). `feint` is consumed by the tick that takes it. */
 /** hold: 0 stop, 1 run, 2 sprint. */
-export type LiveInput = { live: boolean; hold: number; steer: number; feint: number; shot: QuantizedSwipe | null };
+/** `aiming` — the right thumb is down: the stick's lean is `aim` (and
+ * `steer` 0), and the goal shows where it aims. */
+export type LiveInput = {
+  live: boolean;
+  hold: number;
+  steer: number;
+  feint: number;
+  shot: QuantizedSwipe | ShotIntent | null;
+  aiming: boolean;
+  aim: number;
+};
 
 /** Slow motion for the last moments of a shot that's a goal or a save. */
 const SLOWMO_WINDOW = 0.25;
@@ -243,12 +254,48 @@ function Episode({
       </Suspense>
       <Ball stage={stage} flight={flight} skin={ball} quality={quality} />
       <CameraRig stage={stage} flight={flight} />
+      <AimMarker stage={stage} input={input} />
       <Confetti burstId={confetti} />
     </>
   );
 }
 
 type StageRef = MutableRefObject<Stage>;
+
+/** Where the shot goes while the right thumb is down: a ring on the goal
+ * line at the left stick's lean (the spot the aim resolves to). */
+const AIM_MARK_Y = 0.9;
+function AimMarker({ stage, input }: { stage: StageRef; input: MutableRefObject<LiveInput> }) {
+  const mark = useRef<THREE.Group>(null);
+  const fade = useRef(0);
+  useFrame((_, delta) => {
+    const g = mark.current;
+    if (!g) return;
+    const on = input.current.aiming && !stage.current.end && !stage.current.cur.feintTicks;
+    fade.current = THREE.MathUtils.damp(fade.current, on ? 1 : 0, 14, delta);
+    g.visible = fade.current > 0.02;
+    for (const c of g.children) ((c as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = fade.current;
+    const x = (THREE.MathUtils.clamp(input.current.aim, -1000, 1000) / 1000) * AIM_POST;
+    g.position.set(on ? THREE.MathUtils.damp(g.position.x, x, 18, delta) : x, AIM_MARK_Y, 0.05);
+  });
+  // Dark under white under lime: readable over the net, the boards and the crowd.
+  return (
+    <group ref={mark} visible={false} renderOrder={5}>
+      <mesh renderOrder={5}>
+        <ringGeometry args={[0.3, 0.52, 40]} />
+        <meshBasicMaterial color="#0b1830" transparent opacity={0} depthTest={false} toneMapped={false} />
+      </mesh>
+      <mesh renderOrder={6}>
+        <ringGeometry args={[0.34, 0.47, 40]} />
+        <meshBasicMaterial color="#c6e63a" transparent opacity={0} depthTest={false} toneMapped={false} />
+      </mesh>
+      <mesh renderOrder={6}>
+        <circleGeometry args={[0.09, 20]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0} depthTest={false} toneMapped={false} />
+      </mesh>
+    </group>
+  );
+}
 
 /** The attacker's position this frame (interpolated between ticks). */
 function attackerAt(s: Stage) {

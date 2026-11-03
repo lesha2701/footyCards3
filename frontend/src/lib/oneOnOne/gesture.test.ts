@@ -67,3 +67,17 @@ describe("the left thumb's stick", () => {
     expect(s.read().steer).toBe(1000);
   });
 });
+
+describe("the right thumb's tap", () => {
+  it("a short still press is a tap; held, or moved, it is not", () => {
+    const f = new Finger(W, H);
+    f.start({ x: 300, y: 600, t: 0 });
+    f.move({ x: 303, y: 602, t: 80 });
+    expect(f.end({ x: 302, y: 601, t: 150 })).toEqual({ feint: 0, shot: null, tap: true });
+    f.start({ x: 300, y: 600, t: 0 });
+    expect(f.end({ x: 300, y: 600, t: 500 }).tap).toBeUndefined();
+    f.start({ x: 300, y: 600, t: 0 });
+    f.move({ x: 340, y: 600, t: 100 });
+    expect(f.end({ x: 300, y: 600, t: 200 }).tap).toBeUndefined();
+  });
+});

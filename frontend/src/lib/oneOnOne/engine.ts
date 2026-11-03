@@ -125,7 +125,7 @@ const SHOT_LIFT_SCALE = 1.2;
 const SHOT_CHIP_LOFT = 0.6;
 /** Aim scale = AIM_REF / distance (1..3): a full lean is ~5 m off the
  * centre of the goal from any distance. */
-const AIM_REF = 18;
+export const AIM_REF = 18;
 /** A goal over a keeper who came out at least CHIP_KEEPER_OUT m: «парашют». */
 const CHIP_HEIGHT = 1.8;
 const CHIP_KEEPER_OUT = 2;

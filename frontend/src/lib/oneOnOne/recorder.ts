@@ -1,5 +1,6 @@
 import type { QuantizedSwipe } from "@/lib/freeKick3d/trajectory";
 
+import { resolveShot, type ShotIntent } from "./aim";
 import { advance, initState, type EpisodeSetup, type EpisodeState, type EpisodeTimeline } from "./engine";
 
 /** Steer is sent in steps of this many thousandths: a finger's jitter
@@ -17,6 +18,8 @@ export class EpisodeRecorder {
   readonly state: EpisodeState;
   readonly timeline: EpisodeTimeline = { controls: [], feint: null, shot: null };
   private last: [number, number] | null = null;
+  /** An aimed shot waiting for the feint in progress to finish. */
+  private pending: ShotIntent | null = null;
 
   constructor(readonly setup: EpisodeSetup) {
     this.state = initState(setup);
@@ -24,8 +27,10 @@ export class EpisodeRecorder {
 
   /** One tick: stop / run / sprint (0 / 1 / 2, or a boolean for run),
    * steer in thousandths (already quantized), a feint this tick (−1 / 1, 0
-   * for none), a shot released this tick. */
-  step(hold: number | boolean, steer: number, feint = 0, shot: QuantizedSwipe | null = null): void {
+   * for none), a shot released this tick — a swipe as it is, or an aim /
+   * a tap resolved on the tick it is played (so after a feint, from where
+   * the feint left the ball). */
+  step(hold: number | boolean, steer: number, feint = 0, shot: QuantizedSwipe | ShotIntent | null = null): void {
     const s = this.state;
     if (s.ended) return;
     const i = s.tick;
@@ -36,6 +41,14 @@ export class EpisodeRecorder {
     }
     if (feint !== 0 && !s.feintUsed && !this.timeline.feint && !this.timeline.shot) {
       this.timeline.feint = { tick: i, dir: feint > 0 ? 1 : -1 };
+    }
+    if (shot && !("dx" in shot)) {
+      this.pending ??= shot;
+      shot = null;
+    }
+    if (this.pending && !this.timeline.shot && s.feintTicks === 0 && !(this.timeline.feint?.tick === i)) {
+      shot = resolveShot(s, this.pending);
+      this.pending = null;
     }
     if (shot && !this.timeline.shot) this.timeline.shot = { tick: i, ...shot };
     const tl = this.timeline;
