@@ -114,6 +114,7 @@ DEFAULT_CATALOG: list[tuple[str, str, str, int, int]] = [
     ("symbol", "img_kraken", "Кракен", 0, 200),
     ("symbol", "img_devil", "Дьявол", 0, 66),
     ("symbol", "img_devil_trident", "Дьявол с трезубцем", 0, 166),
+    ("symbol", "img_victor_v", "Знак Victor", 0, 999),
     ("effect", "frost", "Иней", 0, 200),
     ("effect", "embers", "Угли", 0, 200),
     ("effect", "pulse", "Волна силы", 0, 250),
