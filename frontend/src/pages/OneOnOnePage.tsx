@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type RefObject } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { fetchCollection } from "@/api/collection";
@@ -13,6 +13,7 @@ import OneOnOneScene3D, { type LiveInput } from "@/components/oneOnOne/OneOnOneS
 import { formatGameError } from "@/lib/errors";
 import { useCrashLog } from "@/lib/freeKick3d/crashLog";
 import { crowdChant, crowdHush, crowdTension, playFreeKickSfx, startCrowd } from "@/lib/freeKick3d/sfx";
+import type { ShotIntent } from "@/lib/oneOnOne/aim";
 import { createEpisode, type EpisodeEnd } from "@/lib/oneOnOne/engine";
 import { Finger, Stick } from "@/lib/oneOnOne/gesture";
 import { EpisodeRecorder } from "@/lib/oneOnOne/recorder";
@@ -84,10 +85,11 @@ export default function OneOnOnePage() {
       <div className="flex flex-col gap-5">
         <GameHero game="one-on-one" title="Атака 1 на 1" />
         <p className="text-sm text-ink-mist">
-          Выход один на один с вратарём. Левый палец — джойстик: веди игрока с мячом, до края — спринт; куда он
-          наклонён в момент удара — туда и летит мяч. Правый палец: свайп вверх — удар (быстрее — сильнее, длиннее —
-          выше, дугой — закрутка), просто тап — игрок сам выберет угол и удар, резкий рывок вбок — финт (поймаешь
-          вратаря на нём — он провалится).
+          Выход один на один с вратарём, управление как в FIFA. Левый палец — джойстик: веди игрока с мячом, до края —
+          спринт; куда он наклонён в момент удара — туда и летит мяч. «Удар»: держи и отпусти — удар подъёмом, чем
+          дольше держишь, тем сильнее и выше (шкала покраснела — над перекладиной); свайп вверх с кнопки — удар на
+          закрутку; тап — игрок всё выберет сам. Маленькая кнопка — парашют. Резкий рывок вбок с «Удара» — финт
+          (поймаешь вратаря на нём — он провалится).
         </p>
         {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
         <CardPickerModal
@@ -179,6 +181,35 @@ export default function OneOnOnePage() {
   );
 }
 
+/** The shot button's power bar fills over this (ms) — after a tap's length
+ * for the shot button, a tap there being the auto shot — and is red past
+ * the top of the goal. */
+const CHARGE_MS = 900;
+const TAP_GRACE_MS = 200;
+const OVER_POWER = 0.9;
+const BAR_R = 46;
+const BAR_LENGTH = 2 * Math.PI * BAR_R;
+
+/** The bar round a button (an SVG ring the page fills by its ref). */
+function PowerRing({ barRef }: { barRef: RefObject<SVGCircleElement> }) {
+  return (
+    <svg viewBox="0 0 100 100" className="pointer-events-none absolute -inset-1.5 h-[calc(100%+12px)] w-[calc(100%+12px)] -rotate-90">
+      <circle
+        ref={barRef}
+        cx={50}
+        cy={50}
+        r={BAR_R}
+        fill="none"
+        stroke="#c6e63a"
+        strokeWidth={6}
+        strokeLinecap="round"
+        strokeDasharray={BAR_LENGTH}
+        strokeDashoffset={BAR_LENGTH}
+      />
+    </svg>
+  );
+}
+
 /** One attack: the 3D episode, the two thumbs, the server's verdict. */
 function AttackRun({
   series,
@@ -197,12 +228,18 @@ function AttackRun({
 }) {
   const setup = useMemo(() => createEpisode(attack.seed, series.rating), [attack.seed, series.rating]);
   const recorder = useMemo(() => new EpisodeRecorder(setup), [setup]);
-  const input = useRef<LiveInput>({ live: false, hold: 0, steer: 0, feint: 0, shot: null, aiming: false, aim: 0 });
+  const input = useRef<LiveInput>({ live: false, hold: 0, steer: 0, feint: 0, shot: null, aiming: false, aim: 0, power: null, lob: false });
   const stick = useRef(new Stick(window.innerWidth, window.innerHeight));
   const pad = useRef(new Finger(window.innerWidth, window.innerHeight));
   const knob = useRef<HTMLDivElement | null>(null);
   const anchor = useRef<HTMLDivElement | null>(null);
   const homeStick = useRef<HTMLDivElement | null>(null);
+  const chipBtn = useRef<HTMLDivElement | null>(null);
+  const shotBar = useRef<SVGCircleElement | null>(null);
+  const chipBar = useRef<SVGCircleElement | null>(null);
+  // The button held now: which, since when (performance.now), and whether
+  // the press turned into a feint (then letting go is no shot).
+  const press = useRef<{ kind: "pad" | "chip"; at: number; feinted: boolean } | null>(null);
   const fpsRef = useRef<HTMLSpanElement | null>(null);
   const crashLog = useCrashLog();
   const [ready, setReady] = useState(false);
@@ -281,8 +318,45 @@ function AttackRun({
     placeStick();
   };
   // Which finger is which: the one that came down on the left half is the
-  // stick, on the right half the action thumb.
-  const fingers = useRef(new Map<number, "stick" | "pad">());
+  // stick, on the right half the action thumb (on the small button — the chip).
+  const fingers = useRef(new Map<number, "stick" | "pad" | "chip">());
+
+  /** The power bar of the button held: fills over CHARGE_MS (the shot's
+   * from the end of a tap on), red once it is past the top of the goal. */
+  const powerOf = (p: NonNullable<typeof press.current>, now: number) =>
+    Math.min(1, Math.max(0, now - p.at - (p.kind === "pad" ? TAP_GRACE_MS : 0)) / CHARGE_MS);
+  const drawBars = () => {
+    const p = press.current;
+    const power = p && !p.feinted ? powerOf(p, performance.now()) : 0;
+    input.current.power = p && !p.feinted ? power : null;
+    input.current.lob = p?.kind === "chip";
+    for (const [bar, kind] of [[shotBar.current, "pad"], [chipBar.current, "chip"]] as const) {
+      if (!bar) continue;
+      const k = p?.kind === kind ? power : 0;
+      bar.style.strokeDashoffset = `${BAR_LENGTH * (1 - k)}`;
+      bar.style.stroke = k > OVER_POWER ? "#f87171" : "#c6e63a";
+    }
+    if (p) requestAnimationFrame(drawBars);
+  };
+  const startPress = (kind: "pad" | "chip") => {
+    press.current = { kind, at: performance.now(), feinted: false };
+    input.current.aiming = true;
+    syncStick();
+    requestAnimationFrame(drawBars);
+  };
+  const endPress = () => {
+    const p = press.current;
+    press.current = null;
+    input.current.aiming = false;
+    syncStick();
+    drawBars();
+    return p ? powerOf(p, performance.now()) : 0;
+  };
+  const shootNow = (shot: ShotIntent) => {
+    input.current.shot = shot;
+    haptic("medium");
+    crowdTension(true);
+  };
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
     if (!playing) return;
@@ -295,15 +369,20 @@ function AttackRun({
     input.current.live = true;
     if (!started) setStarted(true);
     const left = e.clientX < window.innerWidth / 2;
+    const chip = chipBtn.current?.getBoundingClientRect();
+    const onChip =
+      !!chip && Math.hypot(e.clientX - (chip.left + chip.width / 2), e.clientY - (chip.top + chip.height / 2)) < chip.width * 0.75;
     if (left && !stick.current.down) {
       fingers.current.set(e.pointerId, "stick");
       stick.current.start({ x: e.clientX, y: e.clientY });
       syncStick();
-    } else if (!left && !pad.current.down) {
+    } else if (!left && !press.current && onChip) {
+      fingers.current.set(e.pointerId, "chip");
+      startPress("chip");
+    } else if (!left && !press.current && !pad.current.down) {
       fingers.current.set(e.pointerId, "pad");
       pad.current.start({ x: e.clientX, y: e.clientY, t: e.timeStamp });
-      input.current.aiming = true;
-      syncStick();
+      startPress("pad");
     }
   };
   const feint = (dir: number) => {
@@ -318,8 +397,10 @@ function AttackRun({
     if (role === "stick") {
       stick.current.move({ x: e.clientX, y: e.clientY });
       syncStick();
-    } else {
-      feint(pad.current.move({ x: e.clientX, y: e.clientY, t: e.timeStamp }));
+    } else if (role === "pad") {
+      const dir = pad.current.move({ x: e.clientX, y: e.clientY, t: e.timeStamp });
+      if (dir !== 0 && press.current) press.current.feinted = true;
+      feint(dir);
     }
   };
   const release = (e: PointerEvent<HTMLDivElement>, cancelled: boolean) => {
@@ -328,20 +409,23 @@ function AttackRun({
     if (role === "stick") {
       stick.current.end();
       syncStick();
+    } else if (role === "chip") {
+      const power = endPress();
+      if (!cancelled && playing) shootNow({ kind: "chip", power, aim: input.current.aim / 1000 });
     } else if (role === "pad") {
-      input.current.aiming = false;
-      syncStick();
+      const feinted = press.current?.feinted;
+      const power = endPress();
       if (cancelled) return pad.current.cancel();
       const intent = pad.current.end({ x: e.clientX, y: e.clientY, t: e.timeStamp });
-      if (!playing) return;
-      // The swipe gives the power, the height and the bend; where it goes is
-      // the left stick's lean. A tap leaves all of it to the striker.
-      const shot = intent.shot ? { swipe: intent.shot, aim: input.current.aim / 1000 } : intent.tap ? { auto: true as const } : null;
-      if (shot) {
-        input.current.shot = shot;
-        haptic("medium");
-        crowdTension(true);
-      } else feint(intent.feint);
+      if (!playing || feinted) return;
+      // As in FIFA: where it goes is the left stick's lean; the button held
+      // and let go is a drive as hard as its bar, a swipe up off it the
+      // finesse, a tap leaves it all to the striker.
+      const aim = input.current.aim / 1000;
+      if (intent.feint) feint(intent.feint);
+      else if (intent.shot) shootNow({ kind: "finesse", swipe: intent.shot, aim });
+      else if (intent.tap) shootNow({ kind: "auto" });
+      else shootNow({ kind: "drive", power, aim });
     }
   };
 
@@ -397,9 +481,22 @@ function AttackRun({
                 </>
               )}
             </div>
-            <div className="flex h-28 w-28 flex-col items-center justify-center rounded-full border-[3px] border-accent-lime/90 bg-accent-lime/25 shadow-lg">
-              Удар
-              <span className="font-normal text-white/80">{started ? "↑ / тап" : "тап — авто, ↑ — свайп"}</span>
+            <div className="relative h-28 w-28">
+              <PowerRing barRef={shotBar} />
+              <div className="flex h-full w-full flex-col items-center justify-center rounded-full border-[3px] border-accent-lime/90 bg-accent-lime/25 shadow-lg">
+                Удар
+                <span className="font-normal text-white/80">{started ? "держи · ↑" : "держи — сила, ↑ — закрутка"}</span>
+              </div>
+              {/* The chip: a small button, an arc for a sign. */}
+              <div ref={chipBtn} className="absolute -left-3 -top-16 h-14 w-14" aria-label="Парашют">
+                <PowerRing barRef={chipBar} />
+                <div className="flex h-full w-full items-center justify-center rounded-full border-[3px] border-white/80 bg-black/50 shadow-lg">
+                  <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="#fff" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 18 Q12 1 20 18" />
+                    <path d="M16.5 15.5 L20 18 L20.8 13.8" />
+                  </svg>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -441,9 +538,9 @@ function AttackRun({
         <div className="pointer-events-none absolute inset-x-0 top-24 px-6 text-center text-sm text-ink-chalk/90 drop-shadow">
           {ready ? (
             <>
-              Левый палец — джойстик: веди игрока, до края — спринт, наклон — угол удара.
+              Джойстик — бег, до края — спринт, наклон — угол удара.
               <br />
-              Правый палец: свайп вверх — удар, тап — автоудар, рывок вбок — финт.
+              «Удар»: держи — сила (выше), ↑ — закрутка, тап — авто, рывок вбок — финт. ⌒ — парашют.
             </>
           ) : (
             "Загружаем…"
@@ -493,7 +590,7 @@ function AttackRun({
             type="button"
             onClick={() => {
               // Same scene, next attack: no WebGL context churn between attacks.
-              input.current = { live: false, hold: 0, steer: 0, feint: 0, shot: null, aiming: false, aim: 0 };
+              input.current = { live: false, hold: 0, steer: 0, feint: 0, shot: null, aiming: false, aim: 0, power: null, lob: false };
               stick.current.end();
               pad.current.cancel();
               fingers.current.clear();

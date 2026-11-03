@@ -1,8 +1,11 @@
 /** Where the shot goes, worked out on the phone before it is written into
- * the timeline: the left stick's lean picks the spot across the goal, the
- * right thumb's swipe only its power, height and bend — or a tap, and the
- * shot picks itself. Either way the result is an ordinary swipe the server
- * replays like any other (it never sees the stick or the tap). */
+ * the timeline — the controls as in FIFA: the left stick's lean picks the
+ * spot across the goal; the shot button held and let go is a drive, its
+ * power bar how hard and so how high (full — over the bar); a swipe up off
+ * it is the finesse, bent the way his place on the pitch calls for; the
+ * chip button lifts it over; a tap and the shot picks itself. Whatever it
+ * was, the result is an ordinary swipe the server replays like any other
+ * (it never sees the stick or the buttons). */
 import { GOAL_HALF_WIDTH, GRAVITY, type QuantizedSwipe } from "@/lib/freeKick3d/trajectory";
 
 import { AIM_REF, ballOf, shoot, type EpisodeSetup, type EpisodeState } from "./engine";
@@ -20,24 +23,33 @@ const AUTO_CHIP_DIST = 3.2;
 /** swipeToKick's aim: clamp(dx / up, ±0.8) · 0.35 · aimScale. */
 const AIM_GAIN = 0.35;
 const AIM_MAX = 0.8;
-/** A thumb's arc is small: its bend counts this much more than a swipe's. */
-const THUMB_CURL = 1.8;
-/** The thumb's swipe is short and quick, the free kick's whole-screen
- * swipe scale makes it fly over the bar and come out weak. So it is read
- * on its own scale: its length (share of the height) is how high the ball
- * crosses the goal line, its pace (heights / s) how hard it is struck. */
-const THUMB_LOW = 0.06;
-const THUMB_HIGH = 0.3;
-const CROSS_LOW = 0.25;
-const CROSS_HIGH = 2.1;
+/** The drive by its power bar (0…1): struck this hard (m/s), crossing the
+ * line this high (m) — up to the top corner at POWER_TOP, then over the bar. */
+const DRIVE_SOFT = 21;
+const DRIVE_HARD = 32;
+const DRIVE_LOW = 0.3;
+const DRIVE_TOP = 2.15;
+const DRIVE_OVER = 3.1;
+const POWER_TOP = 0.9;
+/** The finesse: the thumb's swipe read on its own scale (it is short and
+ * quick) — its pace (heights / s) how hard, its length (share of the
+ * height) how high; bent this much. */
 const THUMB_SOFT = 0.9;
 const THUMB_HARD = 2.6;
-const SPEED_SOFT = 21;
-const SPEED_HARD = 31;
-/** Slower than this (heights / s) and at least this long: the chip, played
- * as swiped. Well below a calm shot's pace, so a placed shot is no chip. */
-const THUMB_CHIP_PACE = 0.6;
-const THUMB_CHIP_UP = 0.15;
+const THUMB_LOW = 0.06;
+const THUMB_HIGH = 0.3;
+const FINESSE_SOFT = 20;
+const FINESSE_HARD = 27;
+const FINESSE_LOW = 0.6;
+const FINESSE_HIGH = 1.9;
+const FINESSE_CURVE = 320;
+/** Closer to a post than this (m across): the finesse into that near post
+ * bends in from outside it; else it bends away from the keeper into the far one. */
+const NEAR_SIDE = 1;
+/** The chip by its power bar: the swipe that scoops it (free-kick scale). */
+const CHIP_UP_SOFT = 0.24;
+const CHIP_UP_HARD = 0.36;
+const CHIP_MS = 600;
 /** swipeToKick's mapping, run backwards (shot min speed, lift scale, its
  * speed from the swipe, the ball's mean pace over a shot's drag). */
 const KICK_MIN_SPEED = 11;
@@ -47,8 +59,15 @@ const DRAG_PACE = 0.93;
 /** The estimate is then corrected against the real flight (drag, the
  * dip) this many times. */
 const CROSS_FIXES = 3;
+/** A post met the ball this close to the line (m): read the crossing on from it. */
+const CROSS_NEAR = 1.5;
 
-export type ShotIntent = { swipe: QuantizedSwipe; aim: number } | { auto: true };
+/** `aim` is the stick's lean (−1 … 1), `power` the bar (0 … 1). */
+export type ShotIntent =
+  | { kind: "drive"; power: number; aim: number }
+  | { kind: "finesse"; swipe: QuantizedSwipe; aim: number }
+  | { kind: "chip"; power: number; aim: number }
+  | { kind: "auto" };
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
@@ -75,24 +94,35 @@ function leanFor(s: EpisodeState, tx: number): number {
  * corrected by flying it (with the keeper out of the way). */
 function strike(setup: EpisodeSetup, s: EpisodeState, tx: number, speed: number, cross: number, curve: number): QuantizedSwipe {
   const clear: EpisodeState = { ...s, kx: 50, kMode: "wait", kTicks: 0 };
-  let want = cross;
-  let q = estimate(s, tx, speed, want, curve);
+  // The bend doesn't land exactly on the chord, drag and dip pull it down:
+  // the spot and the height are corrected against the real flight.
+  let wantX = tx;
+  let wantY = cross;
+  let q = estimate(s, wantX, speed, wantY, curve);
   for (let i = 0; i < CROSS_FIXES; i++) {
     const got = crossing(setup, clear, q);
-    if (got === null || Math.abs(got - cross) < 0.05) break;
-    want += cross - got;
-    q = estimate(s, tx, speed, want, curve);
+    if (!got || (Math.abs(got.y - cross) < 0.05 && Math.abs(got.x - tx) < 0.1)) break;
+    wantX += tx - got.x;
+    wantY += cross - got.y;
+    q = estimate(s, wantX, speed, wantY, curve);
   }
   return q;
 }
 
-/** How high the ball crosses the goal line (null if it never gets there). */
-function crossing(setup: EpisodeSetup, s: EpisodeState, q: QuantizedSwipe): number | null {
+/** Where the ball crosses the goal line — straight on from the flight
+ * before it if a post or the bar met it first (null if it never gets near). */
+function crossing(setup: EpisodeSetup, s: EpisodeState, q: QuantizedSwipe): { x: number; y: number } | null {
   const f = shoot(setup, s, q, 1);
+  const hit = f.events.length ? f.events[0].t : Infinity;
   for (let i = 1; i < f.samples.length; i++) {
     const a = f.samples[i - 1].ball;
     const b = f.samples[i].ball;
-    if (a.z > 0 && b.z <= 0) return a.y + ((b.y - a.y) * a.z) / (a.z - b.z);
+    const late = f.samples[i].t >= hit;
+    if ((a.z > 0 && b.z <= 0) || (late && a.z > 0 && a.z < CROSS_NEAR)) {
+      const k = a.z / (a.z - b.z || 1e-6);
+      return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
+    }
+    if (late) return null;
   }
   return null;
 }
@@ -112,18 +142,41 @@ function estimate(s: EpisodeState, tx: number, speed: number, cross: number, cur
 
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 
+/** How high the drive crosses the line for its power bar (m). */
+export function driveHeight(power: number): number {
+  const p = clamp(power, 0, 1);
+  return p <= POWER_TOP ? lerp(DRIVE_LOW, DRIVE_TOP, p / POWER_TOP) : lerp(DRIVE_TOP, DRIVE_OVER, (p - POWER_TOP) / (1 - POWER_TOP));
+}
+
+/** Which way the finesse bends (the swipe's curve sign: > 0 bends left).
+ * Into the near post he wraps it in from outside it; into the far one —
+ * or the middle — away from the keeper, from where he stands. */
+export function finesseBend(s: EpisodeState, tx: number): 1 | -1 {
+  const bx = ballOf(s).x;
+  if (tx < -0.3) return bx < -NEAR_SIDE ? -1 : 1;
+  if (tx > 0.3) return bx > NEAR_SIDE ? 1 : -1;
+  return bx >= 0 ? 1 : -1;
+}
+
 /** The intent as the swipe the timeline carries. */
 export function resolveShot(setup: EpisodeSetup, s: EpisodeState, intent: ShotIntent): QuantizedSwipe {
-  if ("swipe" in intent) {
-    const sw = intent.swipe;
+  if (intent.kind !== "auto") {
     const tx = clamp(intent.aim, -1, 1) * AIM_POST;
-    const curve = clamp(Math.round(sw.curve * THUMB_CURL), -500, 500);
+    if (intent.kind === "drive") {
+      const p = clamp(intent.power, 0, 1);
+      return strike(setup, s, tx, lerp(DRIVE_SOFT, DRIVE_HARD, Math.min(1, p / POWER_TOP)), driveHeight(p), 0);
+    }
+    if (intent.kind === "chip") {
+      const up = lerp(CHIP_UP_SOFT, CHIP_UP_HARD, clamp(intent.power, 0, 1));
+      return aimSwipe(s, tx, { dx: 0, dy: -Math.round(up * 1000), curve: 0, durationMs: CHIP_MS });
+    }
+    const sw = intent.swipe;
     const up = -sw.dy / 1000;
     const pace = up / (sw.durationMs / 1000);
-    if (pace < THUMB_CHIP_PACE && up >= THUMB_CHIP_UP) return aimSwipe(s, tx, { ...sw, curve });
     const power = clamp((pace - THUMB_SOFT) / (THUMB_HARD - THUMB_SOFT), 0, 1);
     const height = clamp((up - THUMB_LOW) / (THUMB_HIGH - THUMB_LOW), 0, 1);
-    return strike(setup, s, tx, lerp(SPEED_SOFT, SPEED_HARD, power), lerp(CROSS_LOW, CROSS_HIGH, height), curve);
+    const curve = finesseBend(s, tx) * FINESSE_CURVE;
+    return strike(setup, s, tx, lerp(FINESSE_SOFT, FINESSE_HARD, power), lerp(FINESSE_LOW, FINESSE_HIGH, height), curve);
   }
   // The tap: over a keeper standing on top of him, else low to the side
   // he leaves open.

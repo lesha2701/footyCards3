@@ -41,7 +41,7 @@ import {
   type KeeperMode,
   type ShotFlight,
 } from "@/lib/oneOnOne/engine";
-import { AIM_POST, type ShotIntent } from "@/lib/oneOnOne/aim";
+import { AIM_POST, driveHeight, type ShotIntent } from "@/lib/oneOnOne/aim";
 import type { EpisodeRecorder } from "@/lib/oneOnOne/recorder";
 
 import { ONE_ON_ONE_MOVES_URL, addMoves, play, prepareMoves, strikePlan, type Moves, type StrikePlan } from "./moves";
@@ -50,7 +50,8 @@ import { ONE_ON_ONE_MOVES_URL, addMoves, play, prepareMoves, strikePlan, type Mo
  * every tick). `feint` is consumed by the tick that takes it. */
 /** hold: 0 stop, 1 run, 2 sprint. */
 /** `aiming` — the right thumb is down: the stick's lean is `aim` (and
- * `steer` 0), and the goal shows where it aims. */
+ * `steer` 0), and the goal shows where it aims — as high as the power bar
+ * held (`power`) would put it, or up for the chip (`lob`). */
 export type LiveInput = {
   live: boolean;
   hold: number;
@@ -59,6 +60,8 @@ export type LiveInput = {
   shot: QuantizedSwipe | ShotIntent | null;
   aiming: boolean;
   aim: number;
+  power: number | null;
+  lob: boolean;
 };
 
 /** Slow motion for the last moments of a shot that's a goal or a save. */
@@ -265,6 +268,9 @@ type StageRef = MutableRefObject<Stage>;
 /** Where the shot goes while the right thumb is down: a ring on the goal
  * line at the left stick's lean (the spot the aim resolves to). */
 const AIM_MARK_Y = 0.9;
+const AIM_LOB_Y = 2.1;
+/** Past the bar the ring sits on it (the bar turns red on the button). */
+const AIM_TOP_Y = 2.5;
 function AimMarker({ stage, input }: { stage: StageRef; input: MutableRefObject<LiveInput> }) {
   const mark = useRef<THREE.Group>(null);
   const fade = useRef(0);
@@ -275,8 +281,10 @@ function AimMarker({ stage, input }: { stage: StageRef; input: MutableRefObject<
     fade.current = THREE.MathUtils.damp(fade.current, on ? 1 : 0, 14, delta);
     g.visible = fade.current > 0.02;
     for (const c of g.children) ((c as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = fade.current;
-    const x = (THREE.MathUtils.clamp(input.current.aim, -1000, 1000) / 1000) * AIM_POST;
-    g.position.set(on ? THREE.MathUtils.damp(g.position.x, x, 18, delta) : x, AIM_MARK_Y, 0.05);
+    const inp = input.current;
+    const x = (THREE.MathUtils.clamp(inp.aim, -1000, 1000) / 1000) * AIM_POST;
+    const y = inp.lob ? AIM_LOB_Y : inp.power !== null ? Math.min(AIM_TOP_Y, driveHeight(inp.power)) : AIM_MARK_Y;
+    g.position.set(on ? THREE.MathUtils.damp(g.position.x, x, 18, delta) : x, on ? THREE.MathUtils.damp(g.position.y, y, 18, delta) : y, 0.05);
   });
   // Dark under white under lime: readable over the net, the boards and the crowd.
   return (

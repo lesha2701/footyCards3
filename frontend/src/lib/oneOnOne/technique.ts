@@ -17,8 +17,9 @@ const SIDE_MOVE = 1.2;
 const SIDE_AIM = 0.12;
 /** Closer to the keeper than this (m): a toe poke. */
 const TOE_DIST = 2.2;
-/** A drive from this speed (m/s); slower is placed. */
-const DRIVE_SPEED = 27;
+/** A drive from this speed (m/s): a ball struck clean through the middle
+ * is the laces (the "kick"); only a soft one is side-footed. */
+const DRIVE_SPEED = 19;
 /** Bent away with this much sidespin (rad/s): the outside of the foot. */
 const OUTSIDE_SPIN = 60;
 /** Rising this steeply (vertical over horizontal speed): a chip. */
@@ -40,11 +41,12 @@ export type RunAtShot = {
 const leftOf = (hx: number, hz: number, x: number, z: number) => x * hz - z * hx;
 
 /** Which way the sidespin bends the ball, positive to his left (0 for a
- * ball struck clean through the middle). The swerve goes along v × spin. */
+ * ball struck clean through the middle). The swerve goes along spin × v
+ * (the Magnus force the flight uses). */
 function bendOf(f: ShotFlight, hx: number, hz: number): number {
   const { velocity: v, spin } = f.kick;
   if (Math.abs(spin.y) < CURL_SPIN) return 0;
-  return Math.sign(leftOf(hx, hz, v.y * spin.z - v.z * spin.y, v.x * spin.y - v.y * spin.x));
+  return Math.sign(leftOf(hx, hz, spin.y * v.z - spin.z * v.y, spin.x * v.y - spin.y * v.x));
 }
 
 export function shotTechnique(f: ShotFlight, run: RunAtShot, chip: boolean): Technique {
@@ -60,8 +62,8 @@ export function shotTechnique(f: ShotFlight, run: RunAtShot, chip: boolean): Tec
   else if (Math.abs(aim) > SIDE_AIM) foot = aim > 0 ? "right" : "left";
   else foot = "right";
 
-  // One on one a finish is placed with the inside unless it is struck hard:
-  // the laces for power, the outside only for a ball bent hard away.
+  // A ball struck clean is the laces (side-footed only when soft); a bent
+  // one is curled with the inside, or with the outside when it bends away.
   let kind: ShotKind;
   const bend = bendOf(f, run.hx, run.hz);
   // The inside of the right foot wraps it to the left, the outside away.
@@ -70,8 +72,8 @@ export function shotTechnique(f: ShotFlight, run: RunAtShot, chip: boolean): Tec
   if (chip || v.y / Math.max(1e-6, flat) > CHIP_LOFT) kind = "chip";
   else if (run.keeperDist < TOE_DIST) kind = "toe";
   else if (!inside && hardSpin) kind = "outside";
-  else if (speed >= DRIVE_SPEED) kind = "instep";
-  else kind = bend !== 0 && inside ? "curl" : "side";
+  else if (bend !== 0 && inside) kind = "curl";
+  else kind = speed >= DRIVE_SPEED ? "instep" : "side";
   return { foot, kind };
 }
 

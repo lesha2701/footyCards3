@@ -29,8 +29,9 @@ describe("how the shot looks", () => {
     expect(shotTechnique(flight({ x: 5, y: 2, z: -20 }), RUN, false).foot).toBe("left");
   });
 
-  it("placed with the inside, driven with the laces, scooped, poked", () => {
-    expect(shotTechnique(flight({ x: -4, y: 2, z: -20 }), RUN, false).kind).toBe("side");
+  it("struck clean with the laces, side-footed only soft, scooped, poked", () => {
+    expect(shotTechnique(flight({ x: -4, y: 2, z: -20 }), RUN, false).kind).toBe("instep");
+    expect(shotTechnique(flight({ x: -3, y: 1.5, z: -14 }), RUN, false).kind).toBe("side");
     expect(shotTechnique(flight({ x: -4, y: 4, z: -30 }), RUN, false).kind).toBe("instep");
     expect(shotTechnique(flight({ x: 0, y: 9, z: -12 }), RUN, false).kind).toBe("chip");
     expect(shotTechnique(flight({ x: 0, y: 2, z: -20 }), RUN, true).kind).toBe("chip");
@@ -38,8 +39,9 @@ describe("how the shot looks", () => {
   });
 
   it("sidespin: wrapped with the inside, bent away with the outside", () => {
-    const curled = shotTechnique(flight({ x: -4, y: 2, z: -20 }, -75), RUN, false);
-    const bent = shotTechnique(flight({ x: -4, y: 2, z: -20 }, 75), RUN, false);
+    // Spin up (ω_y > 0) bends a ball flying to −z left — the right instep's wrap.
+    const curled = shotTechnique(flight({ x: -4, y: 2, z: -20 }, 75), RUN, false);
+    const bent = shotTechnique(flight({ x: -4, y: 2, z: -20 }, -75), RUN, false);
     expect(curled).toEqual({ foot: "right", kind: "curl" });
     expect(bent).toEqual({ foot: "right", kind: "outside" });
   });
