@@ -395,21 +395,21 @@ async def test_full_division_relegates_twice_as_many_as_each_league_promotes(cli
 
 async def test_style_shop_merch_and_pro(client, db_session, bot_token):
     config = await get_config(db_session)
-    lion = next(i for i in manager_shop.catalog(config) if i["code"] == "symbol_img_bison")
+    lion = next(i for i in manager_shop.catalog(config) if i["code"] == "symbol_img_tower")
     scarf = next(i for i in manager_shop.merch_items(config) if i["code"] == "scarf")
     found_cost, pro_stars = config.manager_found_cost, config.manager_pro_stars
     a_id, a_headers = await _player(client, db_session, bot_token, 894201)
     fan_id, fan_headers = await _player(client, db_session, bot_token, 894202)
     view = await _club(client, a_headers)
     club_id, budget = view["club"]["id"], view["club"]["budget"]
-    assert view["club"]["look"]["symbol"] == "img_ball"
+    assert view["club"]["look"]["symbol"] == "none"
     shop = view["shop"]["cosmetics"]
     assert "symbol_lion" not in {c["code"] for c in shop}  # the old emoji symbols are retired
     assert (await client.post(f"{API}/manager/shop/symbol_lion", headers=a_headers)).status_code == 404
-    assert (await client.patch(f"{API}/manager/look", headers=a_headers, json={"symbol": "img_bison"})).status_code == 409  # not bought
-    assert (await client.post(f"{API}/manager/shop/symbol_img_bison", headers=a_headers)).status_code == 200
-    view = (await client.patch(f"{API}/manager/look", headers=a_headers, json={"symbol": "img_bison", "color": "#c62828"})).json()
-    assert view["club"]["look"]["symbol"] == "img_bison" and view["club"]["look"]["color"] == "#c62828"
+    assert (await client.patch(f"{API}/manager/look", headers=a_headers, json={"symbol": "img_tower"})).status_code == 409  # not bought
+    assert (await client.post(f"{API}/manager/shop/symbol_img_tower", headers=a_headers)).status_code == 200
+    view = (await client.patch(f"{API}/manager/look", headers=a_headers, json={"symbol": "img_tower", "color": "#c62828"})).json()
+    assert view["club"]["look"]["symbol"] == "img_tower" and view["club"]["look"]["color"] == "#c62828"
     assert (await client.patch(f"{API}/manager/look", headers=a_headers, json={"color": "#123456"})).status_code == 409
     db_session.expire_all()
     assert (await db_session.get(User, a_id)).balance == START - found_cost - lion["coins"]

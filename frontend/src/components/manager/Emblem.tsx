@@ -43,8 +43,9 @@ export default function Emblem({ look, size = 48, className = "" }: {
 }
 
 /** The emblem symbol in SVG space: a picture symbol tinted with `fill`
- * («img_<key>», see ClubLogo.ImageSymbol), or an emoji (the older symbols). */
+ * («img_<key>», see ClubLogo.ImageSymbol), an emoji (the older symbols) or nothing («none»). */
 export function SymbolGlyph({ symbol, fill, cx, cy, size }: { symbol: string; fill: string; cx: number; cy: number; size: number }) {
+  if (!symbol || symbol === "none") return null;
   if (isImageSymbol(symbol)) return <ImageSymbol symbol={symbol} fill={fill} x={cx - size / 2} y={cy - size / 2} size={size} />;
   return <text x={cx} y={cy + size * 0.06} textAnchor="middle" dominantBaseline="middle" fontSize={size * 0.83}>{symbol}</text>;
 }

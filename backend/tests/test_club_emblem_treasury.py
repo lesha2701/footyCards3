@@ -86,9 +86,11 @@ async def test_catalog_is_seeded_and_nothing_is_unlocked(client, db_session, bot
     assert {"lion", "ball"}.isdisjoint(i["style_key"] for i in body["items"])  # retired symbols
     assert body["emblem"] == {"color2": None, "pattern": None, "symbol": None, "letters": None,
                               "outline": None, "outline_thin": False, "effect": None}
-    # Coins for the cheap layers, Stars for symbols / outlines / effects.
+    # Coins for the cheap layers and four symbols, Stars for the other symbols / outlines / effects.
     for item in body["items"]:
-        if item["kind"] in ("symbol", "outline", "effect"):
+        if item["style_key"] in ("img_ball", "img_tower", "img_lightning", "img_compass"):
+            assert item["coins_price"] == 2000 and item["stars_price"] == 0
+        elif item["kind"] in ("symbol", "outline", "effect"):
             assert item["stars_price"] > 0 and item["coins_price"] == 0
         else:
             assert item["coins_price"] > 0 and item["stars_price"] == 0
