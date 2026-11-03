@@ -81,3 +81,16 @@ describe("the right thumb's tap", () => {
     expect(f.end({ x: 300, y: 600, t: 200 }).tap).toBeUndefined();
   });
 });
+
+describe("the shot swipe after the thumb rested", () => {
+  it("counts from when the thumb moved, not from when it came down", () => {
+    const quick = (rest: number) => {
+      const f = new Finger(W, H);
+      f.start({ x: 300, y: 650, t: 0 });
+      for (let i = 1; i <= 5; i++) f.move({ x: 300, y: 650 - i * 32, t: rest + i * 15 });
+      return f.end({ x: 300, y: 490, t: rest + 80 }).shot!;
+    };
+    expect(Math.abs(quick(500).durationMs - quick(0).durationMs)).toBeLessThanOrEqual(16);
+    expect(quick(500).durationMs).toBeLessThan(120);
+  });
+});

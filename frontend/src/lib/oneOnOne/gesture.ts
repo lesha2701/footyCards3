@@ -19,6 +19,9 @@ const FEINT_SLOPE = 1.6;
  * of the height) and no older than SHOT_MS. */
 const SHOT_MIN = 0.07;
 const SHOT_MS = 600;
+/** A thumb resting still (px), and one frame (ms) — where its stroke began. */
+const STILL_PX = 3;
+const FRAME_MS = 16;
 /** A tap: down and up within TAP_MS, moving less than TAP_DIST (share of
  * the height). */
 const TAP_MS = 260;
@@ -112,7 +115,13 @@ export class Finger {
     let i = pts.length - 1;
     while (i > 0 && pts[i - 1].y >= pts[i].y - 2 && last.t - pts[i - 1].t <= SHOT_MS) i -= 1;
     if ((pts[i].y - last.y) / this.height < SHOT_MIN) return null;
-    const swipe = swipeFromPoints(pts.slice(i), this.height);
+    // The thumb often rests on the button (while the left one aims) before
+    // it swipes: the stroke starts when it moves, not when it came down —
+    // else the rest counts as a slow swipe, and the shot comes out weak.
+    const stroke = pts.slice(i);
+    while (stroke.length > 2 && Math.hypot(stroke[1].x - stroke[0].x, stroke[1].y - stroke[0].y) < STILL_PX) stroke.shift();
+    if (stroke[1].t - stroke[0].t > FRAME_MS * 2) stroke[0] = { ...stroke[0], t: stroke[1].t - FRAME_MS };
+    const swipe = swipeFromPoints(stroke, this.height);
     if (!swipe) return null;
     const q = quantizeSwipe(swipe);
     if (q.dy >= 0) return null;

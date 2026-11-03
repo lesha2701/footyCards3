@@ -47,7 +47,7 @@ export class EpisodeRecorder {
       shot = null;
     }
     if (this.pending && !this.timeline.shot && s.feintTicks === 0 && !(this.timeline.feint?.tick === i)) {
-      shot = resolveShot(s, this.pending);
+      shot = resolveShot(this.setup, s, this.pending);
       this.pending = null;
     }
     if (shot && !this.timeline.shot) this.timeline.shot = { tick: i, ...shot };
