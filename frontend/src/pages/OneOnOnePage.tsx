@@ -16,6 +16,7 @@ import { crowdChant, crowdHush, crowdTension, playFreeKickSfx, startCrowd } from
 import { createEpisode, type EpisodeEnd } from "@/lib/oneOnOne/engine";
 import { Finger } from "@/lib/oneOnOne/gesture";
 import { EpisodeRecorder } from "@/lib/oneOnOne/recorder";
+import { FOOT_LABEL, KIND_LABEL, techniqueOf } from "@/lib/oneOnOne/technique";
 import { audio } from "@/lib/sound";
 import { haptic, hapticNotify, showConfirm } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -233,6 +234,8 @@ function AttackRun({
     [submit],
   );
   const onDecided = useCallback(() => setShown(true), []);
+  // Which foot and how (shown with the outcome; the same for this timeline).
+  const technique = useMemo(() => (ended ? techniqueOf(recorder.state, recorder.timeline) : null), [ended, recorder]);
 
   // The crowd reacts the moment the outcome is on screen — on the local
   // episode, which is the server's own computation.
@@ -414,10 +417,15 @@ function AttackRun({
       {outcome && verdict && (
         <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 bg-gradient-to-t from-bg-base/90 to-transparent p-6 pb-10 pt-16">
           <div className={`font-display text-4xl drop-shadow ${OUTCOME[outcome].className}`}>{OUTCOME[outcome].label}</div>
+          {technique && (
+            <div className="text-sm text-ink-chalk">
+              {FOOT_LABEL[technique.foot]} {KIND_LABEL[technique.kind]}
+            </div>
+          )}
           {(verdict.bonuses.length > 0 || verdict.feint) && (
             <div className="text-caption text-ink-chalk/80">
               {verdict.bonuses.length > 0
-                ? verdict.bonuses.map((b) => BONUS[b]).join(", ")
+                ? verdict.bonuses.map((b) => (b === "chip" && technique?.kind === "chip" ? "бонус за парашют" : BONUS[b])).join(", ")
                 : verdict.feint === "read"
                   ? "вратарь не купился на финт"
                   : "вратарь купился на финт"}

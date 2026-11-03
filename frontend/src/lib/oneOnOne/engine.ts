@@ -61,10 +61,10 @@ export const MAX_RUN_TICKS = 600;
 /** The ball runs this far ahead of the attacker's feet (m). */
 export const BALL_LEAD = 0.55;
 
-const RUN_SPEED = 6.4;
+const RUN_SPEED = 5.4;
 /** A full edge (rating 95) runs this much faster (m/s). */
-const EDGE_RUN = 0.6;
-const RUN_ACCEL = 9;
+const EDGE_RUN = 0.5;
+const RUN_ACCEL = 7.5;
 const RUN_BRAKE = 8;
 /** Full steer points the run this far sideways per metre forwards. */
 const STEER_SPREAD = 1.3;
@@ -73,7 +73,7 @@ const TURN_K = 0.16;
 
 /** The feint: a sidestep this long (ticks) at this lateral speed (m/s). */
 export const FEINT_TICKS = 18;
-const FEINT_SIDE_SPEED = 4.2;
+export const FEINT_SIDE_SPEED = 4.2;
 /** The keeper bites best at this distance from the ball (m), not at all
  * FEINT_SPAN either side of it. */
 const FEINT_SWEET = 4.5;
@@ -245,10 +245,10 @@ export function createEpisode(seed: number, rating = 75): EpisodeSetup {
     reactTicks: Math.floor(lerp(14, 26, rnd())),
     keepGap: lerp(4.5, 5.5, rnd()),
     rushDist: lerp(5, 6.5, rnd()),
-    setSpeed: lerp(3.8, 4.6, rnd()) * slow,
-    rushSpeed: lerp(4.8, 5.6, rnd()) * slow,
+    setSpeed: lerp(3.2, 3.9, rnd()) * slow,
+    rushSpeed: lerp(4, 4.7, rnd()) * slow,
     composure: lerp(0.2, 1, rnd()),
-    fallTicks: Math.floor(lerp(48, 72, rnd())),
+    fallTicks: Math.floor(lerp(57, 86, rnd())),
     shotReact: lerp(0.06, 0.12, rnd()),
     diveSpeed: lerp(6, 7.5, rnd()) * slow,
   };
@@ -553,6 +553,8 @@ export function shoot(setup: EpisodeSetup, s: EpisodeState, q: QuantizedSwipe, s
       if (v.y < -0.5) {
         events.push({ t, type: "bounce" });
         v = { x: v.x * GROUND_FRICTION, y: -v.y * GROUND_RESTITUTION, z: v.z * GROUND_FRICTION };
+        // Off the grass it comes up somewhere else: he reads it again.
+        decided = false;
       } else {
         const roll = 1 - ROLL_DECAY_PER_S * SIM_DT;
         v = { x: v.x * roll, y: 0, z: v.z * roll };

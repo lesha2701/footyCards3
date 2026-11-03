@@ -42,9 +42,9 @@ TICK = 1 / 60
 MAX_RUN_TICKS = 600
 BALL_LEAD = 0.55
 
-RUN_SPEED = 6.4
-EDGE_RUN = 0.6
-RUN_ACCEL = 9
+RUN_SPEED = 5.4
+EDGE_RUN = 0.5
+RUN_ACCEL = 7.5
 RUN_BRAKE = 8
 STEER_SPREAD = 1.3
 TURN_K = 0.16
@@ -124,10 +124,10 @@ def create_episode(seed: int, rating: int = 75) -> EpisodeSetup:
     react_ticks = math.floor(_lerp(14, 26, rnd()))
     keep_gap = _lerp(4.5, 5.5, rnd())
     rush_dist = _lerp(5, 6.5, rnd())
-    set_speed = _lerp(3.8, 4.6, rnd()) * slow
-    rush_speed = _lerp(4.8, 5.6, rnd()) * slow
+    set_speed = _lerp(3.2, 3.9, rnd()) * slow
+    rush_speed = _lerp(4, 4.7, rnd()) * slow
     composure = _lerp(0.2, 1, rnd())
-    fall_ticks = math.floor(_lerp(48, 72, rnd()))
+    fall_ticks = math.floor(_lerp(57, 86, rnd()))
     shot_react = _lerp(0.06, 0.12, rnd())
     dive_speed = _lerp(6, 7.5, rnd()) * slow
     keeper = Keeper(react_ticks, keep_gap, rush_dist, set_speed, rush_speed, composure, fall_ticks, shot_react, dive_speed)
@@ -432,6 +432,8 @@ def shoot(setup: EpisodeSetup, s: State, q: Swipe) -> Flight:
             if vy < -0.5:
                 events.append("bounce")
                 vx, vy, vz = vx * GROUND_FRICTION, -vy * GROUND_RESTITUTION, vz * GROUND_FRICTION
+                # Off the grass it comes up somewhere else: he reads it again.
+                decided = False
             else:
                 roll = 1 - ROLL_DECAY_PER_S * SIM_DT
                 vx, vy, vz = vx * roll, 0, vz * roll

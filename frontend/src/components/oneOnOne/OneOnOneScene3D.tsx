@@ -17,7 +17,6 @@ import {
   MaterialCache,
   makePlayer,
   prepareFootballer,
-  setClip,
   type FootballerAsset,
   type SkinnedPlayer,
 } from "@/components/career/goal3d/footballer";
@@ -30,6 +29,7 @@ import { NET_DEPTH, netImpact } from "@/lib/freeKick3d/fx";
 import { playFreeKickSfx } from "@/lib/freeKick3d/sfx";
 import { BALL_RADIUS, createPenaltySetup, type QuantizedSwipe, type ShotTrajectory } from "@/lib/freeKick3d/trajectory";
 import { ballSkin } from "@/lib/gameGear";
+import { keeperTake, techniqueOf, type KeeperTake, type Technique } from "@/lib/oneOnOne/technique";
 import {
   BALL_LEAD,
   FEINT_TICKS,
@@ -44,12 +44,12 @@ import {
 } from "@/lib/oneOnOne/engine";
 import type { EpisodeRecorder } from "@/lib/oneOnOne/recorder";
 
+import { ONE_ON_ONE_MOVES_URL, addMoves, play, prepareMoves, strikePlan, type Moves, type StrikePlan } from "./moves";
+
 /** What the finger does right now (the page writes it, the scene reads it
  * every tick). `feint` is consumed by the tick that takes it. */
 export type LiveInput = { live: boolean; hold: boolean; steer: number; feint: number; shot: QuantizedSwipe | null };
 
-/** The kick clip runs this long before the ball leaves (s). */
-const KICK_LEAD = 0.2;
 /** Slow motion for the last moments of a shot that's a goal or a save. */
 const SLOWMO_WINDOW = 0.25;
 const SLOWMO_SCALE = 0.35;
@@ -80,8 +80,16 @@ type Stage = {
   prev: Snap;
   cur: Snap;
   end: EpisodeEnd | null;
-  /** Shot time (−KICK_LEAD while the kick winds up), or time since the end. */
+  /** Shot time (negative while the kick winds up), or time since the end. */
   t: number;
+  /** How the shot looks (foot, technique) and is played; how he takes it. */
+  tech: Technique | null;
+  plan: StrikePlan | null;
+  take: KeeperTake | null;
+  /** The keeper's hands (between the palms) this frame, and from when (s)
+   * the ball is in them. */
+  hands: THREE.Vector3;
+  holdFrom: number;
   decided: boolean;
   dt: number;
   ball: THREE.Vector3;
@@ -137,6 +145,7 @@ function Episode({
 }: Omit<Props, "fpsRef"> & { quality: Quality; hype: MutableRefObject<number> }) {
   const stage = useRef<Stage>({
     acc: 0, prev: snap(recorder.state), cur: snap(recorder.state), end: null, t: 0, decided: false, dt: 0,
+    tech: null, plan: null, take: null, hands: new THREE.Vector3(), holdFrom: Infinity,
     ball: new THREE.Vector3(), shake: 0, ripple: null,
   });
   const [confetti, setConfetti] = useState(0);
@@ -145,7 +154,9 @@ function Episode({
   // A new attack, a new recorder: start over.
   useEffect(() => {
     const s0 = snap(recorder.state);
-    Object.assign(stage.current, { acc: 0, prev: s0, cur: s0, end: null, t: 0, decided: false, ripple: null });
+    Object.assign(stage.current, {
+      acc: 0, prev: s0, cur: s0, end: null, t: 0, decided: false, ripple: null, tech: null, plan: null, take: null, holdFrom: Infinity,
+    });
     setFlight(null);
   }, [recorder]);
 
@@ -174,7 +185,10 @@ function Episode({
       if (ended) {
         s.end = ended;
         s.acc = TICK;
-        s.t = ended.flight ? -KICK_LEAD : 0;
+        s.tech = techniqueOf(recorder.state, recorder.timeline);
+        s.plan = s.tech ? strikePlan(s.tech.kind, s.tech.foot) : null;
+        s.take = ended.flight ? keeperTake(ended.flight) : null;
+        s.t = s.plan ? -s.plan.lead : 0;
         if (ended.flight) setFlight(ended.flight);
         onEnded(ended);
       }
@@ -271,6 +285,38 @@ function hipsOf(p: SkinnedPlayer): THREE.Object3D | null {
   return hips;
 }
 
+/** The keeper's two hands (the ball between them when he holds it). */
+function handsOf(p: SkinnedPlayer): [THREE.Object3D, THREE.Object3D] | null {
+  let l: THREE.Object3D | null = null;
+  let r: THREE.Object3D | null = null;
+  p.root.traverse((o) => {
+    if (!(o as THREE.Bone).isBone) return;
+    if (/LeftHand$/.test(o.name)) l = o;
+    else if (/RightHand$/.test(o.name)) r = o;
+  });
+  return l && r ? [l, r] : null;
+}
+
+/** The run, then the sprint from a little above the run's own pace: each
+ * played close to the speed it was recorded at (sped up much, the legs
+ * whirl), the strides cross-faded rather than switched. */
+const SPRINT_FROM = 0.95;
+const STRIDE_MIN = 0.75;
+const STRIDE_MAX = 1.1;
+function runAt(p: SkinnedPlayer, speed: number, asset: FootballerAsset) {
+  const sprint = speed > asset.timing.sprintSpeed * SPRINT_FROM;
+  const clip = play(p, sprint ? "sprint" : "run", false, 0.35);
+  clip.timeScale = THREE.MathUtils.clamp(speed / (sprint ? asset.timing.sprintSpeed : asset.timing.runSpeed), STRIDE_MIN, STRIDE_MAX);
+}
+
+/** The ball settles into the keeper's hands over this (s). */
+const INTO_HANDS = 0.08;
+const wrapAngle =(a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+/** The scoop played faster (he is already down at the ball). */
+const SCOOP_SPEED = 1.5;
+/** Getting up after the feint fooled him (s). */
+const GETUP_S = 0.7;
+
 /** Keeps the hips over (x, z) whatever the clip does (the dives travel
  * sideways on their own; here the engine says where his body is). */
 function pinHips(p: SkinnedPlayer, hips: THREE.Object3D | null, x: number, z: number, tmp: THREE.Vector3) {
@@ -295,15 +341,27 @@ function Players({
   quality: Quality;
   onReady: () => void;
 }) {
-  const [gltf, moves] = useLoader(GLTFLoader, [FOOTBALLER_URL, MOVES_URL], (loader) => {
+  const [gltf, extra, movesGltf] = useLoader(GLTFLoader, [FOOTBALLER_URL, MOVES_URL, ONE_ON_ONE_MOVES_URL], (loader) => {
     loader.setMeshoptDecoder(MeshoptDecoder);
   });
-  const asset = useMemo<FootballerAsset>(() => prepareFootballer(gltf, moves), [gltf, moves]);
+  const asset = useMemo<FootballerAsset>(() => prepareFootballer(gltf, extra), [gltf, extra]);
+  const moves = useMemo<Moves>(() => prepareMoves(gltf, movesGltf), [gltf, movesGltf]);
   const materials = useMemo(() => new MaterialCache(), []);
-  const attacker = useMemo(() => makePlayer(asset, ATTACKER_LOOK, materials), [asset, materials]);
-  const keeper = useMemo(() => makePlayer(asset, KEEPER_LOOK, materials), [asset, materials]);
-  const hips = useMemo(() => ({ attacker: hipsOf(attacker), keeper: hipsOf(keeper) }), [attacker, keeper]);
-  const tmp = useMemo(() => new THREE.Vector3(), []);
+  const attacker = useMemo(() => {
+    const p = makePlayer(asset, ATTACKER_LOOK, materials);
+    addMoves(p, moves);
+    p.root.rotation.order = "YXZ";
+    return p;
+  }, [asset, moves, materials]);
+  const keeper = useMemo(() => {
+    const p = makePlayer(asset, KEEPER_LOOK, materials);
+    addMoves(p, moves);
+    return p;
+  }, [asset, moves, materials]);
+  const bones = useMemo(() => ({ keeper: hipsOf(keeper), hands: handsOf(keeper) }), [keeper]);
+  const tmp = useMemo(() => ({ v: new THREE.Vector3(), a: new THREE.Vector3(), b: new THREE.Vector3() }), []);
+  // The keeper getting up after he bit on the feint (s since, or null).
+  const getup = useRef<{ mode: KeeperMode; since: number | null }>({ mode: "wait", since: null });
   useEffect(() => {
     for (const p of [attacker, keeper]) {
       p.root.traverse((o) => {
@@ -322,10 +380,10 @@ function Players({
     if (!flight || flight.keeper.lyingFor > 0) return null;
     const last = flight.samples[flight.samples.length - 1];
     const dx = last.handX - flight.keeper.x;
-    return { dx, arrival: flight.end.t, reaction: flight.keeper.reaction };
+    return { dx, y: last.handY, arrival: flight.end.t, reaction: flight.keeper.reaction };
   }, [flight]);
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     const s = stage.current;
     const a = attackerAt(s);
     const k = keeperAt(s);
@@ -333,73 +391,113 @@ function Players({
     const end = s.end;
 
     // --- Attacker ---
-    const yaw = Math.atan2(a.hx, a.hz);
-    attacker.root.rotation.set(0, yaw, 0);
-    if (end?.flight) {
+    const runYaw = Math.atan2(a.hx, a.hz);
+    attacker.root.rotation.set(0, runYaw, 0);
+    if (end?.flight && s.plan) {
       const f = end.flight;
-      const kick = setClip(attacker, "kick", true, 0.08);
-      kick.time = THREE.MathUtils.clamp(asset.timing.kickContact + t, 0, kick.getClip().duration);
+      const plan = s.plan;
+      const strike = moves.strikes[plan.clip];
+      // He turns his body to the shot (open or closed for the technique)
+      // through the wind-up; at the contact the toe is at the ball.
+      const v = f.kick.velocity;
+      const shotYaw = Math.atan2(v.x, v.z) + plan.yaw;
+      const turn = Math.min(1, (t + plan.lead) / (plan.lead * 0.7));
+      const yaw = runYaw + wrapAngle(shotYaw - runYaw) * turn;
+      attacker.root.rotation.set(-plan.lean * turn, yaw, 0);
+      const kick = play(attacker, plan.clip, true, 0.08);
+      kick.time = THREE.MathUtils.clamp(strike.contact + t * plan.timeScale, 0, kick.getClip().duration);
       kick.paused = true;
-      // The striking toe at the ball when it leaves.
-      const toe = tmp.set(asset.kickToe.x, 0, asset.kickToe.z).applyAxisAngle(THREE.Object3D.DEFAULT_UP, yaw);
+      const toe = tmp.v.set(strike.toe.x, 0, strike.toe.z).applyAxisAngle(THREE.Object3D.DEFAULT_UP, yaw);
       attacker.root.position.set(f.from.x - toe.x, 0, f.from.z - toe.z);
       if (end.outcome === "goal" && t > f.end.t + 0.6) {
-        const party = setClip(attacker, "celebrate", true, 0.3);
-        party.paused = false;
+        attacker.root.rotation.x = 0;
+        play(attacker, "celebrate", true, 0.3).paused = false;
       }
+    } else if (end?.outcome === "tackle") {
+      // Into the keeper at his feet: he goes over.
+      play(attacker, "trip", true, 0.1).paused = false;
+      attacker.root.position.set(a.x, 0, a.z);
     } else if (end) {
-      setClip(attacker, "idle", false, 0.3);
+      play(attacker, "idle", false, 0.3);
       attacker.root.position.set(a.x, 0, a.z);
+    } else if (s.cur.feintTicks > 0) {
+      // The feint: a quick sidestep with the ball, leaning into it.
+      const side = play(attacker, s.cur.feintDir > 0 ? "strafe_r" : "strafe_l", false, 0.08);
+      side.timeScale = 1.6;
+      attacker.root.position.set(a.x, 0, a.z);
+      attacker.root.rotation.z = -s.cur.feintDir * Math.sin((1 - s.cur.feintTicks / FEINT_TICKS) * Math.PI) * 0.18;
     } else {
-      if (a.speed < 0.4) setClip(attacker, "idle", false, 0.2);
-      else {
-        const sprint = a.speed > 5.6;
-        const run = setClip(attacker, sprint ? "sprint" : "run", false, 0.2);
-        run.timeScale = a.speed / (sprint ? asset.timing.sprintSpeed : asset.timing.runSpeed);
-      }
+      if (a.speed < 0.4) play(attacker, "idle", false, 0.2);
+      else runAt(attacker, a.speed, asset);
       attacker.root.position.set(a.x, 0, a.z);
-      // The feint: he leans into the sidestep and back.
-      if (s.cur.feintTicks > 0) {
-        attacker.root.rotation.z = -s.cur.feintDir * Math.sin((1 - s.cur.feintTicks / FEINT_TICKS) * Math.PI) * 0.3;
-      }
     }
     attacker.mixer.update(s.dt);
 
     // --- Keeper (faces the ball) ---
+    // The ball in his hands or at his feet is no direction to face: then he
+    // faces the attacker (where the shot came from).
     const b = s.ball;
-    const kyaw = Math.atan2(b.x - k.x, b.z - k.z);
-    keeper.root.rotation.set(0, end?.flight ? Math.atan2(end.flight.from.x - k.x, end.flight.from.z - k.z) : kyaw, 0);
+    const near = Math.hypot(b.x - k.x, b.z - k.z) < 0.8 || t >= s.holdFrom;
+    const fx = end?.flight ? end.flight.from.x : near ? a.x : b.x;
+    const fz = end?.flight ? end.flight.from.z : near ? a.z : b.z;
+    keeper.root.rotation.set(0, Math.atan2(fx - k.x, fz - k.z), 0);
+    const g = getup.current;
+    if (g.mode === "fallen" && k.mode !== "fallen" && k.mode !== "lunge" && !end) g.since = 0;
+    g.mode = k.mode;
+    if (g.since !== null) g.since += delta;
     let pinX = k.x;
-    if (k.mode === "lunge" || k.mode === "fallen" || (end?.flight && end.flight.keeper.lyingFor > 0 && t < end.flight.keeper.lyingFor)) {
+    const lying = end?.flight && end.flight.keeper.lyingFor > 0 && t < end.flight.keeper.lyingFor;
+    if (k.mode === "lunge" || k.mode === "fallen" || lying) {
       // Bit on the feint: the dive the wrong way, held on the grass.
-      const side = s.cur.lungeDir;
-      const clip = setClip(keeper, side > 0 ? "gk_dive_left" : "gk_dive_right", true, 0.08);
+      const clip = play(keeper, s.cur.lungeDir > 0 ? "gk_dive_left" : "gk_dive_right", true, 0.08);
       clip.timeScale = 1.6;
       clip.paused = false;
     } else if (end?.outcome === "tackle") {
-      setClip(keeper, "gk_catch", true, 0.1).paused = false;
+      // Down at the attacker's feet and the ball gathered in.
+      const scoop = play(keeper, "gk_scoop", true, 0.08);
+      scoop.timeScale = SCOOP_SPEED;
+      scoop.paused = false;
+      s.holdFrom = moves.scoopPickup / SCOOP_SPEED;
     } else if (end?.flight && dive && t >= dive.reaction) {
       const f = end.flight;
       const samp = flightAt(f, Math.min(Math.max(t, 0), f.end.t));
       pinX = samp.bodyX;
+      if (s.take === "catch") s.holdFrom = f.end.t;
       if (Math.abs(dive.dx) >= 1) {
-        const clip = setClip(keeper, dive.dx > 0 ? "gk_dive_left" : "gk_dive_right", true, 0.06);
+        const clip = play(keeper, dive.dx > 0 ? "gk_dive_left" : "gk_dive_right", true, 0.06);
         const { diveStart, diveReach } = asset.timing;
         if (clip.time < diveStart) clip.time = diveStart;
         clip.timeScale = THREE.MathUtils.clamp((diveReach - diveStart) / Math.max(0.15, dive.arrival - dive.reaction), 0.7, 4.5);
         if (clip.time >= diveReach && end.outcome === "save" && t < f.end.t + 0.3) clip.timeScale = 0;
+      } else if (end.outcome === "goal" && t > f.end.t + 0.2) {
+        // Beaten: hands on his head.
+        play(keeper, "gk_miss", true, 0.3);
+      } else if (s.take === "block" || (f.keeper.spread && dive.y < 0.7)) {
+        // Spread at the attacker's feet.
+        play(keeper, f.end.position.x - k.x > 0 ? "gk_block_l" : "gk_block_r", true, 0.06).timeScale = 1.8;
       } else {
-        setClip(keeper, "gk_catch", true, 0.08);
+        // Straight at him: up, at the chest, or down for it.
+        play(keeper, dive.y > 1.35 ? "gk_catch_high" : dive.y < 0.75 ? "gk_catch_low" : "gk_catch", true, 0.08).timeScale = 1.6;
       }
+    } else if (!end && g.since !== null && g.since < GETUP_S) {
+      // Back on his feet after the feint fooled him.
+      const up = play(keeper, "gk_getup", true, 0.1);
+      up.timeScale = up.getClip().duration / GETUP_S;
     } else if (!end && k.speed > 0.6) {
-      const r = setClip(keeper, k.speed > 5 ? "sprint" : "run", false, 0.2);
-      r.timeScale = k.speed / (k.speed > 5 ? asset.timing.sprintSpeed : asset.timing.runSpeed);
+      runAt(keeper, k.speed, asset);
     } else if (!end?.flight || t < (dive?.reaction ?? 0)) {
-      setClip(keeper, "gk_idle", false, 0.25);
+      play(keeper, "gk_idle", false, 0.25);
     }
     keeper.mixer.update(s.dt);
-    pinHips(keeper, hips.keeper, pinX, k.z, tmp);
-  });
+    pinHips(keeper, bones.keeper, pinX, k.z, tmp.v);
+    // Where the ball sits when he has it: between his palms.
+    if (bones.hands) {
+      keeper.root.updateMatrixWorld(true);
+      bones.hands[0].getWorldPosition(tmp.a);
+      bones.hands[1].getWorldPosition(tmp.b);
+      s.hands.addVectors(tmp.a, tmp.b).multiplyScalar(0.5);
+    }
+  }, -0.5);
 
   return (
     <>
@@ -443,14 +541,27 @@ function Ball({ stage, flight, skin: skinCode, quality }: { stage: StageRef; fli
       const t = s.t;
       const p = t < 0 ? { x: f.from.x, y: BALL_RADIUS, z: f.from.z } : t <= f.end.t ? flightAt(f, t).ball : aftermathAt(aftermath, t);
       ({ x, y, z } = p);
+      if (t >= s.holdFrom) {
+        // Caught: it goes into his gloves and stays there.
+        const k = Math.min(1, (t - s.holdFrom) / INTO_HANDS);
+        x = lerp(x, s.hands.x, k);
+        y = lerp(y, s.hands.y, k);
+        z = lerp(z, s.hands.z, k);
+      }
       if (flying !== (t >= 0 && !s.decided)) setFlying(t >= 0 && !s.decided);
     } else if (end?.outcome === "tackle") {
-      // In the keeper's arms.
+      // Rolls on into the keeper at the attacker's feet, then he gathers it
+      // into his hands as he comes up.
       const k = keeperAt(s);
-      const kk = Math.min(1, s.t / 0.25);
-      x = lerp(g.position.x, k.x, kk * 0.3);
-      z = lerp(g.position.z, k.z + 0.3, kk * 0.3);
-      y = lerp(BALL_RADIUS, 0.9, kk);
+      const roll = Math.min(1, s.dt * 10);
+      x = lerp(g.position.x, k.x, roll * 0.5);
+      z = lerp(g.position.z, k.z + 0.35, roll * 0.5);
+      if (s.t >= s.holdFrom) {
+        const kk = Math.min(1, (s.t - s.holdFrom) / INTO_HANDS);
+        x = lerp(x, s.hands.x, kk);
+        y = lerp(BALL_RADIUS, s.hands.y, kk);
+        z = lerp(z, s.hands.z, kk);
+      }
     } else {
       const a = attackerAt(s);
       // Dribbling: a touch every couple of strides runs it a little ahead.
@@ -463,8 +574,11 @@ function Ball({ stage, flight, skin: skinCode, quality }: { stage: StageRef; fli
     stride.current.x = attackerAt(s).x;
     stride.current.z = attackerAt(s).z;
     const moved = Math.hypot(x - g.position.x, z - g.position.z);
-    if (moved > 1e-4) g.rotation.y = Math.atan2(x - g.position.x, z - g.position.z);
-    m.rotation.x += moved / BALL_RADIUS;
+    // Rolling turns it; in the keeper's hands it moves with them, unturned.
+    if (s.t < s.holdFrom || !end) {
+      if (moved > 1e-4) g.rotation.y = Math.atan2(x - g.position.x, z - g.position.z);
+      m.rotation.x += moved / BALL_RADIUS;
+    }
     g.position.set(x, y, z);
     s.ball.set(x, y, z);
     if (shadow.current) {

@@ -39,11 +39,11 @@ function kickToe(gltf: GLTF, kick: THREE.AnimationClip, contact: number): { x: n
   return { x: p.x, z: p.z };
 }
 
-const HIPS = /Hips\.position$/;
+export const HIPS = /Hips\.position$/;
 
 /** Index (0-2) of the up axis in the hips position track: hips height is
  * by far the largest component of a standing pose. */
-function upAxis(track: THREE.KeyframeTrack): number {
+export function upAxis(track: THREE.KeyframeTrack): number {
   const sums = [0, 0, 0];
   for (let i = 0; i < track.values.length; i += 3) for (let k = 0; k < 3; k++) sums[k] += Math.abs(track.values[i + k]);
   return sums.indexOf(Math.max(...sums));
@@ -51,7 +51,7 @@ function upAxis(track: THREE.KeyframeTrack): number {
 
 /** The clip with its hips kept over the origin (sideways and forwards),
  * height left as animated — the key frames move the player, not the clip. */
-function inPlace(clip: THREE.AnimationClip, up: number): THREE.AnimationClip {
+export function inPlace(clip: THREE.AnimationClip, up: number): THREE.AnimationClip {
   const out = clip.clone();
   for (const track of out.tracks) {
     if (!HIPS.test(track.name)) continue;
@@ -61,7 +61,7 @@ function inPlace(clip: THREE.AnimationClip, up: number): THREE.AnimationClip {
 }
 
 /** The dive keeps its sideways travel (that is the dive), from the origin. */
-function fromOrigin(clip: THREE.AnimationClip, up: number): THREE.AnimationClip {
+export function fromOrigin(clip: THREE.AnimationClip, up: number): THREE.AnimationClip {
   const out = clip.clone();
   for (const track of out.tracks) {
     if (!HIPS.test(track.name)) continue;
@@ -149,7 +149,7 @@ function timingOf(clips: Record<string, THREE.AnimationClip>, up: number, metres
 
 /** Bones of the Mixamo rig by their name without the "mixamorigN:" prefix
  * (the GLTF loader drops the colon: "mixamorig5Hips"). */
-function bonesOf(root: THREE.Object3D): Record<string, THREE.Bone> {
+export function bonesOf(root: THREE.Object3D): Record<string, THREE.Bone> {
   const out: Record<string, THREE.Bone> = {};
   root.traverse((o) => {
     if ((o as THREE.Bone).isBone) out[o.name.replace(/^mixamorig\d*:?/, "")] = o as THREE.Bone;

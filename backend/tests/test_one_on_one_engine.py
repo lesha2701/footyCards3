@@ -73,3 +73,22 @@ def test_rating_edge_makes_the_run_faster():
     fast = replay_episode(create_episode(9, 99), tl)
     # The quicker attacker meets the (slower) keeper sooner.
     assert fast.tick < slow.tick
+
+
+# Two real phone shots that went over the keeper's line low after a bounce:
+# he had read them once, before the bounce, and let them through his body.
+BOUNCED_SHOTS = [
+    (786134732, {"controls": [[0, 1, 0], [4, 1, -50], [6, 1, -100], [7, 1, -150], [8, 1, -200], [9, 1, -250], [12, 1, -300],
+                              [15, 1, -350], [29, 1, -400], [40, 1, -350], [47, 1, -300], [57, 1, -250], [70, 1, -200], [77, 0, 0]],
+                 "feint": None, "shot": {"tick": 77, "dx": 17, "dy": -102, "curve": -37, "durationMs": 582}}),
+    (224876744, {"controls": [[0, 1, 0], [2, 1, 50], [5, 1, 100], [11, 1, 50], [25, 1, 0], [49, 1, -50], [51, 1, -150],
+                              [52, 1, -250], [53, 0, 0]],
+                 "feint": None, "shot": {"tick": 53, "dx": -36, "dy": -126, "curve": 130, "durationMs": 568}}),
+]
+
+
+@pytest.mark.parametrize("seed,tl", BOUNCED_SHOTS)
+def test_the_keeper_reads_the_ball_again_after_it_bounces(seed, tl):
+    r = replay_episode(create_episode(seed, 85), _timeline(tl))
+    assert r.flight.events[0] == "bounce"
+    assert r.outcome == "save"
