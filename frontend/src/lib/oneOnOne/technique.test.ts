@@ -45,6 +45,11 @@ describe("how the shot looks", () => {
     expect(curled).toEqual({ foot: "right", kind: "curl" });
     expect(bent).toEqual({ foot: "right", kind: "outside" });
   });
+
+  it("a bent ball is the finesse, not a chip — steep from close in, or over a keeper off his line", () => {
+    expect(shotTechnique(flight({ x: -2, y: 9, z: -14 }, 75), RUN, false).kind).toBe("curl");
+    expect(shotTechnique(flight({ x: -4, y: 3, z: -20 }, 75), RUN, true).kind).toBe("curl");
+  });
 });
 
 describe("how the keeper takes a saved shot", () => {

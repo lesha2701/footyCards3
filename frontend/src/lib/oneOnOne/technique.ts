@@ -74,7 +74,9 @@ export function shotTechnique(f: ShotFlight, run: RunAtShot, chip: boolean): Tec
   // The inside of the right foot wraps it to the left, the outside away.
   const inside = bend === 0 || (foot === "right") === bend > 0;
   const hardSpin = Math.abs(f.kick.spin.y) >= OUTSIDE_SPIN;
-  if (chip || (v.y / Math.max(1e-6, flat) > CHIP_LOFT && speed < CHIP_MAX_SPEED)) kind = "chip";
+  // A ball with the bend on it is the finesse, never the scoop — even rising
+  // steep from close in, or over a keeper who came out (the engine's chip).
+  if (bend === 0 && (chip || (v.y / Math.max(1e-6, flat) > CHIP_LOFT && speed < CHIP_MAX_SPEED))) kind = "chip";
   else if (run.keeperDist < TOE_DIST) kind = "toe";
   else if (!inside && hardSpin) kind = "outside";
   else if (bend !== 0 && inside) kind = "curl";

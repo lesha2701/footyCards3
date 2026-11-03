@@ -38,10 +38,10 @@ const THUMB_SOFT = 0.9;
 const THUMB_HARD = 2.6;
 const THUMB_LOW = 0.06;
 const THUMB_HIGH = 0.3;
-const FINESSE_SOFT = 20;
+const FINESSE_SOFT = 22;
 const FINESSE_HARD = 27;
-const FINESSE_LOW = 0.6;
-const FINESSE_HIGH = 1.9;
+const FINESSE_LOW = 0.5;
+const FINESSE_HIGH = 1.6;
 const FINESSE_CURVE = 320;
 /** Closer to a post than this (m across): the finesse into that near post
  * bends in from outside it; else it bends away from the keeper into the far one. */
