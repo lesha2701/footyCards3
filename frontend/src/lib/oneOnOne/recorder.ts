@@ -22,13 +22,14 @@ export class EpisodeRecorder {
     this.state = initState(setup);
   }
 
-  /** One tick: holding, steer in thousandths (already quantized), a feint
-   * this tick (−1 / 1, 0 for none), a shot released this tick. */
-  step(hold: boolean, steer: number, feint = 0, shot: QuantizedSwipe | null = null): void {
+  /** One tick: stop / run / sprint (0 / 1 / 2, or a boolean for run),
+   * steer in thousandths (already quantized), a feint this tick (−1 / 1, 0
+   * for none), a shot released this tick. */
+  step(hold: number | boolean, steer: number, feint = 0, shot: QuantizedSwipe | null = null): void {
     const s = this.state;
     if (s.ended) return;
     const i = s.tick;
-    const h = hold ? 1 : 0;
+    const h = hold === true ? 1 : hold === false ? 0 : hold;
     if (!this.last || this.last[0] !== h || this.last[1] !== steer) {
       this.timeline.controls.push([i, h, steer]);
       this.last = [h, steer];
@@ -39,7 +40,7 @@ export class EpisodeRecorder {
     if (shot && !this.timeline.shot) this.timeline.shot = { tick: i, ...shot };
     const tl = this.timeline;
     advance(this.setup, s, {
-      hold,
+      hold: h,
       steer,
       feint: tl.feint && tl.feint.tick === i ? tl.feint.dir : 0,
       shot: tl.shot,

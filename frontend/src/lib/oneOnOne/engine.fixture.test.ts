@@ -47,7 +47,10 @@ function play(seed: number, rating: number, variant: number): EpisodeRecorder {
   while (!rec.state.ended) {
     const s = rec.state;
     const steer = s.tick % 40 < 20 ? weave : -Math.floor(weave / 2);
-    const hold = !(s.tick >= 30 && s.tick < 38 && variant % 3 === 0);
+    // Some stop for a moment, some sprint the first stretch (then ease off).
+    const stop = s.tick >= 30 && s.tick < 38 && variant % 3 === 0;
+    const sprint = s.tick >= 10 && s.tick < 70 && variant % 3 === 1;
+    const hold = stop ? 0 : sprint ? 2 : 1;
     const b = ballOf(s);
     const d = Math.hypot(b.x - s.kx, b.z - s.kz);
     let feint = 0;

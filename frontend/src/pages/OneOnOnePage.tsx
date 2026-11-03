@@ -14,7 +14,7 @@ import { formatGameError } from "@/lib/errors";
 import { useCrashLog } from "@/lib/freeKick3d/crashLog";
 import { crowdChant, crowdHush, crowdTension, playFreeKickSfx, startCrowd } from "@/lib/freeKick3d/sfx";
 import { createEpisode, type EpisodeEnd } from "@/lib/oneOnOne/engine";
-import { Finger } from "@/lib/oneOnOne/gesture";
+import { Finger, Stick } from "@/lib/oneOnOne/gesture";
 import { EpisodeRecorder } from "@/lib/oneOnOne/recorder";
 import { FOOT_LABEL, KIND_LABEL, techniqueOf } from "@/lib/oneOnOne/technique";
 import { audio } from "@/lib/sound";
@@ -178,7 +178,11 @@ export default function OneOnOnePage() {
   );
 }
 
-/** One attack: the 3D episode, the finger, the server's verdict. */
+/** The thumb's sideways flick is sharper than the free kick's whole-screen
+ * swipe: it leans the shot this much. */
+const SHOT_AIM = 0.6;
+
+/** One attack: the 3D episode, the two thumbs, the server's verdict. */
 function AttackRun({
   series,
   attack,
@@ -196,8 +200,9 @@ function AttackRun({
 }) {
   const setup = useMemo(() => createEpisode(attack.seed, series.rating), [attack.seed, series.rating]);
   const recorder = useMemo(() => new EpisodeRecorder(setup), [setup]);
-  const input = useRef<LiveInput>({ live: false, hold: false, steer: 0, feint: 0, shot: null });
-  const finger = useRef(new Finger(window.innerWidth, window.innerHeight));
+  const input = useRef<LiveInput>({ live: false, hold: 0, steer: 0, feint: 0, shot: null });
+  const stick = useRef(new Stick(window.innerWidth, window.innerHeight));
+  const pad = useRef(new Finger(window.innerWidth, window.innerHeight, SHOT_AIM));
   const knob = useRef<HTMLDivElement | null>(null);
   const anchor = useRef<HTMLDivElement | null>(null);
   const fpsRef = useRef<HTMLSpanElement | null>(null);
@@ -219,7 +224,10 @@ function AttackRun({
     if (ready) crowdChant();
   }, [ready]);
   useEffect(() => {
-    const onResize = () => finger.current.resize(window.innerWidth, window.innerHeight);
+    const onResize = () => {
+      stick.current.resize(window.innerWidth, window.innerHeight);
+      pad.current.resize(window.innerWidth, window.innerHeight);
+    };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
@@ -249,21 +257,29 @@ function AttackRun({
   }, [local]);
 
   const playing = ready && !ended;
-  const placeKnob = (x: number, y: number, ax: number, ay: number) => {
+  const placeStick = () => {
+    const st = stick.current.read();
+    const r = stick.current.radius;
     if (anchor.current) {
-      anchor.current.style.opacity = "1";
-      anchor.current.style.transform = `translate(${ax - 36}px, ${ay - 36}px)`;
+      anchor.current.style.opacity = stick.current.down ? "1" : "0";
+      anchor.current.style.width = anchor.current.style.height = `${r * 2}px`;
+      anchor.current.style.transform = `translate(${st.anchor.x - r}px, ${st.anchor.y - r}px)`;
+      anchor.current.style.borderColor = st.hold === 2 ? "rgba(198,230,58,0.9)" : "rgba(255,255,255,0.3)";
     }
     if (knob.current) {
-      knob.current.style.opacity = "1";
-      knob.current.style.transform = `translate(${x - 18}px, ${y - 18}px)`;
+      knob.current.style.opacity = stick.current.down ? "1" : "0";
+      knob.current.style.transform = `translate(${st.knob.x - 22}px, ${st.knob.y - 22}px)`;
     }
   };
-  const hideKnob = () => {
-    if (anchor.current) anchor.current.style.opacity = "0";
-    if (knob.current) knob.current.style.opacity = "0";
+  const syncStick = () => {
+    const st = stick.current.read();
+    input.current.hold = st.hold;
+    input.current.steer = st.steer;
+    placeStick();
   };
-  const downAt = useRef({ x: 0, y: 0 });
+  // Which finger is which: the one that came down on the left half is the
+  // stick, on the right half the action thumb.
+  const fingers = useRef(new Map<number, "stick" | "pad">());
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
     if (!playing) return;
@@ -273,41 +289,49 @@ function AttackRun({
       // Not every WebView lets a pointer be captured; the controls still work.
     }
     audio(); // resume the audio context inside the gesture (mobile autoplay rules)
-    finger.current.start({ x: e.clientX, y: e.clientY, t: e.timeStamp });
-    downAt.current = { x: e.clientX, y: e.clientY };
     input.current.live = true;
-    input.current.hold = true;
-    input.current.steer = 0;
     if (!started) setStarted(true);
-    placeKnob(e.clientX, e.clientY, e.clientX, e.clientY);
+    const left = e.clientX < window.innerWidth / 2;
+    if (left && !stick.current.down) {
+      fingers.current.set(e.pointerId, "stick");
+      stick.current.start({ x: e.clientX, y: e.clientY });
+      syncStick();
+    } else if (!left && !pad.current.down) {
+      fingers.current.set(e.pointerId, "pad");
+      pad.current.start({ x: e.clientX, y: e.clientY, t: e.timeStamp });
+    }
+  };
+  const feint = (dir: number) => {
+    if (dir === 0 || feintUsed || recorder.state.feintUsed) return;
+    input.current.feint = dir;
+    setFeintUsed(true);
+    haptic("light");
   };
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
-    if (!playing || !finger.current.down) return;
-    const dir = finger.current.move({ x: e.clientX, y: e.clientY, t: e.timeStamp });
-    if (dir !== 0 && !feintUsed && !recorder.state.feintUsed) {
-      input.current.feint = dir;
-      setFeintUsed(true);
-      haptic("light");
-      downAt.current = { x: e.clientX, y: downAt.current.y };
+    const role = fingers.current.get(e.pointerId);
+    if (!playing || !role) return;
+    if (role === "stick") {
+      stick.current.move({ x: e.clientX, y: e.clientY });
+      syncStick();
+    } else {
+      feint(pad.current.move({ x: e.clientX, y: e.clientY, t: e.timeStamp }));
     }
-    input.current.steer = finger.current.steer();
-    placeKnob(e.clientX, e.clientY, downAt.current.x, downAt.current.y);
   };
-  const onPointerUp = (e: PointerEvent<HTMLDivElement>) => {
-    if (!finger.current.down) return;
-    const intent = finger.current.end({ x: e.clientX, y: e.clientY, t: e.timeStamp });
-    hideKnob();
-    input.current.hold = false;
-    input.current.steer = 0;
-    if (!playing) return;
-    if (intent.shot) {
-      input.current.shot = intent.shot;
-      haptic("medium");
-      crowdTension(true);
-    } else if (intent.feint !== 0 && !feintUsed && !recorder.state.feintUsed) {
-      input.current.feint = intent.feint;
-      setFeintUsed(true);
-      haptic("light");
+  const release = (e: PointerEvent<HTMLDivElement>, cancelled: boolean) => {
+    const role = fingers.current.get(e.pointerId);
+    fingers.current.delete(e.pointerId);
+    if (role === "stick") {
+      stick.current.end();
+      syncStick();
+    } else if (role === "pad") {
+      if (cancelled) return pad.current.cancel();
+      const intent = pad.current.end({ x: e.clientX, y: e.clientY, t: e.timeStamp });
+      if (!playing) return;
+      if (intent.shot) {
+        input.current.shot = intent.shot;
+        haptic("medium");
+        crowdTension(true);
+      } else feint(intent.feint);
     }
   };
 
@@ -335,22 +359,30 @@ function AttackRun({
         style={{ touchAction: "none" }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={() => {
-          finger.current.cancel();
-          input.current.hold = false;
-          input.current.steer = 0;
-          hideKnob();
-        }}
+        onPointerUp={(e) => release(e, false)}
+        onPointerCancel={(e) => release(e, true)}
       >
         <div
           ref={anchor}
-          className="pointer-events-none absolute left-0 top-0 h-[72px] w-[72px] rounded-full border-2 border-white/30 opacity-0"
+          className="pointer-events-none absolute left-0 top-0 rounded-full border-2 border-white/30 bg-black/15 opacity-0"
         />
         <div
           ref={knob}
-          className="pointer-events-none absolute left-0 top-0 h-9 w-9 rounded-full bg-accent-lime/70 opacity-0 shadow"
+          className="pointer-events-none absolute left-0 top-0 h-11 w-11 rounded-full bg-accent-lime/75 opacity-0 shadow"
         />
+        {!started && ready && (
+          // Where the thumbs go.
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-between px-6 pb-24 text-center text-caption text-ink-chalk/90">
+            <div className="flex h-28 w-28 flex-col items-center justify-center rounded-full border-2 border-dashed border-white/40 bg-black/20">
+              Бег
+              <span className="text-ink-mist">до края — спринт</span>
+            </div>
+            <div className="flex h-28 w-28 flex-col items-center justify-center rounded-full border-2 border-dashed border-accent-lime/60 bg-black/20">
+              Удар ↑
+              <span className="text-ink-mist">рывок вбок — финт</span>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-4">
@@ -389,9 +421,9 @@ function AttackRun({
         <div className="pointer-events-none absolute inset-x-0 top-24 px-6 text-center text-sm text-ink-chalk/90 drop-shadow">
           {ready ? (
             <>
-              Коснись и держи — побежали. Веди пальцем влево-вправо.
+              Левый палец — джойстик: веди игрока, до края — спринт.
               <br />
-              Резкий свайп в сторону — финт. Свайп вверх и отпусти — удар.
+              Правый палец: резкий рывок вбок — финт, свайп вверх — удар.
             </>
           ) : (
             "Загружаем…"
@@ -441,8 +473,11 @@ function AttackRun({
             type="button"
             onClick={() => {
               // Same scene, next attack: no WebGL context churn between attacks.
-              input.current = { live: false, hold: false, steer: 0, feint: 0, shot: null };
-              finger.current.cancel();
+              input.current = { live: false, hold: 0, steer: 0, feint: 0, shot: null };
+              stick.current.end();
+              pad.current.cancel();
+              fingers.current.clear();
+              placeStick();
               setStarted(false);
               setFeintUsed(false);
               setEnded(null);

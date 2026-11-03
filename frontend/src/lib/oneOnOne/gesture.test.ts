@@ -1,4 +1,4 @@
-import { Finger } from "./gesture";
+import { Finger, Stick } from "./gesture";
 
 const W = 400;
 const H = 800;
@@ -41,5 +41,29 @@ describe("one finger for the whole attack", () => {
     g.start({ x: 200, y: 600, t: 0 });
     g.move({ x: 230, y: 600, t: 400 });
     expect(g.end({ x: 231, y: 601, t: 800 })).toEqual({ feint: 0, shot: null });
+  });
+});
+
+describe("the left thumb's stick", () => {
+  it("near the centre he stops, off it he runs, at the rim he sprints; the lean steers", () => {
+    const s = new Stick(400, 800); // radius 52 px
+    s.start({ x: 100, y: 600 });
+    expect(s.read().hold).toBe(0);
+    s.move({ x: 100, y: 570 });
+    expect(s.read()).toMatchObject({ hold: 1, steer: 0 });
+    s.move({ x: 100, y: 545 });
+    expect(s.read().hold).toBe(2);
+    s.move({ x: 140, y: 580 });
+    expect(s.read().steer).toBeGreaterThan(500);
+    s.end();
+    expect(s.read()).toMatchObject({ hold: 0, steer: 0 });
+  });
+
+  it("dragged past the rim the stick follows the thumb", () => {
+    const s = new Stick(400, 800);
+    s.start({ x: 100, y: 600 });
+    s.move({ x: 300, y: 600 });
+    expect(s.read().anchor.x).toBeCloseTo(248);
+    expect(s.read().steer).toBe(1000);
   });
 });

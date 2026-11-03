@@ -70,6 +70,13 @@ const RUN_BRAKE = 8;
 const STEER_SPREAD = 1.3;
 /** Share of the way to the wanted heading turned each tick. */
 const TURN_K = 0.16;
+/** The sprint (stick pushed to the rim): this much faster, turning this
+ * much wider, the ball pushed this far ahead (easier for the keeper to
+ * smother); the ball's distance from the foot follows by LEAD_K a tick. */
+const SPRINT_PACE = 1.2;
+const SPRINT_TURN_K = 0.08;
+const SPRINT_LEAD = 0.95;
+const LEAD_K = 0.08;
 
 /** The feint: a sidestep this long (ticks) at this lateral speed (m/s). */
 export const FEINT_TICKS = 18;
@@ -167,6 +174,8 @@ export type EpisodeState = {
   hx: number;
   hz: number;
   speed: number;
+  /** How far ahead of his feet the ball is (m). */
+  lead: number;
   feintTicks: number;
   feintDir: number;
   feintUsed: boolean;
@@ -183,7 +192,8 @@ export type EpisodeState = {
 /** One tick's input: the finger held (run) and its steer in thousandths
  * (−1000 left … 1000 right); a feint (−1 / 1) on the tick it's made; the
  * shot once released (it waits for a feint in progress to finish). */
-export type TickInput = { hold: boolean; steer: number; feint: number; shot: QuantizedSwipe | null };
+/** hold: 0 — stop, 1 — run with the ball, 2 — sprint. */
+export type TickInput = { hold: number; steer: number; feint: number; shot: QuantizedSwipe | null };
 
 export type FlightSample = {
   t: number;
@@ -218,7 +228,7 @@ export type EpisodeEnd = {
   flight: ShotFlight | null;
 };
 
-/** What the server receives: control changes `[tick, hold 0/1, steer]`
+/** What the server receives: control changes `[tick, hold 0/1/2, steer]`
  * (ascending ticks), the feint and the shot with the tick they were made. */
 export type EpisodeTimeline = {
   controls: [number, number, number][];
@@ -265,6 +275,7 @@ export function initState(setup: EpisodeSetup): EpisodeState {
     hx: -setup.start.x / len,
     hz: -setup.start.z / len,
     speed: 0,
+    lead: BALL_LEAD,
     feintTicks: 0,
     feintDir: 0,
     feintUsed: false,
@@ -279,7 +290,7 @@ export function initState(setup: EpisodeSetup): EpisodeState {
 }
 
 export function ballOf(s: EpisodeState): { x: number; z: number } {
-  return { x: s.x + s.hx * BALL_LEAD, z: s.z + s.hz * BALL_LEAD };
+  return { x: s.x + s.hx * s.lead, z: s.z + s.hz * s.lead };
 }
 
 function keeperDown(s: EpisodeState): boolean {
@@ -375,14 +386,19 @@ function stepRun(setup: EpisodeSetup, s: EpisodeState, input: TickInput) {
   const dl = Math.sqrt(sx * sx + 1);
   const wantX = sx / dl;
   const wantZ = -1 / dl;
-  const hx = s.hx + (wantX - s.hx) * TURN_K;
-  const hz = s.hz + (wantZ - s.hz) * TURN_K;
+  const sprint = input.hold === 2;
+  const turnK = sprint ? SPRINT_TURN_K : TURN_K;
+  const hx = s.hx + (wantX - s.hx) * turnK;
+  const hz = s.hz + (wantZ - s.hz) * turnK;
   const hl = Math.sqrt(hx * hx + hz * hz) || 1;
   s.hx = hx / hl;
   s.hz = hz / hl;
 
-  const top = RUN_SPEED + EDGE_RUN * setup.edge;
-  s.speed = input.hold ? Math.min(top, s.speed + RUN_ACCEL * TICK) : Math.max(0, s.speed - RUN_BRAKE * TICK);
+  const top = sprint ? (RUN_SPEED + EDGE_RUN * setup.edge) * SPRINT_PACE : RUN_SPEED + EDGE_RUN * setup.edge;
+  if (!input.hold) s.speed = Math.max(0, s.speed - RUN_BRAKE * TICK);
+  else if (s.speed > top) s.speed = Math.max(top, s.speed - RUN_BRAKE * TICK);
+  else s.speed = Math.min(top, s.speed + RUN_ACCEL * TICK);
+  s.lead += ((sprint ? SPRINT_LEAD : BALL_LEAD) - s.lead) * LEAD_K;
   let vx = s.hx * s.speed;
   let vz = s.hz * s.speed;
   if (s.feintTicks > 0) {
@@ -428,12 +444,12 @@ function isChip(f: ShotFlight): boolean {
 export function replayEpisode(setup: EpisodeSetup, tl: EpisodeTimeline): EpisodeEnd {
   const s = initState(setup);
   let ci = 0;
-  let hold = false;
+  let hold = 0;
   let steer = 0;
   while (!s.ended) {
     const i = s.tick;
     while (ci < tl.controls.length && tl.controls[ci][0] <= i) {
-      hold = tl.controls[ci][1] === 1;
+      hold = tl.controls[ci][1];
       steer = tl.controls[ci][2];
       ci += 1;
     }

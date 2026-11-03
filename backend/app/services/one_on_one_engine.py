@@ -48,6 +48,10 @@ RUN_ACCEL = 7.5
 RUN_BRAKE = 8
 STEER_SPREAD = 1.3
 TURN_K = 0.16
+SPRINT_PACE = 1.2
+SPRINT_TURN_K = 0.08
+SPRINT_LEAD = 0.95
+LEAD_K = 0.08
 
 FEINT_TICKS = 18
 FEINT_SIDE_SPEED = 4.2
@@ -167,6 +171,7 @@ class State:
     hx: float
     hz: float
     speed: float = 0
+    lead: float = BALL_LEAD
     feint_ticks: int = 0
     feint_dir: int = 0
     feint_used: bool = False
@@ -185,7 +190,7 @@ def init_state(setup: EpisodeSetup) -> State:
 
 
 def _ball(s: State) -> tuple[float, float]:
-    return s.x + s.hx * BALL_LEAD, s.z + s.hz * BALL_LEAD
+    return s.x + s.hx * s.lead, s.z + s.hz * s.lead
 
 
 def _keeper_down(s: State) -> bool:
@@ -255,20 +260,28 @@ def _end(s: State, outcome: str, flight: Flight | None = None, chip: bool = Fals
     s.ended = EpisodeEnd(outcome, s.tick, s.feint, chip, flight)
 
 
-def _step_run(setup: EpisodeSetup, s: State, hold: bool, steer_milli: int) -> None:
+def _step_run(setup: EpisodeSetup, s: State, hold: int, steer_milli: int) -> None:
     steer = _clamp(steer_milli, -1000, 1000) / 1000
     sx = steer * STEER_SPREAD
     dl = math.sqrt(sx * sx + 1)
     want_x = sx / dl
     want_z = -1 / dl
-    hx = s.hx + (want_x - s.hx) * TURN_K
-    hz = s.hz + (want_z - s.hz) * TURN_K
+    sprint = hold == 2
+    turn_k = SPRINT_TURN_K if sprint else TURN_K
+    hx = s.hx + (want_x - s.hx) * turn_k
+    hz = s.hz + (want_z - s.hz) * turn_k
     hl = math.sqrt(hx * hx + hz * hz) or 1
     s.hx = hx / hl
     s.hz = hz / hl
 
-    top = RUN_SPEED + EDGE_RUN * setup.edge
-    s.speed = min(top, s.speed + RUN_ACCEL * TICK) if hold else max(0, s.speed - RUN_BRAKE * TICK)
+    top = (RUN_SPEED + EDGE_RUN * setup.edge) * SPRINT_PACE if sprint else RUN_SPEED + EDGE_RUN * setup.edge
+    if not hold:
+        s.speed = max(0, s.speed - RUN_BRAKE * TICK)
+    elif s.speed > top:
+        s.speed = max(top, s.speed - RUN_BRAKE * TICK)
+    else:
+        s.speed = min(top, s.speed + RUN_ACCEL * TICK)
+    s.lead += ((SPRINT_LEAD if sprint else BALL_LEAD) - s.lead) * LEAD_K
     vx = s.hx * s.speed
     vz = s.hz * s.speed
     if s.feint_ticks > 0:
@@ -293,7 +306,7 @@ def _step_run(setup: EpisodeSetup, s: State, hold: bool, steer_milli: int) -> No
         return _end(s, "lost")
 
 
-def advance(setup: EpisodeSetup, s: State, hold: bool, steer: int, feint: int, shot: Swipe | None) -> None:
+def advance(setup: EpisodeSetup, s: State, hold: int, steer: int, feint: int, shot: Swipe | None) -> None:
     """Mirrors `advance`: the feint, then the shot (unless a feint is under
     way), else the run."""
     if s.ended:
@@ -312,7 +325,7 @@ def advance(setup: EpisodeSetup, s: State, hold: bool, steer: int, feint: int, s
 
 @dataclass
 class Timeline:
-    """The client's input: control changes (tick, hold 0/1, steer in
+    """The client's input: control changes (tick, hold 0/1/2, steer in
     thousandths) in ascending ticks, the feint (tick, ±1) and the shot
     (tick and the quantized swipe)."""
 
@@ -324,12 +337,12 @@ class Timeline:
 def replay_episode(setup: EpisodeSetup, tl: Timeline) -> EpisodeEnd:
     s = init_state(setup)
     ci = 0
-    hold = False
+    hold = 0
     steer = 0
     while s.ended is None:
         i = s.tick
         while ci < len(tl.controls) and tl.controls[ci][0] <= i:
-            hold = tl.controls[ci][1] == 1
+            hold = tl.controls[ci][1]
             steer = tl.controls[ci][2]
             ci += 1
         feint = tl.feint[1] if tl.feint is not None and tl.feint[0] == i else 0

@@ -80,3 +80,21 @@ describe("1-on-1 episode engine", () => {
     expect(quantizeSteer(7)).toBe(1000);
   });
 });
+
+describe("the sprint", () => {
+  it("runs faster than the run but pushes the ball further ahead", () => {
+    const run = { controls: [[0, 1, 0]] as [number, number, number][], feint: null, shot: null };
+    const sprint = { controls: [[0, 2, 0]] as [number, number, number][], feint: null, shot: null };
+    const a = replayEpisode(createEpisode(9), run);
+    const b = replayEpisode(createEpisode(9), sprint);
+    expect(b.outcome).toBe("tackle");
+    expect(b.tick).toBeLessThan(a.tick);
+  });
+
+  it("the recorder sends 2 for the sprint and the replay plays it the same", () => {
+    const rec = new EpisodeRecorder(createEpisode(4));
+    for (let i = 0; i < 40; i++) rec.step(i < 20 ? 1 : 2, 0);
+    expect(rec.timeline.controls).toEqual([[0, 1, 0], [20, 2, 0]]);
+    expect(rec.state.lead).toBeGreaterThan(0.7);
+  });
+});

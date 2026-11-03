@@ -28,7 +28,9 @@ export class Finger {
   private feintFrom = 0;
   down = false;
 
-  constructor(private width: number, private height: number) {}
+  /** `aim` scales the shot's sideways lean (a thumb's flick on a phone is
+   * sharper sideways than the free kick's whole-screen swipe). */
+  constructor(private width: number, private height: number, private aim = 1) {}
 
   resize(width: number, height: number) {
     this.width = width;
@@ -107,6 +109,67 @@ export class Finger {
     if (q.dy >= 0) return null;
     // Within what the server accepts (the engine plays the same integers).
     const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
-    return { dx: clamp(q.dx, -1500, 1500), dy: clamp(q.dy, -1500, -1), curve: clamp(q.curve, -500, 500), durationMs: q.durationMs };
+    return { dx: clamp(Math.round(q.dx * this.aim), -1500, 1500), dy: clamp(q.dy, -1500, -1), curve: clamp(q.curve, -500, 500), durationMs: q.durationMs };
+  }
+}
+
+/** The left thumb: a floating stick where it came down. Off-centre by less
+ * than DEAD of the radius — he stops; up to SPRINT — runs with the ball at
+ * his feet; at the rim — sprints. Its sideways lean is the steer. */
+const STICK_RADIUS = 0.13; // of the shorter screen side
+const DEAD = 0.22;
+const SPRINT = 0.88;
+
+export type StickState = { hold: 0 | 1 | 2; steer: number; knob: { x: number; y: number }; anchor: { x: number; y: number } };
+
+export class Stick {
+  private anchor = { x: 0, y: 0 };
+  private knob = { x: 0, y: 0 };
+  down = false;
+
+  constructor(private width: number, private height: number) {}
+
+  resize(width: number, height: number) {
+    this.width = width;
+    this.height = height;
+  }
+
+  get radius() {
+    return Math.min(this.width, this.height) * STICK_RADIUS;
+  }
+
+  start(p: { x: number; y: number }) {
+    this.down = true;
+    this.anchor = { x: p.x, y: p.y };
+    this.knob = { ...this.anchor };
+  }
+
+  move(p: { x: number; y: number }) {
+    if (!this.down) return;
+    const r = this.radius;
+    let dx = p.x - this.anchor.x;
+    let dy = p.y - this.anchor.y;
+    const d = Math.hypot(dx, dy);
+    if (d > r) {
+      // Dragged past the rim: the stick follows the thumb.
+      this.anchor.x += (dx / d) * (d - r);
+      this.anchor.y += (dy / d) * (d - r);
+      dx = p.x - this.anchor.x;
+      dy = p.y - this.anchor.y;
+    }
+    this.knob = { x: p.x, y: p.y };
+  }
+
+  end() {
+    this.down = false;
+  }
+
+  read(): StickState {
+    const r = this.radius;
+    const dx = this.knob.x - this.anchor.x;
+    const dy = this.knob.y - this.anchor.y;
+    const k = Math.hypot(dx, dy) / r;
+    const hold = !this.down || k < DEAD ? 0 : k >= SPRINT ? 2 : 1;
+    return { hold, steer: hold ? quantizeSteer(dx / r) : 0, knob: this.knob, anchor: this.anchor };
   }
 }

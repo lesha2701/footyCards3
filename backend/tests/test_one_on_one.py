@@ -69,10 +69,11 @@ def test_scoring_goal_bonuses_and_consolation():
 
 def test_timeline_validation():
     ok = OneOnOneAttackRequest(**ATTACK)
+    assert OneOnOneAttackRequest(**{**ATTACK, "controls": [[0, 2, 0]]}).controls == [[0, 2, 0]]
     assert to_timeline(ok).shot[0] == 140
     for bad in (
         {**ATTACK, "controls": [[0, 1, 0], [0, 0, 0]]},  # ticks must ascend
-        {**ATTACK, "controls": [[0, 2, 0]]},  # hold is 0/1
+        {**ATTACK, "controls": [[0, 3, 0]]},  # hold is 0/1/2 (stop, run, sprint)
         {**ATTACK, "controls": [[0, 1, 1001]]},  # steer within ±1000
         {**ATTACK, "controls": [[0, 1]]},
         {**ATTACK, "feint": {"tick": 10, "dir": 0}},

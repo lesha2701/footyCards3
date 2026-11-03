@@ -31,7 +31,6 @@ import { BALL_RADIUS, createPenaltySetup, type QuantizedSwipe, type ShotTrajecto
 import { ballSkin } from "@/lib/gameGear";
 import { keeperTake, techniqueOf, type KeeperTake, type Technique } from "@/lib/oneOnOne/technique";
 import {
-  BALL_LEAD,
   FEINT_TICKS,
   KEEPER_START_Z,
   TICK,
@@ -48,7 +47,8 @@ import { ONE_ON_ONE_MOVES_URL, addMoves, play, prepareMoves, strikePlan, type Mo
 
 /** What the finger does right now (the page writes it, the scene reads it
  * every tick). `feint` is consumed by the tick that takes it. */
-export type LiveInput = { live: boolean; hold: boolean; steer: number; feint: number; shot: QuantizedSwipe | null };
+/** hold: 0 stop, 1 run, 2 sprint. */
+export type LiveInput = { live: boolean; hold: number; steer: number; feint: number; shot: QuantizedSwipe | null };
 
 /** Slow motion for the last moments of a shot that's a goal or a save. */
 const SLOWMO_WINDOW = 0.25;
@@ -67,10 +67,10 @@ type Props = {
   ball?: string | null;
 };
 
-type Snap = Pick<EpisodeState, "x" | "z" | "hx" | "hz" | "speed" | "kx" | "kz" | "kMode" | "feintTicks" | "feintDir" | "lungeDir">;
+type Snap = Pick<EpisodeState, "x" | "z" | "hx" | "hz" | "speed" | "lead" | "kx" | "kz" | "kMode" | "feintTicks" | "feintDir" | "lungeDir">;
 
 const snap = (s: EpisodeState): Snap => ({
-  x: s.x, z: s.z, hx: s.hx, hz: s.hz, speed: s.speed, kx: s.kx, kz: s.kz,
+  x: s.x, z: s.z, hx: s.hx, hz: s.hz, speed: s.speed, lead: s.lead, kx: s.kx, kz: s.kz,
   kMode: s.kMode, feintTicks: s.feintTicks, feintDir: s.feintDir, lungeDir: s.lungeDir,
 });
 
@@ -401,14 +401,17 @@ function Players({
       // through the wind-up; at the contact the toe is at the ball.
       const v = f.kick.velocity;
       const shotYaw = Math.atan2(v.x, v.z) + plan.yaw;
-      const turn = Math.min(1, (t + plan.lead) / (plan.lead * 0.7));
+      // Eased, not snapped: through the wind-up he turns and steps from
+      // where the run left him to where his toe meets the ball.
+      const turn = THREE.MathUtils.smoothstep(t + plan.lead, 0, plan.lead * 0.8);
       const yaw = runYaw + wrapAngle(shotYaw - runYaw) * turn;
       attacker.root.rotation.set(-plan.lean * turn, yaw, 0);
-      const kick = play(attacker, plan.clip, true, 0.08);
+      const kick = play(attacker, plan.clip, true, 0.15);
       kick.time = THREE.MathUtils.clamp(strike.contact + t * plan.timeScale, 0, kick.getClip().duration);
       kick.paused = true;
       const toe = tmp.v.set(strike.toe.x, 0, strike.toe.z).applyAxisAngle(THREE.Object3D.DEFAULT_UP, yaw);
-      attacker.root.position.set(f.from.x - toe.x, 0, f.from.z - toe.z);
+      const step = THREE.MathUtils.smoothstep(t + plan.lead, 0, plan.lead);
+      attacker.root.position.set(lerp(a.x, f.from.x - toe.x, step), 0, lerp(a.z, f.from.z - toe.z, step));
       if (end.outcome === "goal" && t > f.end.t + 0.6) {
         attacker.root.rotation.x = 0;
         play(attacker, "celebrate", true, 0.3).paused = false;
@@ -567,7 +570,7 @@ function Ball({ stage, flight, skin: skinCode, quality }: { stage: StageRef; fli
       // Dribbling: a touch every couple of strides runs it a little ahead.
       const moved = Math.hypot(a.x - stride.current.x, a.z - stride.current.z);
       stride.current.phase += moved / 1.1;
-      const lead = BALL_LEAD + 0.16 * Math.sin(stride.current.phase * Math.PI);
+      const lead = s.cur.lead + 0.16 * Math.sin(stride.current.phase * Math.PI);
       x = a.x + a.hx * lead;
       z = a.z + a.hz * lead;
     }
