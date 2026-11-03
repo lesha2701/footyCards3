@@ -1,4 +1,5 @@
 import asyncio
+import mimetypes
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -164,6 +165,9 @@ app.add_middleware(
 
 app.add_middleware(SlowRequestMiddleware)
 
+# Slim images ship without /etc/mime.types, and Python 3.12 does not know .webp:
+# served as text/plain, an emblem symbol never draws inside an SVG <image>.
+mimetypes.add_type("image/webp", ".webp")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 API_PREFIX = "/api/v1"
