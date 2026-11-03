@@ -1,5 +1,7 @@
 import type { ManagerLook } from "@/api/manager";
 
+import { SymbolGlyph } from "./Emblem";
+
 const CSS = `
 @keyframes stx-flicker { 0%,100% { opacity: .95 } 40% { opacity: .55 } 70% { opacity: .85 } }
 @keyframes stx-smoke { 0% { transform: translateY(0) scale(1); opacity: .45 } 100% { transform: translateY(-26px) scale(1.8); opacity: 0 } }
@@ -64,7 +66,7 @@ export default function Stadium({ look, height, label }: { look: ManagerLook; he
           <rect x="6" y="33" width="154" height="44" fill={a} />
           <rect x="160" y="33" width="154" height="44" fill={b} />
           <circle cx="160" cy="55" r="17" fill={b} stroke={a} strokeWidth="4" />
-          <text x="160" y="61" textAnchor="middle" fontSize="18">{look.symbol}</text>
+          <SymbolGlyph symbol={look.symbol} fill={a} cx={160} cy={55} size={22} />
         </g>
       ) : (
         CROWD.map((p, i) => (
