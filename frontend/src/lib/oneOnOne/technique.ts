@@ -71,17 +71,18 @@ export function shotTechnique(f: ShotFlight, run: RunAtShot, chip: boolean, stri
   else if (Math.abs(aim) > SIDE_AIM) foot = aim > 0 ? "right" : "left";
   else foot = "right";
 
-  // A ball struck clean is the laces (side-footed only when soft); a bent
-  // one is curled with the inside, or with the outside of the right foot
-  // when it bends away (wrapped into the near post from outside it). The
-  // left foot never takes the outside: a ball bending left is the right
-  // foot's inside.
+  // A ball struck clean is the laces (side-footed only when soft). A bent
+  // one is curled with the inside of the foot that wraps it that way,
+  // whatever his stride: the right's to the left, the left's to the right.
+  // The outside is the right foot's only, when he is going across to the
+  // right and bends it hard that way (struck on the run, no time to get
+  // the left round it).
   let kind: ShotKind;
   const bend = bendOf(f, run.hx, run.hz);
-  if (foot === "left" && bend > 0) foot = "right";
-  // The inside of the right foot wraps it to the left, the outside away.
-  const inside = bend === 0 || (foot === "right") === bend > 0;
   const hardSpin = Math.abs(f.kick.spin.y) >= OUTSIDE_SPIN;
+  if (bend > 0) foot = "right";
+  else if (bend < 0) foot = hardSpin && run.side < -SIDE_MOVE ? "right" : "left";
+  const inside = bend === 0 || (foot === "right") === bend > 0;
   // A ball with the bend on it is the finesse, never the scoop — even rising
   // steep from close in, or over a keeper who came out (the engine's chip).
   if (bend === 0 && (chip || (v.y / Math.max(1e-6, flat) > CHIP_LOFT && speed < CHIP_MAX_SPEED))) kind = "chip";

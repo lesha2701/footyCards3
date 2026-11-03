@@ -29,7 +29,17 @@ export type StrikeTiming = {
   /** The striking toe then, in the model's own frame on the ground (it
    * faces +z): where the ball must be. */
   toe: { x: number; z: number };
+  /** When the other foot comes down beside the ball and stays (s into the
+   * clip), and where it is at the contact (the model's frame): from then
+   * to the contact it is planted — it must not slide. */
+  plant: number;
+  plantAt: { x: number; z: number };
 };
+
+/** The plant foot has come down when within this of its lowest (m). */
+const PLANT_DOWN = 0.02;
+/** The plant is looked for this long before the contact (s). */
+const PLANT_WINDOW = 0.5;
 
 export type Moves = {
   clips: Record<Move, THREE.AnimationClip>;
@@ -54,27 +64,46 @@ function sample(gltf: GLTF, clip: THREE.AnimationClip, read: (bones: Record<stri
   mixer.stopAllAction();
 }
 
-/** The contact is when the striking toe moves fastest. */
+/** The contact is when the striking toe moves fastest; the plant, the
+ * other foot coming down to its lowest before it (the toe: the heel lifts
+ * as he goes over it). */
 function strikeTiming(gltf: GLTF, clip: THREE.AnimationClip, foot: Foot): StrikeTiming {
   const name = foot === "left" ? "LeftToeBase" : "RightToeBase";
+  const other = foot === "left" ? "RightToeBase" : "LeftToeBase";
   const prev = new THREE.Vector3();
   const p = new THREE.Vector3();
+  const q = new THREE.Vector3();
   let best = -1;
-  let out: StrikeTiming = { contact: clip.duration / 2, toe: { x: foot === "left" ? 0.15 : -0.15, z: 0.45 } };
+  let contact = clip.duration / 2;
+  let toe = { x: foot === "left" ? 0.15 : -0.15, z: 0.45 };
+  const plantFoot: { t: number; x: number; y: number; z: number }[] = [];
   sample(gltf, clip, (bones, t) => {
-    const toe = bones[name];
-    if (!toe) return;
-    toe.getWorldPosition(p);
+    const b = bones[name];
+    if (!b) return;
+    b.getWorldPosition(p);
     if (t > 0) {
       const speed = p.distanceTo(prev);
       if (speed > best) {
         best = speed;
-        out = { contact: t, toe: { x: p.x, z: p.z } };
+        contact = t;
+        toe = { x: p.x, z: p.z };
       }
     }
     prev.copy(p);
+    if (bones[other]) {
+      bones[other].getWorldPosition(q);
+      plantFoot.push({ t, x: q.x, y: q.y, z: q.z });
+    }
   });
-  return out;
+  const window = plantFoot.filter((f) => f.t >= contact - PLANT_WINDOW && f.t <= contact + 1e-6);
+  const at = window[window.length - 1];
+  if (!at) return { contact, toe, plant: contact, plantAt: { x: -toe.x, z: toe.z - 0.2 } };
+  // Down at its lowest; it came down when it first got that low.
+  let lowest = 0;
+  for (let i = 1; i < window.length; i++) if (window[i].y < window[lowest].y) lowest = i;
+  let plant = window[lowest].t;
+  for (let i = lowest; i >= 0 && window[i].y < window[lowest].y + PLANT_DOWN; i--) plant = window[i].t;
+  return { contact, toe, plant, plantAt: { x: at.x, z: at.z } };
 }
 
 function lowestHands(gltf: GLTF, clip: THREE.AnimationClip): number {

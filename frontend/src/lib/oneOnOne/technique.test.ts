@@ -38,12 +38,16 @@ describe("how the shot looks", () => {
     expect(shotTechnique(flight({ x: -4, y: 2, z: -20 }), { ...RUN, keeperDist: 1.5 }, false).kind).toBe("toe");
   });
 
-  it("sidespin: wrapped with the inside, bent away with the outside", () => {
+  it("sidespin: wrapped with the inside of the foot that bends it that way", () => {
     // Spin up (ω_y > 0) bends a ball flying to −z left — the right instep's wrap.
-    const curled = shotTechnique(flight({ x: -4, y: 2, z: -20 }, 75), RUN, false);
-    const bent = shotTechnique(flight({ x: -4, y: 2, z: -20 }, -75), RUN, false);
-    expect(curled).toEqual({ foot: "right", kind: "curl" });
-    expect(bent).toEqual({ foot: "right", kind: "outside" });
+    expect(shotTechnique(flight({ x: -4, y: 2, z: -20 }, 75), RUN, false)).toEqual({ foot: "right", kind: "curl" });
+    // Into the right corner: the left foot's inside, not the right's outside.
+    expect(shotTechnique(flight({ x: 4, y: 2, z: -20 }, -75), RUN, false)).toEqual({ foot: "left", kind: "curl" });
+    expect(shotTechnique(flight({ x: 4, y: 2, z: -20 }, -75), RUN, false, "right")).toEqual({ foot: "left", kind: "curl" });
+  });
+
+  it("the outside only off the right foot going across to the right", () => {
+    expect(shotTechnique(flight({ x: 4, y: 2, z: -20 }, -75), { ...RUN, side: -3 }, false)).toEqual({ foot: "right", kind: "outside" });
   });
 
   it("the outside is the right foot's only: bent left off the left foot, it is the right instep", () => {

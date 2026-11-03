@@ -105,7 +105,7 @@ describe("the finesse: a swipe off the button", () => {
     expect(finesseBend(s, AIM_POST)).toBe(-1);
   });
 
-  it("lands on the aim, under the bar, curled with the inside (or the outside)", () => {
+  it("lands on the aim, under the bar, curled with the inside", () => {
     const fin = flyClear(placeAt(runFor(5, 45), 0), { kind: "finesse", swipe: SWIPE, aim: -1 });
     expect(fin.q.curve).toBeGreaterThan(0);
     expect(fin.cross).toBeLessThan(GOAL_HEIGHT - 0.2);
@@ -116,9 +116,9 @@ describe("the finesse: a swipe off the button", () => {
       return techniqueOf(rec.state, rec.timeline)!;
     };
     expect(kindOf(0, 45, 0)).toEqual({ foot: "right", kind: "curl" });
-    // Out on the left into the near post, wrapped in from outside it: the
-    // right foot's outside, or the left's inside when he is cutting left.
-    expect(kindOf(0, 45, -2)).toEqual({ foot: "right", kind: "outside" });
+    // Out on the left into the near post, bent back in: the left foot's
+    // inside, whether he runs straight or cuts left.
+    expect(kindOf(0, 45, -2)).toEqual({ foot: "left", kind: "curl" });
     expect(kindOf(-600, 60, -2)).toEqual({ foot: "left", kind: "curl" });
   });
 });

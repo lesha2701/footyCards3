@@ -45,7 +45,7 @@ import {
 import { AIM_POST, driveHeight, type ShotIntent } from "@/lib/oneOnOne/aim";
 import type { EpisodeRecorder } from "@/lib/oneOnOne/recorder";
 
-import { CELEBRATIONS, ONE_ON_ONE_MOVES_URL, addMoves, play, prepareMoves, strikePlan, type Moves, type StrikePlan } from "./moves";
+import { CELEBRATIONS, ONE_ON_ONE_MOVES_URL, addMoves, play, prepareMoves, strikePlan, type Moves, type StrikePlan, type StrikeTiming } from "./moves";
 
 /** What the finger does right now (the page writes it, the scene reads it
  * every tick). `feint` is consumed by the tick that takes it. */
@@ -384,14 +384,44 @@ function hipsOf(p: SkinnedPlayer): THREE.Object3D | null {
   return hips;
 }
 
-/** The attacker's two feet (his stride: which one comes through next). */
+/** From the plant to the contact his standing foot stays where it came
+ * down beside the ball (the clip is played in place, so it would slide back
+ * under him): the body is moved over it instead. Its spot is where the clip
+ * has it at the contact with his toe at the ball, so the contact is where
+ * it was; the step into it eases in over PLANT_EASE_S. */
+function plantFoot(
+  p: SkinnedPlayer,
+  feet: [THREE.Object3D, THREE.Object3D] | null,
+  strike: StrikeTiming,
+  plan: StrikePlan,
+  f: ShotFlight,
+  t: number,
+  tmp: THREE.Vector3,
+) {
+  if (!feet || t > 0) return;
+  const from = Math.max((strike.plant - strike.contact) / plan.timeScale, -plan.lead * 0.9);
+  if (t < from - PLANT_EASE_S) return;
+  const w = THREE.MathUtils.smoothstep(t, from - PLANT_EASE_S, from);
+  const yaw = p.root.rotation.y;
+  const spot = tmp.set(strike.plantAt.x - strike.toe.x, 0, strike.plantAt.z - strike.toe.z).applyAxisAngle(THREE.Object3D.DEFAULT_UP, yaw);
+  const sx = f.from.x + spot.x;
+  const sz = f.from.z + spot.z;
+  p.root.updateMatrixWorld(true);
+  const foot = feet[plan.clip.endsWith("_l") ? 1 : 0].getWorldPosition(tmp);
+  p.root.position.x += (sx - foot.x) * w;
+  p.root.position.z += (sz - foot.z) * w;
+}
+/** The step onto the standing foot is eased in over this long (s). */
+const PLANT_EASE_S = 0.08;
+
+/** The attacker's two toes (his stride: which foot comes through next; the plant). */
 function feetOf(p: SkinnedPlayer): [THREE.Object3D, THREE.Object3D] | null {
   let l: THREE.Object3D | null = null;
   let r: THREE.Object3D | null = null;
   p.root.traverse((o) => {
     if (!(o as THREE.Bone).isBone) return;
-    if (/LeftFoot$/.test(o.name)) l = o;
-    else if (/RightFoot$/.test(o.name)) r = o;
+    if (/LeftToeBase$/.test(o.name)) l = o;
+    else if (/RightToeBase$/.test(o.name)) r = o;
   });
   return l && r ? [l, r] : null;
 }
@@ -572,6 +602,7 @@ function Players({
       attacker.root.position.set(a.x, 0, a.z);
     }
     attacker.mixer.update(s.dt);
+    if (end?.flight && s.plan) plantFoot(attacker, bones.feet, moves.strikes[s.plan.clip], s.plan, end.flight, t, tmp.a);
     // His stride: the foot behind him is the next to come through (the
     // other is coming down to plant) — the one he'll strike with.
     if (!end) {
