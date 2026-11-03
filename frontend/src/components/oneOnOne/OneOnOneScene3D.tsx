@@ -342,18 +342,30 @@ const MATE_LOOK = { ...ATTACKER_LOOK, skin: "#b98262", hair: "#151010" };
 const REFEREE_LOOK = { shirt: "#111827", shorts: "#111827", socks: "#111827", skin: "#e2b08c", hair: "#5a4632" };
 
 /** The others on the pitch — presentation only, they follow the attacker
- * and never touch the engine: a defender he has just gone past, at his
- * shoulder and dropping off as he runs (`gapRate`, m/s), a covering one
- * coming across from wide who is passed too, a teammate up in support and
- * the referee out wide ahead of play. Where each wants to be is off the
- * attacker along the line to goal: `side` across it (m, + to his right),
- * `back` behind him (− ahead). A portrait frame is narrow: the ones out
- * wide are seen when they are ahead. */
+ * and never touch the engine. The story: he has just got the ball in
+ * behind; the defender he left is behind him to his left (out of the
+ * frame at first) and chases, closing in (`gapRate` < 0, m/s) to his
+ * shoulder (`minBack`) by the box; the other defender was marking our
+ * teammate up ahead on the right and stays with him; the referee out wide
+ * ahead of play. Where each wants to be is off the attacker along the line
+ * to goal: `side` across it (m, + to his right), `back` behind him (−
+ * ahead). */
 type ExtraRole = "defender" | "mate" | "ref";
-const EXTRAS: { role: ExtraRole; look: typeof ATTACKER_LOOK; side: number; back: number; gapRate: number; top: number; low: boolean }[] = [
-  { role: "defender", look: DEFENDER_LOOK, side: 1.6, back: -1.2, gapRate: 0.55, top: 8.6, low: true },
-  { role: "defender", look: DEFENDER_LOOK_2, side: -3.2, back: -8, gapRate: 1.4, top: 8.4, low: false },
+type ExtraSpec = {
+  role: ExtraRole;
+  look: typeof ATTACKER_LOOK;
+  side: number;
+  back: number;
+  gapRate: number;
+  minBack?: number;
+  top: number;
+  /** Shown on a slow phone too. */
+  low: boolean;
+};
+const EXTRAS: ExtraSpec[] = [
+  { role: "defender", look: DEFENDER_LOOK_2, side: -2.2, back: 5.5, gapRate: -0.45, minBack: 1.1, top: 9.4, low: true },
   { role: "mate", look: MATE_LOOK, side: 4.2, back: -9, gapRate: 0.2, top: 8.2, low: false },
+  { role: "defender", look: DEFENDER_LOOK, side: 5.3, back: -8.2, gapRate: 0.2, top: 8.3, low: false },
   { role: "ref", look: REFEREE_LOOK, side: -7.5, back: -12, gapRate: 0.4, top: 6.8, low: true },
 ];
 /** They don't follow him into the box's middle (m off the line). */
@@ -622,7 +634,7 @@ function Players({
   );
 }
 
-type Other = { p: SkinnedPlayer; spec: (typeof EXTRAS)[number]; pos: THREE.Vector3; vel: THREE.Vector3; since: number };
+type Other = { p: SkinnedPlayer; spec: ExtraSpec; pos: THREE.Vector3; vel: THREE.Vector3; since: number };
 
 /** The defenders, the teammate and the referee (see EXTRAS): each steers for
  * his spot off the attacker, no faster than he can run, and pulls up once
@@ -665,7 +677,7 @@ function Others({ asset, moves, materials, stage, quality }: {
       // Ahead of him only while there is room: nearing the box they are
       // drawn level, and out wide rather than into the keeper's way.
       const room = THREE.MathUtils.clamp((a.z - EXTRAS_MIN_Z) / 14, 0, 1);
-      const back = (spec.back < 0 ? spec.back * room : spec.back) + spec.gapRate * s.run;
+      const back = Math.max(spec.minBack ?? -Infinity, (spec.back < 0 ? spec.back * room : spec.back) + spec.gapRate * s.run);
       const side = spec.side * lerp(1.6, 1, room);
       want.set(a.x - fz * side - fx * back, 0, a.z + fx * side - fz * back);
       if (want.z < EXTRAS_MIN_Z) {
