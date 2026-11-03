@@ -13,8 +13,10 @@ import { IconCoin } from "@/components/icons";
 import { formatGameError } from "@/lib/errors";
 import { gearSwatch } from "@/lib/gameGear";
 import { CELEBRATION_EMOJI, COSMETIC_GROUPS, SHOWCASE_STYLE, WALKOUT_EMOJI } from "@/lib/myPlayer";
+import { cabinetArt } from "@/lib/trophyArt";
 import { payMyPlayerWithStars } from "@/lib/myPlayerStars";
 import { haptic, hapticNotify } from "@/lib/telegram";
+import { FEINTS } from "@/lib/oneOnOne/feints";
 
 import CardEffect from "./CardEffect";
 import PlayerAvatar from "./PlayerAvatar";
@@ -118,6 +120,11 @@ export default function MyPlayerStyleShop({ view, player, preview, onPreview, on
                           {CELEBRATION_EMOJI[item.code] ?? "🎉"}
                         </span>
                       )}
+                      {kind === "feint" && (
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/40 text-5xl">
+                          {FEINTS[item.code]?.emoji ?? "↔"}
+                        </span>
+                      )}
                       {(kind === "ball" || kind === "boots" || kind === "gloves") && (
                         <GearTile code={item.code} />
                       )}
@@ -127,8 +134,9 @@ export default function MyPlayerStyleShop({ view, player, preview, onPreview, on
                         </span>
                       )}
                       {kind === "showcase" && (
-                        <span className={`absolute inset-0 flex items-end justify-center bg-gradient-to-b pb-3 text-4xl ring-2 ring-inset ${
-                          SHOWCASE_STYLE[item.code]?.shelf ?? ""} ${SHOWCASE_STYLE[item.code]?.ring ?? ""} bg-bg-raised`}>
+                        <span className={`absolute inset-0 flex items-end justify-center bg-gradient-to-b bg-cover bg-center pb-3 text-4xl ring-2 ring-inset ${
+                          SHOWCASE_STYLE[item.code]?.shelf ?? ""} ${SHOWCASE_STYLE[item.code]?.ring ?? ""} bg-bg-raised`}
+                          style={cabinetArt(item.code) ? { backgroundImage: `url(${cabinetArt(item.code)})` } : undefined}>
                           🏆
                         </span>
                       )}

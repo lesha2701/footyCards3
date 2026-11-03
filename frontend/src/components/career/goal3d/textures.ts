@@ -28,10 +28,20 @@ export function pitchTexture(): THREE.CanvasTexture {
   const s = W / PITCH_L;
   const H = Math.round(PITCH_W * s);
   const [c, g] = canvas(W, H);
-  const stripes = 14;
+  // Bold mowing, as on a TV broadcast in the sun, with a little grain.
+  const stripes = 18;
   for (let i = 0; i < stripes; i++) {
-    g.fillStyle = i % 2 ? "#2f7d3c" : "#348a42";
+    g.fillStyle = i % 2 ? "#3a8f3f" : "#47a34b";
     g.fillRect((W / stripes) * i, 0, W / stripes + 1, H);
+  }
+  let seed = 3;
+  const rnd = () => {
+    seed = (Math.imul(seed, 1103515245) + 12345) >>> 0;
+    return seed / 4294967296;
+  };
+  for (let i = 0; i < 9000; i++) {
+    g.fillStyle = rnd() < 0.5 ? "rgba(0,40,0,0.08)" : "rgba(255,255,200,0.06)";
+    g.fillRect(rnd() * W, rnd() * H, 2 + rnd() * 3, 1 + rnd() * 2);
   }
   g.strokeStyle = "rgba(255,255,255,0.88)";
   g.fillStyle = "rgba(255,255,255,0.88)";

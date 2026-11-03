@@ -260,7 +260,7 @@ function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: (
 
       {!!data?.staff?.length && (
         <section className="flex flex-col gap-2">
-          <p className="text-micro font-bold uppercase tracking-[0.12em] text-accent-cyan">Тренеры и стадионы коллекции</p>
+          <p className="text-micro font-bold uppercase tracking-[0.12em] text-accent-cyan">Тренеры, стадионы и музы коллекции</p>
           <div className="grid grid-cols-3 gap-2">
             {data.staff.map((s) => <StaffSlot key={`${s.kind}-${s.id}`} staff={s} />)}
           </div>
@@ -402,10 +402,10 @@ function StaffSlot({ staff }: { staff: AlbumStaff }) {
           {staff.image_path ? (
             <img decoding="async" loading="lazy" src={staticUrl(staff.image_path) ?? undefined} alt="" className="h-full w-full object-cover" />
           ) : (
-            <span className="flex h-full w-full items-center justify-center text-3xl">{staff.kind === "stadium" ? "🏟️" : "🧥"}</span>
+            <span className="flex h-full w-full items-center justify-center text-3xl">{staff.kind === "stadium" ? "🏟️" : staff.kind === "muse" ? staff.icon || "💃" : "🧥"}</span>
           )}
           <span className="absolute left-0.5 top-0.5 rounded bg-black/75 px-1 text-micro font-bold text-ink-chalk">
-            {staff.kind === "stadium" ? "Стадион" : "Тренер"}
+            {STAFF_LABELS[staff.kind]}
           </span>
         </div>
         <p className="truncate text-center text-micro font-bold text-ink-chalk">{staff.name}</p>
@@ -416,3 +416,5 @@ function StaffSlot({ staff }: { staff: AlbumStaff }) {
     </div>
   );
 }
+
+const STAFF_LABELS: Record<AlbumStaff["kind"], string> = { coach: "Тренер", stadium: "Стадион", muse: "Муза" };

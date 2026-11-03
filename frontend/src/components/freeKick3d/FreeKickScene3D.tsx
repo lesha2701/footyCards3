@@ -28,7 +28,7 @@ import Confetti from "./Confetti";
 import { KICK } from "./kickStyles";
 import { LOOKS } from "./looks";
 import { KeeperModel, KickerModel, WallPlayerModel, type Celebration, type PlayerClock, type ShirtPrint } from "./Players";
-import { Stadium, type Hype, type Quality } from "./Stadium";
+import { Stadium, type Hype, type MatchTime, type Quality } from "./Stadium";
 import { NET_TILE, ballGeometry, netTexture } from "./textures";
 
 export type SceneGear = {
@@ -147,9 +147,12 @@ export default function FreeKickScene3D({
 }
 
 /** Night match: a cool sky fill plus a floodlight key that casts the only
- * shadows (high quality only, fitted to the ball → goal area). */
-function Lights({ quality }: { quality: Quality }) {
+ * shadows (high quality only, fitted to the ball → goal area). By day the
+ * key is the sun, high and to the side (long, soft TV-broadcast shadows),
+ * the sky's fill brighter and the rim gone warm. */
+export function Lights({ quality, time = "night" }: { quality: Quality; time?: MatchTime }) {
   const key = useRef<THREE.DirectionalLight>(null);
+  const day = time === "day";
   useEffect(() => {
     const l = key.current;
     if (!l) return;
@@ -163,24 +166,24 @@ function Lights({ quality }: { quality: Quality }) {
     cam.near = 1;
     cam.far = 90;
     cam.updateProjectionMatrix();
-  }, [quality]);
+  }, [quality, day]);
   return (
     <>
-      <hemisphereLight args={["#9fb7d9", "#0f2a18", 0.7]} />
+      <hemisphereLight args={day ? ["#d6e8ff", "#3f6b32", 1.25] : ["#9fb7d9", "#0f2a18", 0.7]} />
       <directionalLight
         ref={key}
-        position={[-18, 30, 30]}
-        intensity={2.2}
-        color="#fff6e0"
+        position={day ? [-30, 34, 18] : [-18, 30, 30]}
+        intensity={day ? 3.1 : 2.2}
+        color={day ? "#fff2d8" : "#fff6e0"}
         castShadow={quality === "high"}
         shadow-mapSize={[1024, 1024]}
         shadow-bias={-0.0004}
         shadow-normalBias={0.02}
       />
-      <directionalLight position={[22, 18, -20]} intensity={0.8} color="#cfe0ff" />
+      <directionalLight position={[22, 18, -20]} intensity={day ? 0.55 : 0.8} color={day ? "#e4eeff" : "#cfe0ff"} />
       {/* Rim: the floodlights behind the goal outline the players (the kicker
           is seen from behind) against the dark stands. */}
-      <directionalLight position={[-6, 14, -40]} intensity={1.1} color="#dfe8ff" />
+      <directionalLight position={[-6, 14, -40]} intensity={day ? 0.6 : 1.1} color={day ? "#fff4e2" : "#dfe8ff"} />
     </>
   );
 }
@@ -644,7 +647,8 @@ function Tube({ a, b, r = 0.028 }: { a: [number, number, number]; b: [number, nu
   );
 }
 
-function GoalFrame({ stage }: { stage: MutableRefObject<Stage> }) {
+/** Also the goal of «Атака 1 на 1»: only the net ripple is read. */
+export function GoalFrame({ stage }: { stage: MutableRefObject<Pick<Stage, "ripple">> }) {
   const w = GOAL_HALF_WIDTH * 2;
   const backNet = useNet(w, NET_SLOPE_LEN);
   const roofNet = useNet(w, NET_TOP_DEPTH);
@@ -784,7 +788,7 @@ function CameraRig({ setup, shot, stage }: StageProps) {
   return null;
 }
 
-function FpsMeter({ fpsRef }: { fpsRef: MutableRefObject<HTMLSpanElement | null> }) {
+export function FpsMeter({ fpsRef }: { fpsRef: MutableRefObject<HTMLSpanElement | null> }) {
   const acc = useRef({ frames: 0, time: 0 });
   useFrame((_, delta) => {
     acc.current.frames += 1;

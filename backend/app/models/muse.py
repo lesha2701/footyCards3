@@ -56,6 +56,13 @@ class Muse(TimestampMixin, Base):
     effect_value: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
     # Relative weight among Muses of the same rarity in a pack slot.
     drop_weight: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    # False = «лимитка»: never drops from packs (Stars offers, admin, events).
+    is_pack_droppable: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"), nullable=False)
+    # The footballers' card collection she counts toward (like stadiums /
+    # coaches) — not `collection_id`, which is her own «Музы» line.
+    card_collection_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("card_collections.id", ondelete="SET NULL"), nullable=True, index=True,
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 

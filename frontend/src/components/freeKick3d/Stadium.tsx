@@ -3,9 +3,22 @@ import { useFrame } from "@react-three/fiber";
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
 
-import { PITCH_DEPTH, PITCH_WIDTH, PITCH_Z0, groundStripsGeometry, ledTexture, lineProfileTexture, pitchOverlayTexture, skyTexture } from "./textures";
+import {
+  PITCH_DEPTH,
+  PITCH_WIDTH,
+  PITCH_Z0,
+  daySkyTexture,
+  groundStripsGeometry,
+  ledTexture,
+  lineProfileTexture,
+  pitchOverlayTexture,
+  skyTexture,
+} from "./textures";
 
 export type Quality = "high" | "low";
+
+/** Under the floodlights (the free kick) or in the afternoon sun. */
+export type MatchTime = "night" | "day";
 
 /** 0 = calm crowd, 1 = a goal just went in (decays in the scene). */
 export type Hype = MutableRefObject<number>;
@@ -22,16 +35,16 @@ const ASSETS = {
  * rows of live fans that celebrate (the hybrid: the panorama gives the
  * density, the sprites the reaction), LED boards. Images load lazily; until they do,
  * a plain pitch and the sky stand in. */
-export function Stadium({ quality, hype }: { quality: Quality; hype: Hype }) {
+export function Stadium({ quality, hype, time = "night" }: { quality: Quality; hype: Hype; time?: MatchTime }) {
   return (
     <>
-      <Sky />
-      <StandsBase />
+      <Sky time={time} />
+      <StandsBase time={time} />
       <Suspense fallback={<PlainPitch quality={quality} />}>
-        <Pitch quality={quality} />
+        <Pitch quality={quality} time={time} />
         <PitchLines quality={quality} />
         <Backdrop />
-        <FanSection quality={quality} hype={hype} />
+        <FanSection quality={quality} hype={hype} time={time} />
         <LedBoards hype={hype} />
       </Suspense>
     </>
@@ -41,17 +54,17 @@ export function Stadium({ quality, hype }: { quality: Quality; hype: Hype }) {
 /** The ground beyond the pitch, out to the stands: dark concrete. Without
  * it a ball flying high (the camera climbing after it) showed the empty
  * gap between the boards and the panorama as a grey band. */
-function StandsBase() {
+function StandsBase({ time }: { time: MatchTime }) {
   return (
     <mesh rotation-x={-Math.PI / 2} position={[0, -0.03, BACKDROP_CENTER_Z]}>
       <circleGeometry args={[BACKDROP_RADIUS + 4, 64]} />
-      <meshBasicMaterial color="#0a100c" />
+      <meshBasicMaterial color={time === "day" ? "#3c443c" : "#0a100c"} />
     </mesh>
   );
 }
 
-function Sky() {
-  const tex = useMemo(skyTexture, []);
+function Sky({ time }: { time: MatchTime }) {
+  const tex = useMemo(() => (time === "day" ? daySkyTexture() : skyTexture()), [time]);
   return (
     <mesh>
       <sphereGeometry args={[160, 24, 16]} />
@@ -73,7 +86,7 @@ function PlainPitch({ quality }: { quality: Quality }) {
 
 /** Tiled grass photo, plus a transparent layer on top with the mowing
  * stripes and the markings (crisp at any distance, independent of the tile). */
-function Pitch({ quality }: { quality: Quality }) {
+function Pitch({ quality, time }: { quality: Quality; time: MatchTime }) {
   const grass = useTexture(ASSETS.grass, (t) => {
     const tex = t as THREE.Texture;
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
@@ -81,14 +94,16 @@ function Pitch({ quality }: { quality: Quality }) {
     tex.anisotropy = 8;
     tex.colorSpace = THREE.SRGBColorSpace;
   });
-  const overlay = useMemo(pitchOverlayTexture, []);
+  // In the sun the mowing shows as it does on TV: bold, both ways.
+  const overlay = useMemo(() => pitchOverlayTexture(time === "day" ? 0.16 : 0.08), [time]);
   const shadows = quality === "high";
   return (
     <>
       <mesh rotation-x={-Math.PI / 2} position={PITCH_CENTER} receiveShadow={shadows}>
         <planeGeometry args={[PITCH_WIDTH, PITCH_DEPTH]} />
-        {/* The tile is already a muted night green: only a touch of warmth off. */}
-        <meshLambertMaterial map={grass} color="#eafbe4" />
+        {/* The tile is already a muted night green: only a touch of warmth
+            off at night, a fresh yellow-green in the sun. */}
+        <meshLambertMaterial map={grass} color={time === "day" ? "#e6ffc4" : "#eafbe4"} />
       </mesh>
       <mesh rotation-x={-Math.PI / 2} position={[PITCH_CENTER[0], 0.004, PITCH_CENTER[2]]} receiveShadow={shadows}>
         <planeGeometry args={[PITCH_WIDTH, PITCH_DEPTH]} />
@@ -187,7 +202,7 @@ function Backdrop() {
 /** Supporters right behind the boards, cut from a 4×4 sprite sheet: one
  * instanced draw call, the cell picked per instance and the bobbing done
  * in the vertex shader — no per-frame CPU work. They jump on a goal. */
-function FanSection({ quality, hype }: { quality: Quality; hype: Hype }) {
+function FanSection({ quality, hype, time }: { quality: Quality; hype: Hype; time: MatchTime }) {
   const sheet = useTexture(ASSETS.fans, (t) => {
     (t as THREE.Texture).colorSpace = THREE.SRGBColorSpace;
   });
@@ -210,7 +225,7 @@ function FanSection({ quality, hype }: { quality: Quality; hype: Hype }) {
   }, [rows]);
 
   const material = useMemo(() => {
-    const m = new THREE.MeshBasicMaterial({ map: sheet, alphaTest: 0.5, color: "#c9cbd6" });
+    const m = new THREE.MeshBasicMaterial({ map: sheet, alphaTest: 0.5, color: time === "day" ? "#f2f2f2" : "#c9cbd6" });
     m.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = { value: 0 };
       shader.uniforms.uHype = { value: 0 };
@@ -235,7 +250,7 @@ function FanSection({ quality, hype }: { quality: Quality; hype: Hype }) {
         );
     };
     return m;
-  }, [sheet]);
+  }, [sheet, time]);
 
   const geometry = useMemo(() => {
     const g = new THREE.PlaneGeometry(1, 1);
@@ -270,7 +285,7 @@ function FanSection({ quality, hype }: { quality: Quality; hype: Hype }) {
           under the panorama shows the stand, not whatever is far behind. */}
       <mesh position={[0, 0.85, -6.6 - rows * 0.85]}>
         <planeGeometry args={[60, 1.7]} />
-        <meshBasicMaterial color="#0b120e" fog={false} />
+        <meshBasicMaterial color={time === "day" ? "#2e343b" : "#0b120e"} fog={false} />
       </mesh>
     </>
   );

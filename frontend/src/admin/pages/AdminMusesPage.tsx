@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 
 import {
-  fetchAdminMuses, fetchGameConfig, grantAdminMuse, saveAdminMuseRow, updateGameConfig, uploadAdminMuseImage,
+  fetchAdminCardCollections, fetchAdminMuses, fetchGameConfig, grantAdminMuse, saveAdminMuseRow, updateGameConfig, uploadAdminMuseImage,
   type AdminMuseKind,
 } from "@/admin/api";
 import { useAdminToastStore } from "@/admin/adminToastStore";
@@ -17,7 +17,7 @@ const errText = (err: unknown, fallback: string) => (err instanceof ApiRequestEr
 const toast = (text: string) => useAdminToastStore.getState().push(text, "success");
 const NEW_MUSE: AdminMuse = {
   name: "", title: "", description: "", icon: "💃", rarity: "rare", collection_id: null, effect: "daily_coins",
-  effect_value: 100, drop_weight: 100, is_active: true, sort_order: 0,
+  effect_value: 100, drop_weight: 100, is_pack_droppable: true, card_collection_id: null, is_active: true, sort_order: 0,
 };
 const NEW_COLLECTION: AdminMuseCollection = { name: "", description: "", is_active: true, sort_order: 0 };
 const NEW_GIFT: AdminMuseAccessory = {
@@ -37,6 +37,7 @@ type Editing =
 export default function AdminMusesPage() {
   const queryClient = useQueryClient();
   const { data } = useQuery({ queryKey: ["admin-muses"], queryFn: fetchAdminMuses });
+  const { data: cardCollections } = useQuery({ queryKey: ["admin-card-collections"], queryFn: fetchAdminCardCollections });
   const [tab, setTab] = useState<Tab>("muses");
   const [editing, setEditing] = useState<Editing | null>(null);
   const [filter, setFilter] = useState<number | "all">("all");
@@ -112,12 +113,19 @@ export default function AdminMusesPage() {
         <Field label="Коллекция"><select value={m.collection_id ?? ""} onChange={(e) => set({ collection_id: e.target.value ? Number(e.target.value) : null })} className={input}>
           <option value="">— без коллекции —</option>
           {data.collections.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
+        <Field label="Коллекция футболистов (считается в ней)"><select value={m.card_collection_id ?? ""} onChange={(e) => set({ card_collection_id: e.target.value ? Number(e.target.value) : null })} className={input}>
+          <option value="">— без коллекции —</option>
+          {cardCollections?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
         <Field label="Бонус"><select value={m.effect} onChange={(e) => set({ effect: e.target.value })} className={input}>
           {data.effects.map((ef) => <option key={ef.code} value={ef.code}>{ef.label}</option>)}</select></Field>
         <Field label="N"><input type="number" min={0} value={m.effect_value} onChange={(e) => set({ effect_value: Number(e.target.value) })} className={input} /></Field>
+        <p className="rounded-lg bg-accent-cyan/10 px-2 py-1.5 text-xs text-slate-300 col-span-2">
+          💡 {effectLabel(m.effect, m.effect_value)}. {data.effects.find((ef) => ef.code === m.effect)?.hint} Подарки музе поднимают N на свой %.
+        </p>
         <Field label="Вес выпадения (среди её редкости)"><input type="number" min={0} value={m.drop_weight} onChange={(e) => set({ drop_weight: Number(e.target.value) })} className={input} /></Field>
         <Field label="Порядок"><input type="number" value={m.sort_order} onChange={(e) => set({ sort_order: Number(e.target.value) })} className={input} /></Field>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={m.is_active} onChange={(e) => set({ is_active: e.target.checked })} /> Активна (выпадает, даёт бонус)</label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={m.is_pack_droppable ?? true} onChange={(e) => set({ is_pack_droppable: e.target.checked })} /> Выпадает из паков (снять — лимитка: только за ⭐, ивенты, выдача)</label>
       </Editor>
     );
   })();
@@ -175,7 +183,7 @@ export default function AdminMusesPage() {
           {muses.map((m) => (
             <Row key={m.id} onClick={() => setEditing({ kind: "muses", row: m })}
               art={<MuseArt muse={{ name: m.name, icon: m.icon, image_path: m.image_path ?? null, rarity: m.rarity as Rarity }} locked={!m.is_active} className="h-12 w-10 rounded-lg" iconClass="text-xl" />}
-              title={<>{m.name} {!m.image_path && <span className="text-xs text-amber-300">нет фото</span>}</>}
+              title={<>{m.name} {m.is_pack_droppable === false && <span className="text-xs text-amber-300">лимитка</span>} {!m.image_path && <span className="text-xs text-amber-300">нет фото</span>}</>}
               subtitle={`${RARITY_LABELS[m.rarity as Rarity] ?? m.rarity} · ${effectLabel(m.effect, m.effect_value)} · ${collectionName(m.collection_id)}`}
               right={`вес ${m.drop_weight}`} />
           ))}

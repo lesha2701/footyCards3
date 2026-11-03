@@ -110,13 +110,13 @@ export default function ManagerPage() {
   }
 
   const club = data.club;
-  const tabs: [Tab, string, boolean][] = [
-    ["club", "Мой клуб", !!club && club.incoming.length > 0],
-    ...(club ? [["office", "💼 Кабинет", false] as [Tab, string, boolean]] : []),
-    ["transfers", "Трансферы", false],
-    ["league", "Лига", false],
-    ["me", "Я игрок", data.offers.length > 0],
-    ...(club ? [["style", "Стиль", false] as [Tab, string, boolean]] : []),
+  const tabs: [Tab, string, string, boolean][] = [
+    ["club", "🏟️", "Мой клуб", !!club && club.incoming.length > 0],
+    ...(club ? [["office", "💼", "Кабинет", false] as [Tab, string, string, boolean]] : []),
+    ["transfers", "🔁", "Трансферы", false],
+    ["league", "🏆", "Лига", false],
+    ["me", "⚽", "Я игрок", data.offers.length > 0],
+    ...(club ? [["style", "🎨", "Стиль", false] as [Tab, string, string, boolean]] : []),
   ];
   const props = { view: data, onView, onError };
   return (
@@ -126,13 +126,13 @@ export default function ManagerPage() {
       <TodayPanel onTab={setTab} onError={onError} />
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
       <div className="grid grid-cols-3 gap-1.5">
-        {tabs.map(([id, label, dot]) => (
+        {tabs.map(([id, icon, label, dot]) => (
           <button
             key={id}
             onClick={() => setTab(id)}
             className={`relative truncate rounded-full px-2 py-2 text-xs font-semibold ${tab === id ? "bg-floodlight text-bg-base" : "bg-bg-surface text-ink-mist"}`}
           >
-            {label}
+            <span aria-hidden="true">{icon} </span>{label}
             {dot && tab !== id && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-accent-lime" />}
           </button>
         ))}

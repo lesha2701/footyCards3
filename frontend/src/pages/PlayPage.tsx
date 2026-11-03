@@ -160,6 +160,10 @@ export default function PlayPage() {
       description: "Серия штрафных в 3D: свайпом через стенку и в угол", limitKey: "free_kick",
     },
     {
+      path: "/play/one-on-one", art: artOf("one-on-one"), Icon: IconBall, tint: "bg-lime-600", title: "Атака 1 на 1", group: "quick", time: "3 мин",
+      description: "Выход один на один в 3D: беги с мячом, обведи вратаря финтом и бей", limitKey: "one_on_one",
+    },
+    {
       path: "/play/free-kick/challenge", art: artOf("free-kick"), Icon: IconTarget, tint: "bg-sky-500", title: "Испытание дня", group: "quick", time: "2 мин",
       description: "5 штрафных по мишеням — одна попытка, таблица лидеров дня", noLimit: true,
     },

@@ -904,6 +904,7 @@ export interface GameLimits {
   magnate: number;
   mordoboi: number;
   kontra?: number;
+  one_on_one?: number;
   /** Exhausted games only: when the hourly cap frees up again. */
   resets_at?: Partial<Record<string, string>>;
 }
@@ -1689,6 +1690,43 @@ export interface FreeKick3DKick {
   seed: number;
 }
 
+/** «Атака 1 на 1»: one attack of the series (the client builds the episode
+ * from the seed and the series' card rating, as the server replays it). */
+export interface OneOnOneAttack {
+  attack_index: number;
+  seed: number;
+}
+
+export interface OneOnOneStartResult {
+  session_id: number;
+  rating: number;
+  total_attacks: number;
+  attack: OneOnOneAttack;
+  celebration?: string | null;
+  ball?: string | null;
+  boots?: string | null;
+  gloves?: string | null;
+  /** How his feint looks (a «Мой игрок» style code; null = the sidestep). */
+  feint?: string | null;
+}
+
+export type OneOnOneOutcome = "goal" | "save" | "tackle" | "miss" | "lost";
+
+export interface OneOnOneResult {
+  outcome: OneOnOneOutcome;
+  bonuses: ("feint" | "chip")[];
+  feint: "bit" | "read" | null;
+  coins_this_attack: number;
+  total_coins: number;
+  is_finished: boolean;
+  next_attack: OneOnOneAttack | null;
+}
+
+export interface OneOnOneClaimResult {
+  reward_coins: number;
+  new_balance: number;
+}
+
 export interface FreeKick3DStartResult {
   session_id: number;
   rating: number;
@@ -2016,11 +2054,13 @@ export interface AlbumCollectionDetail {
 }
 
 export interface AlbumStaff {
-  kind: "coach" | "stadium";
+  kind: "coach" | "stadium" | "muse";
   id: number;
   name: string;
   rarity: Rarity;
   image_path: string | null;
+  /** A Muse's emoji while she has no photo. */
+  icon?: string | null;
   owned: boolean;
   effects: string[];
 }

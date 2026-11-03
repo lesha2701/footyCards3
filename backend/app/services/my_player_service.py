@@ -132,6 +132,9 @@ COSMETICS = {
     "gloves_lime": ("gloves", "Перчатки «Лайм»"),
     "gloves_pink": ("gloves", "Перчатки «Розовые»"),
     "gloves_gold": ("gloves", "Перчатки «Золото»"),
+    # «Атака 1 на 1»: how his feint looks (the same sidestep in the engine;
+    # no item = the plain sidestep). Frontend: OneOnOneScene3D.
+    "feint_roulette": ("feint", "Финт «Рулетка»"),
     "cel_fist": ("celebration", "Празднование «Кулак вверх»"),
     "cel_shush": ("celebration", "Празднование «Тсс!»"),
     "cel_flex": ("celebration", "Празднование «Бицепс»"),
@@ -149,9 +152,13 @@ COSMETICS = {
     "sc_marble": ("showcase", "Мраморная витрина"),
     "sc_gold": ("showcase", "Золотая витрина"),
     "sc_crystal": ("showcase", "Хрустальная витрина"),
+    "sc_stadium": ("showcase", "Витрина «Ночной стадион»"),
+    "sc_velvet": ("showcase", "Витрина «Королевский бархат»"),
+    "sc_neon": ("showcase", "Неоновая витрина"),
 }
 COSMETIC_KINDS = (
     "accessory", "background", "effect", "hair", "celebration", "ball", "boots", "gloves", "walkout", "showcase",
+    "feint",
 )
 # Premium hairstyles: wearing one sets appearance["hair"] to this index
 # (PlayerAvatar draws 14+ as these styles); the free choices stay 0..13.
@@ -162,6 +169,7 @@ COSMETIC_STATUS = {
     "hair_neymar": 30, "hair_cr7": 25, "hair_pogba": 20, "aviators": 15, "diamond_chain": 20,
     "crown": 25, "bg_galaxy": 10, "bg_champions": 15, "fx_sparkle": 8, "fx_fire": 10, "fx_lightning": 15,
     "cel_siu_gold": 40, "walk_legend": 35, "cel_flip": 10, "walk_fireworks": 10, "sc_gold": 10, "sc_crystal": 20,
+    "sc_stadium": 15, "sc_velvet": 20, "sc_neon": 15,
 }
 
 TRAINING_MAX_HITS = 3
@@ -197,6 +205,7 @@ DUEL_CHANCE_RANGE = (0.08, 0.75)
 TROPHY_CODES = (
     "player_career_champion", "player_career_top_scorer", "player_career_mvp",
     "player_career_cl_winner", "player_career_national_winner", "player_career_golden_ball",
+    "player_career_golden_boot", "player_career_top_assist", "player_career_golden_glove", "player_career_best_defender",
 )
 
 NAME_RE = re.compile(r"^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё .'\-]{1,19}$")
@@ -795,11 +804,12 @@ def _cosmetics_view(
 
 
 async def game_gear(db: AsyncSession, user_id: int) -> dict:
-    """What the player wears in the 3D free kick / penalty: the goal
-    celebration, ball, boots and keeper's gloves (codes, None = default)."""
+    """What the player wears in the 3D free kick / penalty / «Атака 1 на 1»:
+    the goal celebration, ball, boots, keeper's gloves and the look of his
+    feint (codes, None = default)."""
     mp = await get_my_player(db, user_id)
     state = cosmetics_of(mp) if mp else {}
-    return {kind: state.get(kind) for kind in ("celebration", "ball", "boots", "gloves")}
+    return {kind: state.get(kind) for kind in ("celebration", "ball", "boots", "gloves", "feint")}
 
 
 async def public_view(db: AsyncSession, user_id: int) -> dict:

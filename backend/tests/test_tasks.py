@@ -626,6 +626,48 @@ async def test_referral_completion_progresses_referral_task(client, db_session, 
     assert invite_task_after["progress"] == 1
 
 
+async def test_counted_friend_playing_today_completes_daily_task(client, db_session, bot_token):
+    """«Друг в игре»: a counted friend's new day completes the referrer's
+    daily task — also when the referrer opens his set only after that."""
+    from datetime import timedelta
+
+    db_session.add(TaskDefinition(
+        code="friend_today_test", name="Друг в игре", description="test", category=TaskCategory.regular,
+        condition_type=TaskConditionType.metric_counter, metric="friends_active_today", target_value=1,
+        reward_coins=50,
+    ))
+    await db_session.commit()
+    referrer_headers = telegram_headers(810021, bot_token)
+    await client.post("/api/v1/auth/session", headers=referrer_headers)
+    referrer = await get_user_by_telegram_id(db_session, 810021)
+    friend_headers = telegram_headers(810022, bot_token)
+    friend_headers["X-Referral-Code"] = str(referrer.telegram_id)
+    await client.post("/api/v1/auth/session", headers=friend_headers)
+    friend = await get_user_by_telegram_id(db_session, 810022)
+
+    task = next(t for t in (await client.get("/api/v1/tasks", headers=referrer_headers)).json()["regular"]
+                if t["code"] == "friend_today_test")
+    # Not counted yet (fewer than referral_active_days days): today's visit doesn't count.
+    assert task["is_completed"] is False
+
+    friend.referral_reward_granted = True
+    friend.last_seen_at = datetime.now(timezone.utc) - timedelta(days=1)
+    await db_session.commit()
+    await client.get("/api/v1/tasks", headers=friend_headers)
+    task = next(t for t in (await client.get("/api/v1/tasks", headers=referrer_headers)).json()["regular"]
+                if t["code"] == "friend_today_test")
+    assert task["is_completed"] is True and task["progress"] == 1
+
+    # Handed out after the friend already played today: done at once.
+    row = await db_session.get(UserTask, task["user_task_id"])
+    from app.services import task_service
+
+    definition = await db_session.get(TaskDefinition, row.task_definition_id)
+    await task_service._assign(db_session, referrer, definition, row.slot_index, row.period_key, {definition.id: row})
+    await db_session.commit()
+    assert row.progress == 1 and row.completed_at is not None
+
+
 async def test_claim_stores_reward_coins_granted_snapshot(client, db_session, bot_token):
     """The premium-subscription clawback sweep (bot/services/
     premium_subscription_check.py) debits/credits whatever THIS claim

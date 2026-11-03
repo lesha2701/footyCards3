@@ -163,6 +163,20 @@ export interface PlayerCareerGoldenBallEntry {
   score: number;
 }
 
+export interface PlayerCareerMonthAward {
+  code: "golden_boot" | "top_assist" | "golden_glove" | "best_defender";
+  /** Trophy code (its art). */
+  trophy: string;
+  title: string;
+  /** Only this line competes; null = every line. */
+  line: "GK" | "DEF" | null;
+  stat: "goals" | "assists" | "clean_sheets" | "score";
+  leader: { user_name: string; is_me: boolean; value: number } | null;
+  my_value: number | null;
+  my_place: number | null;
+  last: { month_label: string; user_name: string; is_me: boolean; value: number } | null;
+}
+
 export interface PlayerCareerGoldenBall {
   month: string;
   month_label: string;
@@ -171,6 +185,11 @@ export interface PlayerCareerGoldenBall {
   prize_prestige: number;
   /** Points per goal / assist / clean sheet by line. */
   weights: Record<string, { goals: number; assists: number; clean_sheets: number }>;
+  /** Each line's average rating / contribution per match this month (~100 index). */
+  baselines?: Record<string, { rating: number; contribution: number }>;
+  award_coins?: number;
+  award_prestige?: number;
+  awards?: PlayerCareerMonthAward[];
   table: PlayerCareerGoldenBallEntry[];
   me: PlayerCareerGoldenBallEntry | null;
   winners: { month: string; month_label: string; user_name: string; is_me: boolean; score: number; goals: number; assists: number; avg_rating: number }[];

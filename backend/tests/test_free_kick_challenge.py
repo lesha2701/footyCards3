@@ -42,7 +42,7 @@ def test_points_by_closeness_inside_the_target():
 
 
 async def test_one_attempt_a_day_replayed_paid_once_and_ranked(client, db_session, bot_token):
-    user = await _register(client, db_session, 851001, bot_token)
+    user_id = (await _register(client, db_session, 851001, bot_token)).id
     headers = telegram_headers(851001, bot_token)
     config = await get_config(db_session)
 
@@ -79,6 +79,8 @@ async def test_one_attempt_a_day_replayed_paid_once_and_ranked(client, db_sessio
 
     reward = hits * config.free_kick_challenge_coins_per_hit + (config.free_kick_challenge_perfect_bonus if hits == 5 else 0)
     assert body["reward_coins"] == reward and body["rank"] == 1
+    # The app wrote the reward from its own session: drop this session's stale copy.
+    db_session.expire_all()
     assert (await get_user_by_telegram_id(db_session, 851001)).balance == body["new_balance"]
 
     assert (await client.post(f"{API}/start", headers=headers)).status_code == 409
@@ -95,4 +97,4 @@ async def test_one_attempt_a_day_replayed_paid_once_and_ranked(client, db_sessio
     assert board["my"]["finished"] is False
     assert [r["is_me"] for r in board["top"]].count(True) == 1
     assert board["top"][0]["score"] >= board["top"][1]["score"]
-    assert user.id
+    assert user_id

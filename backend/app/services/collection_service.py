@@ -10,6 +10,7 @@ from app.core.pagination import Page, PageParams
 from app.models.card import UserCard
 from app.models.card_collection import CardCollection, UserCollectionReward
 from app.models.coach import Coach
+from app.models.muse import Muse, UserMuse
 from app.models.stadium import Stadium
 from app.models.user_coach_card import UserCoachCard
 from app.models.user_stadium_card import UserStadiumCard
@@ -419,7 +420,7 @@ async def _collection_progress(db: AsyncSession, user_id: int, collection_id: Op
         )
     ).scalar_one()
     if collection_id is not None:
-        # Coaches and stadiums of the collection count like its footballers.
+        # Coaches, stadiums and Muses of the collection count like its footballers.
         staff_total, staff_owned = await _staff_progress(db, user_id, collection_id)
         total += staff_total
         owned += staff_owned
@@ -429,26 +430,40 @@ async def _collection_progress(db: AsyncSession, user_id: int, collection_id: Op
 async def _staff_progress(db: AsyncSession, user_id: int, collection_id: int) -> tuple[int, int]:
     total = 0
     owned = 0
-    for model, card_model, key in ((Coach, UserCoachCard, "coach_id"), (Stadium, UserStadiumCard, "stadium_id")):
+    for model, card_model, key in _STAFF:
+        collection = _staff_collection_column(model)
         total += (await db.execute(
-            select(func.count(model.id)).where(model.collection_id == collection_id, model.is_active.is_(True))
+            select(func.count(model.id)).where(collection == collection_id, model.is_active.is_(True))
         )).scalar_one()
         owned += (await db.execute(
             select(func.count(func.distinct(getattr(card_model, key))))
             .join(model, model.id == getattr(card_model, key))
-            .where(card_model.user_id == user_id, model.collection_id == collection_id, model.is_active.is_(True))
+            .where(card_model.user_id == user_id, collection == collection_id, model.is_active.is_(True))
         )).scalar_one()
     return total, owned
 
 
-async def staff_collection_ids(db: AsyncSession, coach_ids: Iterable[int] = (), stadium_ids: Iterable[int] = ()) -> list[int]:
-    """Active collections these coaches / stadiums belong to — pass them to
-    grant_collection_rewards_for_new_cards(collection_ids=…) after a grant."""
+# (catalog model, owned model, its key) of what counts toward a card
+# collection besides footballers.
+_STAFF = ((Coach, UserCoachCard, "coach_id"), (Stadium, UserStadiumCard, "stadium_id"), (Muse, UserMuse, "muse_id"))
+
+
+def _staff_collection_column(model):
+    # A Muse's own `collection_id` is her «Музы» line, not a card collection.
+    return Muse.card_collection_id if model is Muse else model.collection_id
+
+
+async def staff_collection_ids(
+    db: AsyncSession, coach_ids: Iterable[int] = (), stadium_ids: Iterable[int] = (), muse_ids: Iterable[int] = (),
+) -> list[int]:
+    """Active collections these coaches / stadiums / Muses belong to — pass
+    them to grant_collection_rewards_for_new_cards(collection_ids=…) after a grant."""
     ids: set[int] = set()
-    for model, wanted in ((Coach, set(coach_ids)), (Stadium, set(stadium_ids))):
+    for model, wanted in ((Coach, set(coach_ids)), (Stadium, set(stadium_ids)), (Muse, set(muse_ids))):
         if wanted:
+            collection = _staff_collection_column(model)
             ids.update(c for c in (await db.execute(
-                select(model.collection_id).where(model.id.in_(wanted), model.collection_id.is_not(None))
+                select(collection).where(model.id.in_(wanted), collection.is_not(None))
             )).scalars().all() if c)
     return sorted(ids)
 
@@ -746,6 +761,16 @@ async def get_album_collection_detail(
             staff.append(AlbumStaffOut(
                 kind="stadium", id=stadium.id, name=stadium.display_name, rarity=stadium.rarity.value,
                 image_path=stadium.image_path, owned=stadium.id in owned_stadiums, effects=stadium_effect_lines(stadium),
+            ))
+        from app.services.muse_service import effect_label
+
+        owned_muses = set((await db.execute(select(UserMuse.muse_id).where(UserMuse.user_id == user_id))).scalars().all())
+        for muse in (await db.execute(
+            select(Muse).where(Muse.card_collection_id == collection_id, Muse.is_active.is_(True)).order_by(Muse.name)
+        )).unique().scalars().all():
+            staff.append(AlbumStaffOut(
+                kind="muse", id=muse.id, name=muse.name, rarity=muse.rarity, image_path=muse.image_path, icon=muse.icon,
+                owned=muse.id in owned_muses, effects=[effect_label(muse.effect, muse.effect_value)],
             ))
 
     return AlbumCollectionDetailOut(

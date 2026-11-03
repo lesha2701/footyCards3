@@ -43,6 +43,7 @@ const MY_PLAYER_COSMETICS: [string, string][] = [
   ["gloves_lime", "Перчатки «Лайм»"],
   ["gloves_pink", "Перчатки «Розовые»"],
   ["gloves_gold", "Перчатки «Золото»"],
+  ["feint_roulette", "Финт «Рулетка» (атака 1 на 1)"],
   ["cel_fist", "Празднование «Кулак вверх» (единственное за монеты)"],
   ["cel_shush", "Празднование «Тсс!»"],
   ["cel_flex", "Празднование «Бицепс»"],
@@ -58,6 +59,9 @@ const MY_PLAYER_COSMETICS: [string, string][] = [
   ["sc_marble", "Мраморная витрина трофеев"],
   ["sc_gold", "Золотая витрина трофеев"],
   ["sc_crystal", "Хрустальная витрина трофеев"],
+  ["sc_stadium", "Витрина трофеев «Ночной стадион»"],
+  ["sc_velvet", "Витрина трофеев «Королевский бархат»"],
+  ["sc_neon", "Неоновая витрина трофеев"],
 ];
 
 const WEEKLY_TOP_METRICS: [string, string][] = [
@@ -785,6 +789,8 @@ export default function AdminGamesPage() {
           {field("player_career_golden_ball_min_matches", "Золотой мяч: минимум матчей")}
           {field("player_career_golden_ball_coins", "Золотой мяч: монеты")}
           {field("player_career_golden_ball_prestige", "Золотой мяч: престиж")}
+          {field("player_career_award_coins", "Призы месяца (бутса, передачи, перчатка, защитник): монеты")}
+          {field("player_career_award_prestige", "Призы месяца: престиж")}
           {field("player_career_moments", "Ключевых моментов в матче")}
           {field("player_career_moment_hit_pct", "Момент: +% шанса за тайминг")}
           {field("player_career_moment_window_hours", "Момент: ждать решения, часов")}
@@ -1593,6 +1599,23 @@ export default function AdminGamesPage() {
           cards={form.magnate_cards}
           onChange={(board, cards) => setForm({ ...form, magnate_board: board, magnate_cards: cards })}
         />
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Атака 1 на 1</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Серия выходов один на один; каждую атаку сервер переигрывает сам по присланному вводу. Попыток в час —
+          общий часовой лимит игр. «После финта» — гол, когда вратарь купился на финт; «парашют» — гол над
+          вышедшим вратарём.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("one_on_one_attacks", "Атак в серии")}
+          {field("one_on_one_daily_limit", "Наградных серий в день")}
+          {field("one_on_one_goal_coins", "Монет за гол")}
+          {field("one_on_one_feint_bonus", "Бонус «после финта»")}
+          {field("one_on_one_chip_bonus", "Бонус «парашют»")}
+          {field("one_on_one_near_coins", "За сейв или штангу")}
+        </div>
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">

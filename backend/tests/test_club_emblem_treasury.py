@@ -83,11 +83,14 @@ async def test_catalog_is_seeded_and_nothing_is_unlocked(client, db_session, bot
     kinds = {i["kind"] for i in body["items"]}
     assert kinds == {"color2", "pattern", "letters", "symbol", "outline", "effect"}
     assert not any(i["unlocked"] for i in body["items"])
+    assert {"lion", "ball"}.isdisjoint(i["style_key"] for i in body["items"])  # retired symbols
     assert body["emblem"] == {"color2": None, "pattern": None, "symbol": None, "letters": None,
                               "outline": None, "outline_thin": False, "effect": None}
-    # Coins for the cheap layers, Stars for symbols / outlines / effects.
+    # Coins for the cheap layers and four symbols, Stars for the other symbols / outlines / effects.
     for item in body["items"]:
-        if item["kind"] in ("symbol", "outline", "effect"):
+        if item["style_key"] in ("img_ball", "img_tower", "img_lightning", "img_compass"):
+            assert item["coins_price"] == 2000 and item["stars_price"] == 0
+        elif item["kind"] in ("symbol", "outline", "effect"):
             assert item["stars_price"] > 0 and item["coins_price"] == 0
         else:
             assert item["coins_price"] > 0 and item["stars_price"] == 0
@@ -121,7 +124,7 @@ async def test_budget_purchase_unlocks_for_the_club(client, db_session, bot_toke
     assert again.status_code == 409
 
     # Stars items can't be bought for coins.
-    crown = await _item(db_session, "symbol", "crown")
+    crown = await _item(db_session, "symbol", "img_crown")
     resp = await client.post(f"/api/v1/clubs/me/emblem/items/{crown.id}/buy", headers=cap_h)
     assert resp.status_code == 409
 
@@ -140,17 +143,17 @@ async def test_captain_puts_only_unlocked_layers_on(client, db_session, bot_toke
     assert resp.json()["logo_shape"] == "crest"
 
     for kind, style in (("pattern", "checker"), ("color2", "second_color"), ("letters", "letters"),
-                        ("symbol", "lion"), ("outline", "gold"), ("effect", "flame")):
+                        ("symbol", "img_tower"), ("outline", "gold"), ("effect", "flame")):
         item = await _item(db_session, kind, style)
         db_session.add(ClubEmblemUnlock(club_id=club_id, item_id=item.id, source="admin"))
     await db_session.commit()
 
-    full = {**base, "pattern": "checker", "color2": "#FFFFFF", "letters": "фк", "symbol": "lion",
+    full = {**base, "pattern": "checker", "color2": "#FFFFFF", "letters": "фк", "symbol": "img_tower",
             "outline": "gold", "outline_thin": True, "effect": "flame"}
     assert (await client.put("/api/v1/clubs/me/emblem", headers=mem_h, json=full)).status_code == 403
     resp = await client.put("/api/v1/clubs/me/emblem", headers=cap_h, json=full)
     assert resp.status_code == 200, resp.text
-    assert resp.json()["emblem"] == {"color2": "#FFFFFF", "pattern": "checker", "symbol": "lion", "letters": "ФК",
+    assert resp.json()["emblem"] == {"color2": "#FFFFFF", "pattern": "checker", "symbol": "img_tower", "letters": "ФК",
                                      "outline": "gold", "outline_thin": True, "effect": "flame"}
 
     bad = await client.put("/api/v1/clubs/me/emblem", headers=cap_h, json={**full, "letters": "a!"})
@@ -160,14 +163,14 @@ async def test_captain_puts_only_unlocked_layers_on(client, db_session, bot_toke
 
     # The emblem travels with the club everywhere its logo does.
     listed = (await client.get("/api/v1/clubs", headers=mem_h)).json()
-    assert next(c for c in listed if c["id"] == club_id)["emblem"]["symbol"] == "lion"
+    assert next(c for c in listed if c["id"] == club_id)["emblem"]["symbol"] == "img_tower"
     assert (await client.get("/api/v1/clubs/me", headers=mem_h)).json()["emblem"]["effect"] == "flame"
 
 
 async def test_member_buys_a_stars_layer_for_the_club(client, db_session, bot_token):
     club_id, cap_h, _captain, mem_h, member = await _club_with_member(client, db_session, bot_token, 860030)
     await client.get("/api/v1/clubs/me/emblem", headers=cap_h)
-    crown = await _item(db_session, "symbol", "crown")
+    crown = await _item(db_session, "symbol", "img_crown")
 
     resp = await client.post(f"/api/v1/clubs/me/emblem/items/{crown.id}/stars-invoice", headers=mem_h)
     assert resp.status_code == 200, resp.text
@@ -284,7 +287,7 @@ async def test_admin_edits_emblem_prices(client, db_session, bot_token):
     resp = await client.post("/api/v1/auth/session", headers=telegram_headers(999000001, bot_token))
     admin = {"Authorization": f"Bearer {resp.json()['admin_token']}"}
     items = (await client.get("/api/v1/admin/club-emblem-items", headers=admin)).json()
-    lion = next(i for i in items if i["style_key"] == "lion")
+    lion = next(i for i in items if i["style_key"] == "img_tower")
     resp = await client.put(f"/api/v1/admin/club-emblem-items/{lion['id']}", headers=admin, json={
         "name": "Лев", "coins_price": 0, "stars_price": 99, "is_active": False, "sort_order": 1,
     })
@@ -293,7 +296,7 @@ async def test_admin_edits_emblem_prices(client, db_session, bot_token):
     # Switched-off items disappear from a club that doesn't own them.
     _club_id, cap_h, *_ = await _club_with_member(client, db_session, bot_token, 860080)
     body = (await client.get("/api/v1/clubs/me/emblem", headers=cap_h)).json()
-    assert all(i["style_key"] != "lion" for i in body["items"])
+    assert all(i["style_key"] != "img_tower" for i in body["items"])
 
 
 async def test_patron_tops_up_club_stars_and_spenders_buy_stars_layers(client, db_session, bot_token):
@@ -302,7 +305,7 @@ async def test_patron_tops_up_club_stars_and_spenders_buy_stars_layers(client, d
     club_id, cap_h, _captain, mem_h, member = await _club_with_member(client, db_session, bot_token, 860090)
     await _enable_donations(db_session)
     await client.get("/api/v1/clubs/me/emblem", headers=cap_h)
-    crown_id = (await _item(db_session, "symbol", "crown")).id  # 75 ⭐
+    crown_id = (await _item(db_session, "symbol", "img_crown")).id  # 75 ⭐
 
     # Not enough on the club balance yet; a plain member can't spend it at all.
     assert (await client.post(f"/api/v1/clubs/me/emblem/items/{crown_id}/buy-club-stars", headers=cap_h)).status_code == 409

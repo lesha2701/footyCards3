@@ -86,6 +86,22 @@ class PlayerCareerGoldenBall(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
+class PlayerCareerMonthAward(Base):
+    """The month awards besides the «Золотой мяч» («Золотая бутса», «Король
+    передач», «Золотая перчатка», «Лучший защитник»); the (month, code) key
+    keeps each awarded once. user_id is null when nobody qualified."""
+
+    __tablename__ = "player_career_month_awards"
+
+    month: Mapped[str] = mapped_column(String(7), primary_key=True)
+    code: Mapped[str] = mapped_column(String(32), primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    # Goals / assists / clean sheets, or the form index of «Лучший защитник».
+    value: Mapped[float] = mapped_column(Float, nullable=False, default=0)
+    avg_rating: Mapped[float] = mapped_column(Float, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
 class PlayerCareerWeekStat(Base):
     """Per-week (ISO week, local) totals of «Карьера игрока» matches — the
     weekly rankings and weekly tasks."""

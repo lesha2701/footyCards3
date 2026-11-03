@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.player import PlayerOut
 
@@ -369,9 +369,95 @@ class GameLimitsOut(BaseModel):
     magnate: int
     mordoboi: int
     kontra: int = 0
+    one_on_one: int = 0
     # When a game's hourly cap is used up: the moment it frees up again
     # (key = the field name above). Games with plays left are absent.
     resets_at: dict[str, datetime] = {}
+
+
+# --- «Атака 1 на 1» ---
+
+# The run's tick cap (one_on_one_engine.MAX_RUN_TICKS): no input can be later.
+_ONE_ON_ONE_MAX_TICK = 600
+
+
+class OneOnOneAttackOut(BaseModel):
+    """One attack of the series: the client builds the episode from `seed`
+    + the series' card rating, exactly as the server will replay it."""
+    attack_index: int
+    seed: int
+
+
+class OneOnOneStartOut(BaseModel):
+    session_id: int
+    rating: int
+    total_attacks: int
+    attack: OneOnOneAttackOut
+    # «Мой игрок» gear worn in the 3D scene (cosmetic codes; None = default).
+    celebration: Optional[str] = None
+    ball: Optional[str] = None
+    boots: Optional[str] = None
+    gloves: Optional[str] = None
+    # How his feint looks (None = the plain sidestep).
+    feint: Optional[str] = None
+
+
+class OneOnOneFeintIn(BaseModel):
+    tick: int = Field(ge=0, le=_ONE_ON_ONE_MAX_TICK)
+    dir: int = Field(ge=-1, le=1)
+
+    @field_validator("dir")
+    @classmethod
+    def _side(cls, v: int) -> int:
+        if v == 0:
+            raise ValueError("dir must be -1 or 1")
+        return v
+
+
+class OneOnOneShotIn(BaseModel):
+    """The release swipe as the client quantized it (as the free kick's)."""
+    tick: int = Field(ge=0, le=_ONE_ON_ONE_MAX_TICK)
+    dx: int = Field(ge=-1500, le=1500)
+    dy: int = Field(ge=-1500, le=-1)
+    curve: int = Field(ge=-500, le=500)
+    duration_ms: int = Field(ge=40, le=2000)
+
+
+class OneOnOneAttackRequest(BaseModel):
+    """The input timeline only — never an outcome: control changes
+    [tick, hold 0/1/2 (stop, run, sprint), steer −1000..1000] in strictly ascending ticks, the
+    feint and the shot with the tick they were made on."""
+    controls: list[list[int]] = Field(max_length=_ONE_ON_ONE_MAX_TICK + 1)
+    feint: Optional[OneOnOneFeintIn] = None
+    shot: Optional[OneOnOneShotIn] = None
+
+    @field_validator("controls")
+    @classmethod
+    def _controls(cls, v: list[list[int]]) -> list[list[int]]:
+        last = -1
+        for c in v:
+            if len(c) != 3:
+                raise ValueError("a control is [tick, hold, steer]")
+            tick, hold, steer = c
+            if not (last < tick <= _ONE_ON_ONE_MAX_TICK) or hold not in (0, 1, 2) or not -1000 <= steer <= 1000:
+                raise ValueError("bad control")
+            last = tick
+        return v
+
+
+class OneOnOneResultOut(BaseModel):
+    outcome: str  # goal | save | tackle | miss | lost
+    bonuses: list[str]  # feint | chip
+    feint: Optional[str] = None  # bit | read
+    coins_this_attack: int
+    total_coins: int
+    is_finished: bool
+    next_attack: Optional[OneOnOneAttackOut] = None
+
+
+class OneOnOneClaimOut(BaseModel):
+    reward_coins: int
+    new_balance: int
 
 
 # --- Найди пару (card pairs memory match) ---

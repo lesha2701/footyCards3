@@ -58,6 +58,21 @@ EFFECTS: dict[str, str] = {
     "xp_bonus_pct": "+{v}% опыта",
     "freshness_regen": "+{v} свежести в час",
 }
+# Admin hints: what N means, where it acts, a sensible value, its ceiling.
+HINTS: dict[str, str] = {
+    "daily_coins": "N монет раз в день «Моему футболисту» по кнопке у музы. Напр. 100 (обычная) … 500 (легенда). "
+                   "Потолок: «Потолок монет в день».",
+    "match_rating": "+N к рейтингу «Моего футболиста» в его матчах. Напр. 1–4. "
+                    "Потолок: «Потолок + рейтинга/атаки/защиты/свежести».",
+    "attack": "+N к атаке «Моего футболиста»: чаще забивает и обыгрывает. Напр. 2–6. Потолок: тот же, что у рейтинга.",
+    "defense": "+N к защите «Моего футболиста»: чаще отбирает мяч. Напр. 2–6. Потолок: тот же, что у рейтинга.",
+    "shot_pp": "+N процентных пунктов к шансу удара в створ у «Моего футболиста». Напр. 2–8. "
+               "Потолок: «Потолок % удара/обыгрыша».",
+    "dribble_pp": "+N процентных пунктов к шансу обыграть один на один. Напр. 2–8. Потолок: «Потолок % удара/обыгрыша».",
+    "xp_bonus_pct": "+N% опыта «Моему футболисту» за тренировки и матчи. Напр. 5–20. Потолок: «Потолок % опыта».",
+    "freshness_regen": "+N свежести в час «Моему футболисту» (быстрее восстанавливается). Напр. 1–3. "
+                       "Потолок: тот же, что у рейтинга.",
+}
 KINDS: dict[str, str] = {
     "bag": "Сумка",
     "dress": "Платье",
@@ -568,8 +583,11 @@ _RARITY_ORDER = {"common": 0, "rare": 1, "epic": 2, "legendary": 3}
 
 
 async def droppable(db: AsyncSession) -> list[Muse]:
-    """Active Muses in active (or no) collections — the pack's drop pool."""
-    rows = (await db.execute(select(Muse).where(Muse.is_active.is_(True), Muse.drop_weight > 0))).unique().scalars().all()
+    """Active Muses in active (or no) collections — the pack's drop pool
+    («лимитки», is_pack_droppable=False, never drop)."""
+    rows = (await db.execute(select(Muse).where(
+        Muse.is_active.is_(True), Muse.is_pack_droppable.is_(True), Muse.drop_weight > 0,
+    ))).unique().scalars().all()
     return [m for m in rows if m.collection is None or m.collection.is_active]
 
 
@@ -613,6 +631,7 @@ def admin_muse_out(muse: Muse) -> dict:
         "image_path": muse.image_path, "rarity": muse.rarity, "collection_id": muse.collection_id,
         "effect": muse.effect, "effect_value": muse.effect_value, "effect_label": effect_label(muse.effect, muse.effect_value),
         "drop_weight": muse.drop_weight, "is_active": muse.is_active, "sort_order": muse.sort_order,
+        "is_pack_droppable": muse.is_pack_droppable, "card_collection_id": muse.card_collection_id,
     }
 
 
@@ -629,7 +648,9 @@ async def admin_catalog(db: AsyncSession) -> dict:
     muses = (await db.execute(select(Muse).order_by(Muse.sort_order, Muse.id))).unique().scalars().all()
     accessories = (await db.execute(select(MuseAccessory).order_by(MuseAccessory.sort_order, MuseAccessory.id))).scalars().all()
     return {
-        "effects": [{"code": code, "label": label.format(v="N")} for code, label in EFFECTS.items()],
+        "effects": [
+            {"code": code, "label": label.format(v="N"), "hint": HINTS.get(code, "")} for code, label in EFFECTS.items()
+        ],
         "kinds": [{"code": code, "label": label} for code, label in KINDS.items()],
         "rarities": list(RARITIES),
         "collections": [admin_collection_out(c) for c in collections],
@@ -670,6 +691,11 @@ async def admin_save_collection(db: AsyncSession, data: dict, collection_id: Opt
 async def admin_save_muse(db: AsyncSession, data: dict, muse_id: Optional[int] = None) -> dict:
     if data.get("collection_id") and await db.get(MuseCollection, data["collection_id"]) is None:
         raise NotFoundError("Коллекция не найдена")
+    if data.get("card_collection_id"):
+        from app.models.card_collection import CardCollection
+
+        if await db.get(CardCollection, data["card_collection_id"]) is None:
+            raise NotFoundError("Коллекция карточек не найдена")
     return admin_muse_out(await _save(db, Muse, data, muse_id, "Муза не найдена"))
 
 

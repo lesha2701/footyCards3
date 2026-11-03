@@ -471,6 +471,8 @@ export interface GameConfig {
   player_career_golden_ball_min_matches: number;
   player_career_golden_ball_coins: number;
   player_career_golden_ball_prestige: number;
+  player_career_award_coins: number;
+  player_career_award_prestige: number;
   player_career_moments: number;
   player_career_moment_hit_pct: number;
   player_career_moment_window_hours: number;
@@ -584,6 +586,12 @@ export interface GameConfig {
   hangman_daily_limit: number;
   hangman_reward_correct: number;
   hangman_max_wrong: number;
+  one_on_one_attacks: number;
+  one_on_one_daily_limit: number;
+  one_on_one_goal_coins: number;
+  one_on_one_feint_bonus: number;
+  one_on_one_chip_bonus: number;
+  one_on_one_near_coins: number;
   pairs_daily_limit: number;
   pairs_reward_perfect: number;
   pairs_reward_min: number;
@@ -1311,6 +1319,10 @@ export interface AdminMuse {
   effect_value: number;
   effect_label?: string;
   drop_weight: number;
+  /** False = «лимитка»: never drops from packs. */
+  is_pack_droppable: boolean;
+  /** The footballers' card collection she counts toward. */
+  card_collection_id: number | null;
   is_active: boolean;
   sort_order: number;
 }
@@ -1332,7 +1344,8 @@ export interface AdminMuseAccessory {
 }
 
 export interface AdminMuseCatalog {
-  effects: { code: string; label: string }[];
+  /** hint: what N means, where it acts, an example and its ceiling. */
+  effects: { code: string; label: string; hint?: string }[];
   kinds: { code: string; label: string }[];
   rarities: string[];
   collections: AdminMuseCollection[];
