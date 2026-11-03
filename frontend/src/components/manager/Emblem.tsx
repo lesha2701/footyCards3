@@ -84,6 +84,23 @@ function KitPattern({ kit, b, uid }: { kit: string; b: string; uid: string }) {
   }
 }
 
+/** The shirt sponsor printed across the chest like a real kit: the brand's first word
+ * big, the rest small under it, squeezed to the chest width instead of cut off. */
+function SponsorPrint({ brand, fill }: { brand: string; fill: string }) {
+  const [main, ...rest] = brand.trim().toUpperCase().split(/\s+/);
+  const tail = rest.join(" ");
+  const fit = (text: string, fontSize: number, max: number) =>
+    text.length * fontSize * 0.62 > max ? { textLength: max, lengthAdjust: "spacingAndGlyphs" as const } : {};
+  const print = { textAnchor: "middle" as const, fontWeight: 900, fill, stroke: "#0b0f14", strokeOpacity: 0.55,
+    strokeLinejoin: "round" as const, paintOrder: "stroke" as const };
+  return (
+    <g>
+      <text x={50} y={tail ? 61 : 63} fontSize={11} strokeWidth={1.4} letterSpacing={0.4} {...fit(main, 11, 46)} {...print}>{main}</text>
+      {tail && <text x={50} y={69} fontSize={5.2} strokeWidth={0.8} letterSpacing={1.2} {...fit(tail, 5.2, 34)} {...print}>{tail}</text>}
+    </g>
+  );
+}
+
 /** The club shirt: kit pattern and colours, collar and cuffs in the second colour, the
  * club emblem on the chest and the shirt sponsor. `back` shows the back instead: the
  * club name and a number. */
@@ -126,6 +143,7 @@ export function KitShirt({ look, size = 40, sponsor, back }: {
         <path d={back ? "M37 7 Q50 11 63 7" : "M37 7 Q50 19 63 7"} fill="none" stroke={b} strokeWidth={4.5} strokeLinecap="round" />
         {!back && <path d="M40 8.5 Q50 15 60 8.5" fill="none" stroke="#000" strokeOpacity={0.35} strokeWidth={1.2} />}
         <path d={shirt} fill="none" stroke="#000" strokeOpacity={0.4} strokeWidth={1.4} strokeLinejoin="round" />
+        {sponsor && !back && <SponsorPrint brand={sponsor} fill={b} />}
         {back && (
           <>
             <text x={50} y={28} textAnchor="middle" fontSize={8.5} fontWeight={900} fill={b} stroke="#0b0f14" strokeOpacity={0.85}
@@ -140,21 +158,8 @@ export function KitShirt({ look, size = 40, sponsor, back }: {
         )}
       </svg>
       {emblem && (
-        <span className="absolute" style={{ left: size * 0.57, top: size * 0.22 }}>
-          <Emblem look={{ shape: look.shape!, symbol: look.symbol!, color: look.color!, color2: look.color2! }} size={Math.round(size * 0.17)} />
-        </span>
-      )}
-      {sponsor && !back && (
-        <span
-          className="absolute inset-x-0 flex justify-center"
-          style={{ top: size * 0.46 }}
-        >
-          <span
-            className="max-w-[54%] truncate rounded-sm bg-white/90 px-0.5 text-center font-black uppercase leading-none text-slate-900"
-            style={{ fontSize: Math.max(5, size * 0.11) }}
-          >
-            {sponsor.split(" ")[0]}
-          </span>
+        <span className="absolute flex leading-none" style={{ left: size * 0.58, top: size * 0.16 }}>
+          <Emblem look={{ shape: look.shape!, symbol: look.symbol!, color: look.color!, color2: look.color2! }} size={Math.round(size * 0.15)} />
         </span>
       )}
     </span>
