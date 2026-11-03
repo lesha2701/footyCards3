@@ -48,7 +48,12 @@ export default function AgentLicensePage() {
         <p className="mt-1 text-sm text-ink-mist">
           Право выставлять свои карточки на «Трансферный рынок». Ставить и покупать лоты можно и без лицензии.
         </p>
-        {license.active && license.expires_at && (
+        {license.permanent && (
+          <p className="mt-3 rounded-xl bg-accent-green/15 px-3 py-2 text-sm font-semibold text-accent-green">
+            Ты агент навсегда — лицензия бессрочная
+          </p>
+        )}
+        {license.active && !license.permanent && license.expires_at && (
           <p className="mt-3 rounded-xl bg-accent-green/15 px-3 py-2 text-sm font-semibold text-accent-green">
             Ты агент до {formatDate(license.expires_at)}
           </p>
@@ -79,7 +84,7 @@ export default function AgentLicensePage() {
         </p>
       )}
 
-      {license.buy_block_reason ? (
+      {license.permanent ? null : license.buy_block_reason ? (
         <p className="rounded-xl bg-amber-500/10 px-3 py-2 text-sm text-amber-300">{license.buy_block_reason}</p>
       ) : (
         <button

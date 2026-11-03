@@ -333,7 +333,7 @@ async def _hydrate(
             await db.execute(select(AgentLicense).where(AgentLicense.user_id.in_(seller_ids)))
         ).scalars().all()
         if agent_license_service.is_active(lic, now)
-    }
+    } | {uid for uid in seller_ids if (u := users.get(uid)) is not None and u.is_admin}
 
     out = []
     for lot in lots:
@@ -595,7 +595,7 @@ async def create_lot(db: AsyncSession, user: User, payload: AuctionLotCreateIn) 
     _require_enabled(config)
     seller = await lock_user_for_update(db, user.id)
     _require_can_trade(seller, config)
-    if not await agent_license_service.has_active(db, seller.id):
+    if not seller.is_admin and not await agent_license_service.has_active(db, seller.id):
         raise ForbiddenError(
             "Выставлять на рынок могут только агенты — купи «Агентскую лицензию» в разделе «Рынок». "
             "Ставить и покупать можно и без неё.",

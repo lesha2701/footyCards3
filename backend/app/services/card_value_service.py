@@ -116,7 +116,10 @@ async def bound_at_creation(db: AsyncSession, source: CardSource, source_ref_id:
 
 
 async def verified_block_reason(db: AsyncSession, user: User, config: GameConfig) -> Optional[str]:
-    """Why `user` isn't a «проверенный аккаунт» yet (None = they are)."""
+    """Why `user` isn't a «проверенный аккаунт» yet (None = they are). An
+    admin always is."""
+    if user.is_admin:
+        return None
     missing = []
     days = config.trade_verified_min_age_days
     if days > 0 and user.created_at is not None:

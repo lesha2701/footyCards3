@@ -86,7 +86,12 @@ export default function MarketPage() {
           </span>
         </button>
       )}
-      {info?.enabled && info.license.active && info.license.expires_at && (
+      {info?.enabled && info.license.permanent && (
+        <button onClick={() => navigate("/market/license")} className="flex items-center gap-2 text-caption text-ink-mist-dim">
+          <AgentBadge /> лицензия бессрочная
+        </button>
+      )}
+      {info?.enabled && info.license.active && !info.license.permanent && info.license.expires_at && (
         <button onClick={() => navigate("/market/license")} className="flex items-center gap-2 text-caption text-ink-mist-dim">
           <AgentBadge /> лицензия до {new Date(info.license.expires_at).toLocaleDateString("ru-RU")}
         </button>

@@ -7,6 +7,8 @@ export interface AgentLicense {
   active: boolean;
   expires_at: string | null;
   revoked: boolean;
+  /** An admin's license: never runs out. */
+  permanent?: boolean;
   stars: number;
   days: number;
   min_account_age_days: number;

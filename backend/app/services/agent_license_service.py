@@ -40,6 +40,11 @@ def is_active(lic: Optional[AgentLicense], now: Optional[datetime] = None) -> bo
     return lic is not None and lic.revoked_at is None and ensure_aware(lic.expires_at) > (now or _now())
 
 
+def holds(user: User, lic: Optional[AgentLicense], now: Optional[datetime] = None) -> bool:
+    """An admin's license never runs out (nothing to buy)."""
+    return user.is_admin or is_active(lic, now)
+
+
 async def get_license(db: AsyncSession, user_id: int) -> Optional[AgentLicense]:
     return await db.get(AgentLicense, user_id)
 
@@ -72,17 +77,18 @@ async def buy_block_reason(db: AsyncSession, user: User, config: GameConfig) -> 
 async def status(db: AsyncSession, user: User, config: Optional[GameConfig] = None) -> AgentLicenseOut:
     config = config or await get_config(db)
     lic = await get_license(db, user.id)
-    active = is_active(lic)
+    active = holds(user, lic)
     return AgentLicenseOut(
         enabled=config.agent_license_enabled,
         active=active,
+        permanent=user.is_admin,
         expires_at=ensure_aware(lic.expires_at) if lic is not None and lic.revoked_at is None else None,
         revoked=lic is not None and lic.revoked_at is not None and not active,
         stars=config.agent_license_stars,
         days=config.agent_license_days,
         min_account_age_days=config.agent_license_min_account_age_days,
         requires_verified=config.agent_license_requires_verified,
-        buy_block_reason=await buy_block_reason(db, user, config),
+        buy_block_reason="Лицензия бессрочная" if user.is_admin else await buy_block_reason(db, user, config),
     )
 
 
