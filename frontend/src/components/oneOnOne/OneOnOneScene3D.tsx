@@ -30,7 +30,7 @@ import { NET_DEPTH, netImpact } from "@/lib/freeKick3d/fx";
 import { playFreeKickSfx } from "@/lib/freeKick3d/sfx";
 import { BALL_RADIUS, createPenaltySetup, type QuantizedSwipe, type ShotTrajectory } from "@/lib/freeKick3d/trajectory";
 import { ballSkin } from "@/lib/gameGear";
-import { keeperTake, techniqueOf, type KeeperTake, type Technique } from "@/lib/oneOnOne/technique";
+import { keeperTake, techniqueOf, type Foot, type KeeperTake, type Technique } from "@/lib/oneOnOne/technique";
 import {
   FEINT_TICKS,
   KEEPER_START_Z,
@@ -63,6 +63,9 @@ export type LiveInput = {
   aim: number;
   power: number | null;
   lob: boolean;
+  /** Written by the scene: the foot his stride brings through next (null
+   * when he isn't running) — the one he strikes with (the page labels it). */
+  stride: Foot | null;
 };
 
 /** Slow motion for the last moments of a shot that's a goal or a save. */
@@ -204,7 +207,7 @@ function Episode({
       if (ended) {
         s.end = ended;
         s.acc = TICK;
-        s.tech = techniqueOf(recorder.state, recorder.timeline);
+        s.tech = techniqueOf(recorder.state, recorder.timeline, input.current.stride);
         s.plan = s.tech ? strikePlan(s.tech.kind, s.tech.foot) : null;
         s.take = ended.flight ? keeperTake(ended.flight) : null;
         s.t = s.plan ? -s.plan.lead : 0;
@@ -258,7 +261,7 @@ function Episode({
     <>
       <GoalFrame stage={stage} />
       <Suspense fallback={null}>
-        <Players setup={setup} stage={stage} flight={flight} quality={quality} onReady={onReady} />
+        <Players setup={setup} stage={stage} input={input} flight={flight} quality={quality} onReady={onReady} />
       </Suspense>
       <Ball stage={stage} flight={flight} skin={ball} quality={quality} />
       <CameraRig stage={stage} flight={flight} />
@@ -381,6 +384,20 @@ function hipsOf(p: SkinnedPlayer): THREE.Object3D | null {
   return hips;
 }
 
+/** The attacker's two feet (his stride: which one comes through next). */
+function feetOf(p: SkinnedPlayer): [THREE.Object3D, THREE.Object3D] | null {
+  let l: THREE.Object3D | null = null;
+  let r: THREE.Object3D | null = null;
+  p.root.traverse((o) => {
+    if (!(o as THREE.Bone).isBone) return;
+    if (/LeftFoot$/.test(o.name)) l = o;
+    else if (/RightFoot$/.test(o.name)) r = o;
+  });
+  return l && r ? [l, r] : null;
+}
+/** Running faster than this (m/s) his stride picks the striking foot. */
+const STRIDE_FROM = 1.5;
+
 /** The keeper's two hands (the ball between them when he holds it). */
 function handsOf(p: SkinnedPlayer): [THREE.Object3D, THREE.Object3D] | null {
   let l: THREE.Object3D | null = null;
@@ -433,12 +450,14 @@ function pinHips(p: SkinnedPlayer, hips: THREE.Object3D | null, x: number, z: nu
 function Players({
   setup,
   stage,
+  input,
   flight,
   quality,
   onReady,
 }: {
   setup: EpisodeSetup;
   stage: StageRef;
+  input: MutableRefObject<LiveInput>;
   flight: ShotFlight | null;
   quality: Quality;
   onReady: () => void;
@@ -460,7 +479,7 @@ function Players({
     addMoves(p, moves);
     return p;
   }, [asset, moves, materials]);
-  const bones = useMemo(() => ({ keeper: hipsOf(keeper), hands: handsOf(keeper) }), [keeper]);
+  const bones = useMemo(() => ({ keeper: hipsOf(keeper), hands: handsOf(keeper), feet: feetOf(attacker) }), [keeper, attacker]);
   const tmp = useMemo(() => ({ v: new THREE.Vector3(), a: new THREE.Vector3(), b: new THREE.Vector3() }), []);
   // The keeper getting up after he bit on the feint (s since, or null).
   const getup = useRef<{ mode: KeeperMode; since: number | null }>({ mode: "wait", since: null });
@@ -553,6 +572,17 @@ function Players({
       attacker.root.position.set(a.x, 0, a.z);
     }
     attacker.mixer.update(s.dt);
+    // His stride: the foot behind him is the next to come through (the
+    // other is coming down to plant) — the one he'll strike with.
+    if (!end) {
+      const feet = bones.feet;
+      if (feet && a.speed > STRIDE_FROM && !s.cur.feintTicks) {
+        attacker.root.updateMatrixWorld(true);
+        const l = feet[0].getWorldPosition(tmp.a);
+        const r = feet[1].getWorldPosition(tmp.b);
+        input.current.stride = (l.x - r.x) * a.hx + (l.z - r.z) * a.hz < 0 ? "left" : "right";
+      } else input.current.stride = null;
+    }
 
     // --- Keeper (faces the ball) ---
     // The ball in his hands or at his feet is no direction to face: then he

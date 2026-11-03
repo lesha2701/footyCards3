@@ -54,7 +54,10 @@ function bendOf(f: ShotFlight, hx: number, hz: number): number {
   return Math.sign(leftOf(hx, hz, spin.y * v.z - spin.z * v.y, spin.x * v.y - spin.y * v.x));
 }
 
-export function shotTechnique(f: ShotFlight, run: RunAtShot, chip: boolean): Technique {
+/** `stride`: the foot his run brings through next (the one behind him as
+ * the other comes down to plant) — in the run he strikes with that one;
+ * null when he is not running (then the cut and the aim pick it). */
+export function shotTechnique(f: ShotFlight, run: RunAtShot, chip: boolean, stride: Foot | null = null): Technique {
   const v = f.kick.velocity;
   const flat = Math.hypot(v.x, v.z);
   const speed = Math.hypot(flat, v.y);
@@ -63,7 +66,8 @@ export function shotTechnique(f: ShotFlight, run: RunAtShot, chip: boolean): Tec
   // Cutting to one side, he strikes with that foot; running straight, with
   // the foot that opens the body to where he aims (the inside across it).
   let foot: Foot;
-  if (Math.abs(run.side) > SIDE_MOVE) foot = run.side > 0 ? "left" : "right";
+  if (stride) foot = stride;
+  else if (Math.abs(run.side) > SIDE_MOVE) foot = run.side > 0 ? "left" : "right";
   else if (Math.abs(aim) > SIDE_AIM) foot = aim > 0 ? "right" : "left";
   else foot = "right";
 
@@ -94,7 +98,7 @@ const FEINT_CARRY = FEINT_TICKS + 24;
 /** The technique of an episode that ended in a shot (the state it ended
  * in, its timeline): his sideways way is the feint's sidestep when he
  * shoots out of it, else how far across the goal he is running. */
-export function techniqueOf(s: EpisodeState, tl: EpisodeTimeline): Technique | null {
+export function techniqueOf(s: EpisodeState, tl: EpisodeTimeline, stride: Foot | null = null): Technique | null {
   const end = s.ended;
   if (!end?.flight) return null;
   const gx = -s.x;
@@ -103,7 +107,7 @@ export function techniqueOf(s: EpisodeState, tl: EpisodeTimeline): Technique | n
   const fromFeint = tl.feint && end.tick - tl.feint.tick <= FEINT_CARRY ? -tl.feint.dir * FEINT_SIDE_SPEED : 0;
   const side = fromFeint || s.speed * leftOf(gx / gl, gz / gl, s.hx, s.hz);
   const b = ballOf(s);
-  return shotTechnique(end.flight, { hx: s.hx, hz: s.hz, side, keeperDist: Math.hypot(b.x - s.kx, b.z - s.kz) }, end.chip);
+  return shotTechnique(end.flight, { hx: s.hx, hz: s.hz, side, keeperDist: Math.hypot(b.x - s.kx, b.z - s.kz) }, end.chip, stride);
 }
 
 /** How the keeper meets a saved shot. */

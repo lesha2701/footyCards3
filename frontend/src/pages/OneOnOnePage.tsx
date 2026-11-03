@@ -228,7 +228,7 @@ function AttackRun({
 }) {
   const setup = useMemo(() => createEpisode(attack.seed, series.rating), [attack.seed, series.rating]);
   const recorder = useMemo(() => new EpisodeRecorder(setup), [setup]);
-  const input = useRef<LiveInput>({ live: false, hold: 0, steer: 0, feint: 0, shot: null, aiming: false, aim: 0, power: null, lob: false });
+  const input = useRef<LiveInput>({ live: false, hold: 0, steer: 0, feint: 0, shot: null, aiming: false, aim: 0, power: null, lob: false, stride: null });
   const stick = useRef(new Stick(window.innerWidth, window.innerHeight));
   const pad = useRef(new Finger(window.innerWidth, window.innerHeight));
   const knob = useRef<HTMLDivElement | null>(null);
@@ -278,7 +278,7 @@ function AttackRun({
   );
   const onDecided = useCallback(() => setShown(true), []);
   // Which foot and how (shown with the outcome; the same for this timeline).
-  const technique = useMemo(() => (ended ? techniqueOf(recorder.state, recorder.timeline) : null), [ended, recorder]);
+  const technique = useMemo(() => (ended ? techniqueOf(recorder.state, recorder.timeline, input.current.stride) : null), [ended, recorder]);
 
   // The crowd reacts the moment the outcome is on screen — on the local
   // episode, which is the server's own computation.
@@ -593,7 +593,7 @@ function AttackRun({
             type="button"
             onClick={() => {
               // Same scene, next attack: no WebGL context churn between attacks.
-              input.current = { live: false, hold: 0, steer: 0, feint: 0, shot: null, aiming: false, aim: 0, power: null, lob: false };
+              input.current = { live: false, hold: 0, steer: 0, feint: 0, shot: null, aiming: false, aim: 0, power: null, lob: false, stride: null };
               stick.current.end();
               pad.current.cancel();
               fingers.current.clear();
