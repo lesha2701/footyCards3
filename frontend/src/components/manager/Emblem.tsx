@@ -127,12 +127,12 @@ export function KitShirt({ look, size = 40, sponsor, back }: {
         <path d={shirt} fill="none" stroke="#000" strokeOpacity={0.4} strokeWidth={1.4} strokeLinejoin="round" />
         {back && (
           <>
-            <text x={50} y={28} textAnchor="middle" fontSize={8.5} fontWeight={900} fill={b} stroke="#000" strokeOpacity={0.35}
-              strokeWidth={0.6} paintOrder="stroke" letterSpacing={0.6} style={{ textTransform: "uppercase" }}>
+            <text x={50} y={28} textAnchor="middle" fontSize={8.5} fontWeight={900} fill={b} stroke="#0b0f14" strokeOpacity={0.85}
+              strokeWidth={1.6} strokeLinejoin="round" paintOrder="stroke" letterSpacing={0.6} style={{ textTransform: "uppercase" }}>
               {back.name.slice(0, 12)}
             </text>
-            <text x={50} y={70} textAnchor="middle" fontSize={38} fontWeight={900} fill={b} stroke="#000" strokeOpacity={0.35}
-              strokeWidth={1.4} paintOrder="stroke">
+            <text x={50} y={70} textAnchor="middle" fontSize={38} fontWeight={900} fill={b} stroke="#0b0f14" strokeOpacity={0.85}
+              strokeWidth={3.2} strokeLinejoin="round" paintOrder="stroke">
               {back.number}
             </text>
           </>
