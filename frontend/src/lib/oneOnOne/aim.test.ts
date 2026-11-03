@@ -77,12 +77,17 @@ describe("the drive: the power bar", () => {
   it("is struck with the laces into either corner", () => {
     const kindOf = (aim: number, power: number) => {
       const rec = runFor(9, 45);
+      // On his line: a goal high over a keeper who came out would be the
+      // engine's «парашют» whatever the swing.
+      rec.state.kz = 0.6;
       rec.step(1, 0, 0, { kind: "drive", power, aim });
       return techniqueOf(rec.state, rec.timeline)!.kind;
     };
     expect(kindOf(-1, 0.5)).toBe("instep");
     expect(kindOf(1, 0.5)).toBe("instep");
     expect(kindOf(-1, 0)).toBe("instep");
+    // Most of the bar: the full swing.
+    expect(kindOf(1, 0.85)).toBe("power");
   });
 });
 

@@ -32,7 +32,7 @@ describe("how the shot looks", () => {
   it("struck clean with the laces, side-footed only soft, scooped, poked", () => {
     expect(shotTechnique(flight({ x: -4, y: 2, z: -20 }), RUN, false).kind).toBe("instep");
     expect(shotTechnique(flight({ x: -3, y: 1.5, z: -14 }), RUN, false).kind).toBe("side");
-    expect(shotTechnique(flight({ x: -4, y: 4, z: -30 }), RUN, false).kind).toBe("instep");
+    expect(shotTechnique(flight({ x: -4, y: 4, z: -30 }), RUN, false).kind).toBe("power");
     expect(shotTechnique(flight({ x: 0, y: 9, z: -12 }), RUN, false).kind).toBe("chip");
     expect(shotTechnique(flight({ x: 0, y: 2, z: -20 }), RUN, true).kind).toBe("chip");
     expect(shotTechnique(flight({ x: -4, y: 2, z: -20 }), { ...RUN, keeperDist: 1.5 }, false).kind).toBe("toe");

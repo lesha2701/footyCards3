@@ -31,6 +31,9 @@ CLIPS = {
     # The attacker.
     'shot_r': ('strike foward jog', False),
     'shot_l': ('strike foward jog', True),
+    # Struck with everything: the full swing off a run-up.
+    'power_r': ('soccer penalty kick', False),
+    'power_l': ('soccer penalty kick', True),
     'pass_r': ('kick soccerball (2)', False),
     'pass_l': ('kick soccerball', False),
     'chip_l': ('kick up soccerball', False),

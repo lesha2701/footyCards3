@@ -14,7 +14,7 @@ import type { Foot, ShotKind } from "@/lib/oneOnOne/technique";
 
 export const ONE_ON_ONE_MOVES_URL = "/one-on-one-3d/moves.glb";
 
-const STRIKES = ["shot_r", "shot_l", "pass_r", "pass_l", "chip_r", "chip_l"] as const;
+const STRIKES = ["shot_r", "shot_l", "power_r", "power_l", "pass_r", "pass_l", "chip_r", "chip_l"] as const;
 const OTHERS = [
   "strafe_l", "strafe_r", "trip",
   "gk_scoop", "gk_catch_high", "gk_catch_low", "gk_block_l", "gk_block_r", "gk_miss", "gk_getup",
@@ -141,6 +141,9 @@ export function strikePlan(kind: ShotKind, foot: Foot): StrikePlan {
   switch (kind) {
     case "instep":
       return { clip: `shot_${f}`, lead: 0.3, timeScale: 1.15, yaw: 0, lean: 0 };
+    case "power":
+      // The full swing: the last stride, the plant and the whole leg through it.
+      return { clip: `power_${f}`, lead: 0.42, timeScale: 1.1, yaw: 0, lean: 0.02 };
     case "curl":
       // Wrapped round with the inside: the side-foot, the body opened more.
       return { clip: `pass_${f}`, lead: 0.3, timeScale: 0.9, yaw: -0.65 * side, lean: 0.04 };

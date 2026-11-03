@@ -5,10 +5,11 @@
 import { FEINT_SIDE_SPEED, FEINT_TICKS, ballOf, type EpisodeState, type EpisodeTimeline, type ShotFlight } from "./engine";
 
 export type Foot = "left" | "right";
-/** instep — a drive with the laces; side — placed with the inside;
+/** instep — a drive with the laces; power — the same with everything,
+ * off a full swing; side — placed with the inside;
  * curl — wrapped round with the inside; outside — bent with the outside;
  * chip — scooped over; toe — poked, no room for a backswing. */
-export type ShotKind = "instep" | "side" | "curl" | "outside" | "chip" | "toe";
+export type ShotKind = "instep" | "power" | "side" | "curl" | "outside" | "chip" | "toe";
 export type Technique = { foot: Foot; kind: ShotKind };
 
 /** Moving sideways faster than this (m/s) picks the foot on that side. */
@@ -20,10 +21,14 @@ const TOE_DIST = 2.2;
 /** A drive from this speed (m/s): a ball struck clean through the middle
  * is the laces (the "kick"); only a soft one is side-footed. */
 const DRIVE_SPEED = 19;
+/** From this speed (m/s) it is struck with everything: the full swing. */
+const POWER_SPEED = 29;
 /** Bent away with this much sidespin (rad/s): the outside of the foot. */
 const OUTSIDE_SPIN = 60;
-/** Rising this steeply (vertical over horizontal speed): a chip. */
+/** Rising this steeply (vertical over horizontal speed) and no faster than
+ * this (m/s): a chip — a hard one that steep is a drive into the roof of the net. */
 const CHIP_LOFT = 0.5;
+const CHIP_MAX_SPEED = 22;
 /** Sidespin from this (rad/s): curled. */
 const CURL_SPIN = 30;
 
@@ -69,11 +74,11 @@ export function shotTechnique(f: ShotFlight, run: RunAtShot, chip: boolean): Tec
   // The inside of the right foot wraps it to the left, the outside away.
   const inside = bend === 0 || (foot === "right") === bend > 0;
   const hardSpin = Math.abs(f.kick.spin.y) >= OUTSIDE_SPIN;
-  if (chip || v.y / Math.max(1e-6, flat) > CHIP_LOFT) kind = "chip";
+  if (chip || (v.y / Math.max(1e-6, flat) > CHIP_LOFT && speed < CHIP_MAX_SPEED)) kind = "chip";
   else if (run.keeperDist < TOE_DIST) kind = "toe";
   else if (!inside && hardSpin) kind = "outside";
   else if (bend !== 0 && inside) kind = "curl";
-  else kind = speed >= DRIVE_SPEED ? "instep" : "side";
+  else kind = speed >= POWER_SPEED ? "power" : speed >= DRIVE_SPEED ? "instep" : "side";
   return { foot, kind };
 }
 
@@ -120,6 +125,7 @@ export function keeperTake(f: ShotFlight): KeeperTake | null {
 
 export const KIND_LABEL: Record<ShotKind, string> = {
   instep: "подъёмом",
+  power: "мощным подъёмом",
   side: "щёчкой",
   curl: "на закрутку",
   outside: "внешней",
