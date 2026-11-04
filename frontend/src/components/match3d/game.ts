@@ -43,6 +43,8 @@ export type Hud = {
   attack: boolean;
   /** He stands over a set piece. */
   setKind: string | null;
+  /** In front of goal: the lofted ball here is the chip. */
+  chipHere: boolean;
   replay: boolean;
   ended: boolean;
 };
@@ -616,6 +618,7 @@ export class MatchGame {
       g0: s.teams[0].goals, g1: s.teams[1].goals, clock: clockText(s),
       attack: !!(u && (s.ball.owner === u.i || taking)),
       setKind: taking ? set!.kind : null,
+      chipHere: !!u && !set && u.x * (u.team === 0 ? 1 : -1) > HALF_L - 26 && Math.abs(u.z) < 16,
       replay: this.replayF >= 0,
       ended: s.phase === Phase.FullTime,
     };

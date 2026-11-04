@@ -19,7 +19,11 @@ export type Merged = {
 };
 
 export type ClipRow = { first: number; count: number; duration: number };
-export type Baked = { texture: THREE.DataTexture; rows: Record<string, ClipRow>; height: number };
+/** `columns` frames side by side: phones cap a texture's side at 4096, and the
+ * clips are longer than that as one column. */
+export type Baked = { texture: THREE.DataTexture; rows: Record<string, ClipRow>; height: number; columns: number };
+
+const ATLAS_WIDTH = 2048;
 
 /** skin, shirt, shorts, socks, hair, the rest (boots). */
 export const partOf = (name: string) =>
@@ -214,8 +218,11 @@ export function bakeClips(gltf: GLTF, clips: Record<string, THREE.AnimationClip>
     rows[name] = { first: height, count, duration: clip.duration };
     height += count;
   }
-  const width = bones.length * 3;
-  const data = new Float32Array(width * height * 4);
+  const frame = bones.length * 3;
+  const columns = Math.floor(ATLAS_WIDTH / frame);
+  const width = columns * frame;
+  const lines = Math.ceil(height / columns);
+  const data = new Float32Array(width * lines * 4);
   const m = new THREE.Matrix4();
   for (const [name, clip] of Object.entries(clips)) {
     const action = mixer.clipAction(clip);
@@ -226,7 +233,8 @@ export function bakeClips(gltf: GLTF, clips: Record<string, THREE.AnimationClip>
     for (let r = 0; r < count; r++) {
       mixer.setTime(Math.min(clip.duration - 1e-4, r / BAKE_FPS));
       model.updateMatrixWorld(true);
-      let at = (first + r) * width * 4;
+      const row = first + r;
+      let at = (Math.floor(row / columns) * width + (row % columns) * frame) * 4;
       for (let b = 0; b < bones.length; b++) {
         m.multiplyMatrices(bones[b].matrixWorld, restInv[b]);
         const e = m.elements;
@@ -237,8 +245,8 @@ export function bakeClips(gltf: GLTF, clips: Record<string, THREE.AnimationClip>
     }
     action.stop();
   }
-  const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat, THREE.FloatType);
+  const texture = new THREE.DataTexture(data, width, lines, THREE.RGBAFormat, THREE.FloatType);
   texture.minFilter = texture.magFilter = THREE.NearestFilter;
   texture.needsUpdate = true;
-  return { texture, rows, height };
+  return { texture, rows, height, columns };
 }

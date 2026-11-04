@@ -41,15 +41,24 @@ calls. Presentation code may use anything: it never feeds the simulation.
   those matrices. Without that the bodies collapse.
 - `bakeClips` takes the inverse bind matrices from the file. `skeleton.pose()`
   would rewrite the bones' local scale, and clips key no scale.
+- Phones cap a texture's side at 4096, and the clips run past that as one
+  column. So the bake is an atlas of frames side by side (`Baked.columns`). A
+  texture over the cap fails silently: every bone is zero and the people
+  collapse to a point.
 - `dragback` ends turned 180°. While it plays the body's heading waits
   (`Motion.turning`), and the switch at its end is a cut, not a blend.
 
 ## Controls
 
-The left half of the screen is a floating stick. Hold a kick button for power.
-On «Удар», drag sideways for curl and up for a chip. The stick across picks the
-corner of the goal. A computer can use WASD or arrows, Shift to sprint, J shot,
-K pass, L through ball, I cross, U feint, H tackle, G slide, Q switch.
+The same hands as «Ответка»: `Controls.tsx` uses `Stick` and `Finger` from
+`lib/oneOnOne/gesture` and the layout of `AttackRun`. The left half is a
+floating stick, and its rim is the sprint. On the right, the big button shoots:
+a tap is a quick shot, a hold adds power, a swipe up is the finesse, a sideways
+flick is the feint. The stick's lean picks the corner. Round it are «Пас»,
+«Разрез» and «Навес» («Парашют» in front of goal). Without the ball the same
+places are «Отбор», «Смена», «Подкат» and «Прессинг». A computer can use WASD or
+arrows, Shift to sprint, J shot, K pass, L through ball, I cross, U feint,
+H tackle, G slide, Q switch.
 
 ## Testing on a phone
 

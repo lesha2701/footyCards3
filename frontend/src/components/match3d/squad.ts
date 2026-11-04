@@ -10,24 +10,27 @@ import { SUN } from "./stadium";
 export const PEOPLE = 25;
 export const REFEREE = 22;
 
-const HEAD = /* glsl */ `
+const head = (b: Baked) => /* glsl */ `
 uniform highp sampler2D uBake;
 attribute vec4 aBones;
 attribute vec4 aWeights;
 attribute float aPart;
 attribute vec3 aPose;
+const int MC_COLUMNS = ${b.columns};
+const int MC_FRAME = ${b.texture.image.width / b.columns};
 mat4 mcBone(int row, int b) {
-  vec4 a = texelFetch(uBake, ivec2(b * 3, row), 0);
-  vec4 c = texelFetch(uBake, ivec2(b * 3 + 1, row), 0);
-  vec4 d = texelFetch(uBake, ivec2(b * 3 + 2, row), 0);
+  ivec2 at = ivec2((row % MC_COLUMNS) * MC_FRAME + b * 3, row / MC_COLUMNS);
+  vec4 a = texelFetch(uBake, at, 0);
+  vec4 c = texelFetch(uBake, at + ivec2(1, 0), 0);
+  vec4 d = texelFetch(uBake, at + ivec2(2, 0), 0);
   return mat4(a.x, c.x, d.x, 0., a.y, c.y, d.y, 0., a.z, c.z, d.z, 0., a.w, c.w, d.w, 1.);
 }
 mat4 mcPose(int b) {
-  return mcBone(int(aPose.x), b) * (1. - aPose.z) + mcBone(int(aPose.y), b) * aPose.z;
+  return mcBone(int(aPose.x + .5), b) * (1. - aPose.z) + mcBone(int(aPose.y + .5), b) * aPose.z;
 }
 mat4 mcSkin() {
   mat4 s = mat4(0.);
-  for (int k = 0; k < 4; k++) if (aWeights[k] > 0.) s += mcPose(int(aBones[k])) * aWeights[k];
+  for (int k = 0; k < 4; k++) if (aWeights[k] > 0.) s += mcPose(int(aBones[k] + .5)) * aWeights[k];
   return s;
 }
 `;
@@ -47,34 +50,42 @@ function geometryOf(m: Merged): THREE.BufferGeometry {
 export type Kit = { shirt: string; shorts: string; socks: string };
 export type Look = { kit: Kit; skin: string; hair: string; bald?: boolean };
 
-/** Per-instance data of one mesh (its own copy: an instance slot can hold anyone). */
-type Layer = { mesh: THREE.InstancedMesh; pose: THREE.InstancedBufferAttribute; shirt: THREE.InstancedBufferAttribute; shorts: THREE.InstancedBufferAttribute; socks: THREE.InstancedBufferAttribute; skin: THREE.InstancedBufferAttribute; hair: THREE.InstancedBufferAttribute };
+/** Per-instance data of one mesh (an instance slot can hold anyone). */
+type Layer = { mesh: THREE.InstancedMesh; pose: THREE.InstancedBufferAttribute; look: THREE.InstancedBufferAttribute };
 
-function layer(merged: Merged, baked: Baked, map: THREE.Texture | null, hairMap: THREE.Texture | null): Layer {
+/** Colours per person: skin, shirt, shorts, socks, hair. In a texture, not in
+ * attributes: phones allow 16 of those, and a matrix alone takes four. */
+function lookTexture(looks: Look[]) {
+  const data = new Float32Array(looks.length * 5 * 4);
+  looks.forEach((l, i) => {
+    [skinTone(l.skin), tint(l.kit.shirt, 1.18), tint(l.kit.shorts, 1.18), tint(l.kit.socks, 1.18), tint(l.hair)].forEach((c, k) => {
+      data.set([c.r, c.g, c.b, 1], (i * 5 + k) * 4);
+    });
+  });
+  const t = new THREE.DataTexture(data, 5, looks.length, THREE.RGBAFormat, THREE.FloatType);
+  t.minFilter = t.magFilter = THREE.NearestFilter;
+  t.needsUpdate = true;
+  return t;
+}
+
+function layer(merged: Merged, baked: Baked, map: THREE.Texture | null, hairMap: THREE.Texture | null, looks: THREE.Texture): Layer {
   const geo = geometryOf(merged);
-  const attr = (size: number, dynamic = false) => {
-    const a = new THREE.InstancedBufferAttribute(new Float32Array(PEOPLE * size), size);
-    if (dynamic) a.setUsage(THREE.DynamicDrawUsage);
-    return a;
-  };
-  const pose = attr(3, true), shirt = attr(3, true), shorts = attr(3, true), socks = attr(3, true), skin = attr(3, true), hair = attr(3, true);
+  const pose = new THREE.InstancedBufferAttribute(new Float32Array(PEOPLE * 3), 3).setUsage(THREE.DynamicDrawUsage);
+  const look = new THREE.InstancedBufferAttribute(new Float32Array(PEOPLE), 1).setUsage(THREE.DynamicDrawUsage);
   geo.setAttribute("aPose", pose);
-  geo.setAttribute("aShirt", shirt);
-  geo.setAttribute("aShorts", shorts);
-  geo.setAttribute("aSocks", socks);
-  geo.setAttribute("aSkin", skin);
-  geo.setAttribute("aHair", hair);
+  geo.setAttribute("aLook", look);
 
   const mat = new THREE.MeshLambertMaterial({ map });
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uBake = { value: baked.texture };
+    sh.uniforms.uLooks = { value: looks };
     sh.uniforms.uHairMap = { value: hairMap };
-    sh.vertexShader = (`${HEAD}attribute vec3 aShirt; attribute vec3 aShorts; attribute vec3 aSocks; attribute vec3 aSkin; attribute vec3 aHair;
+    sh.vertexShader = (`${head(baked)}uniform highp sampler2D uLooks; attribute float aLook;
 varying vec3 vMcTint; varying float vMcHair;
 ` + sh.vertexShader)
       .replace("#include <beginnormal_vertex>", "mat4 mcS = mcSkin();\nvec3 objectNormal = normalize(mat3(mcS) * vec3(normal));")
       .replace("#include <begin_vertex>", `vec3 transformed = (mcS * vec4(position, 1.)).xyz;
-        vMcTint = aPart < .5 ? aSkin : aPart < 1.5 ? aShirt : aPart < 2.5 ? aShorts : aPart < 3.5 ? aSocks : aPart < 4.5 ? aHair : vec3(1.);
+        vMcTint = aPart < 4.5 ? texelFetch(uLooks, ivec2(int(aPart + .5), int(aLook + .5)), 0).rgb : vec3(1.);
         vMcHair = aPart > 3.5 && aPart < 4.5 ? 1. : 0.;`);
     sh.fragmentShader = (`uniform sampler2D uHairMap;
 varying vec3 vMcTint; varying float vMcHair;
@@ -89,7 +100,7 @@ varying vec3 vMcTint; varying float vMcHair;
   const mesh = new THREE.InstancedMesh(geo, mat, PEOPLE);
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   mesh.frustumCulled = false;
-  return { mesh, pose, shirt, shorts, socks, skin, hair };
+  return { mesh, pose, look };
 }
 
 export type Squad = {
@@ -106,13 +117,14 @@ const tint = (s: string, k = 1) => new THREE.Color(s).multiplyScalar(k);
 const skinTone = (s: string) => new THREE.Color(s).lerp(new THREE.Color("#ffffff"), 0.4);
 
 export function makeSquad(near: Merged, far: Merged, baked: Baked, map: THREE.Texture | null, hairMap: THREE.Texture | null, looks: Look[]): Squad {
-  const full = layer(near, baked, map, hairMap);
-  const light = layer(far, baked, map, hairMap);
+  const lookMap = lookTexture(looks);
+  const full = layer(near, baked, map, hairMap, lookMap);
+  const light = layer(far, baked, map, hairMap, lookMap);
   const shadowMat = new THREE.MeshBasicMaterial({ color: "#071a0c", transparent: true, opacity: 0.34, depthFunc: THREE.LessDepth });
   shadowMat.onBeforeCompile = (sh) => {
     sh.uniforms.uBake = { value: baked.texture };
     sh.uniforms.uSun = { value: SUN };
-    sh.vertexShader = (`${HEAD}uniform vec3 uSun;\n` + sh.vertexShader)
+    sh.vertexShader = (`${head(baked)}uniform vec3 uSun;\n` + sh.vertexShader)
       .replace("#include <begin_vertex>", "vec3 transformed = (mcSkin() * vec4(position, 1.)).xyz;")
       .replace("#include <project_vertex>", `vec4 mvPosition = instanceMatrix * vec4(transformed, 1.);
         mvPosition.xz -= uSun.xz / uSun.y * mvPosition.y;
@@ -138,10 +150,6 @@ export function makeSquad(near: Merged, far: Merged, baked: Baked, map: THREE.Te
   const p = new THREE.Vector3();
   const one = new THREE.Vector3(1, 1, 1);
   let nFull = 0, nLight = 0;
-  const setColor = (a: THREE.InstancedBufferAttribute, at: number, c: THREE.Color) => a.setXYZ(at, c.r, c.g, c.b);
-  const colours = looks.map((l) => ({
-    shirt: tint(l.kit.shirt, 1.18), shorts: tint(l.kit.shorts, 1.18), socks: tint(l.kit.socks, 1.18), skin: skinTone(l.skin), hair: tint(l.hair),
-  }));
   return {
     group, shadow,
     set: (i, x, y, z, yaw, rowA, rowB, w, close) => {
@@ -151,8 +159,7 @@ export function makeSquad(near: Merged, far: Merged, baked: Baked, map: THREE.Te
       const at = close ? nFull++ : nLight++;
       l.mesh.setMatrixAt(at, m);
       l.pose.setXYZ(at, rowA, rowB, w);
-      const c = colours[i];
-      setColor(l.shirt, at, c.shirt); setColor(l.shorts, at, c.shorts); setColor(l.socks, at, c.socks); setColor(l.skin, at, c.skin); setColor(l.hair, at, c.hair);
+      l.look.setX(at, i);
       m.toArray(shadow.instanceMatrix.array, i * 16);
       shadowPose.setXYZ(i, rowA, rowB, w);
     },
@@ -160,7 +167,8 @@ export function makeSquad(near: Merged, far: Merged, baked: Baked, map: THREE.Te
       for (const [l, n] of [[full, nFull], [light, nLight]] as const) {
         l.mesh.count = n;
         l.mesh.instanceMatrix.needsUpdate = true;
-        for (const a of [l.pose, l.shirt, l.shorts, l.socks, l.skin, l.hair]) a.needsUpdate = true;
+        l.pose.needsUpdate = true;
+        l.look.needsUpdate = true;
       }
       shadow.instanceMatrix.needsUpdate = true;
       shadowPose.needsUpdate = true;
@@ -173,6 +181,7 @@ export function makeSquad(near: Merged, far: Merged, baked: Baked, map: THREE.Te
       (full.mesh.material as THREE.Material).dispose();
       (light.mesh.material as THREE.Material).dispose();
       shadowMat.dispose();
+      lookMap.dispose();
     },
   };
 }
