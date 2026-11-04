@@ -9,7 +9,7 @@ import { crowdChant, crowdHush, crowdTension, playFreeKickSfx, startCrowd } from
 import {
   Act, BALL_R, HALF_L, HALF_W, HZ, Kick, PRED_STEP, Phase, TICK, type MatchEvent, type MatchState, type Setup,
 } from "@/lib/match3d/core";
-import { clockText, createMatch, stepMatch, type Input, type Press } from "@/lib/match3d/engine";
+import { clockText, createMatch, passTarget, stepMatch, type Input, type Press } from "@/lib/match3d/engine";
 
 import type { MatchAssets } from "./assets";
 import { Motion } from "./motion";
@@ -43,6 +43,8 @@ export type Hud = {
   attack: boolean;
   /** He stands over a set piece. */
   setKind: string | null;
+  /** The ball is in his keeper's hands, or he takes the goal kick. */
+  keeper: boolean;
   /** In front of goal: the lofted ball here is the chip. */
   chipHere: boolean;
   replay: boolean;
@@ -92,6 +94,12 @@ export class MatchGame {
   private readonly ballShadow: THREE.Mesh;
   private readonly marker: THREE.Mesh;
   private readonly arrow: THREE.Mesh;
+  /** Who a pass would go to right now. */
+  private readonly aim: THREE.Mesh;
+  private aimAt = -1;
+  /** The legs of the human's man, over his head. */
+  private readonly legs = new THREE.Group();
+  private readonly legsFill: THREE.Mesh;
   private readonly landing: THREE.Mesh;
   private readonly trail: { mesh: THREE.Mesh; pos: Float32Array; at: number; attr: THREE.BufferAttribute; fade: Float32Array; fadeAttr: THREE.BufferAttribute; x: Float32Array; y: Float32Array; z: Float32Array; on: number };
   private readonly px = new Float32Array(22);
@@ -170,6 +178,23 @@ export class MatchGame {
     this.arrow = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.42, 4), new THREE.MeshBasicMaterial({ color: "#d6ff3f", toneMapped: false }));
     this.arrow.rotation.x = Math.PI;
     this.scene.add(this.arrow);
+    this.aim = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.68, 28), new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.85, depthWrite: false, toneMapped: false }));
+    this.aim.rotation.x = -Math.PI / 2;
+    this.aim.renderOrder = 1;
+    this.aim.visible = false;
+    this.scene.add(this.aim);
+    const bar = new THREE.PlaneGeometry(1, 1);
+    bar.translate(0.5, 0, 0);
+    const back = new THREE.Mesh(bar, new THREE.MeshBasicMaterial({ color: "#000000", transparent: true, opacity: 0.6, depthTest: false, depthWrite: false, toneMapped: false }));
+    back.position.x = -0.6;
+    back.scale.set(1.2, 0.17, 1);
+    back.renderOrder = 5;
+    this.legsFill = new THREE.Mesh(bar, new THREE.MeshBasicMaterial({ color: "#d6ff3f", transparent: true, depthTest: false, depthWrite: false, toneMapped: false }));
+    this.legsFill.position.set(-0.56, 0, 0.001);
+    this.legsFill.renderOrder = 6;
+    this.legs.add(back, this.legsFill);
+    this.legs.visible = false;
+    this.scene.add(this.legs);
     this.landing = new THREE.Mesh(new THREE.RingGeometry(0.34, 0.46, 24), new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.55, depthWrite: false, toneMapped: false }));
     this.landing.rotation.x = -Math.PI / 2;
     this.landing.visible = false;
@@ -463,6 +488,13 @@ export class MatchGame {
     const show = s.user >= 0 && s.phase !== Phase.FullTime && s.phase !== Phase.Goal;
     this.marker.visible = show;
     this.arrow.visible = show;
+    this.legs.visible = show;
+    if (s.tick % 6 === 0) this.aimAt = show ? passTarget(s, this.stick.x, -this.stick.y) : -1;
+    this.aim.visible = this.aimAt >= 0;
+    if (this.aimAt >= 0) {
+      const m = s.players[this.aimAt];
+      this.aim.position.set(this.px[m.i] + (m.x - this.px[m.i]) * alpha, 0.03, this.pz[m.i] + (m.z - this.pz[m.i]) * alpha);
+    }
     if (show) {
       const p = s.players[s.user];
       const x = this.px[p.i] + (p.x - this.px[p.i]) * alpha, z = this.pz[p.i] + (p.z - this.pz[p.i]) * alpha;
@@ -471,6 +503,12 @@ export class MatchGame {
       this.marker.scale.set(k, k, 1);
       this.arrow.position.set(x, 2.32 + Math.sin(s.tick * 0.09) * 0.06, z);
       this.arrow.rotation.y += dt * 2.4;
+      this.legs.position.set(x, 2.1, z);
+      this.legs.quaternion.copy(this.camera.quaternion);
+      const far = Math.min(2, this.camera.position.distanceTo(this.legs.position) / 45);
+      this.legs.scale.set(far, far, 1);
+      this.legsFill.scale.set(Math.max(0.01, 1.12 * p.stamina), 0.09, 1);
+      (this.legsFill.material as THREE.MeshBasicMaterial).color.set(p.stamina > 0.5 ? "#d6ff3f" : p.stamina > 0.25 ? "#fbbf24" : "#ef4444");
     }
     // Where a ball in the air comes down.
     const b = s.ball;
@@ -604,6 +642,8 @@ export class MatchGame {
     this.drawTrail(bx, by, bz, dt);
     this.marker.visible = false;
     this.arrow.visible = false;
+    this.aim.visible = false;
+    this.legs.visible = false;
     this.landing.visible = false;
   }
 
@@ -618,6 +658,7 @@ export class MatchGame {
       g0: s.teams[0].goals, g1: s.teams[1].goals, clock: clockText(s),
       attack: !!(u && (s.ball.owner === u.i || taking)),
       setKind: taking ? set!.kind : null,
+      keeper: !!(u && u.role === "GK" && (s.ball.owner === u.i || taking)),
       chipHere: !!u && !set && u.x * (u.team === 0 ? 1 : -1) > HALF_L - 26 && Math.abs(u.z) < 16,
       replay: this.replayF >= 0,
       ended: s.phase === Phase.FullTime,

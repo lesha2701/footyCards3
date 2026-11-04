@@ -6,6 +6,10 @@ import {
   clamp, dirOf, dist, predAt, predict, rnd, speedOf,
   type KickPlan, type MatchState, type Player,
 } from "./core";
+import { laneMargin, rollPace } from "./actions";
+
+/** The human gets this long with the ball in his hands (ticks). */
+const USER_HOLD = 360;
 
 /** How far he reaches in a dive (m) with this much time (s), from a stand. */
 const DIVE_REACH = 3.3;
@@ -100,6 +104,9 @@ function readShot(s: MatchState, p: Player, c: { z: number; y: number; ticks: nu
   p.hands = c.ticks;
 }
 
+/** Beyond this he throws it. */
+const GROUND_MAX = 26;
+
 function distribute(s: MatchState, p: Player) {
   const us = s.players.filter((m) => m.team === p.team && m.i !== p.i);
   const opps = s.players.filter((m) => m.team !== p.team);
@@ -111,6 +118,8 @@ function distribute(s: MatchState, p: Player) {
     if (d < 12 || d > 42) continue;
     let near = 1e9;
     for (const o of opps) near = Math.min(near, dist(m.x, m.z, o.x, o.z));
+    // Rolled, the lane has to be clear; thrown, it only has to land free.
+    if (d < GROUND_MAX && laneMargin(s, p, m.x, m.z, rollPace(d, 6)) < 0.5) continue;
     const v = Math.min(near, 12) * 2 + (m.x - p.x) * dir * 0.1 + (rnd(s) * 4 - 2);
     if (near > 6 && v > score) {
       score = v;
@@ -122,19 +131,25 @@ function distribute(s: MatchState, p: Player) {
     releaseHands(s, p, best, d, false);
   } else {
     // Up the pitch: a punt onto a forward.
-    const fwd = us.filter((m) => m.role === "ST" || m.role === "W");
-    const m = fwd[Math.floor(rnd(s) * fwd.length)] ?? us[0];
+    let m = us[0], room = -1;
+    for (const f of us) {
+      if (f.role !== "ST" && f.role !== "W") continue;
+      let near = 1e9;
+      for (const o of opps) near = Math.min(near, dist(f.x, f.z, o.x, o.z));
+      const v = near + rnd(s) * 2;
+      if (v > room) { room = v; m = f; }
+    }
     releaseHands(s, p, m, dist(p.x, p.z, m.x, m.z), true);
   }
 }
 
 /** Starts a keeper's distribution towards `m`. */
 export function releaseHands(s: MatchState, p: Player, m: Player, d: number, punt: boolean) {
-  const ground = !punt && d < 24;
+  const ground = !punt && d < GROUND_MAX;
   const plan: KickPlan = punt
     ? { kind: Kick.GkPunt, tx: m.x + dirOf(p.team) * 4, ty: 0.4, tz: m.z, speed: clamp(d * 0.42, 16, 25), curl: 0, to: m.i, err: 0.3, ground: false }
     : ground
-      ? { kind: Kick.GkRoll, tx: m.x, ty: 0, tz: m.z, speed: clamp(Math.sqrt(36 + 6.2 * d), 9, 20), curl: 0, to: m.i, err: 0.05, ground: true }
+      ? { kind: Kick.GkRoll, tx: m.x, ty: 0, tz: m.z, speed: clamp(rollPace(d, 6), 9, 21), curl: 0, to: m.i, err: 0.05, ground: true }
       : { kind: Kick.Lob, tx: m.x, ty: 0.6, tz: m.z, speed: clamp(d * 0.55, 12, 19), curl: 0, to: m.i, err: 0.1, ground: false };
   p.plan = plan;
   p.act = punt ? Act.GkKick : Act.GkThrow;
@@ -152,9 +167,12 @@ export function thinkKeeper(s: MatchState, p: Player) {
     // On his hands, a few steps to the edge of the area.
     p.want = 0;
     p.tx = p.x; p.tz = p.z;
-    if (s.user !== p.i || p.actT > 240) {
-      if (p.actT >= p.actLen) distribute(s, p);
+    // His own side's ball is the human's: it's for him to say where it goes.
+    if (s.user >= 0 && s.user !== p.i && s.players[s.user].team === p.team) {
+      s.user = p.i;
+      s.ev.push({ t: "switch", p: p.i });
     }
+    if (s.user === p.i ? p.actT > USER_HOLD : p.actT >= p.actLen) distribute(s, p);
     return;
   }
   if (p.act === Act.GkThrow || p.act === Act.GkKick || p.act === Act.Kick) return;

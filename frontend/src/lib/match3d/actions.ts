@@ -7,6 +7,9 @@ import {
   type Feint, type KickPlan, type MatchState, type Player,
 } from "./core";
 
+/** His top speed (m/s): tired legs lose up to a sixth of it. */
+export const sprintOf = (p: Player) => (7.1 + p.pace * 1.5) * (0.84 + 0.16 * Math.min(1, p.stamina / 0.35));
+
 /** Windups: ticks from the decision to the foot meeting the ball. */
 const WINDUP: Partial<Record<Kick, number>> = {
   [Kick.Pass]: 9, [Kick.Through]: 10, [Kick.Lob]: 13, [Kick.Cross]: 14, [Kick.Shot]: 13, [Kick.Clear]: 11, [Kick.Throw]: 28, [Kick.Corner]: 24,
@@ -82,7 +85,8 @@ export function releaseKick(s: MatchState, p: Player) {
   if (b.owner !== p.i && !(b.owner < 0 && dist(p.x, p.z, b.x, b.z) < 1.6)) return;
   const d = dist(b.x, b.z, plan.tx, plan.tz);
   const shot = plan.kind === Kick.Shot;
-  const spread = ((shot ? plan.err * 2.8 : plan.err) * d) / 10;
+  // The human's passes are helped on their way, and so kept tidier at the foot.
+  const spread = ((shot ? plan.err * 2.8 : plan.err) * (!shot && p.i === s.user ? 0.5 : 1) * d) / 10;
   const ex = spread * rndN(s), ez = spread * rndN(s);
   const t = shot
     ? { ...plan, tz: plan.tz + ez, ty: Math.max(0.12, plan.ty + spread * 0.5 * rndN(s)) }
@@ -118,6 +122,23 @@ export const rollTime = (v: number, d: number) => {
   const q = v * v - 2 * ROLL_DECEL * d;
   return q <= 0 ? v / ROLL_DECEL : (v - Math.sqrt(q)) / ROLL_DECEL;
 };
+
+/** How safely a ball rolls from him to (x, z): above 0 it gets there first. */
+export function laneMargin(s: MatchState, p: Player, x: number, z: number, pace: number): number {
+  const d = dist(p.x, p.z, x, z) || 1;
+  let worst = 9;
+  for (const o of s.players) {
+    if (o.team === p.team) continue;
+    const dx = x - p.x, dz = z - p.z;
+    const u = clamp(((o.x - p.x) * dx + (o.z - p.z) * dz) / (d * d), 0.05, 1);
+    const along = d * u;
+    const time = rollTime(pace, along);
+    const off = dist(p.x + dx * u, p.z + dz * u, o.x, o.z);
+    const m = off - 0.9 - time * sprintOf(o) * 0.82;
+    if (m < worst) worst = m;
+  }
+  return worst;
+}
 
 export function planPass(s: MatchState, p: Player, m: Player, power: number): KickPlan {
   const d0 = dist(p.x, p.z, m.x, m.z);
@@ -234,6 +255,7 @@ export function startFeint(s: MatchState, p: Player, kind: Feint, side: number) 
   p.act = Act.Feint; p.actT = 0; p.actLen = FEINT_LEN;
   p.sub = kind; p.side = side;
   p.cool = 0;
+  p.runUp = Math.sqrt(p.vx * p.vx + p.vz * p.vz);
 }
 
 /** At the feint's middle: who bites. */
@@ -245,7 +267,7 @@ export function feintBites(s: MatchState, p: Player) {
     if (q.team === p.team || q.role === "GK" || q.beat > 0) continue;
     const d = dist(p.x, p.z, q.x, q.z);
     if (d > 3.6) continue;
-    const chance = 0.42 + p.dribble * 0.5 - q.defend * 0.32 - (d - 1.5) * 0.08;
+    const chance = 0.42 + p.dribble * 0.5 - q.defend * 0.32 - (d - 1.5) * 0.08 - Math.max(0, p.runUp - 5.6) * 0.14;
     if (rnd(s) < chance) {
       q.beat = 34;
       q.beatX = right.x; q.beatZ = right.z;

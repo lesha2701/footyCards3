@@ -4,13 +4,13 @@
  * one `Input` per tick, and draws what happened. */
 import {
   Act, BALL_R, CLOCK_RATE, END_MIN, GOAL_H, GOAL_HALF, HALF_L, HALF_W, Kick, PEN_SPOT, Phase, START_MIN, SIX_D, TICK,
-  ballAt, clamp, dirOf, dist, dist2, freshState, predict, rnd, rndN, speedOf, stepBall,
+  ballAt, clamp, dirOf, dist, dist2, freshState, predAt, predict, rnd, rndN, speedOf, stepBall,
   type Feint, type MatchState, type Player, type Setup, type SetKind,
 } from "./core";
 import {
-  feintBites, fell, inBox, planCross, planLob, planPass, planShot, planThrough, releaseKick, startFeint, startKick, startSlide, startTackle, windupOf,
+  feintBites, fell, inBox, laneMargin, offsideLine, planCross, planLob, planPass, planShot, planThrough, releaseKick, rollPace, sprintOf, startFeint, startKick, startSlide, startTackle, windupOf,
 } from "./actions";
-import { FORMATIONS, setPieceSpot, sprintOf, takeSetPiece, thinkCarrier, thinkPlayer, thinkTackle, thinkTeam } from "./brain";
+import { FORMATIONS, setPieceSpot, takeSetPiece, thinkCarrier, thinkPlayer, thinkTackle, thinkTeam } from "./brain";
 import { keeperSpot, releaseHands, stepKeeper } from "./keeper";
 
 /** What the human does this tick. Stick in world axes (−1..1). */
@@ -40,6 +40,9 @@ const SET_MIN = 90;
 const USER_WAIT = 420;
 /** Past full time the referee waits this long at most for the ball to leave a dangerous place. */
 const LATE_MAX = 240;
+/** A full tank: ten seconds of sprint, twelve of walking to fill it. */
+const STAMINA_DRAIN = 1 / 600;
+const STAMINA_BACK = 1 / 720;
 
 const SLOTS = [FORMATIONS["433"], FORMATIONS["442"]] as const;
 
@@ -63,7 +66,7 @@ export function createMatch(setup: Setup, userTeam: 0 | 1 | null = 0): MatchStat
       x: f.ax * dirOf(team), z: f.z, vx: 0, vz: 0, hx: dirOf(team), hz: 0,
       tx: 0, tz: 0, want: 0, faceBall: false,
       act: Act.None, actT: 0, actLen: 0, side: 1, sub: 0, air: 0, plan: null, cool: 0,
-      beat: 0, beatX: 0, beatZ: 0, off: false, touch: 0,
+      beat: 0, beatX: 0, beatZ: 0, off: false, stamina: 1, runUp: 0, touch: 0,
       runT: 0, runX: 0, runZ: 0, duty: 0, mark: -1, react: -1, saves: false, hands: 0,
     };
   };
@@ -116,7 +119,7 @@ function restart(s: MatchState, kind: SetKind, team: 0 | 1, x: number, z: number
   }
   s.ev.push({ t: "out", set: kind, team });
   const ut = userTeam(s);
-  if (ut === team && kind !== "goalkick") s.user = taker.i;
+  if (ut === team) s.user = taker.i;
 }
 
 function givePossession(s: MatchState, p: Player) {
@@ -176,6 +179,13 @@ function scored(s: MatchState, team: 0 | 1) {
 
 // --- the human ---------------------------------------------------------------------------------------
 
+/** Would he be off if the ball were played now? */
+function offsideNow(s: MatchState, p: Player, m: Player) {
+  const dir = dirOf(p.team);
+  const v = m.x * dir;
+  return v > offsideLine(s, p.team) + 0.1 && v > s.ball.x * dir + 0.1 && v > 0;
+}
+
 function bestMate(s: MatchState, p: Player, ux: number, uz: number, wantFwd: boolean): Player | null {
   const dir = dirOf(p.team);
   const stick = ux !== 0 || uz !== 0;
@@ -188,7 +198,9 @@ function bestMate(s: MatchState, p: Player, ux: number, uz: number, wantFwd: boo
     const along = stick ? (dx / d) * ux + (dz / d) * uz : (dx / d) * p.hx + (dz / d) * p.hz;
     let open = 1e9;
     for (const o of s.players) if (o.team !== p.team) open = Math.min(open, dist(o.x, o.z, m.x, m.z));
-    const v = along * 6 - d * 0.1 + Math.min(open, 6) * 0.35 + (wantFwd ? (dx * dir) * 0.06 : 0) - (m.role === "GK" ? 4 : 0) - (m.off ? 4 : 0);
+    // The stick says the direction; in that direction, whoever is really on.
+    const lane = clamp(laneMargin(s, p, m.x, m.z, rollPace(d, 7)), -4, 1);
+    const v = along * 6 - d * 0.1 + Math.min(open, 6) * 0.35 + lane * 1.8 + (wantFwd ? (dx * dir) * 0.06 : 0) - (m.role === "GK" ? 4 : 0) - (offsideNow(s, p, m) ? 9 : 0);
     if (v > top) { top = v; best = m; }
   }
   return best;
@@ -205,7 +217,9 @@ function userPress(s: MatchState, p: Player, inp: Input) {
   const dir = dirOf(p.team);
 
   if (press.k === "switch") {
+    if (p.act === Act.Hold) return;
     switchUser(s);
+    s.switchT = s.tick + 45;
     return;
   }
   if (s.set && s.set.taker === p.i && s.set.ready && (s.phase === Phase.Dead || s.phase === Phase.Kickoff)) {
@@ -213,8 +227,11 @@ function userPress(s: MatchState, p: Player, inp: Input) {
     return;
   }
   if (p.act === Act.Hold) {
-    const m = bestMate(s, p, ux, uz, true);
-    if (m && (press.k === "pass" || press.k === "lob" || press.k === "through")) releaseHands(s, p, m, dist(p.x, p.z, m.x, m.z), press.k === "lob");
+    const long = press.k === "shot" || press.k === "lob";
+    if (long || press.k === "pass" || press.k === "through") {
+      const m = bestMate(s, p, ux, uz, long);
+      if (m) releaseHands(s, p, m, dist(p.x, p.z, m.x, m.z), long);
+    }
     return;
   }
   if (!has) {
@@ -312,7 +329,7 @@ function userSetPiece(s: MatchState, p: Player, inp: Input, ux: number, uz: numb
     return;
   }
   const m = bestMate(s, p, ux, uz, press.k !== "pass");
-  if (m) startKick(s, p, press.k === "through" ? planThrough(s, p, m, power) : press.k === "lob" ? planLob(s, p, m.x, m.z, m.i, power) : planPass(s, p, m, power));
+  if (m) startKick(s, p, press.k === "through" ? planThrough(s, p, m, power) : press.k === "lob" || press.k === "shot" ? planLob(s, p, m.x, m.z, m.i, power) : planPass(s, p, m, power));
 }
 
 function switchUser(s: MatchState) {
@@ -330,31 +347,93 @@ function switchUser(s: MatchState) {
   }
 }
 
+function toMan(s: MatchState, i: number) {
+  s.user = i;
+  s.ev.push({ t: "switch", p: i });
+}
+
+/** The ball is on its way to the human's man (who is not the keeper). */
+function receiver(s: MatchState): Player | null {
+  const b = s.ball;
+  if (s.user < 0 || b.owner >= 0 || b.to < 0 || s.phase !== Phase.Play) return null;
+  const r = s.players[b.to];
+  return r.team === s.players[s.user].team && r.role !== "GK" && r.act !== Act.Down ? r : null;
+}
+
 function userAutoSwitch(s: MatchState) {
   if (s.user < 0) return;
   const u = s.players[s.user];
   const b = s.ball;
   if (b.owner === s.user) return;
   // The ball on its way to a team-mate: he takes over the receiver.
-  if (b.to >= 0 && s.players[b.to].team === u.team && s.players[b.to].role !== "GK" && b.to !== s.user) {
-    s.user = b.to;
-    s.ev.push({ t: "switch", p: b.to });
+  const r = receiver(s);
+  if (r) {
+    if (r.i !== s.user) toMan(s, r.i);
     return;
   }
-  // A team-mate has it: nothing to switch to but him.
-  if (b.owner >= 0 && s.players[b.owner].team === u.team && s.players[b.owner].role !== "GK") {
+  // A team-mate has it, the keeper too: nothing to switch to but him.
+  if (b.owner >= 0 && s.players[b.owner].team === u.team) {
     s.user = b.owner;
     return;
   }
-  if (s.idle > 30 && s.tick % 20 === 0 && u.act === Act.None) {
-    const here = dist(u.x, u.z, b.x, b.z);
-    for (const m of s.players) {
-      if (m.team === u.team && m.role !== "GK" && m.act !== Act.Down && dist(m.x, m.z, b.x, b.z) < here - 6) {
-        switchUser(s);
-        return;
-      }
-    }
+  if (u.role === "GK") {
+    switchUser(s);
+    return;
   }
+  // Theirs or loose: always the man nearest to where the ball is going.
+  if (u.act !== Act.None || s.tick < s.switchT || s.tick % 4 !== 0) return;
+  const bx = b.x + b.vx * 0.3, bz = b.z + b.vz * 0.3;
+  const dir = dirOf(u.team);
+  const reach = (m: Player) => dist(m.x, m.z, bx, bz) + ((m.x - bx) * dir < 0 ? -1.5 : 0);
+  const here = reach(u);
+  let best = -1, top = here - 2.2;
+  for (const m of s.players) {
+    if (m.team !== u.team || m.role === "GK" || m.act !== Act.None || m.i === s.user) continue;
+    const d = reach(m);
+    if (d < top) { top = d; best = m.i; }
+  }
+  if (best >= 0) {
+    toMan(s, best);
+    s.switchT = s.tick + 24;
+  }
+}
+
+/** Where he meets the ball: the first point on its path he gets to in time. */
+function meetPoint(s: MatchState, p: Player) {
+  let q = predAt(s, 0);
+  const top = sprintOf(p);
+  for (let k = 0; k < 240; k += 6) {
+    const c = predAt(s, k);
+    if (c.y > 1.9) continue;
+    q = c;
+    if (dist(p.x, p.z, c.x, c.z) / top <= k * TICK + 0.05) break;
+  }
+  return q;
+}
+
+/** The pass assist: a ball rolling to the human's man bends on to him and
+ * never dies short of him, as long as it has not gone past him. */
+function assistPass(s: MatchState) {
+  const r = receiver(s);
+  if (!r) return;
+  const b = s.ball;
+  if (s.tick % 6 === 0) predict(s);
+  const rolling = b.kick === Kick.Pass || b.kick === Kick.Through || b.kick === Kick.GkRoll;
+  if (!rolling || b.y > BALL_R + 0.01) return;
+  const dx = r.x + r.vx * 0.25 - b.x, dz = r.z + r.vz * 0.25 - b.z;
+  const d = Math.sqrt(dx * dx + dz * dz);
+  const v = Math.sqrt(b.vx * b.vx + b.vz * b.vz);
+  if (d < 0.4) return;
+  if (v > 0.5 && dx * b.vx + dz * b.vz < 0) {
+    if (d > 2) b.to = -1;
+    return;
+  }
+  const through = b.kick === Kick.Through;
+  const k = through ? (d < 8 ? 0.05 : 0) : d < 15 ? 0.08 : 0.035;
+  const pace = Math.max(v, through ? 3.5 : 5.5);
+  const nx = b.vx + ((dx / d) * pace - b.vx) * k, nz = b.vz + ((dz / d) * pace - b.vz) * k;
+  const l = Math.sqrt(nx * nx + nz * nz) || 1;
+  b.vx = (nx / l) * pace; b.vz = (nz / l) * pace;
 }
 
 // --- bodies -------------------------------------------------------------------------------------------
@@ -378,11 +457,11 @@ function steer(s: MatchState, p: Player, tx: number, tz: number, want: number) {
   moveToward(p, vx, vz, ACCEL);
 }
 
-function moveToward(p: Player, vx: number, vz: number, accel: number) {
+function moveToward(p: Player, vx: number, vz: number, accel: number, brake = BRAKE) {
   const ax = vx - p.vx, az = vz - p.vz;
   const a = Math.sqrt(ax * ax + az * az);
   const speedUp = vx * vx + vz * vz > p.vx * p.vx + p.vz * p.vz;
-  const lim = (speedUp ? accel : BRAKE) * TICK;
+  const lim = (speedUp ? accel : brake) * TICK;
   if (a <= lim) { p.vx = vx; p.vz = vz; } else { p.vx += (ax / a) * lim; p.vz += (az / a) * lim; }
 }
 
@@ -554,6 +633,7 @@ function stepAct(s: MatchState, p: Player) {
 function stepPlayers(s: MatchState, inp: Input) {
   const b = s.ball;
   const userP = s.user;
+  const meets = receiver(s);
   for (const p of s.players) {
     if (p.cool > 0) p.cool -= 1;
     if (p.role === "GK") stepKeeper(s, p);
@@ -569,12 +649,17 @@ function stepPlayers(s: MatchState, inp: Input) {
         // Off balance: carried the wrong way for a moment.
         p.beat -= 1;
         moveToward(p, p.beatX * 2.4, p.beatZ * 2.4, 20);
-      } else if (p.i === userP && (inp.mx !== 0 || inp.mz !== 0 || b.owner === p.i)) {
+      } else if (p === meets) {
+        // Whatever the thumb is doing: he goes to the ball.
+        const q = meetPoint(s, p);
+        steer(s, p, q.x, q.z, sprintOf(p));
+      } else if (p.i === userP && !(s.set && s.set.taker === p.i) && (inp.mx !== 0 || inp.mz !== 0 || b.owner === p.i)) {
         const l = Math.sqrt(inp.mx * inp.mx + inp.mz * inp.mz);
         const has = b.owner === p.i;
         const top = inp.sprint ? sprintOf(p) * (has ? 0.94 : 1) : has ? 5.4 : 6;
         const v = top * clamp(l * 1.25, 0, 1);
-        moveToward(p, inp.mx / (l || 1) * v, inp.mz / (l || 1) * v, has ? ACCEL * 0.9 : ACCEL);
+        const fast = has && p.vx * p.vx + p.vz * p.vz > 42;
+        moveToward(p, inp.mx / (l || 1) * v, inp.mz / (l || 1) * v, has ? ACCEL * 0.9 : ACCEL, fast ? BRAKE * 0.5 : BRAKE);
       } else if (p.i === userP && s.phase === Phase.Play && b.owner >= 0 && s.players[b.owner].team !== p.team) {
         // Hands off the stick: he holds his ground a touch off the ball.
         steer(s, p, p.tx, p.tz, Math.min(p.want, 6));
@@ -584,6 +669,7 @@ function stepPlayers(s: MatchState, inp: Input) {
     p.z += p.vz * TICK;
     // Facing.
     const v2 = p.vx * p.vx + p.vz * p.vz;
+    p.stamina = clamp(p.stamina + (v2 > 42 ? -STAMINA_DRAIN : v2 < 26 ? STAMINA_BACK : STAMINA_BACK * 0.3), 0, 1);
     if (p.act === Act.None) {
       if (p.faceBall && p.i !== userP && v2 < 30) {
         const dx = b.x - p.x, dz = b.z - p.z;
@@ -642,7 +728,7 @@ function stepCarried(s: MatchState) {
   const phase = p.touch / period;
   const lead = p.act === Act.Kick ? 0.55
     : p.act === Act.Feint ? (p.sub === 1 ? 0.3 : 0.42)
-      : 0.46 + v * 0.05 + phase * v * 0.075;
+      : 0.46 + v * 0.05 + phase * v * 0.075 + (v > 6.5 ? (v - 6.5) * 0.16 : 0);
   const ux = v > 0.5 ? p.vx / v : p.hx, uz = v > 0.5 ? p.vz / v : p.hz;
   const tx = p.x + ux * lead, tz = p.z + uz * lead;
   const k = p.act === Act.Feint ? 0.28 : 0.4;
@@ -754,7 +840,7 @@ function contacts(s: MatchState) {
   const p = best;
   const d = Math.sqrt(top < 0 ? 0 : top);
   if (b.y < 0.75) {
-    if (d > REACH + 0.25) return;
+    if (d > REACH + (p.i === b.to ? 0.55 : 0.25)) return;
     const mine = b.last >= 0 && s.players[b.last].team === p.team;
     if (fast > 13 && !mine) {
       // A hard ball at an opponent: it comes off him more often than he stops it.
@@ -779,7 +865,7 @@ function contacts(s: MatchState) {
     }
     if (p.act === Act.Kick) return;
     // A poor first touch off a hot pass.
-    if (fast > 12 && rnd(s) > 0.55 + p.dribble * 0.4) {
+    if (fast > 12 && !(mine && p.i === s.user) && rnd(s) > 0.55 + p.dribble * 0.4) {
       b.vx = b.vx * 0.3 + rndN(s) * 3; b.vz = b.vz * 0.3 + rndN(s) * 3; b.vy = 1;
       b.last = p.i; b.since = 2; b.kick = Kick.None;
       p.cool = 16;
@@ -892,6 +978,16 @@ function startPlay(s: MatchState) {
   s.poss = s.players[s.ball.owner >= 0 ? s.ball.owner : 0].team;
 }
 
+/** Who a pass goes to with the stick as it is now (for the mark on the pitch). */
+export function passTarget(s: MatchState, mx: number, mz: number): number {
+  if (s.user < 0) return -1;
+  const p = s.players[s.user];
+  if (s.ball.owner !== p.i && !(s.set && s.set.taker === p.i && s.set.ready)) return -1;
+  const l = Math.sqrt(mx * mx + mz * mz);
+  const m = bestMate(s, p, l > 0.2 ? mx / l : 0, l > 0.2 ? mz / l : 0, false);
+  return m ? m.i : -1;
+}
+
 // --- the tick ---------------------------------------------------------------------------------------
 
 export function stepMatch(s: MatchState, inp: Input) {
@@ -950,7 +1046,10 @@ export function stepMatch(s: MatchState, inp: Input) {
   stepPlayers(s, inp);
 
   if (s.ball.owner >= 0) stepCarried(s);
-  else if (s.phase === Phase.Play) stepBall(s);
+  else if (s.phase === Phase.Play) {
+    stepBall(s);
+    assistPass(s);
+  }
   if (s.phase === Phase.Play && s.ball.owner < 0) contacts(s);
   laws(s);
 

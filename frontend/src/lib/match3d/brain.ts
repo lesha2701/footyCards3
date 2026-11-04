@@ -9,7 +9,7 @@ import {
   type Feint, type MatchState, type Player, type SetPiece,
 } from "./core";
 import {
-  nearestOpp, offsideLine, planClear, planCross, planLob, planPass, planShot, planThrough, rollPace, rollTime, startFeint, startKick, startSlide, startTackle,
+  laneMargin, nearestOpp, offsideLine, planClear, planCross, planLob, planPass, planShot, planThrough, rollPace, rollTime, sprintOf, startFeint, startKick, startSlide, startTackle,
 } from "./actions";
 import { goalX, keeperSpot, thinkKeeper } from "./keeper";
 
@@ -34,9 +34,6 @@ export const FORMATIONS: Record<"433" | "442", Slot[]> = {
 
 const JOG = 4.2;
 const RUN = 6.2;
-/** His top sprint (m/s). */
-export const sprintOf = (p: Player) => 7.1 + p.pace * 1.5;
-
 /** Time for him to get to a point (s). */
 const reachTime = (p: Player, x: number, z: number) => dist(p.x, p.z, x, z) / sprintOf(p) + 0.12;
 
@@ -282,23 +279,6 @@ export function shotValue(s: MatchState, p: Player): { xg: number; aim: number }
   return { xg, aim };
 }
 
-/** How safely a ball rolls from him to (x, z): above 0 it gets there first. */
-function laneMargin(s: MatchState, p: Player, x: number, z: number, pace: number): number {
-  const d = dist(p.x, p.z, x, z) || 1;
-  let worst = 9;
-  for (const o of s.players) {
-    if (o.team === p.team) continue;
-    const dx = x - p.x, dz = z - p.z;
-    const u = clamp(((o.x - p.x) * dx + (o.z - p.z) * dz) / (d * d), 0.05, 1);
-    const along = d * u;
-    const time = rollTime(pace, along);
-    const off = dist(p.x + dx * u, p.z + dz * u, o.x, o.z);
-    const m = off - 0.9 - time * sprintOf(o) * 0.82;
-    if (m < worst) worst = m;
-  }
-  return worst;
-}
-
 type Option = { v: number; go: () => void };
 
 export function thinkCarrier(s: MatchState, p: Player) {
@@ -487,7 +467,7 @@ export function takeSetPiece(s: MatchState, p: Player, set: SetPiece) {
       if (d > lim || d < 3) continue;
       let open = 1e9;
       for (const o of s.players) if (o.team !== p.team) open = Math.min(open, dist(o.x, o.z, m.x, m.z));
-      const q = open + (m.x - p.x) * dir * 0.1 + rnd(s) * 2;
+      const q = open + (m.x - p.x) * dir * 0.1 + clamp(laneMargin(s, p, m.x, m.z, rollPace(d, 7)), -4, 1) * 3 + rnd(s) * 2;
       if (q > v) { v = q; best = m; }
     }
     return best;

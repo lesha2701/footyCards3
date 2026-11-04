@@ -60,6 +60,25 @@ places are «Отбор», «Смена», «Подкат» and «Прессин
 arrows, Shift to sprint, J shot, K pass, L through ball, I cross, U feint,
 H tackle, G slide, Q switch.
 
+The help a human gets, all in `engine.ts`:
+
+- `bestMate` takes the stick for a direction and, in it, the man with a clear
+  lane. A white ring on the pitch shows him (`passTarget`).
+- A ball on its way to the human's man is his: `receiver`. The man runs to meet
+  it whatever the stick does (`meetPoint`), and a rolling ball bends on to him
+  and keeps its pace until he has it (`assistPass`). The AI gets none of this.
+- When the keeper has it in his hands the human has the keeper: the stick aims,
+  «Пас» rolls or throws, «Навес» and «Выбить» go long, and after six seconds the
+  keeper decides himself. Goal kicks work the same way.
+- With the ball theirs or loose, the human gets the man nearest to where it is
+  going within a fifth of a second of that changing (`userAutoSwitch`). «Смена»
+  by hand holds for three quarters of a second.
+
+Stamina (`Player.stamina`, a bar over the man): ten seconds of sprint empties
+it, twelve of walking fills it, and tired legs lose a sixth of the top speed.
+At a sprint the ball runs further from the foot, the turns get wider and feints
+stop selling: dribbling is done at walking pace.
+
 ## Testing on a phone
 
 `bench/serve.mjs` serves `bench/out` with the app's public assets, and
@@ -71,7 +90,9 @@ npx esbuild src/bench/match3d/play.tsx --bundle --minify --format=esm --target=e
 ```
 
 `bench/sim.mjs` plays AI against AI without a screen and prints the statistics
-used to tune the football.
+used to tune the football. `bench/human.mjs` plays through `Input` as a thumb
+does and prints how many passes arrive, what happens to the keeper's ball and
+how close the human's man stays to the action.
 
 ## Before rewards
 

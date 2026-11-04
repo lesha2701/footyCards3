@@ -41,8 +41,8 @@ const SPIN_DECAY = 0.08;
 const RESTITUTION = 0.52;
 const BOUNCE_FRICTION = 0.86;
 /** A rolling ball slows by this (m/s²); pass planning relies on it. */
-export const ROLL_DECEL = 3.1;
-const ROLL_DRAG = 0.1;
+/** Constant, so a pass can be planned exactly: see `rollPace`. */
+export const ROLL_DECEL = 4.2;
 
 export type Role = "GK" | "CB" | "FB" | "DM" | "CM" | "W" | "ST";
 
@@ -104,6 +104,10 @@ export type Player = {
   beat: number; beatX: number; beatZ: number;
   /** Past the second-last defender when the pass was played. */
   off: boolean;
+  /** Legs, 0-1: a sprint spends them, walking gives them back. */
+  stamina: number;
+  /** His pace going into a feint (m/s): it only sells at a walk. */
+  runUp: number;
   /** Next ball touch in the dribble (ticks). */
   touch: number;
   /** Attacking runs. */
@@ -188,6 +192,8 @@ export type MatchState = {
   idle: number;
   /** The human calls a second man to the ball. */
   contain: boolean;
+  /** No automatic change of the human's man before this tick. */
+  switchT: number;
   ev: MatchEvent[];
 };
 
@@ -250,7 +256,7 @@ function stepRoll(b: Pick<Ball, "x" | "y" | "z" | "vx" | "vy" | "vz">, dt: numbe
     b.vx = 0; b.vz = 0;
     return;
   }
-  const lost = (ROLL_DECEL + ROLL_DRAG * v) * dt;
+  const lost = ROLL_DECEL * dt;
   const k = lost >= v ? 0 : (v - lost) / v;
   b.vx *= k; b.vz *= k;
   b.x += b.vx * dt; b.z += b.vz * dt;
@@ -429,6 +435,6 @@ export function freshState(setup: Setup, players: Player[]): MatchState {
     teams: [team(setup.home, setup.homeRating), team(setup.away, setup.awayRating)],
     set: null, user: -1, poss: 0, chaser: [-1, -1],
     pred: new Float64Array(PRED_MAX * 3), predN: 0, predFrom: 0,
-    lastGoal: null, prevTouch: -1, wantShot: 0, idle: 0, contain: false, ev: [],
+    lastGoal: null, prevTouch: -1, wantShot: 0, idle: 0, contain: false, switchT: 0, ev: [],
   };
 }

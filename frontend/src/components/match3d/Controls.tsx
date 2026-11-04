@@ -223,8 +223,8 @@ export default function Controls({ game, hud, w, h, toBox }: { game: MatchGame; 
           <>
             <Ring barRef={bigBar} />
             <div style={{ ...face, background: LIME, color: "#000", fontSize: 14, fontWeight: 700, border: 0, flexDirection: "column", textShadow: "none" }}>
-              Удар
-              {!started && <span style={{ fontSize: 9, fontWeight: 500, marginTop: 3, opacity: 0.7 }}>держи, вбок — финт</span>}
+              {hud.keeper ? "Выбить" : "Удар"}
+              {!started && !hud.keeper && <span style={{ fontSize: 9, fontWeight: 500, marginTop: 3, opacity: 0.7 }}>держи, вбок — финт</span>}
             </div>
             {small("top", "Пас")}
             {small("side", "Разрез")}

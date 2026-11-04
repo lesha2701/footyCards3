@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { HZ, MATCH_SECONDS, Phase, type MatchState } from "./core";
+import { Act, BALL_R, HZ, MATCH_SECONDS, Phase, ballAt, predict, type MatchState } from "./core";
 import { NO_INPUT, createMatch, stepMatch, type Input } from "./engine";
 
 const SETUP = { seed: 1234, home: "A", away: "B", homeRating: 0.78, awayRating: 0.76 };
@@ -55,5 +55,83 @@ describe("match3d engine", () => {
       const code = text.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
       expect(code, name).not.toMatch(/Math\.(sin|cos|tan|atan|atan2|asin|acos|pow|exp|log|hypot|cbrt|random)\b|\*\*|Date\.now|performance\./);
     }
+  });
+
+  /** Open play with team 0's `who` on the ball at (x, z), everybody else far off. */
+  const onBall = (who: number, x: number, z: number) => {
+    const s = createMatch(SETUP, 0);
+    for (let i = 0; i < 900 && s.phase !== Phase.Play; i++) stepMatch(s, NO_INPUT);
+    expect(s.phase).toBe(Phase.Play);
+    s.set = null;
+    for (const p of s.players) if (p.team === 1 && p.role !== "GK") { p.x = 45; p.z = p.i - 16; p.vx = 0; p.vz = 0; }
+    const p = s.players[who];
+    p.x = x; p.z = z; p.vx = 0; p.vz = 0; p.act = Act.None;
+    ballAt(s.ball, x + 0.4, BALL_R, z);
+    s.ball.owner = who; s.ball.to = -1; s.ball.since = 20;
+    s.user = who;
+    predict(s);
+    return s;
+  };
+  const outfield = (s: MatchState, not: number) => s.players.filter((p) => p.team === 0 && p.role !== "GK" && p.i !== not);
+
+  it("a human's pass gets to his man, whatever the stick does meanwhile", () => {
+    const from = outfield(createMatch(SETUP, 0), -1)[0].i;
+    const s = onBall(from, -10, 5);
+    const m = outfield(s, from)[0];
+    m.x = 4; m.z = -6;
+    stepMatch(s, { ...NO_INPUT, mx: (m.x - s.players[from].x) / 18, mz: (m.z - s.players[from].z) / 18, press: { k: "pass", power: 0.4 } });
+    const away = { ...NO_INPUT, mx: -1, mz: 0, sprint: true };
+    for (let i = 0; i < 240 && (s.ball.owner < 0 || s.ball.owner === from); i++) stepMatch(s, away);
+    expect(s.players[s.ball.owner].team).toBe(0);
+    expect(s.user).toBe(s.ball.owner);
+  });
+
+  it("the human decides what his keeper does with the ball", () => {
+    const s = createMatch(SETUP, 0);
+    for (let i = 0; i < 900 && s.phase !== Phase.Play; i++) stepMatch(s, NO_INPUT);
+    const gk = s.players.find((p) => p.team === 0 && p.role === "GK")!;
+    const b = s.ball;
+    b.owner = gk.i; b.last = gk.i; b.to = -1;
+    gk.act = Act.Hold; gk.actT = 0; gk.actLen = 40;
+    stepMatch(s, NO_INPUT);
+    expect(s.user).toBe(gk.i);
+    for (let i = 0; i < 200; i++) stepMatch(s, NO_INPUT);
+    expect(gk.act).toBe(Act.Hold);
+    stepMatch(s, { ...NO_INPUT, mx: 1, press: { k: "pass", power: 0.4 } });
+    expect([Act.GkThrow, Act.GkKick]).toContain(s.players[gk.i].act as number);
+    for (let i = 0; i < 40 && b.owner === gk.i; i++) stepMatch(s, NO_INPUT);
+    expect(b.to).toBeGreaterThanOrEqual(0);
+    expect(s.players[b.to].team).toBe(0);
+    stepMatch(s, NO_INPUT);
+    expect(s.user).toBe(b.to);
+  });
+
+  it("in defence the human gets the man nearest to the ball", () => {
+    const s = createMatch(SETUP, 0);
+    for (let i = 0; i < 900 && s.phase !== Phase.Play; i++) stepMatch(s, NO_INPUT);
+    s.set = null;
+    const c = s.players.find((p) => p.team === 1 && p.role !== "GK")!;
+    ballAt(s.ball, c.x, BALL_R, c.z);
+    s.ball.owner = c.i; s.ball.to = -1;
+    const near = outfield(s, -1)[0], far = outfield(s, -1)[1];
+    near.x = c.x + 3; near.z = c.z;
+    far.x = c.x + 30; far.z = c.z + 10;
+    s.user = far.i;
+    s.switchT = 0;
+    for (let i = 0; i < 6; i++) stepMatch(s, { ...NO_INPUT, mz: 1 });
+    expect(s.user).toBe(near.i);
+  });
+
+  it("a sprint spends the legs and walking gives them back", () => {
+    const from = outfield(createMatch(SETUP, 0), -1)[0].i;
+    const s = onBall(from, -40, 0);
+    const p = s.players[from];
+    const fresh = Math.abs(p.stamina - 1) < 1e-9;
+    for (let i = 0; i < 180; i++) stepMatch(s, { ...NO_INPUT, mx: 1, sprint: true });
+    const spent = p.stamina;
+    for (let i = 0; i < 120; i++) stepMatch(s, NO_INPUT);
+    expect(fresh).toBe(true);
+    expect(spent).toBeLessThan(0.9);
+    expect(p.stamina).toBeGreaterThan(spent);
   });
 });
