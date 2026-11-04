@@ -102,6 +102,16 @@ gap in the back line (`channel`), a full-back overlaps on the ball's side, and w
 the ball's side is crowded the far flank gets a switch: for the human «Навес» with the
 stick across (`bestMate` with `air`). `bench/shape.mjs` measures all of this.
 
+Penalties and close free kicks: when the human's team has a penalty, or a free
+kick under 30 m out and under 20 m wide, and when he faces a penalty, the match
+stops at the whistle (`set.scene`, `sceneOf`) and the kick is played in the game's
+swipe scene (`SetPieceScene`, `createSetup` from the foul's real spot, the keeper of
+«Пенальти» for their penalty). Only the outcome comes back as an input
+(`Press` "scene"): a goal counts, a save is in the keeper's hands, a miss is a goal
+kick, off the wall the ball is loose. No replay of such a goal. If the scene can't
+run, the kick is played in the match. For a server replay the swipe itself will
+have to be kept: today nothing rewarded depends on it.
+
 Stamina (`Player.stamina`): the ring under the human's man is the gauge. Ten seconds of sprint
 empties it, twelve of walking fills it, and tired legs lose a sixth of the top speed.
 At a sprint the ball runs further from the foot, the turns get wider and feints

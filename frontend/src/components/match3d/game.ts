@@ -8,8 +8,9 @@ import { ballGeometry } from "@/components/freeKick3d/textures";
 import { crowdChant, crowdHush, crowdTension, playFreeKickSfx, startCrowd } from "@/lib/freeKick3d/sfx";
 import {
   Act, BALL_R, HALF_L, HALF_W, HZ, Kick, PRED_STEP, Phase, TICK, clamp, type MatchEvent, type MatchState, type Setup,
+  type SceneKick, type SceneOutcome,
 } from "@/lib/match3d/core";
-import { clockText, createMatch, passTarget, stepMatch, type Input, type Press } from "@/lib/match3d/engine";
+import { clockText, createMatch, passTarget, sceneOf, stepMatch, type Input, type Press } from "@/lib/match3d/engine";
 
 import type { MatchAssets } from "./assets";
 import { Motion } from "./motion";
@@ -55,6 +56,8 @@ export type GameHooks = {
   onHud: (h: Hud) => void;
   onMessage: (text: string, big?: boolean) => void;
   onEnd: (e: GameEnd) => void;
+  /** A kick for the swipe scene: `sceneDone` brings the match back. */
+  onScene: (kick: SceneKick) => void;
 };
 
 const FPS_SAMPLE = 90;
@@ -90,6 +93,8 @@ export class MatchGame {
   paused = false;
 
   private press: Press | null = null;
+  /** The swipe scene has the kick: nothing here moves or draws. */
+  private inScene = false;
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(24, 2, 1, 900);
@@ -297,6 +302,7 @@ export class MatchGame {
     this.raf = requestAnimationFrame(this.frame);
     const real = (now - this.last) / 1000;
     this.last = now;
+    if (this.inScene) return;
     const dt = Math.min(real, 0.1);
     this.adaptDpr(real);
     if (!this.paused) {
@@ -317,7 +323,7 @@ export class MatchGame {
     while (this.acc >= TICK) {
       this.acc -= TICK;
       this.tick();
-      if (this.replayF >= 0) return;
+      if (this.replayF >= 0 || this.inScene) return;
     }
     this.draw(this.acc / TICK, dt);
   }
@@ -329,11 +335,17 @@ export class MatchGame {
     this.press = null;
     stepMatch(s, inp);
     for (const e of s.ev) this.onEvent(e);
+    const kick = sceneOf(s);
+    if (kick) {
+      this.inScene = true;
+      this.stick.x = 0; this.stick.y = 0; this.sprint = false;
+      this.hooks.onScene(kick);
+    }
     this.moveOfficials();
     for (let i = 0; i < 22; i++) this.motion.update(i, s.players[i], s, TICK);
     for (let i = 0; i < 3; i++) this.motion.updateSimple(REFEREE + i, Math.sqrt(this.off.vx[i] ** 2 + this.off.vz[i] ** 2), TICK);
     this.record();
-    if (s.phase === Phase.Goal && !this.replayed && s.phaseT >= REPLAY_AT) this.startReplay();
+    if (s.phase === Phase.Goal && !this.replayed && !s.lastGoal?.scene && s.phaseT >= REPLAY_AT) this.startReplay();
     if (s.phase !== Phase.Goal) this.replayed = false;
     if (s.phase === Phase.FullTime && !this.ended && s.phaseT > 330) {
       this.ended = true;
@@ -667,6 +679,13 @@ export class MatchGame {
     this.aim.visible = false;
     this.ringBack.visible = false;
     this.landing.visible = false;
+  }
+
+  /** The scene is over: the match goes on from what the kick did. */
+  sceneDone(outcome: SceneOutcome | null) {
+    this.press = { k: "scene", outcome };
+    this.inScene = false;
+    this.last = performance.now();
   }
 
   // --- housekeeping -------------------------------------------------------------------------------

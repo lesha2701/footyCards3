@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { planLob } from "./actions";
-import { Act, BALL_R, HALF_W, HZ, Kick, MATCH_SECONDS, Phase, ballAt, launch, predict, stepBall, type MatchState } from "./core";
-import { NO_INPUT, createMatch, stepMatch, type Input } from "./engine";
+import { Act, BALL_R, HALF_W, HZ, Kick, MATCH_SECONDS, Phase, ballAt, launch, predict, stepBall, type MatchState, type SceneOutcome } from "./core";
+import { NO_INPUT, createMatch, sceneOf, stepMatch, type Input } from "./engine";
 
 const SETUP = { seed: 1234, home: "A", away: "B", homeRating: 0.78, awayRating: 0.76 };
 
@@ -308,6 +308,66 @@ describe("match3d engine", () => {
       expect(left(170)).toBe(true);
       expect(s.ball.last === o.i || s.ball.owner === o.i).toBe(false);
     }
+  });
+
+  const waitForScene = (kind: "penalty" | "free", team: 0 | 1, x: number, z: number) => {
+    const s = createMatch(SETUP, 0);
+    for (let i = 0; i < 900 && s.phase !== Phase.Play; i++) stepMatch(s, NO_INPUT);
+    const taker = s.players.find((p) => p.team === team && p.role === "ST")!;
+    s.phase = Phase.Dead;
+    s.ball.owner = -1;
+    s.set = { kind, team, x, z, taker: taker.i, t: 0, ready: false, scene: -1 };
+    if (team === 0) s.user = taker.i;
+    for (let i = 0; i < 900 && !s.set?.ready; i++) stepMatch(s, NO_INPUT);
+    return s;
+  };
+  const outcome = (s: MatchState, o: SceneOutcome | null) => stepMatch(s, { ...NO_INPUT, press: { k: "scene", outcome: o } });
+
+  it("a penalty or a close free kick waits for the swipe scene and takes its outcome", () => {
+    const s = waitForScene("penalty", 0, 41.5, 0);
+    expect(sceneOf(s)).toMatchObject({ kind: "penalty" });
+    const before = s.tick;
+    for (let i = 0; i < 2000; i++) stepMatch(s, NO_INPUT);
+    expect(s.phase).toBe(Phase.Dead);
+    expect(s.tick).toBeGreaterThan(before);
+    outcome(s, "goal");
+    expect(s.phase).toBe(Phase.Goal);
+    expect(s.teams[0].goals).toBe(1);
+    expect(s.teams[0].onTarget).toBe(1);
+
+    const f = waitForScene("free", 0, 30, -6);
+    expect(sceneOf(f)).toMatchObject({ kind: "free", distance: 22.5, offset: -6 });
+    outcome(f, "save");
+    expect(f.phase).toBe(Phase.Play);
+    expect(f.players[f.ball.owner].role).toBe("GK");
+    expect(f.players[f.ball.owner].team).toBe(1);
+
+    const m = waitForScene("free", 0, 30, 6);
+    outcome(m, "miss");
+    expect(m.set?.kind).toBe("goalkick");
+
+    const w = waitForScene("free", 0, 30, 0);
+    outcome(w, "wall");
+    expect(w.phase).toBe(Phase.Play);
+    expect(w.ball.owner).toBe(-1);
+    expect(w.ball.x).toBeGreaterThan(30);
+  });
+
+  it("their penalty puts the human in goal, a far free kick stays in the match", () => {
+    const k = waitForScene("penalty", 1, -41.5, 0);
+    expect(sceneOf(k)).toMatchObject({ kind: "keep" });
+    outcome(k, "save");
+    expect(k.players[k.ball.owner].team).toBe(0);
+    expect(sceneOf(waitForScene("free", 0, 5, 0))).toBeNull();
+    expect(sceneOf(waitForScene("free", 1, -30, 0))).toBeNull();
+  });
+
+  it("a scene that fails leaves the kick to the match", () => {
+    const s = waitForScene("penalty", 0, 41.5, 0);
+    outcome(s, null);
+    expect(sceneOf(s)).toBeNull();
+    expect(s.phase).toBe(Phase.Dead);
+    expect(s.set?.kind).toBe("penalty");
   });
 
   it("the side without the ball holds its zones: two go, the rest pick up men", () => {

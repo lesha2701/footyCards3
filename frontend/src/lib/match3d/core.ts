@@ -146,7 +146,23 @@ export type SetPiece = {
   kind: SetKind; team: 0 | 1; x: number; z: number; taker: number; t: number;
   /** The taker stands at the ball. */
   ready: boolean;
+  /** This kick is played in the swipe scene: its seed (see `SceneKick`). */
+  scene: number;
 };
+
+/** A penalty or a close free kick with the human in it is played out in the
+ * set-piece scene; only its outcome comes back to the match. */
+export type SceneKick = {
+  /** "keep": their penalty, the human in goal. */
+  kind: "penalty" | "free" | "keep";
+  seed: number;
+  /** How good the man on the ball is, as a card (55..95). */
+  rating: number;
+  /** Metres from the goal line and along it, the free kick's spot. */
+  distance: number;
+  offset: number;
+};
+export type SceneOutcome = "goal" | "save" | "miss" | "wall";
 
 export type Team = { name: string; rating: number; goals: number; shots: number; onTarget: number; passes: number; passesOk: number; corners: number; fouls: number; possTicks: number; tackles: number };
 
@@ -186,7 +202,7 @@ export type MatchState = {
   predN: number;
   predFrom: number;
   /** Tick of the last goal, who scored it. */
-  lastGoal: { tick: number; team: 0 | 1; p: number; kind: Kick; long: boolean } | null;
+  lastGoal: { tick: number; team: 0 | 1; p: number; kind: Kick; long: boolean; scene?: boolean } | null;
   /** Assist candidate: the last team-mate who touched it. */
   prevTouch: number;
   /** Ticks the user's press is remembered for an aerial chance. */

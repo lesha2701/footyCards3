@@ -34,7 +34,7 @@ function crossing(s: MatchState, p: Player): { z: number; y: number; ticks: numb
   return null;
 }
 
-function holdBall(s: MatchState, p: Player) {
+export function holdBall(s: MatchState, p: Player) {
   const b = s.ball;
   b.owner = p.i; b.last = p.i; b.kick = Kick.None; b.to = -1;
   b.vx = 0; b.vy = 0; b.vz = 0; b.sx = 0; b.sy = 0; b.sz = 0;

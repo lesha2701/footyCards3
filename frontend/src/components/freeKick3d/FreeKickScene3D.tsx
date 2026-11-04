@@ -71,6 +71,8 @@ type Props = {
   /** Current shot time, written every frame (−1 while waiting): the page
    * times the player's dive against the strike with it. */
   shotClockRef?: MutableRefObject<number>;
+  /** Measure the canvas by layout, not on screen: inside a rotated box. */
+  layoutSize?: boolean;
 };
 
 
@@ -104,6 +106,7 @@ export default function FreeKickScene3D({
   targetHit = null,
   time = "night",
   shotClockRef,
+  layoutSize = false,
 }: Props) {
   // Start pretty; the first sustained frame drop switches to the light
   // profile for good (no flip-flopping shadows on a struggling phone).
@@ -116,6 +119,7 @@ export default function FreeKickScene3D({
       gl={{ antialias: false, powerPreference: "high-performance", stencil: false }}
       camera={{ fov: 50, near: 0.1, far: 400 }}
       style={{ touchAction: "none" }}
+      resize={layoutSize ? { offsetSize: true } : undefined}
     >
       <PerformanceMonitor onDecline={() => setQuality("low")} />
       <fog attach="fog" args={time === "day" ? ["#c4d6e6", 90, 230] : ["#0b1830", 70, 170]} />

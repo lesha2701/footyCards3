@@ -5,13 +5,13 @@
 import {
   Act, BALL_R, CLOCK_RATE, END_MIN, GOAL_H, GOAL_HALF, HALF_L, HALF_W, Kick, PEN_SPOT, Phase, START_MIN, SIX_D, TICK,
   ballAt, clamp, dirOf, dist, dist2, freshState, predAt, predict, rnd, rndN, speedOf, stepBall,
-  type Feint, type MatchState, type Player, type Setup, type SetKind,
+  type Feint, type MatchState, type Player, type SceneKick, type SceneOutcome, type SetKind, type SetPiece, type Setup,
 } from "./core";
 import {
   feintBites, fell, inBox, laneMargin, offsideLine, planCross, planLob, planPass, planShot, planThrough, releaseKick, rollPace, sprintOf, startFeint, startKick, startSlide, startTackle, windupOf,
 } from "./actions";
 import { FORMATIONS, setPieceSpot, takeSetPiece, thinkCarrier, thinkPlayer, thinkTackle, thinkTeam } from "./brain";
-import { keeperSpot, releaseHands, stepKeeper } from "./keeper";
+import { holdBall, keeperSpot, releaseHands, stepKeeper } from "./keeper";
 
 /** What the human does this tick. Stick in world axes (−1..1). */
 export type Input = {
@@ -27,7 +27,9 @@ export type Press =
   | { k: "shot"; power: number; curl: number; chip: boolean }
   | { k: "feint" | "tackle" | "slide" | "switch" }
   /** A touch on a team-mate: the best ball to him, or, without it, him. */
-  | { k: "to"; i: number };
+  | { k: "to"; i: number }
+  /** What the swipe scene's kick did; null: the scene failed. */
+  | { k: "scene"; outcome: SceneOutcome | null };
 
 export const NO_INPUT: Input = { mx: 0, mz: 0, sprint: false, press: null, contain: false };
 
@@ -39,6 +41,9 @@ const REACH = 0.85;
 const GOAL_PAUSE = 150;
 /** Ticks before a restart can be taken. */
 const SET_MIN = 90;
+/** A free kick closer than this (m), not too wide, goes to the swipe scene. */
+const FREE_SCENE_MAX = 30;
+const FREE_SCENE_WIDE = 20;
 const USER_WAIT = 420;
 /** Past full time the referee waits this long at most for the ball to leave a dangerous place. */
 const LATE_MAX = 240;
@@ -119,7 +124,7 @@ function restart(s: MatchState, kind: SetKind, team: 0 | 1, x: number, z: number
   s.phase = kind === "kickoff" ? Phase.Kickoff : Phase.Dead;
   s.phaseT = 0;
   const taker = pickTaker(s, kind, team, x, z);
-  s.set = { kind, team, x, z, taker: taker.i, t: 0, ready: false };
+  s.set = { kind, team, x, z, taker: taker.i, t: 0, ready: false, scene: -1 };
   b.owner = -1; b.to = -1; b.kick = Kick.None; b.inNet = false;
   s.chaser = [-1, -1];
   for (const p of s.players) {
@@ -1065,10 +1070,23 @@ function runRestart(s: MatchState, inp: Input) {
       ballAt(b, set.x + t.hx * 0.45, set.kind === "throw" ? 2.05 : BALL_R, set.z + t.hz * 0.45);
       b.owner = t.i;
       s.ev.push({ t: "whistle", n: 1 });
+      if (sceneKick(s, set)) set.scene = Math.floor(rnd(s) * 2147483647);
     }
     return;
   }
   t.want = 0;
+  // The swipe scene has it: the match waits for the outcome, and has no clock
+  // of its own on it. No outcome (the scene failed): it is played right here.
+  if (set.scene >= 0) {
+    if (inp.press?.k !== "scene") return;
+    if (inp.press.outcome) {
+      sceneResult(s, t, inp.press.outcome);
+      return;
+    }
+    set.scene = -1;
+    set.t = SET_MIN;
+    return;
+  }
   const human = s.user === t.i;
   if (human) {
     if (inp.mx !== 0 || inp.mz !== 0) s.idle = 0;
@@ -1081,6 +1099,79 @@ function runRestart(s: MatchState, inp: Input) {
     return;
   }
   if (set.t > SET_MIN + (set.kind === "corner" || set.kind === "free" ? 110 : 30)) goSet(s, t);
+}
+
+/** Does this restart go to the scene? The human's own close free kick, and
+ * every penalty he is in. */
+function sceneKick(s: MatchState, set: SetPiece) {
+  const ut = userTeam(s);
+  if (ut === null) return false;
+  if (set.kind === "penalty") return true;
+  if (set.kind !== "free" || set.team !== ut) return false;
+  const distance = HALF_L - set.x * dirOf(set.team);
+  return distance > 16 && distance < FREE_SCENE_MAX && Math.abs(set.z) < FREE_SCENE_WIDE;
+}
+
+/** What the scene needs for the kick waiting on it, if one is. */
+export function sceneOf(s: MatchState): SceneKick | null {
+  const set = s.set;
+  if (!set || set.scene < 0) return null;
+  const dir = dirOf(set.team);
+  return {
+    kind: set.team !== userTeam(s) ? "keep" : set.kind === "penalty" ? "penalty" : "free",
+    seed: set.scene,
+    rating: clamp(Math.round(s.players[set.taker].shot * 100), 55, 95),
+    distance: HALF_L - set.x * dir,
+    // Looking at the goal, the scene's right is the attackers' right.
+    offset: set.z * dir,
+  };
+}
+
+/** The scene's kick comes back as what it did to the match. */
+function sceneResult(s: MatchState, t: Player, outcome: SceneOutcome) {
+  const set = s.set!;
+  const b = s.ball;
+  const team = set.team;
+  const other: 0 | 1 = team === 0 ? 1 : 0;
+  const dir = dirOf(team);
+  const tm = s.teams[team];
+  const keeper = s.players.find((p) => p.team === other && p.role === "GK")!;
+  tm.shots += 1;
+  if (outcome === "goal" || outcome === "save") tm.onTarget += 1;
+  b.owner = -1; b.last = t.i; b.kicker = t.i; b.kick = Kick.Shot; b.to = -1; b.since = 0;
+  b.fromX = set.x; b.fromZ = set.z;
+  if (outcome === "goal") {
+    ballAt(b, dir * (HALF_L + 0.8), 1, 0);
+    b.inNet = true;
+    s.ev.push({ t: "net" });
+    scored(s, team);
+    s.lastGoal!.scene = true;
+    return;
+  }
+  if (outcome === "miss") {
+    s.ev.push({ t: "miss", p: t.i, near: true });
+    restart(s, "goalkick", other, dir * (HALF_L - SIX_D), 0);
+    return;
+  }
+  if (outcome === "save") {
+    s.ev.push({ t: "save", p: keeper.i, held: true });
+    ballAt(b, keeper.x, 1.05, keeper.z);
+    holdBall(s, keeper);
+    startPlay(s);
+    return;
+  }
+  // Off the wall and loose in front of it.
+  const gx = dir * HALF_L;
+  const d = dist(set.x, set.z, gx, 0) || 1;
+  const ux = (gx - set.x) / d, uz = -set.z / d;
+  ballAt(b, set.x + ux * 8, 0.5, set.z + uz * 8);
+  b.vx = -ux * (5 + rnd(s) * 4) + uz * rndN(s) * 3;
+  b.vz = -uz * (5 + rnd(s) * 4) - ux * rndN(s) * 3;
+  b.vy = 2;
+  b.kick = Kick.Tackle;
+  predict(s);
+  startPlay(s);
+  s.poss = other;
 }
 
 function goSet(s: MatchState, t: Player) {

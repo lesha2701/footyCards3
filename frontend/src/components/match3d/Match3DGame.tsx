@@ -5,11 +5,12 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 
 import { enterImmersive } from "@/lib/immersive";
 import { preloadFreeKickSfx } from "@/lib/freeKick3d/sfx";
-import { HALF_L, HALF_W } from "@/lib/match3d/core";
+import { HALF_L, HALF_W, type SceneKick, type SceneOutcome } from "@/lib/match3d/core";
 
 import { loadMatchAssets } from "./assets";
 import Controls from "./Controls";
 import { MatchGame, type GameEnd, type Hud } from "./game";
+import SetPieceScene, { loadScene } from "./SetPieceScene";
 
 const SETUP = { home: "Твой клуб", away: "Гранит", homeRating: 0.78, awayRating: 0.76 };
 
@@ -93,6 +94,7 @@ export default function Match3DGame({ onExit, demo = false, onGame }: { onExit: 
   const [message, setMessage] = useState<{ text: string; big: boolean; id: number } | null>(null);
   const [paused, setPaused] = useState(false);
   const [end, setEnd] = useState<GameEnd | null>(null);
+  const [scene, setScene] = useState<SceneKick | null>(null);
   const [seed, setSeed] = useState(() => (Date.now() >>> 3) & 0xffffff);
   const canvas = useRef<HTMLCanvasElement>(null);
   const leave = useRef<() => void>(() => {});
@@ -105,6 +107,8 @@ export default function Match3DGame({ onExit, demo = false, onGame }: { onExit: 
     return () => { window.removeEventListener("resize", on); window.removeEventListener("orientationchange", on); };
   }, []);
   useLayoutEffect(() => { gameRef.current?.resize(box.w, box.h); }, [box]);
+  // So that a penalty doesn't stop the match to download a scene.
+  useEffect(() => { if (stage === "play") void loadScene(); }, [stage]);
 
   useEffect(() => {
     if (stage !== "loading") return undefined;
@@ -117,6 +121,7 @@ export default function Match3DGame({ onExit, demo = false, onGame }: { onExit: 
         onHud: setHud,
         onMessage: (text, big = false) => setMessage({ text, big, id: performance.now() }),
         onEnd: (e) => { setEnd(e); setStage("end"); },
+        onScene: setScene,
       }, demo);
       g.resize(box.w, box.h);
       gameRef.current = g;
@@ -182,7 +187,12 @@ export default function Match3DGame({ onExit, demo = false, onGame }: { onExit: 
     setPaused(v);
     if (game) game.paused = v;
   };
-  const live = stage === "play" && hud && !hud.replay && !hud.ended;
+  const live = stage === "play" && hud && !hud.replay && !hud.ended && !scene;
+  const sceneDone = useCallback((outcome: SceneOutcome | null) => {
+    setScene(null);
+    gameRef.current?.sceneDone(outcome);
+  }, []);
+  const sceneTouch = useCallback((x: number, y: number) => toBox(box, x, y), [box]);
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "#07121f", overflow: "hidden", zIndex: 60 }}>
@@ -201,6 +211,7 @@ export default function Match3DGame({ onExit, demo = false, onGame }: { onExit: 
             <span style={{ padding: "4px 9px", background: "rgba(12,26,44,.82)", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>{hud.clock}</span>
           </div>
         )}
+        {scene && <SetPieceScene kick={scene} toBox={sceneTouch} height={box.h} onDone={sceneDone} />}
         {hud?.replay && <div style={{ position: "absolute", top: 10, left: 14, padding: "3px 9px", borderRadius: 5, background: "#c61c2b", fontWeight: 800, letterSpacing: 1, fontSize: 12 }}>ПОВТОР</div>}
         {message && !hud?.replay && (
           <div key={message.id} style={{ position: "absolute", top: message.big ? "30%" : 40, left: "50%", transform: "translateX(-50%)", padding: message.big ? "8px 22px" : "4px 12px", borderRadius: 8, background: message.big ? "rgba(198,28,43,.86)" : "rgba(10,20,34,.62)", fontWeight: message.big ? 900 : 600, fontSize: message.big ? 26 : 13, whiteSpace: "nowrap", pointerEvents: "none" }}>
