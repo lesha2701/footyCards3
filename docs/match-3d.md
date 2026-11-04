@@ -12,7 +12,7 @@ nothing and nothing is sent to the server.
   `core.ts` holds the state and the ball's physics, `actions.ts` the kicks,
   tackles and feints, `brain.ts` the team shape and the AI, `keeper.ts` the
   goalkeepers, `engine.ts` the tick, the laws and the restarts.
-- `frontend/src/components/match3d/` is the presentation. It reads the state
+- `frontend/src/components/match3d/` is the presentation (played at `GAME_SPEED`, 85% of real time). It reads the state
   and feeds one `Input` per tick. `game.ts` runs the loop, the camera, the
   sound and the goal replay, `motion.ts` picks a clip for everybody,
   `baked.ts` and `squad.ts` draw 25 people in a few instanced draws,
@@ -47,6 +47,9 @@ calls. Presentation code may use anything: it never feeds the simulation.
   collapse to a point.
 - `dragback` ends turned 180°. While it plays the body's heading waits
   (`Motion.turning`), and the switch at its end is a cut, not a blend.
+
+- The pitch's lines are not a mesh: `mcLines` in `stadium.ts` is a distance field
+  in the turf shader, so the paint takes the grass's blades, light and shadows.
 
 ## Controls
 
@@ -83,6 +86,19 @@ At a sprint the ball runs further from the foot, the turns get wider and feints
 stop selling: dribbling is done at walking pace.
 
 ## The team
+
+With the ball deep in its own third a side takes up `buildSpot`: the centre-backs
+split to the edges of the box, the holding man drops between them, the
+full-backs go high and wide, the midfield offers in the half-spaces and the
+front men pin the line. A goal kick starts from that shape, short when somebody
+is really free and long over the press when not. In the attacking third, with
+the ball wide, the box fills: near post, far post, spot, edge. Crosses hit into
+a man closing down deflect, usually behind, and that is where corners come from.
+
+In their third the side without the ball presses (`pressingHigh`): it stretches,
+everyone in front of the back four takes a man, and the two nearest go at once
+for 2.5 seconds after losing it (`lostAt`). It backs off when the keeper has the
+ball in his hands. Elsewhere it holds the block below.
 
 Without the ball (`blockSpot`) a side is three flat lines 13 metres apart that
 slide together: `backLine` follows the ball, `LINE_GAP` places the rest, and

@@ -96,6 +96,16 @@ export function releaseKick(s: MatchState, p: Player) {
   if (b.y < BALL_R) b.y = BALL_R;
   launch(s, t);
   b.to = plan.to;
+  // A cross hit into a man closing it down comes off him, usually behind.
+  if (plan.kind === Kick.Cross) {
+    const q = nearestOpp(s, p);
+    if (q.o && q.d < 2.8 && rnd(s) < 0.42) {
+      const dir = dirOf(p.team);
+      b.last = q.o.i; b.kicker = q.o.i; b.kick = Kick.Tackle; b.to = -1; b.since = 0;
+      b.vx = dir * (7 + rnd(s) * 6); b.vz = Math.sign(p.z || 1) * (rnd(s) * 3 - 1); b.vy = 2 + rnd(s) * 3.5;
+      b.sx = 0; b.sy = 0; b.sz = 0;
+    }
+  }
   const passing = plan.kind === Kick.Pass || plan.kind === Kick.Through || plan.kind === Kick.Lob || plan.kind === Kick.Cross || plan.kind === Kick.GkRoll || plan.kind === Kick.GkPunt;
   clearOffside(s);
   if (passing) {

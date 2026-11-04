@@ -106,7 +106,7 @@ varying vec3 vMcTint; varying float vMcHair;
 export type Squad = {
   group: THREE.Group;
   /** Place someone. `near`: draw him in full detail. */
-  set: (i: number, x: number, y: number, z: number, yaw: number, rowA: number, rowB: number, w: number, near: boolean) => void;
+  set: (i: number, x: number, y: number, z: number, yaw: number, rowA: number, rowB: number, w: number, near: boolean, roll?: number, pitch?: number) => void;
   commit: () => void;
   dispose: () => void;
   shadow: THREE.InstancedMesh;
@@ -146,14 +146,14 @@ export function makeSquad(near: Merged, far: Merged, baked: Baked, map: THREE.Te
 
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
-  const up = new THREE.Vector3(0, 1, 0);
+  const e = new THREE.Euler();
   const p = new THREE.Vector3();
   const one = new THREE.Vector3(1, 1, 1);
   let nFull = 0, nLight = 0;
   return {
     group, shadow,
-    set: (i, x, y, z, yaw, rowA, rowB, w, close) => {
-      q.setFromAxisAngle(up, yaw);
+    set: (i, x, y, z, yaw, rowA, rowB, w, close, roll = 0, pitch = 0) => {
+      q.setFromEuler(e.set(pitch, yaw, roll, "YXZ"));
       m.compose(p.set(x, y, z), q, one);
       const l = close ? full : light;
       const at = close ? nFull++ : nLight++;

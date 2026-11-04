@@ -28,7 +28,8 @@ for (let m = 0; m < matches; m++) {
         if (wild > 0) { sx = 1; sz = (r() - 0.5) * 1.4; wild = 0; }
         inp.mx = sx; inp.mz = sz; inp.sprint = mine && u.stamina > 0.3;
         if (wait > 90) { inp.press = { k: "pass", power: 0.4 }; wait = 0; wild = 1; }
-        if (mine && u.x > 24 && Math.abs(u.z) < 18 && wait > 6) { inp.press = { k: "shot", power: 0.7, curl: 0, chip: false }; wait = 0; }
+        if (mine && u.x > 26 && Math.abs(u.z) > 14) { inp.press = { k: "lob", power: 0.6 }; wait = 0; wild = 1; c.crosses = (c.crosses ?? 0) + 1; }
+        else if (mine && u.x > 24 && Math.abs(u.z) < 18 && wait > 6) { inp.press = { k: "shot", power: 0.7, curl: 0, chip: false }; wait = 0; }
       } else if (b.owner < 0 && b.to >= 0) {
         // The thumb stays where it was while the ball travels.
         inp.mx = sx; inp.mz = sz; inp.sprint = true;
@@ -68,7 +69,7 @@ for (let m = 0; m < matches; m++) {
     }
     void wasOwner;
   }
-  c.shots += s.teams[0].shots; c.onT += s.teams[0].onTarget; c.g0 += s.teams[0].goals; c.g1 += s.teams[1].goals;
+  c.corners = (c.corners ?? 0) + s.teams[0].corners; c.shots += s.teams[0].shots; c.onT += s.teams[0].onTarget; c.g0 += s.teams[0].goals; c.g1 += s.teams[1].goals;
   for (const p of s.players) if (p.stamina !== undefined) { c.staminaEnd += p.stamina; c.staminaN++; }
 }
 const pct = (a, b) => (b ? Math.round(a / b * 100) : 0);
@@ -77,4 +78,5 @@ console.log(`passes ${(c.pass / matches).toFixed(1)}/match: reached ours ${pct(c
 console.log(`keeper ${(c.gk / matches).toFixed(1)}/match: ours ${pct(c.gkOurs, c.gk)}%, opponent ${pct(c.gkTheirs, c.gk)}%, dead ${pct(c.gkOut, c.gk)}%; ticks as keeper ${(c.userGk / matches).toFixed(0)}`);
 console.log(`defending: within 2 m of the nearest man ${pct(c.defNearest, c.defTicks)}%, mean gap ${(c.defGap / (c.defTicks || 1)).toFixed(1)} m`);
 console.log(`shape without the ball: back four ${(c.lineSpread / (c.defTicks || 1)).toFixed(1)} m deep, back to midfield ${(c.lineGap / (c.defTicks || 1)).toFixed(1)} m`);
+console.log(`crosses ${((c.crosses ?? 0) / matches).toFixed(1)}, corners ${(c.corners / matches).toFixed(1)}`);
 console.log(`shots ${(c.shots / matches).toFixed(1)}, on target ${(c.onT / matches).toFixed(1)}; goals ${(c.g0 / matches).toFixed(1)}:${(c.g1 / matches).toFixed(1)}; stamina at the end ${c.staminaN ? (c.staminaEnd / c.staminaN).toFixed(2) : "-"}`);

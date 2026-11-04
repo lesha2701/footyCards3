@@ -1,5 +1,5 @@
 /** The footballers' heads. The team keeps a shape that breathes with the ball
- * (compact without it, wide and high with it, the back line holding offside);
+ * (three flat lines without it, a build-up from the back and a full box with it, a high man-for-man press in their third, the back line holding offside);
  * who presses, who covers and who marks is settled a few times a second; the
  * forwards time runs on the line; the man on the ball weighs a shot against
  * every pass and against carrying it on. */
@@ -32,6 +32,8 @@ export const FORMATIONS: Record<"433" | "442", Slot[]> = {
   ],
 };
 
+/** A man stands this far from the centre at a kick-off (the circle is 9.15 m). */
+const CIRCLE_CLEAR = 10.2;
 const JOG = 4.2;
 const RUN = 6.2;
 /** Time for him to get to a point (s). */
@@ -75,12 +77,15 @@ export function thinkTeam(s: MatchState, team: 0 | 1) {
   // Without it: the nearest goes, the next covers; the rest pick up men.
   const ax = b.x * dirOf(team);
   // In front of the back four it's the midfield's ball: they don't step out for it.
-  const high = ax > backLine(s, team) + 9;
+  const hunting = pressingHigh(s, team);
+  const high = ax > backLine(ax, hunting) + 9;
   const cost = (p: Player) => dist(p.x, p.z, b.x, b.z) + (high && (p.role === "CB" || p.role === "FB") ? 12 : 0);
   const byDist = [...outfield].sort((p, q) => cost(p) - cost(q));
   const pressing = ax < 20 ? 1 : dist(byDist[0].x, byDist[0].z, b.x, b.z) < 26 ? 1 : 0;
   if (pressing && byDist[0]) byDist[0].duty = 1;
   if (byDist[1] && dist(byDist[1].x, byDist[1].z, b.x, b.z) < 16) byDist[1].duty = 2;
+  // Just lost it up the pitch: the two nearest go at once, before it gets away.
+  if (s.tick - s.lostAt[team] < 150 && ax > -12 && byDist[1]) byDist[1].duty = 1;
   // The human called a second man: the nearest who isn't him goes at the ball.
   if (s.contain && s.user >= 0 && s.players[s.user].team === team) {
     const helper = byDist.find((m) => m.i !== s.user);
@@ -101,24 +106,61 @@ export function thinkTeam(s: MatchState, team: 0 | 1) {
     });
     if (at >= 0) free[at].mark = o.i;
   }
+  // A high press is man for man: everyone in front of the back four takes one.
+  if (hunting) {
+    const taken = new Set(free.map((m) => m.mark));
+    for (const m of free) {
+      if (m.mark >= 0 || m.role === "CB" || m.role === "FB") continue;
+      let at = -1, near = 24;
+      for (const o of others) {
+        if (o.role === "GK" || o.i === carrier.i || taken.has(o.i)) continue;
+        const d = dist(m.x, m.z, o.x, o.z);
+        if (d < near) { near = d; at = o.i; }
+      }
+      if (at >= 0) { m.mark = at; taken.add(at); }
+    }
+  }
+}
+
+/** The ball in their third and not in their keeper's hands: we go and get it. */
+function pressingHigh(s: MatchState, team: 0 | 1) {
+  const b = s.ball;
+  if (b.x * dirOf(team) < 16) return false;
+  return !(b.owner >= 0 && s.players[b.owner].act === Act.Hold);
 }
 
 /** The back four's line without the ball, flat, up the pitch from their goal. */
-function backLine(s: MatchState, team: 0 | 1) {
-  const ax = s.ball.x * dirOf(team);
-  return clamp(ax - 17, -HALF_L + 9, 0);
+function backLine(ax: number, high: boolean) {
+  return clamp(ax - 17, -HALF_L + 9, high ? 5 : 0);
 }
 
 /** How far ahead of the back line each role keeps without the ball. */
 const LINE_GAP: Record<Player["role"], number> = { GK: 0, CB: 0, FB: 0, DM: 7, CM: 13, W: 15, ST: 27 };
 
-/** Without the ball: three lines, flat and close, sliding together to the ball. */
-function blockSpot(s: MatchState, p: Player, slot: Slot) {
+/** Without the ball: three lines, flat and close, sliding together to the ball.
+ * High up they stretch and go wider, each man near one to press. */
+function blockSpot(p: Player, slot: Slot, ballX: number, ballZ: number, high: boolean) {
   const dir = dirOf(p.team);
-  const b = s.ball;
-  const ax = Math.max(backLine(s, p.team), -HALF_L + 5) + LINE_GAP[slot.role];
-  const z = slot.z * 0.6 + clamp(b.z, -26, 26) * 0.5;
+  const ax = Math.max(backLine(ballX * dir, high), -HALF_L + 5) + LINE_GAP[slot.role] * (high ? 1.25 : 1);
+  const z = slot.z * (high ? 0.85 : 0.6) + clamp(ballZ, -26, 26) * (high ? 0.25 : 0.5);
   return { x: ax * dir, z: clamp(z, -HALF_W + 3, HALF_W - 3) };
+}
+
+/** Playing out from the back: the centre-backs split to the edges of the box,
+ * the holding man drops between them, the full-backs go high and wide, the
+ * midfield offers in the half-spaces, the front men pin the line. */
+function buildSpot(s: MatchState, p: Player, slot: Slot) {
+  const side = slot.z > 0 ? 1 : slot.z < 0 ? -1 : 0;
+  let ax: number, z: number;
+  switch (slot.role) {
+    case "CB": ax = -38; z = side * 15; break;
+    case "FB": ax = -24; z = side * 31; break;
+    case "DM": ax = -31; z = clamp(s.ball.z * 0.25, -6, 6); break;
+    case "CM": ax = slot.ax > -6 ? -15 : -24; z = side * (slot.ax > -6 ? 13 : 11); break;
+    case "W": ax = slot.ax > 0 ? 4 : -8; z = side * 30; break;
+    default: ax = 10; z = side * 8;
+  }
+  return { ax, z };
 }
 
 /** Where his place in the shape is right now. */
@@ -127,7 +169,7 @@ function shapeSpot(s: MatchState, p: Player, slot: Slot): { x: number; z: number
   const b = s.ball;
   const ballAx = b.x * dir;
   const has = s.poss === p.team;
-  if (!has) return blockSpot(s, p, slot);
+  if (!has) return blockSpot(p, slot, b.x, b.z, pressingHigh(s, p.team));
   const block = clamp(ballAx * 0.62 + 9, -20, 26);
   let ax = block + slot.ax * 1.05;
   const line = offsideLine(s, p.team);
@@ -140,6 +182,13 @@ function shapeSpot(s: MatchState, p: Player, slot: Slot): { x: number; z: number
   }
   ax = Math.min(ax, Math.max(line - 0.7, ballAx));
   if (slot.role !== "CB") ax = Math.max(ax, back);
+  // Deep in his own third the team takes up its build-up shape.
+  const deep = clamp((-ballAx - 14) / 16, 0, 1);
+  if (deep > 0) {
+    const q = buildSpot(s, p, slot);
+    ax += (Math.min(q.ax, line - 0.7) - ax) * deep;
+    z += (q.z - z) * deep;
+  }
   z = clamp(z, -HALF_W + 2, HALF_W - 2);
   return { x: ax * dir, z };
 }
@@ -209,6 +258,19 @@ export function thinkOffBall(s: MatchState, p: Player, slot: Slot) {
 
   if (has) {
     if (b.owner === p.i) return;
+    // The ball out wide near the byline: the box fills, near post, far post, spot.
+    if (b.owner >= 0 && Math.abs(b.z) > 13 && b.x * dir > HALF_L - 38 && (p.role === "ST" || p.role === "W" || p.role === "CM")) {
+      const near = b.z > 0 ? 1 : -1;
+      const hisSide = p.z * near > 8;
+      if (!(p.role === "W" && hisSide)) {
+        const lane = p.role === "ST" ? [6, near * 3] : p.role === "W" ? [7, -near * 5] : p.slot % 2 ? [12, -near * 2] : [20, near * 6];
+        p.tx = Math.min(HALF_L - lane[0], Math.max(offsideLine(s, p.team) - 0.6, b.x * dir)) * dir;
+        p.tz = lane[1];
+        p.want = dist(p.x, p.z, p.tx, p.tz) > 3 ? sprintOf(p) - 0.5 : JOG;
+        p.dash = 0;
+        return;
+      }
+    }
     p.runT -= 12;
     if (p.dash > 0) {
       // Gone: he doesn't look back until the run is over.
@@ -268,10 +330,12 @@ export function thinkOffBall(s: MatchState, p: Player, slot: Slot) {
     const gx = goalX(p);
     const gd = dist(m.x, m.z, gx, 0) || 1;
     const box = m.x * dir < -30;
-    const close = box ? 1.4 : 3;
-    // Tight at the goal; further out he stays on his line and only leans.
-    const lean = box ? 9 : 4;
-    p.tx = home.x + clamp(m.x + ((gx - m.x) / gd) * close - home.x, -lean, lean);
+    const hunting = pressingHigh(s, p.team) && p.role !== "CB" && p.role !== "FB";
+    const close = box || hunting ? 1.6 : 3;
+    // Tight at the goal or pressing; otherwise he stays on his line and only leans.
+    const lean = hunting ? 40 : box ? 9 : 4;
+    const leanX = hunting || box ? lean : 2;
+    p.tx = home.x + clamp(m.x + ((gx - m.x) / gd) * close - home.x, -leanX, leanX);
     p.tz = home.z + clamp(m.z + (-m.z / gd) * close - home.z, -lean, lean);
     p.want = recover(p, p.tx, p.tz);
     p.faceBall = true;
@@ -409,7 +473,7 @@ export function thinkCarrier(s: MatchState, p: Player) {
     }
     if (men > 0) {
       const plan = planCross(s, p, bx, bz, bi, 0.6);
-      options.push({ v: 1.9 + men * 0.42 + (ax - 30) * 0.05 + rnd(s), go: () => startKick(s, p, plan) });
+      options.push({ v: 2.2 + men * 0.5 + (ax - 30) * 0.09 + rnd(s), go: () => startKick(s, p, plan) });
     }
   }
 
@@ -423,7 +487,10 @@ export function thinkCarrier(s: MatchState, p: Player) {
     let room = 1e9;
     for (const o of s.players) if (o.team !== p.team) room = Math.min(room, dist2(o.x, o.z, qx, qz));
     let v = Math.min(Math.sqrt(room), 9) * 0.26 + cx * dir * 1.4;
-    if (ax > HALF_L - 30) v += (-Math.sign(p.z) * cz) * 0.5;
+    // A wide man goes down the line to the byline; the others come inside.
+    if (Math.abs(p.z) > 14 && (p.role === "W" || p.role === "FB")) {
+      if (ax > HALF_L - 40) v += cx * dir * (ax < HALF_L - 7 ? 1.3 : -1);
+    } else if (ax > HALF_L - 30) v += (-Math.sign(p.z) * cz) * 0.5;
     if (v > carryV) { carryV = v; ux = cx; uz = cz; }
   }
   const carry = carryV * 0.9 + (near > 5 ? 1 : 0) + rnd(s) * 0.7 + p.dribble * 0.6 + (b.since < 24 ? 0.9 : 0);
@@ -454,18 +521,25 @@ export function setPieceSpot(s: MatchState, p: Player, slot: Slot, set: SetPiece
   const attacking = set.team === p.team;
   const n = p.slot;
   if (set.kind === "kickoff") {
-    const home = { x: (slot.ax * 0.8 - 8) * dir, z: slot.z * 0.9 };
-    home.x = Math.min(home.x * dir, -1) * dir;
-    if (attacking && slot.role === "ST") return { x: -dir * 2, z: n % 2 ? 7 : -7 };
-    return home;
+    // Each in his own half, and only the taker inside the circle.
+    let x = Math.min(slot.ax * 0.8 - 8, -1), z = slot.z * 0.9;
+    if (attacking && slot.role === "ST") { x = -1.5; z = n % 2 ? 11 : -11; }
+    const r = dist(0, 0, x, z) || 1;
+    if (r < CIRCLE_CLEAR) { x *= CIRCLE_CLEAR / r; z *= CIRCLE_CLEAR / r; }
+    return { x: x * dir, z };
   }
   if (set.kind === "penalty") {
     if (attacking) return { x: dir * (HALF_L - 20 + (n % 3)), z: (n - 5) * 3 };
     return { x: dir * -(HALF_L - 20 + (n % 3)), z: (n - 5) * 3 + 1 };
   }
   if (set.kind === "goalkick") {
-    if (attacking) return { x: dir * clamp(slot.ax + 12, -36, 18), z: slot.z * 1.05 };
-    return { x: dir * clamp(slot.ax + 12, -24, 30), z: slot.z * 0.9 };
+    if (attacking) {
+      const q = buildSpot(s, p, slot);
+      return { x: q.ax * dir, z: q.z };
+    }
+    // Pressing it: up to the edge of their box and no further until it's kicked.
+    const q = blockSpot(p, slot, set.x, set.z, true);
+    return { x: clamp(q.x * dir, -HALF_L, HALF_L - BOX_D - 1) * dir, z: q.z };
   }
   if (set.kind === "corner") {
     const gx = set.x > 0 ? 1 : -1;
@@ -524,7 +598,7 @@ export function takeSetPiece(s: MatchState, p: Player, set: SetPiece) {
     return best;
   };
   if (set.kind === "kickoff") {
-    const m = nearest(14) ?? mates[0];
+    const m = nearest(19) ?? mates[0];
     startKick(s, p, planPass(s, p, m, 0.4));
     return;
   }
@@ -545,11 +619,17 @@ export function takeSetPiece(s: MatchState, p: Player, set: SetPiece) {
     return;
   }
   if (set.kind === "goalkick") {
+    // Short when somebody is really free, long over the press when not.
     const m = nearest(30);
-    if (m) startKick(s, p, planPass(s, p, m, 0.6));
+    if (m && laneMargin(s, p, m.x, m.z, rollPace(dist(p.x, p.z, m.x, m.z), 7)) > 0.4) startKick(s, p, planPass(s, p, m, 0.6));
     else {
       const fwd = mates.filter((q) => q.role === "ST" || q.role === "W");
-      const t = fwd[Math.floor(rnd(s) * fwd.length)] ?? mates[0];
+      let t = fwd[0] ?? mates[0], room = -1;
+      for (const f of fwd) {
+        let open = 1e9;
+        for (const o of s.players) if (o.team !== p.team) open = Math.min(open, dist(o.x, o.z, f.x, f.z));
+        if (open + rnd(s) * 2 > room) { room = open; t = f; }
+      }
       const plan = planLob(s, p, t.x, t.z, t.i, 0.8);
       startKick(s, p, { ...plan, speed: 24, kind: Kick.GkPunt });
     }

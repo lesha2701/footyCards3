@@ -8,7 +8,10 @@ import { Act, HZ, Kick, type MatchState, type Player } from "@/lib/match3d/core"
 
 import { BAKE_FPS, type Baked } from "./baked";
 
-const FADE = 0.14;
+const FADE = 0.2;
+/** A run, a sprint or a sidestep lasts at least this long (s): a body doesn't
+ * change gait every other step. */
+const GAIT_MIN = 0.28;
 const QUICK = 0.08;
 /** When the ball leaves the hands or the foot in the match's own clips (s). */
 const CONTACT: Record<string, number> = { throw_in: 0.68, penalty: 0.73, gk_throw: 1.53, gk_roll: 1.13, gk_dropkick: 2.1 };
@@ -32,6 +35,7 @@ export class Motion {
   private loop: Uint8Array;
   private held: (Pick | null)[];
   private lastAct: Int8Array;
+  private gait: Float32Array;
   readonly pose: Pose[];
 
   constructor(private readonly baked: Baked, private readonly moves: Moves, private readonly paces: Paces, n: number) {
@@ -45,6 +49,7 @@ export class Motion {
     this.fadeLen = new Float32Array(n).fill(FADE);
     this.held = new Array(n).fill(null);
     this.lastAct = new Int8Array(n).fill(-1);
+    this.gait = new Float32Array(n);
     this.pose = Array.from({ length: n }, () => ({ rowA: 0, rowB: 0, w: 0 }));
   }
 
@@ -157,7 +162,8 @@ export class Motion {
       return { name, loop: true, speed: Math.max(0.8, v / 3.6), fade: FADE };
     }
     if (p.faceBall && v < 3.2 && p.duty === 1 && this.has("jockey")) return { name: "jockey", loop: true, speed: 1, fade: FADE };
-    if (v > 6.3) return { name: "sprint", loop: true, speed: v / this.paces.sprint, fade: FADE };
+    // Up into a sprint later than down out of it.
+    if (v > (this.clip[p.i] === "sprint" ? 5.9 : 6.5)) return { name: "sprint", loop: true, speed: v / this.paces.sprint, fade: FADE };
     return { name: "run", loop: true, speed: Math.max(0.55, v / this.paces.run), fade: FADE };
   }
 
@@ -212,7 +218,15 @@ export class Motion {
       if (pick) this.enter(i, pick);
     }
     const pick = this.held[i] ?? this.locomotion(p, s);
-    if (!this.held[i]) this.enter(i, pick);
+    this.gait[i] += dt;
+    if (!this.held[i]) {
+      const stopping = pick.name.endsWith("idle") || pick.name === "gk_set";
+      if (pick.name !== this.clip[i] && (this.gait[i] >= GAIT_MIN || stopping || this.loop[i] === 0)) {
+        this.enter(i, pick);
+        this.gait[i] = 0;
+      }
+      if (pick.name !== this.clip[i]) { this.step(i, dt, Math.max(0.55, pick.speed)); return; }
+    }
     this.step(i, dt, pick.speed);
   }
 

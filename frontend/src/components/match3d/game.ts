@@ -7,7 +7,7 @@ import * as THREE from "three";
 import { ballGeometry } from "@/components/freeKick3d/textures";
 import { crowdChant, crowdHush, crowdTension, playFreeKickSfx, startCrowd } from "@/lib/freeKick3d/sfx";
 import {
-  Act, BALL_R, HALF_L, HALF_W, HZ, Kick, PRED_STEP, Phase, TICK, type MatchEvent, type MatchState, type Setup,
+  Act, BALL_R, HALF_L, HALF_W, HZ, Kick, PRED_STEP, Phase, TICK, clamp, type MatchEvent, type MatchState, type Setup,
 } from "@/lib/match3d/core";
 import { clockText, createMatch, passTarget, stepMatch, type Input, type Press } from "@/lib/match3d/engine";
 
@@ -59,13 +59,16 @@ export type GameHooks = {
 
 const FPS_SAMPLE = 90;
 const DPR_MIN = 1;
-const DPR_MAX = 1.75;
+const DPR_MAX = 2;
 const NEAR_LOD = 46;
 const RING = 420;
 const REC = 3 + 7 * PEOPLE;
 const REPLAY_RATE = 0.5;
 /** Ticks into the celebration when the replay cuts in. */
 const REPLAY_AT = 100;
+/** The whole match runs a touch under real speed: it reads heavier, more like
+ * grown men on grass, and the clips keep their weight. */
+const GAME_SPEED = 0.85;
 const RING_SEGMENTS = 64;
 /** How near a touch has to come to a man to mean him (px). */
 const TOUCH_REACH = 48;
@@ -102,6 +105,9 @@ export class MatchGame {
   private aimAt = -1;
   /** The ring under the human's man is his legs: the arc left is what's left. */
   private readonly ringBack: THREE.Mesh;
+  private readonly speed = new Float32Array(22);
+  private readonly roll = new Float32Array(22);
+  private readonly pitch = new Float32Array(22);
   private readonly landing: THREE.Mesh;
   private readonly trail: { mesh: THREE.Mesh; pos: Float32Array; at: number; attr: THREE.BufferAttribute; fade: Float32Array; fadeAttr: THREE.BufferAttribute; x: Float32Array; y: Float32Array; z: Float32Array; on: number };
   private readonly px = new Float32Array(22);
@@ -307,7 +313,7 @@ export class MatchGame {
   };
 
   private live(dt: number) {
-    this.acc += dt;
+    this.acc += dt * GAME_SPEED;
     while (this.acc >= TICK) {
       this.acc -= TICK;
       this.tick();
@@ -420,9 +426,9 @@ export class MatchGame {
     });
   }
 
-  private place(i: number, x: number, y: number, z: number, yaw: number, a: number, b: number, w: number) {
+  private place(i: number, x: number, y: number, z: number, yaw: number, a: number, b: number, w: number, roll = 0, pitch = 0) {
     const dx = x - this.camera.position.x, dz = z - this.camera.position.z;
-    this.squad.set(i, x, y, z, yaw, a, b, w, dx * dx + dz * dz < NEAR_LOD * NEAR_LOD);
+    this.squad.set(i, x, y, z, yaw, a, b, w, dx * dx + dz * dz < NEAR_LOD * NEAR_LOD, roll, pitch);
   }
 
   private draw(alpha: number, dt: number) {
@@ -433,9 +439,16 @@ export class MatchGame {
       const target = Math.atan2(p.hx, p.hz);
       if (this.motion.turning(i)) this.turned[i] = 1;
       else if (this.turned[i]) { this.turned[i] = 0; this.yaw[i] = target; }
-      else this.yaw[i] += shortest(this.yaw[i], target) * damp(22, dt);
+      else this.yaw[i] += shortest(this.yaw[i], target) * damp(13, dt);
+      // Into the bends, and over the toes when he pushes off.
+      const v = Math.sqrt(p.vx * p.vx + p.vz * p.vz);
+      const free = p.act === Act.None;
+      const dv = dt > 0 ? (v - this.speed[i]) / dt : 0;
+      this.speed[i] = v;
+      this.roll[i] += ((free ? clamp(-shortest(this.yaw[i], target) * v * 0.075, -0.17, 0.17) : 0) - this.roll[i]) * damp(9, dt);
+      this.pitch[i] += ((free ? clamp(dv * 0.018, -0.07, 0.1) : 0) - this.pitch[i]) * damp(7, dt);
       const pose = this.motion.pose[i];
-      this.place(i, this.px[i] + (p.x - this.px[i]) * alpha, this.pa[i] + (p.air - this.pa[i]) * alpha, this.pz[i] + (p.z - this.pz[i]) * alpha, this.yaw[i], pose.rowA, pose.rowB, pose.w);
+      this.place(i, this.px[i] + (p.x - this.px[i]) * alpha, this.pa[i] + (p.air - this.pa[i]) * alpha, this.pz[i] + (p.z - this.pz[i]) * alpha, this.yaw[i], pose.rowA, pose.rowB, pose.w, this.roll[i], this.pitch[i]);
     }
     for (let i = 0; i < 3; i++) {
       const o = this.off, v2 = o.vx[i] ** 2 + o.vz[i] ** 2;

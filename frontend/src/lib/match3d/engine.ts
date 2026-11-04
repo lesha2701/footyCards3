@@ -797,6 +797,7 @@ function take(s: MatchState, p: Player) {
     s.teams[p.team].passesOk += 1;
   }
   if (was >= 0 && was !== p.i) s.prevTouch = was;
+  if (s.poss !== p.team) s.lostAt[s.poss] = s.tick;
   b.owner = p.i; b.last = p.i; b.kick = Kick.None; b.to = -1; b.since = 0;
   b.vy = 0; b.y = BALL_R;
   p.touch = 8;
@@ -851,6 +852,8 @@ function headOrVolley(s: MatchState, p: Player, foot: boolean) {
     const pace = foot ? 15 : 10 + rnd(s) * 4;
     let ux = dir, uz = rndN(s);
     if (x < -20) uz += p.z > 0 ? 0.6 : -0.6;
+    // Under pressure at his own goal he gets anything on it: behind, for a corner.
+    if (x < -HALF_L + 16 && rnd(s) < 0.4) ux = -dir * (0.7 + rnd(s) * 0.5);
     const l = Math.sqrt(ux * ux + uz * uz);
     ux /= l; uz /= l;
     b.vx = ux * pace; b.vz = uz * pace; b.vy = 1.5 + rnd(s) * 3;

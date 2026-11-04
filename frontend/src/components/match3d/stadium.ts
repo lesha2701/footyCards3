@@ -1,43 +1,13 @@
-/** The ground of «Матч 3D»: a real pitch with crisp lines, two goals whose
+/** The ground of «Матч 3D»: a real pitch with its lines painted into the grass, two goals whose
  * nets take the ball, a bowl of stands under a roof, boards, masts and sky.
  * All static, a dozen draws; only the nets and the boards move. */
 import * as THREE from "three";
 
-import { NET_TILE, daySkyTexture, groundStripsGeometry, ledTexture, lineProfileTexture, netTexture } from "@/components/freeKick3d/textures";
+import { NET_TILE, daySkyTexture, ledTexture, netTexture } from "@/components/freeKick3d/textures";
 import { BOX_D, BOX_HALF, GOAL_H, GOAL_HALF, HALF_L, HALF_W, NET_DEPTH, PEN_SPOT, SIX_D, SIX_HALF } from "@/lib/match3d/core";
 
 /** Where the sun is (a direction): the shadows on the grass fall from it. */
 export const SUN = new THREE.Vector3(-0.42, 1, 0.34);
-
-const arc = (cx: number, cz: number, r: number, from: number, to: number, n = 48): [number, number][] => {
-  const out: [number, number][] = [];
-  for (let i = 0; i <= n; i++) {
-    const a = from + ((to - from) * i) / n;
-    out.push([cx + r * Math.cos(a), cz + r * Math.sin(a)]);
-  }
-  return out;
-};
-
-function markings(): [number, number][][] {
-  const L = HALF_L, W = HALF_W;
-  const lines: [number, number][][] = [
-    [[-L, -W], [L, -W], [L, W], [-L, W], [-L, -W]],
-    [[0, -W], [0, W]],
-    arc(0, 0, 9.15, 0, Math.PI * 2, 72),
-    arc(0, 0, 0.2, 0, Math.PI * 2, 10),
-  ];
-  for (const d of [1, -1]) {
-    lines.push(
-      [[d * L, -BOX_HALF], [d * (L - BOX_D), -BOX_HALF], [d * (L - BOX_D), BOX_HALF], [d * L, BOX_HALF]],
-      [[d * L, -SIX_HALF], [d * (L - SIX_D), -SIX_HALF], [d * (L - SIX_D), SIX_HALF], [d * L, SIX_HALF]],
-      arc(d * (L - PEN_SPOT), 0, 0.16, 0, Math.PI * 2, 8),
-    );
-    const a = Math.acos((BOX_D - PEN_SPOT) / 9.15);
-    lines.push(d > 0 ? arc(L - PEN_SPOT, 0, 9.15, Math.PI - a, Math.PI + a, 24) : arc(-L + PEN_SPOT, 0, 9.15, -a, a, 24));
-    for (const e of [1, -1]) lines.push(arc(d * L, e * W, 1, d * e > 0 ? Math.PI : d > 0 ? Math.PI / 2 : 0, d * e > 0 ? Math.PI * 1.5 : d > 0 ? Math.PI : Math.PI / 2, 8));
-  }
-  return lines;
-}
 
 /** One side of a net as a grid (the ball pushes the grid). */
 function netSheet(w: number, h: number, nx: number, ny: number, place: (u: number, v: number, out: THREE.Vector3) => void) {
@@ -171,15 +141,38 @@ function tier(a0: number, b0: number, y0: number, a1: number, b1: number, y1: nu
   return geo;
 }
 
+/** The pitch's markings as a distance field, folded into one quarter. */
+const LINES_GLSL = `
+float mcBox(vec2 p, vec2 c, vec2 h) {
+  vec2 q = abs(p - c) - h;
+  return abs(length(max(q, 0.)) + min(max(q.x, q.y), 0.));
+}
+float mcLines(vec2 w) {
+  vec2 a = abs(w);
+  vec2 spot = vec2(${(HALF_L - PEN_SPOT).toFixed(3)}, 0.);
+  float d = mcBox(a, vec2(0.), vec2(${HALF_L.toFixed(3)}, ${HALF_W.toFixed(3)}));
+  d = min(d, a.y < ${HALF_W.toFixed(3)} ? a.x : 1e3);
+  d = min(d, abs(length(a) - 9.15));
+  d = min(d, length(a) - .1);
+  d = min(d, mcBox(a, vec2(${(HALF_L - BOX_D / 2).toFixed(3)}, 0.), vec2(${(BOX_D / 2).toFixed(3)}, ${BOX_HALF.toFixed(3)})));
+  d = min(d, mcBox(a, vec2(${(HALF_L - SIX_D / 2).toFixed(3)}, 0.), vec2(${(SIX_D / 2).toFixed(3)}, ${SIX_HALF.toFixed(3)})));
+  d = min(d, length(a - spot) - .08);
+  if (a.x < ${(HALF_L - BOX_D).toFixed(3)}) d = min(d, abs(length(a - spot) - 9.15));
+  if (a.x < ${HALF_L.toFixed(3)} && a.y < ${HALF_W.toFixed(3)}) d = min(d, abs(length(a - vec2(${HALF_L.toFixed(3)}, ${HALF_W.toFixed(3)})) - 1.));
+  return d;
+}
+`;
+
 function pitchMaterial(grass: THREE.Texture) {
   const mat = new THREE.MeshLambertMaterial({ map: grass, color: "#ffffff" });
   mat.onBeforeCompile = (sh) => {
-    sh.vertexShader = ("varying vec2 vMcWorld;\n" + sh.vertexShader).replace(
+    sh.vertexShader = ("varying highp vec2 vMcWorld;\n" + sh.vertexShader).replace(
       "#include <begin_vertex>",
       "#include <begin_vertex>\nvMcWorld = position.xz;",
     );
-    sh.fragmentShader = (`varying vec2 vMcWorld;
+    sh.fragmentShader = (`varying highp vec2 vMcWorld;
 uniform vec2 uHalf;
+${LINES_GLSL}
 ` + sh.fragmentShader).replace(
       "#include <map_fragment>",
       `#include <map_fragment>
@@ -189,8 +182,23 @@ uniform vec2 uHalf;
        float across = fract((vMcWorld.y + uHalf.y) / 11.333 * .5);
        float cross = smoothstep(.0, .02, across - .5) * (1. - smoothstep(.0, .02, across - .98));
        float mow = mix(mix(.93, 1.07, band), mix(1., 1.14, band), cross);
+       // Slow patches, so the tiling never shows, and the wear of a season.
+       float patchy = texture2D(map, vMapUv * .083).g;
+       float blades = dot(sampledDiffuseColor.rgb, vec3(.3, .6, .1));
+       vec2 mouth = vec2(abs(vMcWorld.x) - uHalf.x + 7., vMcWorld.y);
+       float worn = exp(-dot(mouth, mouth) * .012) + exp(-dot(vMcWorld, vMcWorld) * .012) * .5;
        vec3 turf = mix(vec3(.30, .42, .24), vec3(.44, .62, .34) * mow, inside * .9 + .1);
+       turf *= .86 + patchy * .55;
+       turf = mix(turf, vec3(.52, .50, .30), clamp(worn * (patchy * 1.5 - .1), 0., .42) * inside);
        diffuseColor.rgb = diffuseColor.rgb * 1.95 * turf;
+       // The paint is in the grass: blades break its edge and show through it,
+       // and it takes the same light and the same shadows as they do.
+       float dLine = mcLines(vMcWorld) + (blades - .3) * .1;
+       float aa = max(fwidth(dLine), .002);
+       float half0 = max(.09, aa * .6);
+       float paint = (1. - smoothstep(half0 - aa * .6, half0 + aa * .6, dLine)) * min(1., .1 / half0 + .42);
+       vec3 chalk = vec3(.66, .71, .6) * (.72 + blades * .95);
+       diffuseColor.rgb = mix(diffuseColor.rgb, chalk, paint * .8);
        // The near stand's shadow on the touchline, with a soft, curved edge.
        float edge = uHalf.y - 9. - 1.4 * sin(vMcWorld.x * .035) - vMcWorld.x * .06;
        diffuseColor.rgb *= mix(1., .7, smoothstep(edge - .5, edge + .5, vMcWorld.y));`,
@@ -198,6 +206,22 @@ uniform vec2 uHalf;
     sh.uniforms.uHalf = { value: new THREE.Vector2(HALF_L, HALF_W) };
   };
   mat.customProgramCacheKey = () => "match3d-pitch";
+  return mat;
+}
+
+/** The people in the stands: a sharper mip than the angle asks for, a harder
+ * contrast, and the roof's shade falling towards the back. */
+function crowdMaterial(map: THREE.Texture) {
+  const mat = new THREE.MeshBasicMaterial({ map, color: "#ffffff" });
+  mat.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace(
+      "#include <map_fragment>",
+      `vec4 crowd = texture2D(map, vMapUv, -1.4);
+       crowd.rgb = clamp((crowd.rgb - .22) * 1.3 + .22, 0., 1.);
+       diffuseColor.rgb *= crowd.rgb * mix(.98, .66, vMapUv.y * vMapUv.y);`,
+    );
+  };
+  mat.customProgramCacheKey = () => "match3d-crowd";
   return mat;
 }
 
@@ -228,15 +252,6 @@ export function makeStadium(textures: { grass: THREE.Texture; stands: THREE.Text
   // Laid flat in its own coordinates: the shader reads the pitch from them.
   ground.geometry.rotateX(-Math.PI / 2);
 
-  const profile = own(lineProfileTexture());
-  profile.generateMipmaps = true;
-  const lines = add(new THREE.Mesh(
-    own(groundStripsGeometry(markings(), 0.26)),
-    own(new THREE.MeshBasicMaterial({ color: "#ffffff", alphaMap: profile, transparent: true, depthWrite: false, opacity: 0.96 })),
-  ));
-  lines.position.y = 0.012;
-  lines.renderOrder = 0;
-
   const netTex = own(netTexture());
   netTex.wrapS = netTex.wrapT = THREE.RepeatWrapping;
   netTex.anisotropy = 4;
@@ -246,8 +261,8 @@ export function makeStadium(textures: { grass: THREE.Texture; stands: THREE.Text
   // The stands: two tiers of people, a band between them, and a roof.
   const st = textures.stands;
   st.wrapS = THREE.RepeatWrapping;
-  st.anisotropy = 4;
-  const crowdMat = own(new THREE.MeshBasicMaterial({ map: st, color: "#d9dade" }));
+  st.anisotropy = 8;
+  const crowdMat = own(crowdMaterial(st));
   add(new THREE.Mesh(own(tier(61, 43, 1.2, 84, 66, 15, 16)), crowdMat));
   add(new THREE.Mesh(own(tier(86, 68, 19, 112, 94, 42, 20)), crowdMat));
   add(new THREE.Mesh(own(tier(84, 66, 15, 86, 68, 19, 8)), own(new THREE.MeshBasicMaterial({ color: "#20344e" }))));

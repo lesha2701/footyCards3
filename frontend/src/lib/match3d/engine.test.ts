@@ -168,4 +168,32 @@ describe("match3d engine", () => {
     expect(n).toBeGreaterThan(20);
     expect(deep / n).toBeLessThan(7);
   });
+
+  it("at a kick-off only the taker is in the circle, everybody in his own half", () => {
+    for (const seed of [1, 2, 3]) {
+      const s = createMatch({ ...SETUP, seed }, 0);
+      for (const p of s.players) {
+        if (p.i === s.set!.taker) continue;
+        expect(Math.sqrt(p.x * p.x + p.z * p.z)).toBeGreaterThan(9.15);
+        expect(p.x * (p.team === 0 ? 1 : -1)).toBeLessThan(0);
+      }
+    }
+  });
+
+  it("at a goal kick he has men near him and the other side waits outside the box", () => {
+    const s = createMatch(SETUP, null);
+    for (let i = 0; i < 700 && s.phase !== Phase.Play; i++) stepMatch(s, NO_INPUT);
+    ballAt(s.ball, -53.4, BALL_R, 20);
+    s.ball.owner = -1; s.ball.vx = -1; s.ball.vz = 0; s.ball.last = s.players.find((p) => p.team === 1)!.i;
+    for (let i = 0; i < 240 && !(s.set && s.set.kind === "goalkick"); i++) stepMatch(s, NO_INPUT);
+    expect(s.set?.kind).toBe("goalkick");
+    for (let i = 0; i < 200 && s.set; i++) {
+      stepMatch(s, NO_INPUT);
+      if (s.set && s.set.t === 100) {
+        const gk = s.players[s.set.taker];
+        const near = s.players.filter((p) => p.team === gk.team && p.i !== gk.i && Math.abs(p.x - gk.x) < 26 && Math.abs(p.z - gk.z) < 22);
+        expect(near.length).toBeGreaterThanOrEqual(3);
+      }
+    }
+  });
 });
