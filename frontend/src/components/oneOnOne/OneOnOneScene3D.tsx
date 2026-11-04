@@ -756,13 +756,18 @@ function Players({
       });
     }
   }, [man, keeper, squad, quality]);
+  // Apart: the squad comes and goes between a match's episodes, and stopping
+  // the striker and the keeper with it would leave them in the bind pose with
+  // the clip still marked as theirs.
   useEffect(() => () => {
     man.p.mixer.stopAllAction();
     keeper.mixer.stopAllAction();
+    materials.dispose();
+  }, [man, keeper, materials]);
+  useEffect(() => () => {
     squad?.mates.forEach((m) => m.p.mixer.stopAllAction());
     squad?.defs.forEach((p) => p.mixer.stopAllAction());
-    materials.dispose();
-  }, [man, keeper, squad, materials]);
+  }, [squad]);
   useEffect(onReady, [onReady]);
   // The keeper's dive in the shot: where his hands go, which side, when.
   const dive = useMemo(() => {
@@ -785,8 +790,12 @@ function Players({
       mates.forEach((m, i) => {
         m.kick = null;
         m.p.root.visible = i < (team?.men.length ?? 0);
+        play(m.p, "idle", false, 0);
       });
-      squad?.defs.forEach((p, i) => (p.root.visible = i < (team?.defs.length ?? 0)));
+      squad?.defs.forEach((p, i) => {
+        p.root.visible = i < (team?.defs.length ?? 0);
+        play(p, "idle", false, 0);
+      });
       s.cast = { active: man, mates: mates.slice(0, team?.men.length ?? 0), defs: squad?.defs.slice(0, team?.defs.length ?? 0) ?? [] };
     }
     const actor = s.cast.active ?? man;

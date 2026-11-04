@@ -38,8 +38,66 @@ export function ExitButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-/** The score bug: the series (one dot per attack) or, in a match, the score,
- * the coins, and under it the striker's strip (name, rating). */
+type MatchScore = { mine: number; theirs: number; opponent: string; penalties?: [number, number] };
+
+/** The score bug of a match: the names round the score (a long one is cut,
+ * the score never moves), the ten episodes as a line under them, and the strip
+ * of what is being played. */
+function MatchBug({
+  index,
+  total,
+  results,
+  coins,
+  name,
+  rating,
+  match,
+}: {
+  index: number;
+  total: number;
+  results: OneOnOneOutcome[];
+  coins: number;
+  name: string;
+  rating: number;
+  match: MatchScore;
+}) {
+  const side = "max-w-[108px] flex-1 truncate px-2 py-1 text-[11px] font-semibold text-white";
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <div className="min-w-[136px] overflow-hidden rounded-md bg-[#0b1220]/90 shadow-lg shadow-black/40 backdrop-blur">
+        <div className="flex items-stretch">
+          <span className={`${side} text-right`}>Ты</span>
+          <span className="flex shrink-0 items-center bg-accent-lime px-2 font-mono text-xs font-black text-black">
+            {match.mine}:{match.theirs}
+          </span>
+          <span className={side}>{match.opponent}</span>
+        </div>
+        {match.penalties ? (
+          <div className="bg-black/40 py-px text-center font-mono text-[10px] font-bold text-accent-lime">
+            пен. {match.penalties[0]}:{match.penalties[1]}
+          </div>
+        ) : (
+          <div className="flex h-1 gap-px">
+            {Array.from({ length: total }, (_, i) => (
+              <span key={i} className={`flex-1 ${results[i] ? DOT[results[i]] : i === index ? "animate-pulse bg-white" : "bg-white/20"}`} />
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-1.5 whitespace-nowrap rounded-sm bg-black/60 px-2 py-0.5 text-[10px] uppercase tracking-wide text-white backdrop-blur">
+        <span className="h-3 w-0.5 bg-accent-lime" />
+        <span className="font-semibold">{name}</span>
+        <span className="font-mono text-accent-lime">{rating}</span>
+        <span className="flex items-center gap-0.5 font-mono font-bold text-accent-lime">
+          · {coins}
+          <IconCoin size={10} />
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** The score bug: the series (one dot per attack), the coins, and under it
+ * the striker's strip (name, rating). A match has its own, above. */
 export function ScoreBug({
   index,
   total,
@@ -55,37 +113,25 @@ export function ScoreBug({
   coins: number;
   name: string;
   rating: number;
-  match?: { mine: number; theirs: number; opponent: string; penalties?: [number, number] };
+  match?: MatchScore;
 }) {
+  if (match) return <MatchBug index={index} total={total} results={results} coins={coins} name={name} rating={rating} match={match} />;
   return (
     <div className="flex flex-col items-end gap-1 font-display">
       <div className="flex items-stretch overflow-hidden rounded-md shadow-lg shadow-black/40">
         <div className="flex items-center bg-accent-lime px-2 text-[11px] font-black italic tracking-tight text-black">VFC</div>
         <div className="flex items-center gap-2 bg-[#0b1220]/90 px-2.5 py-1 backdrop-blur">
-          <span className="whitespace-nowrap text-[11px] font-bold uppercase tracking-wider text-white">
-            {match ? (
-              <>
-                Ты {match.mine}:{match.theirs} {match.opponent}
-                {match.penalties && ` (${match.penalties[0]}:${match.penalties[1]})`}
-              </>
-            ) : (
-              <>
-                Атака {index + 1}/{total}
-              </>
-            )}
+          <span className="text-[11px] font-bold uppercase tracking-wider text-white">
+            Атака {index + 1}/{total}
           </span>
-          {!match?.penalties && (
-            <span className="flex gap-1">
-              {Array.from({ length: total }, (_, i) => (
-                <span
-                  key={i}
-                  className={`${match ? "h-1.5 w-1.5" : "h-2 w-2"} rounded-full ${
-                    results[i] ? DOT[results[i]] : i === index ? "animate-pulse bg-white" : "bg-white/20"
-                  }`}
-                />
-              ))}
-            </span>
-          )}
+          <span className="flex gap-1">
+            {Array.from({ length: total }, (_, i) => (
+              <span
+                key={i}
+                className={`h-2 w-2 rounded-full ${results[i] ? DOT[results[i]] : i === index ? "animate-pulse bg-white" : "bg-white/20"}`}
+              />
+            ))}
+          </span>
         </div>
         <div className="flex items-center gap-0.5 bg-[#16233a]/90 px-2 font-mono text-xs font-bold text-accent-lime">
           {coins}
