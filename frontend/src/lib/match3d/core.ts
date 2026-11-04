@@ -110,6 +110,8 @@ export type Player = {
   runUp: number;
   /** Next ball touch in the dribble (ticks). */
   touch: number;
+  /** Ticks left of a run in behind, offside if the pass comes late. */
+  dash: number;
   /** Attacking runs. */
   runT: number; runX: number; runZ: number;
   /** Set by the team's brain: 1 presses the ball, 2 covers; 0 holds shape. */

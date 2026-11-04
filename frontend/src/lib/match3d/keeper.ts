@@ -81,7 +81,7 @@ function readShot(s: MatchState, p: Player, c: { z: number; y: number; ticks: nu
   const wide = Math.abs(dz) / reach;
   const b = s.ball;
   const v = speedOf(b);
-  let chance = 1.02 - wide * wide * 0.5 - clamp((v - 20) * 0.022, 0, 0.3);
+  let chance = 1.1 - wide * wide * 0.5 - clamp((v - 20) * 0.022, 0, 0.3);
   // The corners are the hardest, high ones most of all.
   const corner = Math.abs(c.z) / GOAL_HALF;
   if (c.y > 1.7) chance -= corner * 0.34;
@@ -89,6 +89,8 @@ function readShot(s: MatchState, p: Player, c: { z: number; y: number; ticks: nu
   // From far out he sees it all the way.
   chance += clamp(t - 0.55, 0, 1) * 0.42;
   chance += (p.save - 0.75) * 0.8;
+  // From distance he sees it all the way.
+  chance += clamp((dist(b.fromX, b.fromZ, goalX(p), 0) - 17) * 0.035, 0, 0.5);
   p.saves = wide <= 1 && rnd(s) < chance;
   if (Math.abs(dz) < 0.85 && c.y < 2) {
     p.act = Act.Catch; p.actT = 0; p.actLen = 34;

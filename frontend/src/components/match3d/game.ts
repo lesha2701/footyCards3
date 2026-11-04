@@ -65,7 +65,10 @@ const RING = 420;
 const REC = 3 + 7 * PEOPLE;
 const REPLAY_RATE = 0.5;
 /** Ticks into the celebration when the replay cuts in. */
-const REPLAY_AT = 170;
+const REPLAY_AT = 100;
+const RING_SEGMENTS = 64;
+/** How near a touch has to come to a man to mean him (px). */
+const TOUCH_REACH = 48;
 
 const shortest = (a: number, b: number) => {
   let d = b - a;
@@ -97,9 +100,8 @@ export class MatchGame {
   /** Who a pass would go to right now. */
   private readonly aim: THREE.Mesh;
   private aimAt = -1;
-  /** The legs of the human's man, over his head. */
-  private readonly legs = new THREE.Group();
-  private readonly legsFill: THREE.Mesh;
+  /** The ring under the human's man is his legs: the arc left is what's left. */
+  private readonly ringBack: THREE.Mesh;
   private readonly landing: THREE.Mesh;
   private readonly trail: { mesh: THREE.Mesh; pos: Float32Array; at: number; attr: THREE.BufferAttribute; fade: Float32Array; fadeAttr: THREE.BufferAttribute; x: Float32Array; y: Float32Array; z: Float32Array; on: number };
   private readonly px = new Float32Array(22);
@@ -171,10 +173,15 @@ export class MatchGame {
     this.ballShadow = blob;
     this.scene.add(blob);
 
-    this.marker = new THREE.Mesh(new THREE.RingGeometry(0.62, 0.8, 36), new THREE.MeshBasicMaterial({ color: "#d6ff3f", transparent: true, opacity: 0.92, depthWrite: false, toneMapped: false }));
+    const ring = new THREE.RingGeometry(0.62, 0.88, RING_SEGMENTS, 1, Math.PI / 2, -Math.PI * 2);
+    this.marker = new THREE.Mesh(ring.clone(), new THREE.MeshBasicMaterial({ color: "#d6ff3f", transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
     this.marker.rotation.x = -Math.PI / 2;
-    this.marker.renderOrder = 1;
+    this.marker.renderOrder = 2;
     this.scene.add(this.marker);
+    this.ringBack = new THREE.Mesh(ring, new THREE.MeshBasicMaterial({ color: "#000000", transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+    this.ringBack.rotation.x = -Math.PI / 2;
+    this.ringBack.renderOrder = 1;
+    this.scene.add(this.ringBack);
     this.arrow = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.42, 4), new THREE.MeshBasicMaterial({ color: "#d6ff3f", toneMapped: false }));
     this.arrow.rotation.x = Math.PI;
     this.scene.add(this.arrow);
@@ -183,18 +190,6 @@ export class MatchGame {
     this.aim.renderOrder = 1;
     this.aim.visible = false;
     this.scene.add(this.aim);
-    const bar = new THREE.PlaneGeometry(1, 1);
-    bar.translate(0.5, 0, 0);
-    const back = new THREE.Mesh(bar, new THREE.MeshBasicMaterial({ color: "#000000", transparent: true, opacity: 0.6, depthTest: false, depthWrite: false, toneMapped: false }));
-    back.position.x = -0.6;
-    back.scale.set(1.2, 0.17, 1);
-    back.renderOrder = 5;
-    this.legsFill = new THREE.Mesh(bar, new THREE.MeshBasicMaterial({ color: "#d6ff3f", transparent: true, depthTest: false, depthWrite: false, toneMapped: false }));
-    this.legsFill.position.set(-0.56, 0, 0.001);
-    this.legsFill.renderOrder = 6;
-    this.legs.add(back, this.legsFill);
-    this.legs.visible = false;
-    this.scene.add(this.legs);
     this.landing = new THREE.Mesh(new THREE.RingGeometry(0.34, 0.46, 24), new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.55, depthWrite: false, toneMapped: false }));
     this.landing.rotation.x = -Math.PI / 2;
     this.landing.visible = false;
@@ -227,6 +222,22 @@ export class MatchGame {
       return;
     }
     this.press = press;
+  }
+
+  /** The team-mate under a touch (box pixels), -1 if there's none near. */
+  mateAt(x: number, y: number, w: number, h: number): number {
+    const s = this.s;
+    if (s.user < 0) return -1;
+    const team = s.players[s.user].team;
+    const v = new THREE.Vector3();
+    let best = -1, top = TOUCH_REACH;
+    for (const m of s.players) {
+      if (m.team !== team || m.i === s.user) continue;
+      v.set(m.x, 1, m.z).project(this.camera);
+      const d = Math.hypot((v.x + 1) * 0.5 * w - x, (1 - v.y) * 0.5 * h - y);
+      if (d < top) { top = d; best = m.i; }
+    }
+    return best;
   }
 
   skipReplay() {
@@ -488,7 +499,7 @@ export class MatchGame {
     const show = s.user >= 0 && s.phase !== Phase.FullTime && s.phase !== Phase.Goal;
     this.marker.visible = show;
     this.arrow.visible = show;
-    this.legs.visible = show;
+    this.ringBack.visible = show;
     if (s.tick % 6 === 0) this.aimAt = show ? passTarget(s, this.stick.x, -this.stick.y) : -1;
     this.aim.visible = this.aimAt >= 0;
     if (this.aimAt >= 0) {
@@ -501,14 +512,12 @@ export class MatchGame {
       const k = 1 + Math.sin(s.tick * 0.12) * 0.05;
       this.marker.position.set(x, 0.03, z);
       this.marker.scale.set(k, k, 1);
+      this.ringBack.position.set(x, 0.025, z);
+      this.ringBack.scale.set(k, k, 1);
+      this.marker.geometry.setDrawRange(0, 6 * Math.max(1, Math.round(RING_SEGMENTS * p.stamina)));
+      (this.marker.material as THREE.MeshBasicMaterial).color.set(p.stamina > 0.5 ? "#d6ff3f" : p.stamina > 0.25 ? "#fbbf24" : "#ef4444");
       this.arrow.position.set(x, 2.32 + Math.sin(s.tick * 0.09) * 0.06, z);
       this.arrow.rotation.y += dt * 2.4;
-      this.legs.position.set(x, 2.1, z);
-      this.legs.quaternion.copy(this.camera.quaternion);
-      const far = Math.min(2, this.camera.position.distanceTo(this.legs.position) / 45);
-      this.legs.scale.set(far, far, 1);
-      this.legsFill.scale.set(Math.max(0.01, 1.12 * p.stamina), 0.09, 1);
-      (this.legsFill.material as THREE.MeshBasicMaterial).color.set(p.stamina > 0.5 ? "#d6ff3f" : p.stamina > 0.25 ? "#fbbf24" : "#ef4444");
     }
     // Where a ball in the air comes down.
     const b = s.ball;
@@ -643,7 +652,7 @@ export class MatchGame {
     this.marker.visible = false;
     this.arrow.visible = false;
     this.aim.visible = false;
-    this.legs.visible = false;
+    this.ringBack.visible = false;
     this.landing.visible = false;
   }
 

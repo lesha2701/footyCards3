@@ -73,8 +73,11 @@ export function thinkTeam(s: MatchState, team: 0 | 1) {
   if (carrier.team === team) return;
 
   // Without it: the nearest goes, the next covers; the rest pick up men.
-  const byDist = [...outfield].sort((p, q) => dist2(p.x, p.z, b.x, b.z) - dist2(q.x, q.z, b.x, b.z));
   const ax = b.x * dirOf(team);
+  // In front of the back four it's the midfield's ball: they don't step out for it.
+  const high = ax > backLine(s, team) + 9;
+  const cost = (p: Player) => dist(p.x, p.z, b.x, b.z) + (high && (p.role === "CB" || p.role === "FB") ? 12 : 0);
+  const byDist = [...outfield].sort((p, q) => cost(p) - cost(q));
   const pressing = ax < 20 ? 1 : dist(byDist[0].x, byDist[0].z, b.x, b.z) < 26 ? 1 : 0;
   if (pressing && byDist[0]) byDist[0].duty = 1;
   if (byDist[1] && dist(byDist[1].x, byDist[1].z, b.x, b.z) < 16) byDist[1].duty = 2;
@@ -88,7 +91,8 @@ export function thinkTeam(s: MatchState, team: 0 | 1) {
     .filter((o) => o.role !== "GK" && o.i !== carrier.i && o.x * dirOf(team) < 12)
     .sort((p, q) => p.x * dirOf(team) - q.x * dirOf(team));
   for (const o of danger) {
-    let at = -1, near = 26;
+    // Picks up whoever comes into his zone; he doesn't follow him out of it.
+    let at = -1, near = 11;
     free.forEach((m, n) => {
       if (m.mark < 0) {
         const d = dist(m.x, m.z, o.x, o.z);
@@ -99,28 +103,43 @@ export function thinkTeam(s: MatchState, team: 0 | 1) {
   }
 }
 
+/** The back four's line without the ball, flat, up the pitch from their goal. */
+function backLine(s: MatchState, team: 0 | 1) {
+  const ax = s.ball.x * dirOf(team);
+  return clamp(ax - 17, -HALF_L + 9, 0);
+}
+
+/** How far ahead of the back line each role keeps without the ball. */
+const LINE_GAP: Record<Player["role"], number> = { GK: 0, CB: 0, FB: 0, DM: 7, CM: 13, W: 15, ST: 27 };
+
+/** Without the ball: three lines, flat and close, sliding together to the ball. */
+function blockSpot(s: MatchState, p: Player, slot: Slot) {
+  const dir = dirOf(p.team);
+  const b = s.ball;
+  const ax = Math.max(backLine(s, p.team), -HALF_L + 5) + LINE_GAP[slot.role];
+  const z = slot.z * 0.6 + clamp(b.z, -26, 26) * 0.5;
+  return { x: ax * dir, z: clamp(z, -HALF_W + 3, HALF_W - 3) };
+}
+
 /** Where his place in the shape is right now. */
 function shapeSpot(s: MatchState, p: Player, slot: Slot): { x: number; z: number } {
   const dir = dirOf(p.team);
   const b = s.ball;
   const ballAx = b.x * dir;
   const has = s.poss === p.team;
-  const block = has ? clamp(ballAx * 0.62 + 9, -20, 26) : clamp(ballAx * 0.62 - 7, -27, 15);
-  const compress = has ? 1.05 : 0.7;
-  let ax = block + slot.ax * compress;
+  if (!has) return blockSpot(s, p, slot);
+  const block = clamp(ballAx * 0.62 + 9, -20, 26);
+  let ax = block + slot.ax * 1.05;
   const line = offsideLine(s, p.team);
   const back = -offsideLine(s, p.team === 0 ? 1 : 0);
-  const wide = has ? 1.02 : 0.74;
-  let z = slot.z * wide + clamp(b.z, -24, 24) * (has ? 0.2 : 0.42);
+  let z = slot.z * 1.02 + clamp(b.z, -24, 24) * 0.2;
   if (slot.role === "CB" || slot.role === "FB") {
-    if (!has) ax = Math.min(ax, ballAx - 2);
     ax = Math.max(ax, -HALF_L + 8);
     // The line holds together, a bit behind the block, never deep for no reason.
-    if (has) ax = Math.min(ax, ballAx - 1 + (slot.role === "FB" ? 14 : 0));
+    ax = Math.min(ax, ballAx - 1 + (slot.role === "FB" ? 14 : 0));
   }
-  if (!has) ax = Math.min(ax, ballAx + 18);
   ax = Math.min(ax, Math.max(line - 0.7, ballAx));
-  if (has && slot.role !== "CB") ax = Math.max(ax, back);
+  if (slot.role !== "CB") ax = Math.max(ax, back);
   z = clamp(z, -HALF_W + 2, HALF_W - 2);
   return { x: ax * dir, z };
 }
@@ -161,12 +180,20 @@ function chooseRun(s: MatchState, p: Player, home: { x: number; z: number }) {
   p.runX = bx; p.runZ = bz; p.runT = 50 + Math.floor(rnd(s) * 60);
 }
 
+/** How fast he gets back to his place: flat out when the ball is lost behind him. */
+function recover(p: Player, x: number, z: number) {
+  const d = dist(p.x, p.z, x, z);
+  const out = (p.x - x) * dirOf(p.team) > 3;
+  return d > 3 && out ? sprintOf(p) - 0.3 : d > 4 ? RUN : d > 1 ? JOG : 2;
+}
+
 export function thinkOffBall(s: MatchState, p: Player, slot: Slot) {
   const b = s.ball;
   const dir = dirOf(p.team);
   const home = shapeSpot(s, p, slot);
   const has = s.poss === p.team;
   p.faceBall = false;
+  if (!has) p.dash = 0;
 
   if (p.duty === 1 && b.owner < 0) {
     // After the ball: where he can cut it off.
@@ -183,6 +210,23 @@ export function thinkOffBall(s: MatchState, p: Player, slot: Slot) {
   if (has) {
     if (b.owner === p.i) return;
     p.runT -= 12;
+    if (p.dash > 0) {
+      // Gone: he doesn't look back until the run is over.
+      p.dash -= 12;
+      p.tx = p.runX; p.tz = p.runZ; p.want = sprintOf(p);
+      if (p.dash <= 0) p.runT = 0;
+      return;
+    }
+    const line0 = offsideLine(s, p.team);
+    const gap = line0 - p.x * dir;
+    const up = p.role === "ST" || p.role === "W" || (p.role === "CM" && rnd(s) < 0.3);
+    if (up && b.owner >= 0 && gap > -1 && gap < 9 && (p.x - b.x) * dir > 4 && line0 < HALF_L - 9 && p.stamina > 0.3 && rnd(s) < 0.16) {
+      p.dash = 96;
+      p.runX = clamp(line0 + 14, -HALF_L, HALF_L - 7) * dir;
+      p.runZ = clamp(p.z * 0.75 + (b.z - p.z) * 0.1, -HALF_W + 4, HALF_W - 4);
+      p.tx = p.runX; p.tz = p.runZ; p.want = sprintOf(p);
+      return;
+    }
     if (p.runT <= 0) chooseRun(s, p, home);
     const urgent = dist(p.x, p.z, p.runX, p.runZ) > 7;
     p.tx = p.runX; p.tz = p.runZ;
@@ -223,17 +267,18 @@ export function thinkOffBall(s: MatchState, p: Player, slot: Slot) {
     const m = s.players[p.mark];
     const gx = goalX(p);
     const gd = dist(m.x, m.z, gx, 0) || 1;
-    const close = m.x * dir < -28 ? 1.4 : 3;
-    p.tx = m.x + ((gx - m.x) / gd) * close;
-    p.tz = m.z + (-m.z / gd) * close;
-    p.tx = p.tx * 0.7 + home.x * 0.3;
-    p.tz = p.tz * 0.7 + home.z * 0.3;
-    p.want = RUN;
+    const box = m.x * dir < -30;
+    const close = box ? 1.4 : 3;
+    // Tight at the goal; further out he stays on his line and only leans.
+    const lean = box ? 9 : 4;
+    p.tx = home.x + clamp(m.x + ((gx - m.x) / gd) * close - home.x, -lean, lean);
+    p.tz = home.z + clamp(m.z + (-m.z / gd) * close - home.z, -lean, lean);
+    p.want = recover(p, p.tx, p.tz);
     p.faceBall = true;
     return;
   }
   p.tx = home.x; p.tz = home.z;
-  p.want = dist(p.x, p.z, home.x, home.z) > 6 ? RUN : JOG;
+  p.want = has ? (dist(p.x, p.z, home.x, home.z) > 6 ? RUN : JOG) : recover(p, home.x, home.z);
   p.faceBall = true;
 }
 
@@ -298,8 +343,12 @@ export function thinkCarrier(s: MatchState, p: Player) {
   // Shooting.
   const shot = shotValue(s, p);
   const wide = Math.abs(p.z) > 22;
-  const lim = dist(p.x, p.z, gx, 0) < 19 ? 0.09 : 0.025 + (1 - p.shot) * 0.07;
-  if (shot.xg > lim + rnd(s) * (near < 4 ? 0.03 : 0.07) && !(wide && ax > 40)) {
+  const range = dist(p.x, p.z, gx, 0);
+  // Close in he takes what's on. From further he has to fancy it, and it is
+  // asked ten times a second, so rarely: otherwise everything gets hit.
+  const fancy = range < 19 || (range < 28 && rnd(s) < 0.012 + p.shot * 0.02);
+  const lim = range < 19 ? 0.07 : 0.03 + (1 - p.shot) * 0.05;
+  if (fancy && shot.xg > lim + rnd(s) * (near < 4 ? 0.03 : 0.07) && !(wide && ax > 40)) {
     const power = clamp(0.45 + dist(p.x, p.z, gx, 0) * 0.021 + rnd(s) * 0.12, 0.4, 0.97);
     const curl = dist(p.x, p.z, gx, 0) > 15 && rnd(s) < 0.4 ? (p.z * dir > 0 ? 0.7 : -0.7) : 0;
     startKick(s, p, planShot(s, p, shot.aim + rndN(s) * 0.15, power, curl, false));
@@ -308,6 +357,8 @@ export function thinkCarrier(s: MatchState, p: Player) {
 
   const options: Option[] = [];
   const line = offsideLine(s, p.team);
+  // Now and then he misjudges the line by a step, as people do.
+  const misread = rnd(s) < 0.15 ? 1.4 : 0;
   for (const m of s.players) {
     if (m.team !== p.team || m.i === p.i || m.act === Act.Down || m.off) continue;
     const d0 = dist(p.x, p.z, m.x, m.z);
@@ -315,7 +366,7 @@ export function thinkCarrier(s: MatchState, p: Player) {
     const maxD = m.role === "GK" ? 22 : p.pass > 0.7 ? 44 : 36;
     if (d0 > maxD) continue;
     if (m.role === "GK" && (near > 3 || ax > -18)) continue;
-    const aheadOfLine = m.x * dir > line;
+    const aheadOfLine = m.x * dir > line + misread;
     if (aheadOfLine) continue;
     const pace = clamp(rollPace(d0, 8), 8, 24);
     const t = rollTime(pace, d0);
@@ -334,7 +385,7 @@ export function thinkCarrier(s: MatchState, p: Player) {
       options.push({ v: v - 0.5 + Math.min(open, 8) * 0.1, go: () => startKick(s, p, planLob(s, p, mx, mz, m.i, 0.5)) });
     }
     // The ball behind them for a man running on to it.
-    const runner = (m.role === "ST" || m.role === "W" || m.role === "CM") && (m.x - p.x) * dir > 2;
+    const runner = m.dash > 0 || ((m.role === "ST" || m.role === "W" || m.role === "CM") && (m.x - p.x) * dir > 2);
     if (runner) {
       const plan = planThrough(s, p, m, 0.5);
       const mine = reachTime(m, plan.tx, plan.tz);
@@ -342,7 +393,7 @@ export function thinkCarrier(s: MatchState, p: Player) {
       for (const o of s.players) if (o.team !== p.team) them = Math.min(them, reachTime(o, plan.tx, plan.tz));
       const lm = laneMargin(s, p, plan.tx, plan.tz, plan.speed);
       if (mine < them + 0.15 && lm > -0.4 && plan.tx * dir > line - 8) {
-        options.push({ v: 2.9 + (plan.tx - p.x) * dir * 0.05 + lm * 0.4 + rnd(s) * 1.5, go: () => startKick(s, p, plan) });
+        options.push({ v: 2.9 + (m.dash > 0 ? 1.6 : 0) + (plan.tx - p.x) * dir * 0.05 + lm * 0.4 + rnd(s) * 1.5, go: () => startKick(s, p, plan) });
       }
     }
   }

@@ -134,4 +134,38 @@ describe("match3d engine", () => {
     expect(spent).toBeLessThan(0.9);
     expect(p.stamina).toBeGreaterThan(spent);
   });
+
+  it("after a goal everybody is on his spot for the kick-off at once", () => {
+    const s = createMatch(SETUP, 0);
+    for (let i = 0; i < 900 && s.phase !== Phase.Play; i++) stepMatch(s, NO_INPUT);
+    const p = s.players.find((q) => q.team === 0 && q.role === "ST")!;
+    ballAt(s.ball, 53.2, 0.5, 0);
+    s.ball.vx = 12; s.ball.owner = -1; s.ball.last = p.i;
+    for (let i = 0; i < 400 && s.phase !== Phase.Kickoff; i++) stepMatch(s, NO_INPUT);
+    expect(s.phase).toBe(Phase.Kickoff);
+    for (const q of s.players) expect(q.x * (q.team === 0 ? 1 : -1)).toBeLessThanOrEqual(0.51);
+  });
+
+  it("a touch on a team-mate plays the ball to him", () => {
+    const from = outfield(createMatch(SETUP, 0), -1)[0].i;
+    const s = onBall(from, -10, 5);
+    const m = outfield(s, from)[3];
+    stepMatch(s, { ...NO_INPUT, press: { k: "to", i: m.i } });
+    expect(s.players[from].act).toBe(Act.Kick);
+    expect(s.players[from].plan?.to).toBe(m.i);
+  });
+
+  it("without the ball the back four keep a line", () => {
+    const s = createMatch(SETUP, null);
+    let n = 0, deep = 0;
+    while (s.phase !== Phase.FullTime) {
+      stepMatch(s, NO_INPUT);
+      const c = s.ball.owner >= 0 ? s.players[s.ball.owner] : null;
+      if (s.phase !== Phase.Play || !c || c.team !== 1 || s.tick % 30) continue;
+      const xs = s.players.filter((p) => p.team === 0 && (p.role === "CB" || p.role === "FB") && !p.duty).map((p) => p.x);
+      n += 1; deep += Math.max(...xs) - Math.min(...xs);
+    }
+    expect(n).toBeGreaterThan(20);
+    expect(deep / n).toBeLessThan(7);
+  });
 });

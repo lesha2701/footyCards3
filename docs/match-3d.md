@@ -73,11 +73,23 @@ The help a human gets, all in `engine.ts`:
 - With the ball theirs or loose, the human gets the man nearest to where it is
   going within a fifth of a second of that changing (`userAutoSwitch`). «Смена»
   by hand holds for three quarters of a second.
+- A touch on a team-mate plays the best ball to him (`bestBall`: in behind if
+  he is off and running, on the ground if the lane is open, otherwise over the
+  top). Without the ball the same touch makes him the human's man.
 
-Stamina (`Player.stamina`, a bar over the man): ten seconds of sprint empties
-it, twelve of walking fills it, and tired legs lose a sixth of the top speed.
+Stamina (`Player.stamina`): the ring under the human's man is the gauge. Ten seconds of sprint
+empties it, twelve of walking fills it, and tired legs lose a sixth of the top speed.
 At a sprint the ball runs further from the foot, the turns get wider and feints
 stop selling: dribbling is done at walking pace.
+
+## The team
+
+Without the ball (`blockSpot`) a side is three flat lines 13 metres apart that
+slide together: `backLine` follows the ball, `LINE_GAP` places the rest, and
+nobody follows a man out of his zone except inside the box. Who is ahead of his
+place when the ball goes runs back flat out (`recover`). With the ball the
+forwards start runs in behind from the line (`Player.dash`): a pass that comes
+late finds them offside. After a goal `lineUp` puts everybody on his spot.
 
 ## Testing on a phone
 

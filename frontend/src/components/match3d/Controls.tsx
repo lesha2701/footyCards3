@@ -32,6 +32,9 @@ const BAR_LENGTH = 2 * Math.PI * BAR_R;
 type Slot = keyof typeof ARC;
 type Role = "stick" | "pad" | Slot;
 type Held = { role: "pad" | Slot; at: number; feinted: boolean };
+/** A quick touch on the stick's side still may mean a man. */
+const TAP_MS = 240;
+const TAP_MOVE = 14;
 
 const face: CSSProperties = {
   width: "100%", height: "100%", borderRadius: "50%", border: "2px solid rgba(255,255,255,.3)", background: "rgba(0,0,0,.6)", color: "#fff",
@@ -53,6 +56,7 @@ export default function Controls({ game, hud, w, h, toBox }: { game: MatchGame; 
   useEffect(() => { stick.resize(w, h); pad.resize(w, h); }, [stick, pad, w, h]);
   const fingers = useRef(new Map<number, Role>());
   const held = useRef<Held | null>(null);
+  const stickDown = useRef({ x: 0, y: 0, t: 0 });
   const bigBar = useRef<SVGCircleElement>(null);
   const midBar = useRef<SVGCircleElement>(null);
   const anchor = useRef<HTMLDivElement>(null);
@@ -122,10 +126,18 @@ export default function Controls({ game, hud, w, h, toBox }: { game: MatchGame; 
     }
     if (!started) setStarted(true);
     const p = toBox(e.clientX, e.clientY);
+    const touchMan = () => {
+      const m = game.mateAt(p.x, p.y, w, h);
+      if (m < 0) return false;
+      game.act({ k: "to", i: m });
+      haptic("medium");
+      return true;
+    };
     if (p.x < w / 2) {
-      if (stick.down) return;
+      if (stick.down) { touchMan(); return; }
       fingers.current.set(e.pointerId, "stick");
       stick.start(p);
+      stickDown.current = { x: p.x, y: p.y, t: e.timeStamp };
       syncStick();
       return;
     }
@@ -147,6 +159,9 @@ export default function Controls({ game, hud, w, h, toBox }: { game: MatchGame; 
       else game.contain = true;
       return;
     }
+    const big = centre("big");
+    const onBig = Math.hypot(p.x - big.x, p.y - big.y) < BIG * 0.8;
+    if (!onBig && touchMan()) return;
     if (!held.current && !pad.down) {
       fingers.current.set(e.pointerId, "pad");
       pad.start({ ...p, t: e.timeStamp });
@@ -179,6 +194,11 @@ export default function Controls({ game, hud, w, h, toBox }: { game: MatchGame; 
     if (role === "stick") {
       stick.end();
       syncStick();
+      const d = stickDown.current;
+      if (!cancelled && e.timeStamp - d.t < TAP_MS && Math.hypot(p.x - d.x, p.y - d.y) < TAP_MOVE) {
+        const m = game.mateAt(p.x, p.y, w, h);
+        if (m >= 0) { game.act({ k: "to", i: m }); haptic("medium"); }
+      }
     } else if (role === "mid") {
       game.contain = false;
       if (!held.current) return;
@@ -235,7 +255,7 @@ export default function Controls({ game, hud, w, h, toBox }: { game: MatchGame; 
             <div style={{ ...face, background: LIME, color: "#000", fontSize: 14, fontWeight: 700, border: 0, textShadow: "none" }}>Отбор</div>
             {small("top", "Смена")}
             {small("side", "Подкат")}
-            {small("mid", "Прессинг")}
+            {small("mid", "Помощь", undefined, false)}
           </>
         )}
       </div>

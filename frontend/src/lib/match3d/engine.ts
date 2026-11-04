@@ -25,7 +25,9 @@ export type Input = {
 export type Press =
   | { k: "pass" | "through" | "lob"; power: number }
   | { k: "shot"; power: number; curl: number; chip: boolean }
-  | { k: "feint" | "tackle" | "slide" | "switch" };
+  | { k: "feint" | "tackle" | "slide" | "switch" }
+  /** A touch on a team-mate: the best ball to him, or, without it, him. */
+  | { k: "to"; i: number };
 
 export const NO_INPUT: Input = { mx: 0, mz: 0, sprint: false, press: null, contain: false };
 
@@ -34,7 +36,7 @@ const BRAKE = 15;
 const BODY = 0.78;
 /** How far a footballer's foot gets to a low ball (m). */
 const REACH = 0.85;
-const GOAL_PAUSE = 300;
+const GOAL_PAUSE = 150;
 /** Ticks before a restart can be taken. */
 const SET_MIN = 90;
 const USER_WAIT = 420;
@@ -66,7 +68,7 @@ export function createMatch(setup: Setup, userTeam: 0 | 1 | null = 0): MatchStat
       x: f.ax * dirOf(team), z: f.z, vx: 0, vz: 0, hx: dirOf(team), hz: 0,
       tx: 0, tz: 0, want: 0, faceBall: false,
       act: Act.None, actT: 0, actLen: 0, side: 1, sub: 0, air: 0, plan: null, cool: 0,
-      beat: 0, beatX: 0, beatZ: 0, off: false, stamina: 1, runUp: 0, touch: 0,
+      beat: 0, beatX: 0, beatZ: 0, off: false, stamina: 1, runUp: 0, dash: 0, touch: 0,
       runT: 0, runX: 0, runZ: 0, duty: 0, mark: -1, react: -1, saves: false, hands: 0,
     };
   };
@@ -74,15 +76,23 @@ export function createMatch(setup: Setup, userTeam: 0 | 1 | null = 0): MatchStat
   const s = freshState(setup, players);
   s.user = userTeam === null ? -1 : players.find((p) => p.team === userTeam && p.role === "ST")!.i;
   restart(s, "kickoff", rnd(s) < 0.5 ? 0 : 1, 0, 0);
+  lineUp(s);
+  return s;
+}
+
+/** Everybody on his spot for a kick-off, at once: nobody walks back to it. */
+function lineUp(s: MatchState) {
   for (const p of s.players) {
     const sp = setPieceSpot(s, p, SLOTS[p.team][p.slot], s.set!);
     if (p.role === "GK") { const g = keeperSpot(p, s); p.x = g.x; p.z = g.z; } else { p.x = sp.x; p.z = sp.z; }
-    p.tx = p.x; p.tz = p.z;
+    p.tx = p.x; p.tz = p.z; p.vx = 0; p.vz = 0; p.want = 0;
+    p.act = Act.None; p.dash = 0;
+    const d = dirOf(p.team);
+    p.hx = d; p.hz = 0;
   }
   const t = s.players[s.set!.taker];
-  t.x = 0; t.z = -0.5;
+  t.x = t.team === 0 ? -0.5 : 0.5; t.z = 0;
   ballAt(s.ball, 0, BALL_R, 0);
-  return s;
 }
 
 export const userTeam = (s: MatchState): 0 | 1 | null => (s.user >= 0 ? s.players[s.user].team : null);
@@ -200,10 +210,26 @@ function bestMate(s: MatchState, p: Player, ux: number, uz: number, wantFwd: boo
     for (const o of s.players) if (o.team !== p.team) open = Math.min(open, dist(o.x, o.z, m.x, m.z));
     // The stick says the direction; in that direction, whoever is really on.
     const lane = clamp(laneMargin(s, p, m.x, m.z, rollPace(d, 7)), -4, 1);
-    const v = along * 6 - d * 0.1 + Math.min(open, 6) * 0.35 + lane * 1.8 + (wantFwd ? (dx * dir) * 0.06 : 0) - (m.role === "GK" ? 4 : 0) - (offsideNow(s, p, m) ? 9 : 0);
+    const v = along * 6 - d * 0.1 + Math.min(open, 6) * 0.35 + lane * 1.8 + (wantFwd ? (dx * dir) * 0.06 : 0) - (m.role === "GK" ? 4 : 0) - (offsideNow(s, p, m) ? 4 : 0);
     if (v > top) { top = v; best = m; }
   }
   return best;
+}
+
+/** The best ball to a man he picked by hand: in behind him if he's off and
+ * running on to it, along the ground if it's on, over them if it isn't. */
+function bestBall(s: MatchState, p: Player, m: Player) {
+  const d = dist(p.x, p.z, m.x, m.z);
+  const dir = dirOf(p.team);
+  const running = m.vx * m.vx + m.vz * m.vz > 25 && m.vx * dir > 2 && (m.x - p.x) * dir > 2;
+  if (running) {
+    const t = planThrough(s, p, m, 0.5);
+    if (laneMargin(s, p, t.tx, t.tz, t.speed) > -0.5) return t;
+  }
+  const power = clamp(d / 34, 0.2, 0.9);
+  const plan = planPass(s, p, m, power);
+  if (d < 34 && laneMargin(s, p, plan.tx, plan.tz, plan.speed) > -0.3) return plan;
+  return planLob(s, p, m.x + m.vx * 0.9, m.z + m.vz * 0.9, m.i, 0.5);
 }
 
 function userPress(s: MatchState, p: Player, inp: Input) {
@@ -222,7 +248,24 @@ function userPress(s: MatchState, p: Player, inp: Input) {
     s.switchT = s.tick + 45;
     return;
   }
-  if (s.set && s.set.taker === p.i && s.set.ready && (s.phase === Phase.Dead || s.phase === Phase.Kickoff)) {
+  const taking = !!s.set && s.set.taker === p.i && s.set.ready && (s.phase === Phase.Dead || s.phase === Phase.Kickoff);
+  if (press.k === "to") {
+    const m = s.players[press.i];
+    if (m.team !== p.team || m.i === p.i) return;
+    if (p.act === Act.Hold) {
+      const d = dist(p.x, p.z, m.x, m.z);
+      releaseHands(s, p, m, d, d > 42);
+    } else if (taking && s.set!.kind === "throw") {
+      const d = dist(p.x, p.z, m.x, m.z);
+      startKick(s, p, { kind: Kick.Throw, tx: m.x, ty: 0.9, tz: m.z, speed: clamp(d * 0.5 + 5, 8, 15), curl: 0, to: m.i, err: 0.1, ground: false });
+    } else if (taking || (has && free)) startKick(s, p, bestBall(s, p, m));
+    else if (!has && !s.set && m.role !== "GK") {
+      toMan(s, m.i);
+      s.switchT = s.tick + 45;
+    }
+    return;
+  }
+  if (taking) {
     userSetPiece(s, p, inp, ux, uz);
     return;
   }
@@ -1012,6 +1055,7 @@ export function stepMatch(s: MatchState, inp: Input) {
       const g = s.lastGoal!;
       resetAfterGoal(s);
       restart(s, "kickoff", g.team === 0 ? 1 : 0, 0, 0);
+      lineUp(s);
     }
     return;
   }

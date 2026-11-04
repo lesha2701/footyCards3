@@ -61,6 +61,10 @@ for (let m = 0; m < matches; m++) {
       for (const p of s.players) if (p.team === 0 && p.role !== "GK") top = Math.min(top, Math.hypot(p.x - bb.x, p.z - bb.z));
       const us = Math.hypot(s.players[s.user].x - bb.x, s.players[s.user].z - bb.z);
       c.defTicks++; c.defGap += us - top; if (us - top < 2) c.defNearest++;
+      const back = s.players.filter((p) => p.team === 0 && (p.role === "CB" || p.role === "FB")).map((p) => p.x);
+      const mid = s.players.filter((p) => p.team === 0 && (p.role === "CM" || p.role === "DM")).map((p) => p.x);
+      c.lineSpread = (c.lineSpread ?? 0) + Math.max(...back) - Math.min(...back);
+      c.lineGap = (c.lineGap ?? 0) + Math.abs(mid.reduce((a, v) => a + v, 0) / mid.length - back.reduce((a, v) => a + v, 0) / back.length);
     }
     void wasOwner;
   }
@@ -72,4 +76,5 @@ console.log(`${matches} matches`);
 console.log(`passes ${(c.pass / matches).toFixed(1)}/match: reached ours ${pct(c.passOurs, c.pass)}%, opponent ${pct(c.passTheirs, c.pass)}%, dead ${pct(c.passOut, c.pass)}%; offsides ${(c.off / matches).toFixed(1)}`);
 console.log(`keeper ${(c.gk / matches).toFixed(1)}/match: ours ${pct(c.gkOurs, c.gk)}%, opponent ${pct(c.gkTheirs, c.gk)}%, dead ${pct(c.gkOut, c.gk)}%; ticks as keeper ${(c.userGk / matches).toFixed(0)}`);
 console.log(`defending: within 2 m of the nearest man ${pct(c.defNearest, c.defTicks)}%, mean gap ${(c.defGap / (c.defTicks || 1)).toFixed(1)} m`);
+console.log(`shape without the ball: back four ${(c.lineSpread / (c.defTicks || 1)).toFixed(1)} m deep, back to midfield ${(c.lineGap / (c.defTicks || 1)).toFixed(1)} m`);
 console.log(`shots ${(c.shots / matches).toFixed(1)}, on target ${(c.onT / matches).toFixed(1)}; goals ${(c.g0 / matches).toFixed(1)}:${(c.g1 / matches).toFixed(1)}; stamina at the end ${c.staminaN ? (c.staminaEnd / c.staminaN).toFixed(2) : "-"}`);
