@@ -6,7 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { haptic } from "@/lib/telegram";
 import { enterImmersive } from "@/lib/immersive";
 import { preloadFreeKickSfx } from "@/lib/freeKick3d/sfx";
-import { HALF_L, HALF_W, Phase } from "@/lib/match3d/core";
+import { HALF_L, HALF_W } from "@/lib/match3d/core";
 import type { Press } from "@/lib/match3d/engine";
 
 import { loadMatchAssets } from "./assets";
@@ -204,7 +204,7 @@ function Final({ end, onAgain, onExit }: { end: GameEnd; onAgain: () => void; on
   );
 }
 
-export default function Match3DGame({ onExit, demo = false }: { onExit: () => void; demo?: boolean }) {
+export default function Match3DGame({ onExit, demo = false, onGame }: { onExit: () => void; demo?: boolean; onGame?: (g: MatchGame) => void }) {
   const [box, setBox] = useState<Box>(measure);
   const [stage, setStage] = useState<"intro" | "loading" | "play" | "end">(demo ? "loading" : "intro");
   const [share, setShare] = useState(0);
@@ -213,6 +213,7 @@ export default function Match3DGame({ onExit, demo = false }: { onExit: () => vo
   const [hud, setHud] = useState<Hud | null>(null);
   const [message, setMessage] = useState<{ text: string; big: boolean; id: number } | null>(null);
   const [power, setPower] = useState(0);
+  const [paused, setPaused] = useState(false);
   const [end, setEnd] = useState<GameEnd | null>(null);
   const [seed, setSeed] = useState(() => (Date.now() >>> 3) & 0xffffff);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -241,7 +242,7 @@ export default function Match3DGame({ onExit, demo = false }: { onExit: () => vo
       }, demo);
       g.resize(box.w, box.h);
       gameRef.current = g;
-      (window as unknown as { __m3d: unknown }).__m3d = { g, assets };
+      onGame?.(g);
       setGame(g);
       setStage("play");
     }).catch(() => { if (!gone) setFailed(true); });
@@ -299,9 +300,13 @@ export default function Match3DGame({ onExit, demo = false }: { onExit: () => vo
     setStage("loading");
   };
 
+  const pause = (v: boolean) => {
+    setPaused(v);
+    if (game) game.paused = v;
+  };
   const setSprint = (v: boolean) => { if (game) game.sprint = v; };
   const setContain = (v: boolean) => { if (game) game.contain = v; };
-  const live = stage === "play" && hud && !hud.replay && game?.s.phase !== Phase.FullTime;
+  const live = stage === "play" && hud && !hud.replay && !hud.ended;
   const attack = hud?.attack ?? false;
   const blue = "rgba(30,120,230,.62)", green = "rgba(30,160,90,.62)", red = "rgba(220,50,60,.66)", grey = "rgba(20,30,44,.55)";
 
@@ -335,6 +340,7 @@ export default function Match3DGame({ onExit, demo = false }: { onExit: () => vo
         {live && !demo && (
           <>
             <Radar game={game} />
+            <button type="button" onClick={() => pause(true)} aria-label="Пауза" style={{ position: "absolute", left: 8, top: 6, width: 34, height: 30, borderRadius: 8, border: 0, background: "rgba(10,20,34,.6)", color: "#fff", fontSize: 13, fontWeight: 800 }}>II</button>
             <Stick game={game} box={box} />
             {power > 0 && (
               <div style={{ position: "absolute", right: 150, bottom: 136, width: 120, height: 9, borderRadius: 5, background: "rgba(0,0,0,.45)", overflow: "hidden", pointerEvents: "none" }}>
@@ -392,6 +398,12 @@ export default function Match3DGame({ onExit, demo = false }: { onExit: () => vo
                 </div>
               </>
             )}
+          </div>
+        )}
+        {paused && (
+          <div style={{ position: "absolute", inset: 0, background: "rgba(5,14,26,.66)", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+            <button type="button" onClick={onExit} style={{ padding: "12px 22px", borderRadius: 10, border: 0, background: "rgba(255,255,255,.14)", color: "#fff", fontWeight: 700 }}>Выйти из матча</button>
+            <button type="button" onClick={() => pause(false)} style={{ padding: "12px 26px", borderRadius: 10, border: 0, background: "#d6ff3f", color: "#0c1a10", fontWeight: 800 }}>Продолжить</button>
           </div>
         )}
         {stage === "end" && end && <Final end={end} onAgain={again} onExit={onExit} />}

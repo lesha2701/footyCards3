@@ -256,7 +256,8 @@ function userPress(s: MatchState, p: Player, inp: Input) {
       return;
     }
     case "shot": {
-      const aim = uz !== 0 ? clamp(uz * 1.05, -1, 1) : (p.z >= 0 ? -0.55 : 0.55);
+      // The stick across picks the corner; straight at goal, the far one.
+      const aim = Math.abs(uz) > 0.25 ? clamp(uz * 1.05, -1, 1) : (p.z >= 0 ? -0.55 : 0.55);
       startKick(s, p, planShot(s, p, aim, press.power, press.curl, press.chip));
       return;
     }

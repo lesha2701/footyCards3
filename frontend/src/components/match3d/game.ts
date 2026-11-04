@@ -7,7 +7,7 @@ import * as THREE from "three";
 import { ballGeometry } from "@/components/freeKick3d/textures";
 import { crowdChant, crowdHush, crowdTension, playFreeKickSfx, startCrowd } from "@/lib/freeKick3d/sfx";
 import {
-  Act, BALL_R, HALF_L, HALF_W, HZ, Kick, MATCH_SECONDS, PRED_STEP, Phase, TICK, type MatchEvent, type MatchState, type Setup,
+  Act, BALL_R, HALF_L, HALF_W, HZ, Kick, PRED_STEP, Phase, TICK, type MatchEvent, type MatchState, type Setup,
 } from "@/lib/match3d/core";
 import { clockText, createMatch, stepMatch, type Input, type Press } from "@/lib/match3d/engine";
 
@@ -44,7 +44,7 @@ export type Hud = {
   /** He stands over a set piece. */
   setKind: string | null;
   replay: boolean;
-  power: number;
+  ended: boolean;
 };
 
 export type GameHooks = {
@@ -77,7 +77,7 @@ export class MatchGame {
   readonly stick = { x: 0, y: 0 };
   sprint = false;
   contain = false;
-  power = 0;
+  paused = false;
 
   private press: Press | null = null;
   private readonly renderer: THREE.WebGLRenderer;
@@ -119,6 +119,7 @@ export class MatchGame {
   private frameSum = 0;
   private dpr: number;
   private hudT = 0;
+  private hudKey = "";
   private ended = false;
   private tense = false;
   private readonly stopCrowd: () => void;
@@ -254,9 +255,11 @@ export class MatchGame {
     this.last = now;
     const dt = Math.min(real, 0.1);
     this.adaptDpr(real);
-    this.stadium.update(dt);
-    if (this.replayF >= 0) this.playReplay(dt);
-    else this.live(dt);
+    if (!this.paused) {
+      this.stadium.update(dt);
+      if (this.replayF >= 0) this.playReplay(dt);
+      else this.live(dt);
+    }
     this.renderer.render(this.scene, this.camera);
     this.hudT -= dt;
     if (this.hudT <= 0) {
@@ -322,7 +325,7 @@ export class MatchGame {
       case "goal":
         this.goalTick = s.tick;
         playFreeKickSfx(e.team === you ? "roar" : "groan");
-        this.hooks.onMessage(e.long ? "ГОЛ! Дальний удар!" : e.kind === Kick.Header ? "ГОЛ! Головой!" : e.kind === Kick.Save ? "ГОЛ!" : "ГОЛ!", true);
+        this.hooks.onMessage(e.long ? "ГОЛ! Дальний удар!" : e.kind === Kick.Header ? "ГОЛ! Головой!" : "ГОЛ!", true);
         crowdHush();
         break;
       case "save":
@@ -470,7 +473,7 @@ export class MatchGame {
     // Where a ball in the air comes down.
     const b = s.ball;
     let on = false;
-    if (b.owner < 0 && b.y > 2.2 && b.vy !== undefined) {
+    if (b.owner < 0 && b.y > 2.2) {
       const start = Math.max(0, Math.floor((s.tick - s.predFrom) / PRED_STEP));
       for (let i = start; i < s.predN; i++) {
         const y = s.pred[i * 3 + 1];
@@ -609,13 +612,18 @@ export class MatchGame {
     const u = s.user >= 0 ? s.players[s.user] : null;
     const set = s.set;
     const taking = !!(u && set && set.taker === u.i);
-    this.hooks.onHud({
+    const hud: Hud = {
       g0: s.teams[0].goals, g1: s.teams[1].goals, clock: clockText(s),
       attack: !!(u && (s.ball.owner === u.i || taking)),
       setKind: taking ? set!.kind : null,
       replay: this.replayF >= 0,
-      power: this.power,
-    });
+      ended: s.phase === Phase.FullTime,
+    };
+    const key = JSON.stringify(hud);
+    if (key !== this.hudKey) {
+      this.hudKey = key;
+      this.hooks.onHud(hud);
+    }
   }
 
   private adaptDpr(real: number) {
@@ -636,5 +644,3 @@ export class MatchGame {
     }
   }
 }
-
-export const REAL_MINUTES = MATCH_SECONDS / 60;

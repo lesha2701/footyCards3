@@ -39,6 +39,10 @@ Main features:
   docs/otvetka.md): a match of ten signed episodes of every kind at match
   minutes, the opponent (a bot, for now) answers each, a draw → sudden-death
   penalties; the bot's answers stay in `server_state` until an episode is played;
+- «Матч 3D» (docs/match-3d.md): a short real 11-a-side match in landscape on a
+  pure 60 Hz engine `lib/match3d` (+ − × ÷ and Math.sqrt only, its own seeded
+  generator, so a server can replay it in V8), drawn by instanced baked clips
+  in `components/match3d`; no rewards yet;
 - clubs: squad/tournaments/league plus emblem constructor (`club_emblem_service`,
   paid layers for budget coins or Stars), «Казна за Stars» (`club_treasury_service`),
   spare-card sale/exchange (`club_market_service`), roles (vice-captain, treasurer),

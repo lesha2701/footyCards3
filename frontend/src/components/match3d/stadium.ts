@@ -188,9 +188,9 @@ uniform vec2 uHalf;
        float band = smoothstep(.0, .012, along - .5) * (1. - smoothstep(.0, .012, along - .988));
        float across = fract((vMcWorld.y + uHalf.y) / 11.333 * .5);
        float cross = smoothstep(.0, .02, across - .5) * (1. - smoothstep(.0, .02, across - .98));
-       float mow = mix(mix(.9, 1.1, band), mix(1.1, .9, band), cross);
-       vec3 turf = mix(vec3(.30, .46, .22), vec3(.52, .78, .36) * mow, inside * .9 + .1);
-       diffuseColor.rgb = diffuseColor.rgb * 1.5 * turf;
+       float mow = mix(mix(.93, 1.07, band), mix(1., 1.14, band), cross);
+       vec3 turf = mix(vec3(.30, .42, .24), vec3(.44, .62, .34) * mow, inside * .9 + .1);
+       diffuseColor.rgb = diffuseColor.rgb * 1.95 * turf;
        // The near stand's shadow on the touchline, with a soft, curved edge.
        float edge = uHalf.y - 9. - 1.4 * sin(vMcWorld.x * .035) - vMcWorld.x * .06;
        diffuseColor.rgb *= mix(1., .7, smoothstep(edge - .5, edge + .5, vMcWorld.y));`,
