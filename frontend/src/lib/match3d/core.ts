@@ -196,6 +196,11 @@ export type MatchState = {
   contain: boolean;
   /** No automatic change of the human's man before this tick. */
   switchT: number;
+  /** The thumb that was already down when the game changed his man: it was
+   * steering somebody else. It counts again once it moves or lifts. */
+  locked: boolean; lockX: number; lockZ: number;
+  /** The stick last tick. */
+  stickX: number; stickZ: number;
   /** When each team last lost the ball: the counter-press runs from here. */
   lostAt: [number, number];
   ev: MatchEvent[];
@@ -439,6 +444,6 @@ export function freshState(setup: Setup, players: Player[]): MatchState {
     teams: [team(setup.home, setup.homeRating), team(setup.away, setup.awayRating)],
     set: null, user: -1, poss: 0, chaser: [-1, -1],
     pred: new Float64Array(PRED_MAX * 3), predN: 0, predFrom: 0,
-    lastGoal: null, prevTouch: -1, wantShot: 0, idle: 0, contain: false, switchT: 0, lostAt: [-9999, -9999], ev: [],
+    lastGoal: null, prevTouch: -1, wantShot: 0, idle: 0, contain: false, switchT: 0, locked: false, lockX: 0, lockZ: 0, stickX: 0, stickZ: 0, lostAt: [-9999, -9999], ev: [],
   };
 }

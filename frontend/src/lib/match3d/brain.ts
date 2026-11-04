@@ -84,6 +84,11 @@ export function thinkTeam(s: MatchState, team: 0 | 1) {
   const pressing = ax < 20 ? 1 : dist(byDist[0].x, byDist[0].z, b.x, b.z) < 26 ? 1 : 0;
   if (pressing && byDist[0]) byDist[0].duty = 1;
   if (byDist[1] && dist(byDist[1].x, byDist[1].z, b.x, b.z) < 16) byDist[1].duty = 2;
+  // Nobody watches a man run past him: whoever the ball comes near steps in,
+  // and close to our goal it's always two on him. The human's man counts as one
+  // of them only if he really goes.
+  for (const m of outfield) if (dist(m.x, m.z, b.x, b.z) < 4.5) m.duty = 1;
+  if (ax < 12 && byDist[1] && dist(byDist[1].x, byDist[1].z, b.x, b.z) < 14) byDist[1].duty = 1;
   // Just lost it up the pitch: the two nearest go at once, before it gets away.
   if (s.tick - s.lostAt[team] < 150 && ax > -12 && byDist[1]) byDist[1].duty = 1;
   // The human called a second man: the nearest who isn't him goes at the ball.
@@ -131,7 +136,7 @@ function pressingHigh(s: MatchState, team: 0 | 1) {
 
 /** The back four's line without the ball, flat, up the pitch from their goal. */
 function backLine(ax: number, high: boolean) {
-  return clamp(ax - 17, -HALF_L + 9, high ? 5 : 0);
+  return clamp(ax - 22, -HALF_L + 9, high ? 5 : -7);
 }
 
 /** How far ahead of the back line each role keeps without the ball. */
@@ -307,11 +312,15 @@ export function thinkOffBall(s: MatchState, p: Player, slot: Slot) {
   if (p.duty === 1 && c) {
     const gx = goalX(p);
     const gd = dist(c.x, c.z, gx, 0) || 1;
-    const stand = dist(p.x, p.z, c.x, c.z) < 5 ? 1.2 : 0.6;
-    p.tx = c.x + c.vx * 0.25 + ((gx - c.x) / gd) * stand;
-    p.tz = c.z + c.vz * 0.25 + (-c.z / gd) * stand;
+    // Between him and the goal, a stride off, giving ground at his pace: the
+    // carrier meets a body, not a man jogging beside him.
     const d = dist(p.x, p.z, c.x, c.z);
-    p.want = d > 6 ? sprintOf(p) : d > 3 ? RUN : JOG + 1.4;
+    const stand = d < 5 ? 1.2 : 0.6;
+    const lead = clamp(d * 0.09, 0.15, 0.6);
+    p.tx = c.x + c.vx * lead + ((gx - c.x) / gd) * stand;
+    p.tz = c.z + c.vz * lead + (-c.z / gd) * stand;
+    const pace = Math.sqrt(c.vx * c.vx + c.vz * c.vz);
+    p.want = d > 3.2 ? sprintOf(p) : Math.min(sprintOf(p), pace + 1.4);
     p.faceBall = d < 5;
     return;
   }
@@ -331,7 +340,7 @@ export function thinkOffBall(s: MatchState, p: Player, slot: Slot) {
     const gd = dist(m.x, m.z, gx, 0) || 1;
     const box = m.x * dir < -30;
     const hunting = pressingHigh(s, p.team) && p.role !== "CB" && p.role !== "FB";
-    const close = box || hunting ? 1.6 : 3;
+    const close = box ? 1.6 : hunting ? 2.6 : 3;
     // Tight at the goal or pressing; otherwise he stays on his line and only leans.
     const lean = hunting ? 40 : box ? 9 : 4;
     const leanX = hunting || box ? lean : 2;
@@ -353,8 +362,8 @@ export function thinkTackle(s: MatchState, p: Player) {
   const c = s.players[b.owner];
   if (c.team === p.team || c.act === Act.Hold) return;
   const d = dist(p.x, p.z, b.x, b.z);
-  if (d < 1.45 && rnd(s) < 0.1 + p.defend * 0.14) startTackle(p);
-  else if (d < 3 && d > 1.6 && p.defend > 0.6 && p.vx * c.vx + p.vz * c.vz > 12 && rnd(s) < 0.015 && p.x * dirOf(p.team) > -36) startSlide(p);
+  if (d < 1.4 && rnd(s) < 0.04 + p.defend * 0.08) startTackle(p);
+  else if (p.i !== s.user && d < 3 && d > 1.6 && p.defend > 0.6 && p.vx * c.vx + p.vz * c.vz > 12 && rnd(s) < 0.015 && p.x * dirOf(p.team) > -36) startSlide(p);
 }
 
 // --- on the ball --------------------------------------------------------------------------------------
@@ -410,8 +419,8 @@ export function thinkCarrier(s: MatchState, p: Player) {
   const range = dist(p.x, p.z, gx, 0);
   // Close in he takes what's on. From further he has to fancy it, and it is
   // asked ten times a second, so rarely: otherwise everything gets hit.
-  const fancy = range < 19 || (range < 28 && rnd(s) < 0.012 + p.shot * 0.02);
-  const lim = range < 19 ? 0.07 : 0.03 + (1 - p.shot) * 0.05;
+  const fancy = range < 22 || (range < 30 && rnd(s) < 0.06 + p.shot * 0.06);
+  const lim = range < 21 ? 0.05 : 0.025 + (1 - p.shot) * 0.04;
   if (fancy && shot.xg > lim + rnd(s) * (near < 4 ? 0.03 : 0.07) && !(wide && ax > 40)) {
     const power = clamp(0.45 + dist(p.x, p.z, gx, 0) * 0.021 + rnd(s) * 0.12, 0.4, 0.97);
     const curl = dist(p.x, p.z, gx, 0) > 15 && rnd(s) < 0.4 ? (p.z * dir > 0 ? 0.7 : -0.7) : 0;
@@ -439,14 +448,19 @@ export function thinkCarrier(s: MatchState, p: Player) {
     let open = 1e9;
     for (const o of s.players) if (o.team !== p.team) open = Math.min(open, dist(o.x, o.z, mx, mz));
     const gain = (mx - p.x) * dir;
-    let v = gain * 0.16 + Math.min(open, 8) * 0.28 + clamp(margin, -3, 1.2) * 1.6 - d0 * 0.02 + rnd(s) * 1.1;
+    // The ball has to get somewhere: forward and of a useful length beats safe
+    // and short, and sideways near their box gets nobody a shot.
+    let v = gain * (ax > 0 ? 0.26 : 0.2) + Math.min(open, 8) * 0.28 + clamp(margin, -3, 1.2) * 1.6 + Math.min(d0, 18) * 0.05 + rnd(s) * 1.1;
+    if (d0 < 7 && near > 3) v -= 1;
+    if (near > 5 && gain < 3) v -= 2.4;
     if (mx * dir > HALF_L - 22 && Math.abs(mz) < 18) v += 1.1;
-    if (near < 2.2) v += 1.2;
-    if (d0 < 30 && margin > 0.2) options.push({ v, go: () => startKick(s, p, planPass(s, p, m, clamp(d0 / 34, 0.2, 0.9))) });
-    else if (d0 >= 30 && margin > -1) {
-      options.push({ v: v - 1.2, go: () => startKick(s, p, planLob(s, p, mx, mz, m.i, 0.5)) });
-    } else if (margin < 0.2 && d0 > 14) {
-      options.push({ v: v - 0.5 + Math.min(open, 8) * 0.1, go: () => startKick(s, p, planLob(s, p, mx, mz, m.i, 0.5)) });
+    // Closed down, the ball goes: that's what team-mates are for.
+    if (near < 2.6) v += 2;
+    if (d0 < 32 && margin > 0) options.push({ v, go: () => startKick(s, p, planPass(s, p, m, clamp(d0 / 34, 0.2, 0.9))) });
+    else if (d0 > 16 && open > 6.5 && gain > 6) {
+      // Over the top only to a man with room, going forward: otherwise it's a
+      // coin toss, and a side that tosses coins never keeps the ball.
+      options.push({ v: v - 2 + (ax < -20 && near < 4 ? 1 : 0), go: () => startKick(s, p, planLob(s, p, mx, mz, m.i, 0.5)) });
     }
     // The ball behind them for a man running on to it.
     const runner = m.dash > 0 || ((m.role === "ST" || m.role === "W" || m.role === "CM") && (m.x - p.x) * dir > 2);
@@ -456,8 +470,8 @@ export function thinkCarrier(s: MatchState, p: Player) {
       let them = 1e9;
       for (const o of s.players) if (o.team !== p.team) them = Math.min(them, reachTime(o, plan.tx, plan.tz));
       const lm = laneMargin(s, p, plan.tx, plan.tz, plan.speed);
-      if (mine < them + 0.15 && lm > -0.4 && plan.tx * dir > line - 8) {
-        options.push({ v: 2.9 + (m.dash > 0 ? 1.6 : 0) + (plan.tx - p.x) * dir * 0.05 + lm * 0.4 + rnd(s) * 1.5, go: () => startKick(s, p, plan) });
+      if (mine < them + 0.45 && lm > -0.7 && plan.tx * dir > line - 10) {
+        options.push({ v: 3.4 + (m.dash > 0 ? 2 : 0) + (plan.tx - p.x) * dir * 0.05 + lm * 0.4 + rnd(s) * 1.5, go: () => startKick(s, p, plan) });
       }
     }
   }
@@ -487,13 +501,21 @@ export function thinkCarrier(s: MatchState, p: Player) {
     let room = 1e9;
     for (const o of s.players) if (o.team !== p.team) room = Math.min(room, dist2(o.x, o.z, qx, qz));
     let v = Math.min(Math.sqrt(room), 9) * 0.26 + cx * dir * 1.4;
+    // Not through a man: the way has to be free for the next few strides.
+    for (const o of s.players) {
+      if (o.team !== p.team && o.role !== "GK" && segDist2(p.x, p.z, qx, qz, o.x, o.z) < 2.2) v -= 1.6;
+    }
     // A wide man goes down the line to the byline; the others come inside.
     if (Math.abs(p.z) > 14 && (p.role === "W" || p.role === "FB")) {
       if (ax > HALF_L - 40) v += cx * dir * (ax < HALF_L - 7 ? 1.3 : -1);
     } else if (ax > HALF_L - 30) v += (-Math.sign(p.z) * cz) * 0.5;
     if (v > carryV) { carryV = v; ux = cx; uz = cz; }
   }
-  const carry = carryV * 0.9 + (near > 5 ? 1 : 0) + rnd(s) * 0.7 + p.dribble * 0.6 + (b.since < 24 ? 0.9 : 0);
+  // With room he takes it on: a first touch, a look, a few strides. Nobody who
+  // isn't being closed down gets rid of it the moment it arrives.
+  const room = near > 7 ? 5.5 : near > 4 ? 3.8 : 0;
+  const settle = b.since < 110 && near > 3 ? 2.6 : 0;
+  const carry = carryV * 0.9 + room + settle + rnd(s) * 0.7 + p.dribble * 0.6;
 
   let bestV = carry, go: (() => void) | null = null;
   for (const o of options) if (o.v > bestV) { bestV = o.v; go = o.go; }

@@ -196,4 +196,46 @@ describe("match3d engine", () => {
       }
     }
   });
+
+  it("a thumb that moves always steers, even with a pass on its way to him", () => {
+    const from = outfield(createMatch(SETUP, 0), -1)[0].i;
+    const s = onBall(from, -10, 5);
+    const m = outfield(s, from)[0];
+    m.x = 8; m.z = -6;
+    const hold = { ...NO_INPUT, mx: 1 };
+    stepMatch(s, { ...hold, press: { k: "pass", power: 0.4 } });
+    for (let i = 0; i < 40 && s.ball.owner === from; i++) stepMatch(s, hold);
+    stepMatch(s, hold);
+    const man = s.players[s.user];
+    expect(s.locked).toBe(true);
+    // The same thumb: he goes to the ball. A new direction: he goes that way.
+    for (let i = 0; i < 40; i++) stepMatch(s, { ...NO_INPUT, mz: 1 });
+    expect(s.locked).toBe(false);
+    if (s.ball.owner !== man.i) expect(man.vz).toBeGreaterThan(2);
+  });
+
+  it("a loose ball by his feet is his for a push of the stick", () => {
+    const from = outfield(createMatch(SETUP, 0), -1)[0].i;
+    const s = onBall(from, -10, 5);
+    const b = s.ball;
+    b.owner = -1; b.last = -1; b.to = -1; b.kick = 0; b.x = -7; b.z = 6.5; b.vx = 3; b.vz = 0;
+    predict(s);
+    for (let i = 0; i < 60 && b.owner < 0; i++) stepMatch(s, { ...NO_INPUT, mx: 1, mz: -0.3, sprint: true });
+    expect(b.owner).toBe(from);
+  });
+
+  it("the human's team-mates win the ball without being told", () => {
+    let won = 0;
+    for (const seed of [11, 12, 13, 14, 15, 16]) {
+      const s = createMatch({ ...SETUP, seed }, 0);
+      for (let i = 0; i < 900 && s.phase !== Phase.Play; i++) stepMatch(s, NO_INPUT);
+      const c = s.players.find((p) => p.team === 1 && p.role === "ST")!;
+      c.x = -18; c.z = 0;
+      ballAt(s.ball, -17.6, BALL_R, 0);
+      s.ball.owner = c.i; s.ball.to = -1; s.ball.since = 20; s.poss = 1;
+      for (let i = 0; i < 360 && s.players[s.ball.owner < 0 ? c.i : s.ball.owner].team === 1 && s.phase === Phase.Play; i++) stepMatch(s, NO_INPUT);
+      if (s.ball.owner < 0 || s.players[s.ball.owner].team === 0) won += 1;
+    }
+    expect(won).toBeGreaterThanOrEqual(4);
+  });
 });

@@ -144,7 +144,8 @@ export function laneMargin(s: MatchState, p: Player, x: number, z: number, pace:
     const along = d * u;
     const time = rollTime(pace, along);
     const off = dist(p.x + dx * u, p.z + dz * u, o.x, o.z);
-    const m = off - 0.9 - time * sprintOf(o) * 0.82;
+    // He has to read it first, and he comes from a stand.
+    const m = off - 0.9 - Math.max(0, time - 0.25) * sprintOf(o) * 0.74;
     if (m < worst) worst = m;
   }
   return worst;
@@ -152,14 +153,14 @@ export function laneMargin(s: MatchState, p: Player, x: number, z: number, pace:
 
 export function planPass(s: MatchState, p: Player, m: Player, power: number): KickPlan {
   const d0 = dist(p.x, p.z, m.x, m.z);
-  const pace = clamp(rollPace(d0, 5 + power * 7), 8, 25);
+  const pace = clamp(rollPace(d0, 6.5 + power * 8), 9, 26);
   const t = rollTime(pace, d0);
   // Into his feet where he'll be.
   const tx = clamp(m.x + m.vx * t * 0.8, -HALF_L + 1, HALF_L - 1);
   const tz = clamp(m.z + m.vz * t * 0.8, -HALF_W + 1, HALF_W - 1);
   const d = dist(p.x, p.z, tx, tz);
   return {
-    kind: Kick.Pass, tx, ty: 0, tz, speed: clamp(rollPace(d, 5 + power * 7), 8, 25), curl: 0, to: m.i, ground: true,
+    kind: Kick.Pass, tx, ty: 0, tz, speed: clamp(rollPace(d, 6.5 + power * 8), 9, 26), curl: 0, to: m.i, ground: true,
     err: 0.08 + (1 - p.pass) * 0.32 + pressureOn(s, p) * 0.14 + (d > 25 ? 0.08 : 0),
   };
 }

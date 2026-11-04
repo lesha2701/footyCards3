@@ -390,9 +390,22 @@ function switchUser(s: MatchState) {
   }
 }
 
+/** The game changes his man: the thumb that was down isn't steering this one. */
 function toMan(s: MatchState, i: number) {
   s.user = i;
   s.ev.push({ t: "switch", p: i });
+  s.locked = s.stickX !== 0 || s.stickZ !== 0;
+  s.lockX = s.stickX; s.lockZ = s.stickZ;
+}
+
+/** Is the stick steering? Off it, or locked, the man plays by himself. */
+function readStick(s: MatchState, inp: Input) {
+  const l = Math.sqrt(inp.mx * inp.mx + inp.mz * inp.mz);
+  if (s.locked) {
+    const lk = Math.sqrt(s.lockX * s.lockX + s.lockZ * s.lockZ) || 1;
+    if (l === 0 || (inp.mx * s.lockX + inp.mz * s.lockZ) / (l * lk) < 0.8) s.locked = false;
+  }
+  s.stickX = inp.mx; s.stickZ = inp.mz;
 }
 
 /** The ball is on its way to the human's man (who is not the keeper). */
@@ -520,6 +533,7 @@ function stepKick(s: MatchState, p: Player) {
     if (p.actT >= windupOf(p)) releaseKick(s, p);
   } else {
     p.vx *= 0.96; p.vz *= 0.96;
+    if (p.i === s.user && p.actT >= windupOf(p) + 7) p.actT = p.actLen;
   }
   if (p.actT >= p.actLen) { p.act = Act.None; p.plan = null; }
 }
@@ -634,7 +648,8 @@ function stepAct(s: MatchState, p: Player) {
     case Act.Trap:
       p.actT += 1;
       p.vx *= 0.95; p.vz *= 0.95;
-      if (p.actT >= p.actLen) p.act = Act.None;
+      // The human's man never stands waiting for the end of a clip.
+      if (p.actT >= (p.i === s.user ? Math.min(p.actLen, 7) : p.actLen)) p.act = Act.None;
       break;
     case Act.Down:
       p.actT += 1;
@@ -677,6 +692,7 @@ function stepPlayers(s: MatchState, inp: Input) {
   const b = s.ball;
   const userP = s.user;
   const meets = receiver(s);
+  const live = (inp.mx !== 0 || inp.mz !== 0) && !s.locked;
   for (const p of s.players) {
     if (p.cool > 0) p.cool -= 1;
     if (p.role === "GK") stepKeeper(s, p);
@@ -692,20 +708,28 @@ function stepPlayers(s: MatchState, inp: Input) {
         // Off balance: carried the wrong way for a moment.
         p.beat -= 1;
         moveToward(p, p.beatX * 2.4, p.beatZ * 2.4, 20);
-      } else if (p === meets) {
-        // Whatever the thumb is doing: he goes to the ball.
+      } else if (p === meets && !live) {
+        // Until the thumb says otherwise he goes to the ball by himself.
         const q = meetPoint(s, p);
         steer(s, p, q.x, q.z, sprintOf(p));
-      } else if (p.i === userP && !(s.set && s.set.taker === p.i) && (inp.mx !== 0 || inp.mz !== 0 || b.owner === p.i)) {
-        const l = Math.sqrt(inp.mx * inp.mx + inp.mz * inp.mz);
+      } else if (p.i === userP && !(s.set && s.set.taker === p.i) && (live || b.owner === p.i)) {
         const has = b.owner === p.i;
+        const l = Math.sqrt(inp.mx * inp.mx + inp.mz * inp.mz);
+        let ux = inp.mx / (l || 1), uz = inp.mz / (l || 1);
+        // Steering roughly at a loose ball means steering at the ball.
+        if (!has && b.owner < 0 && b.y < 1.3) {
+          const dx = b.x + b.vx * 0.15 - p.x, dz = b.z + b.vz * 0.15 - p.z;
+          const d = Math.sqrt(dx * dx + dz * dz) || 1;
+          if (d < 6 && (ux * dx + uz * dz) / d > 0.1) {
+            const nx = ux + (dx / d - ux) * 0.8, nz = uz + (dz / d - uz) * 0.8;
+            const n = Math.sqrt(nx * nx + nz * nz) || 1;
+            ux = nx / n; uz = nz / n;
+          }
+        }
         const top = inp.sprint ? sprintOf(p) * (has ? 0.94 : 1) : has ? 5.4 : 6;
         const v = top * clamp(l * 1.25, 0, 1);
         const fast = has && p.vx * p.vx + p.vz * p.vz > 42;
-        moveToward(p, inp.mx / (l || 1) * v, inp.mz / (l || 1) * v, has ? ACCEL * 0.9 : ACCEL, fast ? BRAKE * 0.5 : BRAKE);
-      } else if (p.i === userP && s.phase === Phase.Play && b.owner >= 0 && s.players[b.owner].team !== p.team) {
-        // Hands off the stick: he holds his ground a touch off the ball.
-        steer(s, p, p.tx, p.tz, Math.min(p.want, 6));
+        moveToward(p, ux * v, uz * v, has ? ACCEL * 0.9 : ACCEL, fast ? BRAKE * 0.5 : BRAKE);
       } else steer(s, p, p.tx, p.tz, p.want);
     }
     p.x += p.vx * TICK;
@@ -740,10 +764,17 @@ function stepPlayers(s: MatchState, inp: Input) {
       if (q >= BODY * BODY || q < 1e-6) continue;
       if (a.act === Act.Down || c.act === Act.Down || a.act === Act.Slide || c.act === Act.Slide || a.act === Act.Dive || c.act === Act.Dive) continue;
       const d = Math.sqrt(q);
-      const push = (BODY - d) * 0.5;
+      const push = BODY - d;
       const ux = dx / d, uz = dz / d;
-      a.x += ux * push; a.z += uz * push;
-      c.x -= ux * push; c.z -= uz * push;
+      // A man with the ball runs into a body and pays for it: he gives way
+      // and loses his pace, the defender holds his ground.
+      const rival = a.team !== c.team;
+      const aHas = rival && b.owner === a.i, cHas = rival && b.owner === c.i;
+      const ka = aHas ? 0.85 : cHas ? 0.15 : 0.5;
+      a.x += ux * push * ka; a.z += uz * push * ka;
+      c.x -= ux * push * (1 - ka); c.z -= uz * push * (1 - ka);
+      if (aHas) { a.vx *= 0.93; a.vz *= 0.93; }
+      if (cHas) { c.vx *= 0.93; c.vz *= 0.93; }
     }
   }
   for (const p of ps) {
@@ -886,7 +917,7 @@ function contacts(s: MatchState) {
   const p = best;
   const d = Math.sqrt(top < 0 ? 0 : top);
   if (b.y < 0.75) {
-    if (d > REACH + (p.i === b.to ? 0.55 : 0.25)) return;
+    if (d > REACH + (p.i === b.to || p.i === s.user ? 0.55 : 0.25)) return;
     const mine = b.last >= 0 && s.players[b.last].team === p.team;
     if (fast > 13 && !mine) {
       // A hard ball at an opponent: it comes off him more often than he stops it.
@@ -1047,6 +1078,7 @@ export function stepMatch(s: MatchState, inp: Input) {
   if (s.wantShot > 0) s.wantShot -= 1;
   s.idle = inp.mx !== 0 || inp.mz !== 0 || inp.press ? 0 : s.idle + 1;
   s.contain = inp.contain;
+  readStick(s, inp);
 
   if (s.phase !== Phase.Goal) s.clock += CLOCK_RATE;
 
@@ -1068,7 +1100,8 @@ export function stepMatch(s: MatchState, inp: Input) {
   for (const p of s.players) {
     const slot = SLOTS[p.team][p.slot];
     if (p.role === "GK") { thinkPlayer(s, p, slot); continue; }
-    if ((s.tick + p.i * 3) % 12 === 0 && p.act === Act.None) thinkPlayer(s, p, slot);
+    // The man on the ball re-reads it every few ticks, the rest a few times a second.
+    if (((s.tick + p.i * 3) % 12 === 0 || (p.duty === 1 && s.tick % 3 === 0)) && p.act === Act.None) thinkPlayer(s, p, slot);
   }
 
   if (s.phase === Phase.Dead || s.phase === Phase.Kickoff) {
@@ -1084,7 +1117,7 @@ export function stepMatch(s: MatchState, inp: Input) {
       b.since += 1;
     }
     for (const p of s.players) {
-      if (p.i !== s.user && p.act === Act.None && p.role !== "GK" && p.duty) thinkTackle(s, p);
+      if (p.act === Act.None && p.role !== "GK") thinkTackle(s, p);
     }
     userAutoSwitch(s);
     if (s.user >= 0 && inp.press) userPress(s, s.players[s.user], inp);

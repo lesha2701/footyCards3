@@ -59,16 +59,23 @@ floating stick, and its rim is the sprint. On the right, the big button shoots:
 a tap is a quick shot, a hold adds power, a swipe up is the finesse, a sideways
 flick is the feint. The stick's lean picks the corner. Round it are «Пас»,
 «Разрез» and «Навес» («Парашют» in front of goal). Without the ball the same
-places are «Отбор», «Смена», «Подкат» and «Прессинг». A computer can use WASD or
+places are «Отбор», «Смена» and «Подкат». «Смена» and «Подкат» are all the defence needs: the second man goes by himself. A computer can use WASD or
 arrows, Shift to sprint, J shot, K pass, L through ball, I cross, U feint,
 H tackle, G slide, Q switch.
+
+Who is in charge of the man (the rule all the help below obeys): a moving thumb
+always steers. A thumb that was already down when the game changed his man is
+locked out (`toMan`, `readStick`) until it moves or lifts, because it was
+steering somebody else; locked or idle, the man plays by himself exactly as a
+team-mate does, tackling included. Steering roughly at a loose ball steers at
+the ball.
 
 The help a human gets, all in `engine.ts`:
 
 - `bestMate` takes the stick for a direction and, in it, the man with a clear
   lane. A white ring on the pitch shows him (`passTarget`).
 - A ball on its way to the human's man is his: `receiver`. The man runs to meet
-  it whatever the stick does (`meetPoint`), and a rolling ball bends on to him
+  it unless a new thumb says otherwise (`meetPoint`), and a rolling ball bends on to him
   and keeps its pace until he has it (`assistPass`). The AI gets none of this.
 - When the keeper has it in his hands the human has the keeper: the stick aims,
   «Пас» rolls or throws, «Навес» and «Выбить» go long, and after six seconds the
@@ -102,7 +109,10 @@ ball in his hands. Elsewhere it holds the block below.
 
 Without the ball (`blockSpot`) a side is three flat lines 13 metres apart that
 slide together: `backLine` follows the ball, `LINE_GAP` places the rest, and
-nobody follows a man out of his zone except inside the box. Who is ahead of his
+nobody follows a man out of his zone except inside the box. Anybody the ball
+comes within 4.5 m of steps in and tackles by himself (`thinkTackle`), the human's
+side like the other, and close to goal two go. A carrier who runs into a body
+gives way and loses pace (the keep-apart in `stepPlayers`). Who is ahead of his
 place when the ball goes runs back flat out (`recover`). With the ball the
 forwards start runs in behind from the line (`Player.dash`): a pass that comes
 late finds them offside. After a goal `lineUp` puts everybody on his spot.
@@ -120,7 +130,10 @@ npx esbuild src/bench/match3d/play.tsx --bundle --minify --format=esm --target=e
 `bench/sim.mjs` plays AI against AI without a screen and prints the statistics
 used to tune the football. `bench/human.mjs` plays through `Input` as a thumb
 does and prints how many passes arrive, what happens to the keeper's ball and
-how close the human's man stays to the action.
+how close the human's man stays to the action. `bench/audit.mjs` judges AI against
+AI the way a match is judged: spells of possession, duels, what each kind of
+kick keeps. `bench/out/board.html` (with `engine.iife.js` built beside it) draws
+the match from above, twelve moments at a time.
 
 ## Before rewards
 

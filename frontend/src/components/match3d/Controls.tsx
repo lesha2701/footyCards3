@@ -145,9 +145,9 @@ export default function Controls({ game, hud, w, h, toBox }: { game: MatchGame; 
       const c = centre(slot);
       return Math.sqrt((p.x - c.x) ** 2 + (p.y - c.y) ** 2) / SMALL;
     };
-    const near = (["top", "side", "mid"] as Slot[]).reduce((a, b) => (off(b) < off(a) ? b : a));
-    const onArc = off(near) < BUTTON_REACH;
     const fight = now.current.attack;
+    const near = ((fight ? ["top", "side", "mid"] : ["top", "side"]) as Slot[]).reduce((a, b) => (off(b) < off(a) ? b : a));
+    const onArc = off(near) < BUTTON_REACH;
     if (onArc) {
       fingers.current.set(e.pointerId, near);
       haptic("light");
@@ -155,8 +155,7 @@ export default function Controls({ game, hud, w, h, toBox }: { game: MatchGame; 
       else if (fight && near === "side") game.act({ k: "through", power: 0.5 });
       else if (fight) startHold("mid");
       else if (near === "top") game.act({ k: "switch" });
-      else if (near === "side") game.act({ k: "slide" });
-      else game.contain = true;
+      else game.act({ k: "slide" });
       return;
     }
     const big = centre("big");
@@ -200,7 +199,6 @@ export default function Controls({ game, hud, w, h, toBox }: { game: MatchGame; 
         if (m >= 0) { game.act({ k: "to", i: m }); haptic("medium"); }
       }
     } else if (role === "mid") {
-      game.contain = false;
       if (!held.current) return;
       const { power, tap } = endHold();
       if (cancelled) return;
@@ -255,7 +253,6 @@ export default function Controls({ game, hud, w, h, toBox }: { game: MatchGame; 
             <div style={{ ...face, background: LIME, color: "#000", fontSize: 14, fontWeight: 700, border: 0, textShadow: "none" }}>Отбор</div>
             {small("top", "Смена")}
             {small("side", "Подкат")}
-            {small("mid", "Помощь", undefined, false)}
           </>
         )}
       </div>
