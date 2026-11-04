@@ -1,0 +1,11 @@
+<!doctype html><meta charset=utf8><title>board</title><body style="margin:0;background:#111"><canvas id=c></canvas>
+<script src="engine.iife.js"></script><script>
+const q=new URLSearchParams(location.search),seed=+(q.get('seed')||77),from=+(q.get('from')||600),step=+(q.get('step')||90);
+const cols=4,rows=3,W=300,H=200,cv=document.getElementById('c');cv.width=cols*W;cv.height=rows*H;const g=cv.getContext('2d');
+const s=E.createMatch({seed,home:'A',away:'B',homeRating:.78,awayRating:.78},null);
+const fr=[];while(s.phase!==4&&fr.length<cols*rows){E.stepMatch(s,E.NO_INPUT);if(s.tick>=from&&(s.tick-from)%step===0)fr.push({t:s.tick,ph:s.phase,owner:s.ball.owner,b:[s.ball.x,s.ball.z,s.ball.y],to:s.ball.to,p:s.players.map(p=>({x:p.x,z:p.z,tx:p.tx,tz:p.tz,team:p.team,role:p.role,i:p.i,duty:p.duty,mark:p.mark}))})}
+fr.forEach((f,k)=>{const ox=k%cols*W,oy=(k/cols|0)*H,X=x=>ox+W/2+x*2.7,Z=z=>oy+H/2+z*2.5;g.fillStyle=k%2?'#1c5a2b':'#1a5428';g.fillRect(ox,oy,W,H);g.strokeStyle='#fff6';g.strokeRect(X(-52.5),Z(-34),105*2.7,68*2.5);g.beginPath();g.moveTo(X(0),Z(-34));g.lineTo(X(0),Z(34));g.stroke();
+g.strokeRect(X(-52.5),Z(-20),16.5*2.7,40*2.5);g.strokeRect(X(36),Z(-20),16.5*2.7,40*2.5);
+for(const p of f.p){g.fillStyle=p.team?'#fff':'#f44';g.beginPath();g.arc(X(p.x),Z(p.z),p.role==='GK'?3:3.4,0,7);g.fill();g.fillStyle=p.team?'#000':'#fff';g.font='7px sans-serif';g.fillText({GK:'G',CB:'C',FB:'F',DM:'D',CM:'M',W:'W',ST:'S'}[p.role],X(p.x)-2,Z(p.z)+2.5);if(p.duty){g.strokeStyle=p.duty==1?'#ff0':'#0ff';g.beginPath();g.arc(X(p.x),Z(p.z),5.5,0,7);g.stroke()}}
+g.fillStyle='#fc0';g.beginPath();g.arc(X(f.b[0]),Z(f.b[1]),2.4,0,7);g.fill();g.fillStyle='#fff';g.font='10px sans-serif';g.fillText((f.t/60).toFixed(1)+'s ph'+f.ph+' own'+f.owner+(f.to>=0?' to'+f.to:''),ox+4,oy+11)});
+document.title='ready';</script>
