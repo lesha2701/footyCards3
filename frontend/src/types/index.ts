@@ -905,6 +905,7 @@ export interface GameLimits {
   mordoboi: number;
   kontra?: number;
   one_on_one?: number;
+  otvetka?: number;
   /** Exhausted games only: when the hourly cap frees up again. */
   resets_at?: Partial<Record<string, string>>;
 }
@@ -1712,7 +1713,7 @@ export interface OneOnOneStartResult {
 
 export type OneOnOneOutcome =
   | "goal" | "save" | "tackle" | "miss" | "lost"
-  | "dispossessed" | "intercepted" | "offside" | "cleared" | "blocked";
+  | "dispossessed" | "intercepted" | "offside" | "cleared" | "blocked" | "wall";
 
 export interface OneOnOneResult {
   outcome: OneOnOneOutcome;
@@ -1727,6 +1728,49 @@ export interface OneOnOneResult {
 export interface OneOnOneClaimResult {
   reward_coins: number;
   new_balance: number;
+}
+
+/** «Ответка»: the episodes a match is drawn from. */
+export type OtvetkaEpisodeKind = "penalty" | "free_kick" | "one_on_one" | "two_v_one" | "three_v_two" | "through_ball" | "cross";
+
+/** One episode: the client builds it from kind, seed and the card's rating,
+ * as the server replays it. `minute` null — a penalty of the shoot-out. */
+export interface OtvetkaEpisode {
+  episode_index: number;
+  kind: OtvetkaEpisodeKind;
+  minute: number | null;
+  seed: number;
+}
+
+export interface OtvetkaStartResult {
+  session_id: number;
+  rating: number;
+  total_episodes: number;
+  opponent: string;
+  goal_coins: number;
+  win_coins: number;
+  loss_coins: number;
+  episode: OtvetkaEpisode;
+  celebration?: string | null;
+  ball?: string | null;
+  boots?: string | null;
+  gloves?: string | null;
+  feint?: string | null;
+}
+
+export interface OtvetkaResult {
+  outcome: OneOnOneOutcome;
+  opponent_goal: boolean;
+  my_score: number;
+  opponent_score: number;
+  shootout_my: number;
+  shootout_opponent: number;
+  coins_this_episode: number;
+  total_coins: number;
+  is_finished: boolean;
+  result: "win" | "loss" | null;
+  reward_coins: number | null;
+  next_episode: OtvetkaEpisode | null;
 }
 
 export interface FreeKick3DStartResult {

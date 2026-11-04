@@ -24,6 +24,7 @@ const OUTCOME: Record<OneOnOneOutcome, { label: string; className: string }> = {
   offside: { label: "Офсайд", className: "text-ink-mist" },
   cleared: { label: "Вынесли", className: "text-ink-mist" },
   blocked: { label: "Блок", className: "text-accent-cyan" },
+  wall: { label: "В стенку", className: "text-ink-mist" },
 };
 
 type Series = OneOnOneStartResult & { card: UserCard };

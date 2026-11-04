@@ -592,6 +592,12 @@ export interface GameConfig {
   one_on_one_feint_bonus: number;
   one_on_one_chip_bonus: number;
   one_on_one_near_coins: number;
+  otvetka_daily_limit: number;
+  otvetka_goal_coins: number;
+  otvetka_win_coins: number;
+  otvetka_loss_coins: number;
+  otvetka_bot_goal_pct: number;
+  otvetka_bot_penalty_pct: number;
   pairs_daily_limit: number;
   pairs_reward_perfect: number;
   pairs_reward_min: number;

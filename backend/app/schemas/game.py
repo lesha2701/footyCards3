@@ -370,6 +370,7 @@ class GameLimitsOut(BaseModel):
     mordoboi: int
     kontra: int = 0
     one_on_one: int = 0
+    otvetka: int = 0
     # When a game's hourly cap is used up: the moment it frees up again
     # (key = the field name above). Games with plays left are absent.
     resets_at: dict[str, datetime] = {}
@@ -456,6 +457,79 @@ class OneOnOneResultOut(BaseModel):
 
 
 class OneOnOneClaimOut(BaseModel):
+    reward_coins: int
+    new_balance: int
+
+
+# --- «Ответка» ---
+
+class OtvetkaEpisodeOut(BaseModel):
+    """One episode of the match: the client builds it from `kind`, `seed` and
+    the card's rating, exactly as the server will replay it. No `minute` —
+    a penalty of the shoot-out."""
+    episode_index: int
+    kind: str  # penalty | free_kick | one_on_one | two_v_one | three_v_two | through_ball | cross
+    minute: Optional[int] = None
+    seed: int
+
+
+class OtvetkaStartOut(BaseModel):
+    session_id: int
+    rating: int
+    total_episodes: int
+    opponent: str
+    goal_coins: int
+    win_coins: int
+    loss_coins: int
+    episode: OtvetkaEpisodeOut
+    celebration: Optional[str] = None
+    ball: Optional[str] = None
+    boots: Optional[str] = None
+    gloves: Optional[str] = None
+    feint: Optional[str] = None
+
+
+class OtvetkaPassIn(BaseModel):
+    """A pass asked for: to which teammate, how (team_attack_engine.PASS_*),
+    the cross's bar."""
+    tick: int = Field(ge=0, le=_ONE_ON_ONE_MAX_TICK)
+    target: int = Field(ge=0, le=2)
+    mode: int = Field(ge=0, le=3)
+    power: int = Field(ge=0, le=100)
+
+
+class OtvetkaEpisodeRequest(OneOnOneAttackRequest):
+    """What was done, never what came of it: the timeline of an attack with
+    its passes, or the swipe of a set piece."""
+    controls: list[list[int]] = Field(default_factory=list, max_length=_ONE_ON_ONE_MAX_TICK + 1)
+    passes: list[OtvetkaPassIn] = Field(default_factory=list, max_length=_ONE_ON_ONE_MAX_TICK + 1)
+    swipe: Optional[FreeKick3DShotRequest] = None
+
+    @field_validator("passes")
+    @classmethod
+    def _passes(cls, v: list[OtvetkaPassIn]) -> list[OtvetkaPassIn]:
+        ticks = [p.tick for p in v]
+        if ticks != sorted(set(ticks)):
+            raise ValueError("passes go in strictly ascending ticks")
+        return v
+
+
+class OtvetkaResultOut(BaseModel):
+    outcome: str
+    opponent_goal: bool  # its answer to this episode
+    my_score: int
+    opponent_score: int
+    shootout_my: int
+    shootout_opponent: int
+    coins_this_episode: int
+    total_coins: int
+    is_finished: bool
+    result: Optional[str] = None  # win | loss
+    reward_coins: Optional[int] = None
+    next_episode: Optional[OtvetkaEpisodeOut] = None
+
+
+class OtvetkaClaimOut(BaseModel):
     reward_coins: int
     new_balance: int
 

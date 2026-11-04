@@ -32,6 +32,13 @@ Main features:
   4-seat economic board game — `magnate_engine.py` is the pure, seeded
   rules engine + bot, `magnate_service.py` the lobbies/rooms, turn timers,
   limits and rewards; see "Turn-based game state" below);
+- «Атака 1 на 1» (`one_on_one_service.py`, deterministic episodes: the TS engine
+  `lib/oneOnOne/engine.ts` and its port `one_on_one_engine.py`, team episodes
+  `lib/oneOnOne/team.ts` ↔ `team_attack_engine.py` — change both in lockstep, a
+  shared fixture checks them) and «Ответка» (`otvetka_service.py`,
+  docs/otvetka.md): a match of ten signed episodes of every kind at match
+  minutes, the opponent (a bot, for now) answers each, a draw → sudden-death
+  penalties; the bot's answers stay in `server_state` until an episode is played;
 - clubs: squad/tournaments/league plus emblem constructor (`club_emblem_service`,
   paid layers for budget coins or Stars), «Казна за Stars» (`club_treasury_service`),
   spare-card sale/exchange (`club_market_service`), roles (vice-captain, treasurer),
@@ -160,7 +167,7 @@ Main features:
   `CoinTransaction` row; the caller still has to `db.add`/`db.commit`. Any
   coins/cards/packs/exchange mutation should go through this pattern.
 - **Mini-game hourly/daily limits**: each mini-game (memory, arena/match,
-  saboteur, penalty, free_kick, hangman, tactico, pairs, stratego, magnate) has two independent
+  saboteur, penalty, free_kick, hangman, tactico, pairs, stratego, magnate, otvetka) has two independent
   counters on `User`: `<game>_hourly_attempts` / `<game>_hour_started_at`
   (a shared cap, `config.hourly_game_limit`, resets on a rolling 1h window —
   see `game_limits_service.py`) and `<game>_rewarded_attempts_today` /

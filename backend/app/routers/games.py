@@ -35,6 +35,10 @@ from app.schemas.game import (
     OneOnOneClaimOut,
     OneOnOneResultOut,
     OneOnOneStartOut,
+    OtvetkaClaimOut,
+    OtvetkaEpisodeRequest,
+    OtvetkaResultOut,
+    OtvetkaStartOut,
     PairsClaimOut,
     PairsFlipOut,
     PairsFlipRequest,
@@ -77,6 +81,7 @@ from app.services import (
     hangman_service,
     memory_game_service,
     one_on_one_service,
+    otvetka_service,
     pairs_service,
     penalty_service,
     saboteur_service,
@@ -308,6 +313,27 @@ async def one_on_one_attack(
 @router.post("/one-on-one/{session_id}/claim", response_model=OneOnOneClaimOut)
 async def one_on_one_claim(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await one_on_one_service.claim_reward(db, user, session_id)
+
+
+# --- «Ответка» ---
+
+@router.post("/otvetka/start", response_model=OtvetkaStartOut)
+async def otvetka_start(payload: FreeKickStartRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"otvetka_start:{user.id}", max_calls=20, window_seconds=60)
+    return await otvetka_service.start(db, user, payload.user_card_id)
+
+
+@router.post("/otvetka/{session_id}/episode", response_model=OtvetkaResultOut)
+async def otvetka_episode(
+    session_id: int, payload: OtvetkaEpisodeRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    await check_rate_limit(f"otvetka_episode:{user.id}", max_calls=30, window_seconds=60)
+    return await otvetka_service.play_episode(db, user, session_id, payload)
+
+
+@router.post("/otvetka/{session_id}/claim", response_model=OtvetkaClaimOut)
+async def otvetka_claim(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await otvetka_service.claim_reward(db, user, session_id)
 
 
 # --- Найди пару (card pairs memory match) ---

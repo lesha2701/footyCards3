@@ -28,6 +28,8 @@ import type {
   OneOnOneClaimResult,
   OneOnOneResult,
   OneOnOneStartResult,
+  OtvetkaResult,
+  OtvetkaStartResult,
   MatchActionKind,
   MemoryClaimResult,
   MemoryLeaderboardEntry,
@@ -230,20 +232,47 @@ export async function startOneOnOne(userCardId: number): Promise<OneOnOneStartRe
   return data;
 }
 
+const timelineBody = (tl: EpisodeTimeline) => ({
+  controls: tl.controls,
+  feint: tl.feint,
+  shot: tl.shot
+    ? { tick: tl.shot.tick, dx: tl.shot.dx, dy: tl.shot.dy, curve: tl.shot.curve, duration_ms: tl.shot.durationMs }
+    : null,
+});
+
 /** Only the input timeline goes up; the server replays it and decides. */
 export async function playOneOnOneAttack(sessionId: number, tl: EpisodeTimeline): Promise<OneOnOneResult> {
-  const { data } = await api.post<OneOnOneResult>(`/games/one-on-one/${sessionId}/attack`, {
-    controls: tl.controls,
-    feint: tl.feint,
-    shot: tl.shot
-      ? { tick: tl.shot.tick, dx: tl.shot.dx, dy: tl.shot.dy, curve: tl.shot.curve, duration_ms: tl.shot.durationMs }
-      : null,
-  });
+  const { data } = await api.post<OneOnOneResult>(`/games/one-on-one/${sessionId}/attack`, timelineBody(tl));
   return data;
 }
 
 export async function claimOneOnOneReward(sessionId: number): Promise<OneOnOneClaimResult> {
   const { data } = await api.post<OneOnOneClaimResult>(`/games/one-on-one/${sessionId}/claim`);
+  return data;
+}
+
+// --- «Ответка» ---
+
+export async function startOtvetka(userCardId: number): Promise<OtvetkaStartResult> {
+  const { data } = await api.post<OtvetkaStartResult>("/games/otvetka/start", { user_card_id: userCardId });
+  return data;
+}
+
+/** What was done in the episode, never what came of it. */
+export async function playOtvetkaEpisode(
+  sessionId: number,
+  body: { timeline: EpisodeTimeline } | { swipe: QuantizedSwipe },
+): Promise<OtvetkaResult> {
+  const payload =
+    "timeline" in body
+      ? { ...timelineBody(body.timeline), passes: body.timeline.passes ?? [] }
+      : { swipe: { dx: body.swipe.dx, dy: body.swipe.dy, curve: body.swipe.curve, duration_ms: body.swipe.durationMs } };
+  const { data } = await api.post<OtvetkaResult>(`/games/otvetka/${sessionId}/episode`, payload);
+  return data;
+}
+
+export async function claimOtvetkaReward(sessionId: number): Promise<OneOnOneClaimResult> {
+  const { data } = await api.post<OneOnOneClaimResult>(`/games/otvetka/${sessionId}/claim`);
   return data;
 }
 

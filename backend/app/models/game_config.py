@@ -318,6 +318,16 @@ class GameConfig(TimestampMixin, Base):
     one_on_one_chip_bonus: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     one_on_one_near_coins: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
 
+    # «Ответка» (otvetka_service): the daily cap of rewarded matches (the
+    # hourly cap is the shared hourly_game_limit), coins per goal and for the
+    # result, how often the bot answers an episode / scores a penalty (%).
+    otvetka_daily_limit: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    otvetka_goal_coins: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    otvetka_win_coins: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    otvetka_loss_coins: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    otvetka_bot_goal_pct: Mapped[int] = mapped_column(Integer, default=35, nullable=False)
+    otvetka_bot_penalty_pct: Mapped[int] = mapped_column(Integer, default=70, nullable=False)
+
     pairs_daily_limit: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
     pairs_reward_perfect: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
     pairs_reward_min: Mapped[int] = mapped_column(Integer, default=10, nullable=False)

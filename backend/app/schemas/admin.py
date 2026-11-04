@@ -609,6 +609,12 @@ class GameConfigOut(BaseModel):
     one_on_one_feint_bonus: int = 10
     one_on_one_chip_bonus: int = 15
     one_on_one_near_coins: int = 3
+    otvetka_daily_limit: int = 5
+    otvetka_goal_coins: int = 15
+    otvetka_win_coins: int = 150
+    otvetka_loss_coins: int = 30
+    otvetka_bot_goal_pct: int = 35
+    otvetka_bot_penalty_pct: int = 70
     pairs_daily_limit: int
     pairs_reward_perfect: int
     pairs_reward_min: int
@@ -1417,6 +1423,12 @@ class GameConfigUpdate(BaseModel):
     one_on_one_feint_bonus: Optional[int] = Field(default=None, ge=0)
     one_on_one_chip_bonus: Optional[int] = Field(default=None, ge=0)
     one_on_one_near_coins: Optional[int] = Field(default=None, ge=0)
+    otvetka_daily_limit: Optional[int] = Field(default=None, ge=0)
+    otvetka_goal_coins: Optional[int] = Field(default=None, ge=0)
+    otvetka_win_coins: Optional[int] = Field(default=None, ge=0)
+    otvetka_loss_coins: Optional[int] = Field(default=None, ge=0)
+    otvetka_bot_goal_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    otvetka_bot_penalty_pct: Optional[int] = Field(default=None, ge=0, le=100)
     pairs_daily_limit: Optional[int] = Field(default=None, ge=0)
     pairs_reward_perfect: Optional[int] = Field(default=None, ge=0)
     pairs_reward_min: Optional[int] = Field(default=None, ge=0)

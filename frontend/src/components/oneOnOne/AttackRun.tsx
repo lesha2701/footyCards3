@@ -1,10 +1,10 @@
 import { useMutation } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type PointerEvent, type ReactNode, type RefObject } from "react";
 
 import ErrorBoundary from "@/components/common/ErrorBoundary";
 import { IconCoin } from "@/components/icons";
 import SceneCrash from "@/components/freeKick3d/SceneCrash";
-import { OutcomeCaption, ScoreBug } from "@/components/oneOnOne/Broadcast";
+import { ExitButton, OutcomeCaption, ScoreBug } from "@/components/oneOnOne/Broadcast";
 import FeintPicker from "@/components/oneOnOne/FeintPicker";
 import OneOnOneScene3D, { type LiveInput } from "@/components/oneOnOne/OneOnOneScene3D";
 import { formatGameError } from "@/lib/errors";
@@ -80,11 +80,19 @@ export type AttackRunProps = {
   coins: number;
   results: OneOnOneOutcome[];
   nextLabel: string;
+  /** In a match: the score for the bug, what this episode is and what to do
+   * in it (until the first touch), what came of it beyond the outcome. */
+  match?: ComponentProps<typeof ScoreBug>["match"];
+  title?: string;
+  hint?: string;
+  verdictNote?: ReactNode;
   /** Hands the timeline to whoever decides the outcome. */
   submit: (timeline: EpisodeTimeline) => Promise<OneOnOneResult>;
   onBack: () => void;
   onFeint: (code: string | null) => void;
   onResult: (r: OneOnOneResult) => void;
+  /** The episode has played out on screen. */
+  onShown?: () => void;
   onNext: (r: OneOnOneResult) => void;
 };
 
@@ -105,10 +113,15 @@ export default function AttackRun({
   coins,
   results,
   nextLabel,
+  match,
+  title,
+  hint,
+  verdictNote,
   submit: submitTimeline,
   onBack,
   onFeint,
   onResult,
+  onShown,
   onNext,
 }: AttackRunProps) {
   const setup = useMemo(() => (kind ? createTeamEpisode(kind, seed, rating) : createEpisode(seed, rating)), [kind, seed, rating]);
@@ -179,6 +192,9 @@ export default function AttackRun({
     [submit],
   );
   const onDecided = useCallback(() => setShown(true), []);
+  useEffect(() => {
+    if (shown) onShown?.();
+  }, [shown, onShown]);
   // Which foot and how (shown with the outcome; the same for this timeline).
   const technique = useMemo(() => (ended ? techniqueOf(recorder.state, recorder.timeline, input.current.stride) : null), [ended, recorder]);
 
@@ -491,17 +507,7 @@ export default function AttackRun({
       </div>
 
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-4">
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Выйти"
-          className="pointer-events-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-white/30 bg-black/60 shadow-[0_2px_10px_rgba(0,0,0,0.5)]"
-        >
-          <svg {...ACTION_ICON} className="h-4 w-4" stroke="#fff">
-            <path d="M12 3 V11" />
-            <path d="M6.8 6.5 A8 8 0 1 0 17.2 6.5" />
-          </svg>
-        </button>
+        <ExitButton onClick={onBack} />
         <div>
           <ScoreBug
             index={index}
@@ -510,6 +516,7 @@ export default function AttackRun({
             coins={coins}
             name={name}
             rating={rating}
+            match={match}
           />
           <span ref={fpsRef} className="hidden" />
         </div>
@@ -517,7 +524,12 @@ export default function AttackRun({
 
       {!started && (
         <div className="pointer-events-none absolute inset-x-0 top-24 px-6 text-center text-sm text-ink-chalk/90 drop-shadow">
-          {ready ? (
+          {ready && title ? (
+            <>
+              <div className="font-display text-xl font-bold uppercase text-white">{title}</div>
+              {hint && <div className="mt-1">{hint}</div>}
+            </>
+          ) : ready ? (
             <>
               Джойстик — бег, до края — спринт, вниз — назад, наклон — угол удара.
               <br />
@@ -576,6 +588,7 @@ export default function AttackRun({
                   : "вратарь купился на финт"}
             </div>
           )}
+          {verdictNote}
           {verdict.coins_this_attack > 0 && (
             <div className="flex items-center gap-1 font-mono text-lg font-bold text-accent-lime">
               +{verdict.coins_this_attack}

@@ -17,10 +17,29 @@ const DOT: Record<OneOnOneOutcome, string> = {
   offside: "bg-red-500",
   cleared: "bg-red-500",
   blocked: "bg-red-500",
+  wall: "bg-red-500",
 };
 
-/** The score bug: the series (one dot per attack), the coins, and under it
- * the striker's strip (name, rating, the feint). */
+/** Leaving the attack: an icon, so it holds up on a bright sky and leaves
+ * the top row to the score bug. */
+export function ExitButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Выйти"
+      className="pointer-events-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-white/30 bg-black/60 shadow-[0_2px_10px_rgba(0,0,0,0.5)]"
+    >
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="#fff" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 3 V11" />
+        <path d="M6.8 6.5 A8 8 0 1 0 17.2 6.5" />
+      </svg>
+    </button>
+  );
+}
+
+/** The score bug: the series (one dot per attack) or, in a match, the score,
+ * the coins, and under it the striker's strip (name, rating). */
 export function ScoreBug({
   index,
   total,
@@ -28,6 +47,7 @@ export function ScoreBug({
   coins,
   name,
   rating,
+  match,
 }: {
   index: number;
   total: number;
@@ -35,25 +55,37 @@ export function ScoreBug({
   coins: number;
   name: string;
   rating: number;
+  match?: { mine: number; theirs: number; opponent: string; penalties?: [number, number] };
 }) {
   return (
     <div className="flex flex-col items-end gap-1 font-display">
       <div className="flex items-stretch overflow-hidden rounded-md shadow-lg shadow-black/40">
         <div className="flex items-center bg-accent-lime px-2 text-[11px] font-black italic tracking-tight text-black">VFC</div>
         <div className="flex items-center gap-2 bg-[#0b1220]/90 px-2.5 py-1 backdrop-blur">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-white">
-            Атака {index + 1}/{total}
+          <span className="whitespace-nowrap text-[11px] font-bold uppercase tracking-wider text-white">
+            {match ? (
+              <>
+                Ты {match.mine}:{match.theirs} {match.opponent}
+                {match.penalties && ` (${match.penalties[0]}:${match.penalties[1]})`}
+              </>
+            ) : (
+              <>
+                Атака {index + 1}/{total}
+              </>
+            )}
           </span>
-          <span className="flex gap-1">
-            {Array.from({ length: total }, (_, i) => (
-              <span
-                key={i}
-                className={`h-2 w-2 rounded-full ${
-                  results[i] ? DOT[results[i]] : i === index ? "animate-pulse bg-white" : "bg-white/20"
-                }`}
-              />
-            ))}
-          </span>
+          {!match?.penalties && (
+            <span className="flex gap-1">
+              {Array.from({ length: total }, (_, i) => (
+                <span
+                  key={i}
+                  className={`${match ? "h-1.5 w-1.5" : "h-2 w-2"} rounded-full ${
+                    results[i] ? DOT[results[i]] : i === index ? "animate-pulse bg-white" : "bg-white/20"
+                  }`}
+                />
+              ))}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-0.5 bg-[#16233a]/90 px-2 font-mono text-xs font-bold text-accent-lime">
           {coins}
@@ -80,6 +112,7 @@ const CAPTION: Record<OneOnOneOutcome, { text: string; band: string; fill: strin
   offside: { text: "ОФСАЙД", band: "from-amber-500/0 via-amber-600/85 to-amber-500/0", fill: "from-white to-amber-200", glow: "#f59e0b" },
   cleared: { text: "ВЫНЕСЛИ", band: "from-red-500/0 via-red-700/80 to-red-500/0", fill: "from-white to-red-200", glow: "#ef4444" },
   blocked: { text: "БЛОК", band: "from-sky-500/0 via-sky-700/80 to-sky-500/0", fill: "from-white to-sky-200", glow: "#38bdf8" },
+  wall: { text: "В СТЕНКУ", band: "from-red-500/0 via-red-700/80 to-red-500/0", fill: "from-white to-red-200", glow: "#ef4444" },
 };
 
 /** The caption of the outcome: a slanted band across the screen and the

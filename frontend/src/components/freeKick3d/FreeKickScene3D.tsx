@@ -66,6 +66,8 @@ type Props = {
    * the shot went in it (null until the server says). */
   target?: FreeKickTarget | null;
   targetHit?: boolean | null;
+  /** Night by default; by day in a match with the day episodes. */
+  time?: MatchTime;
   /** Current shot time, written every frame (−1 while waiting): the page
    * times the player's dive against the strike with it. */
   shotClockRef?: MutableRefObject<number>;
@@ -100,6 +102,7 @@ export default function FreeKickScene3D({
   gear = NO_GEAR,
   target = null,
   targetHit = null,
+  time = "night",
   shotClockRef,
 }: Props) {
   // Start pretty; the first sustained frame drop switches to the light
@@ -115,8 +118,8 @@ export default function FreeKickScene3D({
       style={{ touchAction: "none" }}
     >
       <PerformanceMonitor onDecline={() => setQuality("low")} />
-      <fog attach="fog" args={["#0b1830", 70, 170]} />
-      <Lights quality={quality} />
+      <fog attach="fog" args={time === "day" ? ["#c4d6e6", 90, 230] : ["#0b1830", 70, 170]} />
+      <Lights quality={quality} time={time} />
       {/* Reflections for the ball and posts: a tiny cube map rendered once
           from a few light panels — no HDR download. */}
       <Environment resolution={64} frames={1}>
@@ -125,7 +128,7 @@ export default function FreeKickScene3D({
         <Lightformer intensity={2} position={[25, 10, 10]} rotation-y={-Math.PI / 2} scale={[30, 4, 1]} />
         <Lightformer intensity={0.6} color="#2c8a47" position={[0, -5, 0]} rotation-x={Math.PI / 2} scale={[60, 60, 1]} />
       </Environment>
-      <Stadium quality={quality} hype={hype} />
+      <Stadium quality={quality} hype={hype} time={time} />
       <ShotWorld
         setup={setup}
         shot={shot}
