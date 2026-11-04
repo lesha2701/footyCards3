@@ -33,8 +33,10 @@ import { ballSkin } from "@/lib/gameGear";
 import { keeperTake, techniqueOf, type Foot, type KeeperTake, type Technique } from "@/lib/oneOnOne/technique";
 import {
   FEINT_TICKS,
+  HEADER_Y,
   KEEPER_START_Z,
   TICK,
+  VOLLEY_Y,
   flightAt,
   type EpisodeEnd,
   type EpisodeSetup,
@@ -44,9 +46,10 @@ import {
 } from "@/lib/oneOnOne/engine";
 import { AIM_POST, driveHeight, type ShotIntent } from "@/lib/oneOnOne/aim";
 import type { EpisodeRecorder } from "@/lib/oneOnOne/recorder";
+import { CLAIM_RADIUS, DEF_LUNGE_TICKS, PASS_CROSS, PASS_WINDUP, isOffside, offsideLine, pickMate, type DefMode, type TeamSetup } from "@/lib/oneOnOne/team";
 
 import { FEINTS } from "@/lib/oneOnOne/feints";
-import { CELEBRATIONS, ONE_ON_ONE_MOVES_URL, addMoves, play, prepareMoves, strikePlan, type Moves, type StrikePlan, type StrikeTiming } from "./moves";
+import { CELEBRATIONS, ONE_ON_ONE_MOVES_URL, addMoves, play, prepareMoves, scissorFoot, strikePlan, type Moves, type Strike, type StrikePlan, type StrikeTiming } from "./moves";
 
 /** What the finger does right now (the page writes it, the scene reads it
  * every tick). `feint` is consumed by the tick that takes it. */
@@ -64,6 +67,10 @@ export type LiveInput = {
   aim: number;
   power: number | null;
   lob: boolean;
+  /** A pass button: how it's played (consumed by the tick that takes it). */
+  pass: { mode: number; power: number } | null;
+  /** The stick pulled back: the pass looks behind him too. */
+  back: boolean;
   /** Written by the scene: the foot his stride brings through next (null
    * when he isn't running) — the one he strikes with (the page labels it). */
   stride: Foot | null;
@@ -86,14 +93,48 @@ type Props = {
   ball?: string | null;
   /** How his feint looks (lib/oneOnOne/feints.ts; null = the sidestep). */
   feint?: string | null;
+  /** Arrows at the screen's edge to teammates out of the frame. */
+  pointers?: MutableRefObject<(HTMLDivElement | null)[]>;
 };
 
-type Snap = Pick<EpisodeState, "x" | "z" | "hx" | "hz" | "speed" | "lead" | "kx" | "kz" | "kMode" | "feintTicks" | "feintDir" | "lungeDir">;
+type Dot = { x: number; z: number; vx: number; vz: number };
+type DefDot = Dot & { mode: DefMode; dirX: number; dirZ: number };
+type Snap = Pick<EpisodeState, "x" | "z" | "hx" | "hz" | "speed" | "lead" | "kx" | "kz" | "kMode" | "feintTicks" | "feintDir" | "lungeDir"> & {
+  /** The team episodes: the others, the pass being played, the ball off his feet. */
+  men: Dot[];
+  defs: DefDot[];
+  windup: number;
+  target: number;
+  ball: { x: number; y: number; z: number } | null;
+  /** Ticks until a cross meets him, negative past it (null: no cross on its way). */
+  crossIn: number | null;
+  /** Where it meets him, how high, whether he can get there. */
+  air: { x: number; z: number; y: number; reach: boolean } | null;
+  mode: number;
+};
 
-const snap = (s: EpisodeState): Snap => ({
-  x: s.x, z: s.z, hx: s.hx, hz: s.hz, speed: s.speed, lead: s.lead, kx: s.kx, kz: s.kz,
-  kMode: s.kMode, feintTicks: s.feintTicks, feintDir: s.feintDir, lungeDir: s.lungeDir,
-});
+const snap = (s: EpisodeState): Snap => {
+  const r = s.team;
+  return {
+    x: s.x, z: s.z, hx: s.hx, hz: s.hz, speed: s.speed, lead: s.lead, kx: s.kx, kz: s.kz,
+    kMode: s.kMode, feintTicks: s.feintTicks, feintDir: s.feintDir, lungeDir: s.lungeDir,
+    men: r ? r.men.map((m) => ({ x: m.x, z: m.z, vx: m.vx, vz: m.vz })) : [],
+    defs: r ? r.defs.map((d) => ({ x: d.x, z: d.z, vx: d.vx, vz: d.vz, mode: d.mode, dirX: d.dirX, dirZ: d.dirZ })) : [],
+    windup: r ? r.windup : 0,
+    target: r ? r.target : 0,
+    ball: s.free ? { x: s.free.x, y: s.fromY ?? BALL_RADIUS, z: s.free.z } : null,
+    crossIn: r?.pass?.high ? r.pass.total - r.pass.at : null,
+    air: r?.pass?.high ? { x: r.pass.toX, z: r.pass.toZ, y: r.pass.contactY, reach: r.pass.reach } : null,
+    mode: r ? r.mode : 0,
+  };
+};
+
+/** One of the team's men on the pitch: the model, its toes, and what is
+ * left of the pass it has just played. */
+type Actor = { p: SkinnedPlayer; feet: [THREE.Object3D, THREE.Object3D] | null; kick: { clip: Strike; t: number } | null };
+/** Who plays whom: the man the player runs and the others. A pass swaps the
+ * passer's and the receiver's models. */
+type Cast = { active: Actor | null; mates: Actor[]; defs: SkinnedPlayer[] };
 
 /** Shared per frame between the parts of the scene. */
 type Stage = {
@@ -120,13 +161,46 @@ type Stage = {
   run: number;
   /** When (s of `run`) the feint began. */
   feintAt: number | null;
+  cast: Cast;
+  /** The strike the pass under way is played with. */
+  passClip: Strike;
+  passes: number;
+  /** How he meets a ball in the air, once he goes for it. */
+  air: AirMove | null;
+  /** Who dealt with the cross, and how the ball leaves if it isn't held. */
+  claim: "catch" | "away" | null;
+  away: THREE.Vector3;
 };
+
+type AirMove = "header" | "dive" | "volley";
+/** Above HEADER_Y he heads it on his feet, a jump for what's over his head;
+ * under it he goes in for it with the head; lower it's the foot, in the fall. */
+const VOLLEY_FROM = 0.5;
+const airMove = (y: number): AirMove | null => (y > HEADER_Y ? "header" : y > VOLLEY_Y ? "dive" : y > VOLLEY_FROM ? "volley" : null);
+/** Head height (m), how far the head goes forward in the header, how long
+ * before the contact he leaves the ground and turns to the shot. */
+const HEAD_Y = 1.6;
+const HEADER_REACH = 0.3;
+const AIR_UP = 0.3;
+/** He runs on until this close to the contact (s). */
+const AIR_WINDOW = 0.4;
+const AIR_TURN = 0.3;
+/** The dive: how long, how far over at the contact, flat on the grass (rad),
+ * his length to the head, how far he slides past the ball (m/s). */
+const DIVE_S = 0.32;
+const DIVE_PITCH = 1.2;
+const DIVE_FLAT = 1.5;
+const DIVE_BODY = 1.6;
+const DIVE_SLIDE = 2;
+/** The trap in the receive clip (s). */
+const RECEIVE_TRAP = 1;
+const airEuler = new THREE.Euler(0, 0, 0, "YXZ");
 
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 
 /** The flight as the free kick's helpers read a trajectory (outcome and end). */
 function asTrajectory(f: ShotFlight): ShotTrajectory {
-  return { outcome: f.outcome, samples: [], events: f.events, end: f.end };
+  return { outcome: f.outcome === "blocked" ? "wall" : f.outcome, samples: [], events: f.events, end: f.end };
 }
 const NO_WALL = createPenaltySetup(1);
 
@@ -166,6 +240,7 @@ function Episode({
   onReady,
   ball,
   feint,
+  pointers,
   quality,
   hype,
 }: Omit<Props, "fpsRef"> & { quality: Quality; hype: MutableRefObject<number> }) {
@@ -173,6 +248,7 @@ function Episode({
     acc: 0, prev: snap(recorder.state), cur: snap(recorder.state), end: null, t: 0, decided: false, dt: 0,
     tech: null, plan: null, take: null, hands: new THREE.Vector3(), holdFrom: Infinity,
     ball: new THREE.Vector3(), shake: 0, ripple: null, run: 0, feintAt: null,
+    cast: { active: null, mates: [], defs: [] }, passClip: "pass_r", passes: 0, air: null, claim: null, away: new THREE.Vector3(),
   });
   const [confetti, setConfetti] = useState(0);
   const [flight, setFlight] = useState<ShotFlight | null>(null);
@@ -182,7 +258,7 @@ function Episode({
     const s0 = snap(recorder.state);
     Object.assign(stage.current, {
       acc: 0, prev: s0, cur: s0, end: null, t: 0, decided: false, ripple: null, tech: null, plan: null, take: null, holdFrom: Infinity,
-      run: 0, feintAt: null,
+      run: 0, feintAt: null, passes: 0, air: null, claim: null,
     });
     setFlight(null);
   }, [recorder]);
@@ -201,10 +277,29 @@ function Episode({
       while (s.acc >= TICK && steps < 8 && !recorder.state.ended) {
         const inp = input.current;
         s.prev = s.cur;
-        recorder.step(inp.hold, inp.steer, inp.feint, inp.shot);
+        const team = recorder.state.team;
+        recorder.step(inp.hold, inp.steer, inp.feint, inp.shot, inp.pass && team ? { target: pickMate(recorder.state, inp.aim, inp.back), ...inp.pass } : null);
         inp.feint = 0;
+        inp.pass = null;
         s.cur = snap(recorder.state);
+        // A shot waiting for the cross: he goes for it, by how high it comes.
+        const air = s.cur.air;
+        if (!air) s.air = null;
+        else if (air.reach && recorder.shotWaiting) s.air = airMove((s.cur.crossIn ?? 0) > 0 ? air.y : s.cur.ball?.y ?? 0);
         if (s.cur.feintTicks > 0 && s.prev.feintTicks === 0) s.feintAt = s.run;
+        if (team && team.passes !== s.passes) {
+          // The ball has left: the player has the receiver now, the passer
+          // carries on with the strike. Both jump slots here, no in-between.
+          s.passes = team.passes;
+          const c = s.cast;
+          const passer = c.active;
+          if (passer) {
+            c.active = c.mates[team.target];
+            c.mates[team.target] = passer;
+            passer.kick = { clip: s.passClip, t: 0 };
+          }
+          s.prev = s.cur;
+        }
         s.acc -= TICK;
         steps += 1;
       }
@@ -214,10 +309,29 @@ function Episode({
       if (ended) {
         s.end = ended;
         s.acc = TICK;
-        s.tech = techniqueOf(recorder.state, recorder.timeline, input.current.stride);
+        // Met in the air: no wind-up on the grass, he is already up there
+        // (or, struck late, goes up now).
+        const wentUp = s.air !== null;
+        s.air = ended.flight ? airMove(recorder.state.fromY ?? 0) : null;
+        s.tech = s.air ? null : techniqueOf(recorder.state, recorder.timeline, input.current.stride);
         s.plan = s.tech ? strikePlan(s.tech.kind, s.tech.foot) : null;
+        // Struck first time off a pass the wind-up is only a touch.
+        if (s.plan && (recorder.timeline.passes?.length ?? 0) > 0) s.plan = { ...s.plan, lead: Math.min(s.plan.lead, FIRST_TIME_LEAD) };
         s.take = ended.flight ? keeperTake(ended.flight) : null;
-        s.t = s.plan ? -s.plan.lead : 0;
+        s.t = s.plan ? -s.plan.lead : s.air && !wentUp ? -FIRST_TIME_LEAD : 0;
+        if (s.air && wentUp) playFreeKickSfx("kick");
+        const p = recorder.state.team?.pass;
+        s.claim = null;
+        if (!ended.flight && p?.high && s.cur.ball) {
+          // The cross dealt with: held, punched or headed clear, or it ran out.
+          const b = s.cur.ball;
+          const met = p.at === p.total;
+          s.claim = ended.outcome === "tackle" ? "catch" : "away";
+          if (met) s.away.set(Math.sign(b.x || 1) * 6, 6.5, 12);
+          else s.away.set((p.toX - p.fromX) / (p.total * TICK), 0, (p.toZ - p.fromZ) / (p.total * TICK)).multiplyScalar(0.7);
+          // His to deal with: up for it, whether he holds it or punches it.
+          if (met && Math.hypot(b.x - s.cur.kx, b.z - s.cur.kz) < CLAIM_RADIUS) s.take = "catch";
+        }
         if (ended.flight) setFlight(ended.flight);
         onEnded(ended);
       }
@@ -240,7 +354,7 @@ function Episode({
         if (e.type === "post") {
           playFreeKickSfx("post");
           s.shake = 0.6;
-        } else if (e.type === "save") {
+        } else if (e.type === "save" || e.type === "wall") {
           playFreeKickSfx("wall");
           s.shake = 0.3;
         }
@@ -271,8 +385,9 @@ function Episode({
         <Players setup={setup} stage={stage} input={input} feint={feint} flight={flight} quality={quality} onReady={onReady} />
       </Suspense>
       <Ball stage={stage} flight={flight} skin={ball} quality={quality} />
-      <CameraRig stage={stage} flight={flight} />
+      <CameraRig stage={stage} flight={flight} wide={"team" in setup} />
       <AimMarker stage={stage} input={input} />
+      {"team" in setup && <PassMarks stage={stage} input={input} recorder={recorder} setup={setup as TeamSetup} pointers={pointers} />}
       <Confetti burstId={confetti} />
     </>
   );
@@ -320,6 +435,96 @@ function AimMarker({ stage, input }: { stage: StageRef; input: MutableRefObject<
   );
 }
 
+/** A teammate this far off the centre of the frame (±1 the edge) gets an arrow. */
+const POINTER_FROM = 0.94;
+
+/** The ring round the teammate the stick picks (red while he is offside),
+ * and the last defender's line. */
+function PassMarks({
+  stage,
+  input,
+  recorder,
+  setup,
+  pointers,
+}: {
+  stage: StageRef;
+  input: MutableRefObject<LiveInput>;
+  recorder: EpisodeRecorder;
+  setup: TeamSetup;
+  pointers?: MutableRefObject<(HTMLDivElement | null)[]>;
+}) {
+  const camera = useThree((s) => s.camera);
+  const size = useThree((s) => s.size);
+  const spot = useMemo(() => new THREE.Vector3(), []);
+  const ring = useRef<THREE.Mesh>(null);
+  const line = useRef<THREE.Mesh>(null);
+  const drop = useRef<THREE.Mesh>(null);
+  const showLine = setup.team.kind === "through_ball";
+  useFrame(() => {
+    const s = recorder.state;
+    const r = s.team;
+    const m = ring.current;
+    const free = !!r && !s.ended && !r.pass && r.windup === 0;
+    if (m) {
+      m.visible = free;
+      if (free && r) {
+        const i = pickMate(s, input.current.aim, input.current.back);
+        const k = Math.min(1, stage.current.acc / TICK);
+        const a = stage.current.prev.men[i] ?? r.men[i];
+        const b = stage.current.cur.men[i] ?? r.men[i];
+        m.position.set(lerp(a.x, b.x, k), 0.03, lerp(a.z, b.z, k));
+        ((m.material as THREE.MeshBasicMaterial).color as THREE.Color).set(isOffside(s, i) ? "#ef4444" : "#c6e63a");
+      }
+    }
+    // Where the cross comes down, and whose it looks like.
+    if (drop.current) {
+      const p = r?.pass;
+      drop.current.visible = !!p?.high && !s.ended;
+      if (p) {
+        drop.current.position.set(p.toX, 0.03, p.toZ);
+        ((drop.current.material as THREE.MeshBasicMaterial).color as THREE.Color).set(!p.reach ? "#ef4444" : p.claim ? "#f59e0b" : "#c6e63a");
+      }
+    }
+    if (line.current) {
+      line.current.visible = free;
+      if (r) line.current.position.z = offsideLine(r);
+    }
+    // Out of the frame: an arrow on the edge he is off, by his height on screen.
+    const picked = r ? pickMate(s, input.current.aim, input.current.back) : -1;
+    pointers?.current.forEach((el, i) => {
+      if (!el) return;
+      const dot = stage.current.cur.men[i];
+      const on = free && !!dot;
+      if (dot) spot.set(dot.x, 1, dot.z).project(camera);
+      const off = on && Math.abs(spot.x) > POINTER_FROM;
+      el.style.opacity = off ? "1" : "0";
+      if (!off) return;
+      const right = spot.x > 0;
+      const y = THREE.MathUtils.clamp((1 - spot.y) / 2, 0.2, 0.7) * size.height;
+      el.style.transform = `translate(${right ? size.width - 46 : 10}px, ${y}px) scaleX(${right ? 1 : -1})`;
+      el.style.color = i === picked ? (r && isOffside(s, i) ? "#ef4444" : "#c6e63a") : "#ffffff";
+    });
+  });
+  return (
+    <>
+      <mesh ref={ring} rotation-x={-Math.PI / 2} visible={false}>
+        <ringGeometry args={[0.55, 0.78, 32]} />
+        <meshBasicMaterial color="#c6e63a" transparent opacity={0.9} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh ref={drop} rotation-x={-Math.PI / 2} visible={false}>
+        <ringGeometry args={[0.9, 1.05, 40]} />
+        <meshBasicMaterial color="#c6e63a" transparent opacity={0.8} depthWrite={false} toneMapped={false} />
+      </mesh>
+      {showLine && (
+        <mesh ref={line} rotation-x={-Math.PI / 2} position={[0, 0.02, 0]} visible={false}>
+          <planeGeometry args={[68, 0.12]} />
+          <meshBasicMaterial color="#fde047" transparent opacity={0.55} depthWrite={false} toneMapped={false} />
+        </mesh>
+      )}
+    </>
+  );
+}
+
 /** The attacker's position this frame (interpolated between ticks). */
 function attackerAt(s: Stage) {
   const k = s.end ? 1 : Math.min(1, s.acc / TICK);
@@ -349,6 +554,10 @@ const KEEPER_LOOK = { shirt: "#facc15", shorts: "#111827", socks: "#facc15", ski
 const DEFENDER_LOOK = { shirt: "#dc2626", shorts: "#1f2937", socks: "#dc2626", skin: "#d9a57f", hair: "#2a1d15" };
 const DEFENDER_LOOK_2 = { ...DEFENDER_LOOK, skin: "#8d5a3c", hair: "#0f0b08" };
 const MATE_LOOK = { ...ATTACKER_LOOK, skin: "#b98262", hair: "#151010" };
+/** The team episodes: the wind-up of a first-time shot (s), the pass's
+ * strike played at this pace, a defender's slide at this pace. */
+const FIRST_TIME_LEAD = 0.12;
+const PASS_CLIP_SPEED = 1.15;
 const REFEREE_LOOK = { shirt: "#111827", shorts: "#111827", socks: "#111827", skin: "#e2b08c", hair: "#5a4632" };
 
 /** The others on the pitch — presentation only, they follow the attacker
@@ -508,33 +717,52 @@ function Players({
   const moves = useMemo<Moves>(() => prepareMoves(gltf, movesGltf), [gltf, movesGltf]);
   const style = feint ? FEINTS[feint] : undefined;
   const materials = useMemo(() => new MaterialCache("standard"), []);
-  const attacker = useMemo(() => {
+  const man = useMemo(() => {
     const p = makePlayer(asset, ATTACKER_LOOK, materials);
     addMoves(p, moves);
     p.root.rotation.order = "YXZ";
-    return p;
+    return { p, feet: feetOf(p), kick: null } as Actor;
   }, [asset, moves, materials]);
+  // The team episodes' men: only once one of them is played.
+  const hasTeam = "team" in setup;
+  const squad = useMemo(() => {
+    if (!hasTeam) return null;
+    const mates = [0, 1].map(() => {
+      const p = makePlayer(asset, ATTACKER_LOOK, materials);
+      addMoves(p, moves);
+      p.root.rotation.order = "YXZ";
+      return { p, feet: feetOf(p), kick: null } as Actor;
+    });
+    const defs = [DEFENDER_LOOK, DEFENDER_LOOK_2, DEFENDER_LOOK].map((look) => {
+      const p = makePlayer(asset, look, materials);
+      addMoves(p, moves);
+      return p;
+    });
+    return { mates, defs };
+  }, [hasTeam, asset, moves, materials]);
   const keeper = useMemo(() => {
     const p = makePlayer(asset, KEEPER_LOOK, materials);
     addMoves(p, moves);
     return p;
   }, [asset, moves, materials]);
-  const bones = useMemo(() => ({ keeper: hipsOf(keeper), hands: handsOf(keeper), feet: feetOf(attacker) }), [keeper, attacker]);
+  const bones = useMemo(() => ({ keeper: hipsOf(keeper), hands: handsOf(keeper) }), [keeper]);
   const tmp = useMemo(() => ({ v: new THREE.Vector3(), a: new THREE.Vector3(), b: new THREE.Vector3() }), []);
   // The keeper getting up after he bit on the feint (s since, or null).
   const getup = useRef<{ mode: KeeperMode; since: number | null }>({ mode: "wait", since: null });
   useEffect(() => {
-    for (const p of [attacker, keeper]) {
+    for (const p of [man.p, keeper, ...(squad?.mates.map((m) => m.p) ?? []), ...(squad?.defs ?? [])]) {
       p.root.traverse((o) => {
         if ((o as THREE.Mesh).isMesh) o.castShadow = quality === "high";
       });
     }
-  }, [attacker, keeper, quality]);
+  }, [man, keeper, squad, quality]);
   useEffect(() => () => {
-    attacker.mixer.stopAllAction();
+    man.p.mixer.stopAllAction();
     keeper.mixer.stopAllAction();
+    squad?.mates.forEach((m) => m.p.mixer.stopAllAction());
+    squad?.defs.forEach((p) => p.mixer.stopAllAction());
     materials.dispose();
-  }, [attacker, keeper, materials]);
+  }, [man, keeper, squad, materials]);
   useEffect(onReady, [onReady]);
   // The keeper's dive in the shot: where his hands go, which side, when.
   const dive = useMemo(() => {
@@ -544,8 +772,25 @@ function Players({
     return { dx, y: last.handY, arrival: flight.end.t, reaction: flight.keeper.reaction };
   }, [flight]);
 
+  // A new episode: everyone back in his own slot.
+  const castFor = useRef<EpisodeSetup | null>(null);
+
   useFrame((_, delta) => {
     const s = stage.current;
+    if (castFor.current !== setup) {
+      castFor.current = setup;
+      const team = (setup as Partial<TeamSetup>).team;
+      const mates = squad?.mates ?? [];
+      man.kick = null;
+      mates.forEach((m, i) => {
+        m.kick = null;
+        m.p.root.visible = i < (team?.men.length ?? 0);
+      });
+      squad?.defs.forEach((p, i) => (p.root.visible = i < (team?.defs.length ?? 0)));
+      s.cast = { active: man, mates: mates.slice(0, team?.men.length ?? 0), defs: squad?.defs.slice(0, team?.defs.length ?? 0) ?? [] };
+    }
+    const actor = s.cast.active ?? man;
+    const attacker = actor.p;
     const a = attackerAt(s);
     const k = keeperAt(s);
     const t = s.t;
@@ -594,12 +839,82 @@ function Players({
         attacker.root.rotation.x = 0;
         play(attacker, CELEBRATIONS[setup.seed % CELEBRATIONS.length], true, 0.3).paused = false;
       }
-    } else if (end?.outcome === "tackle") {
-      // Into the keeper at his feet: he goes over.
+    } else if (s.air && (end || (s.cur.crossIn ?? 0) * TICK < AIR_WINDOW)) {
+      // He meets it in the air: everything timed to the contact, `c` s off.
+      const c = end ? t : -Math.max(0, s.cur.crossIn ?? 0) * TICK;
+      const f = end?.flight;
+      const spot = f ? f.from : s.cur.air ?? a;
+      const y = f ? f.samples[0].ball.y : s.cur.air?.y ?? HEAD_Y;
+      const v = f?.kick.velocity;
+      const face = v ? Math.atan2(v.x, v.z) : Math.atan2(-spot.x, -spot.z);
+      const yaw = runYaw + wrapAngle(face - runYaw) * THREE.MathUtils.smoothstep(c, -AIR_TURN, -0.05);
+      const fx = Math.sin(yaw);
+      const fz = Math.cos(yaw);
+      const step = THREE.MathUtils.smoothstep(c, -AIR_UP, -0.02);
+      if (s.air === "volley") {
+        // The foot comes up to the ball as he goes over.
+        const foot = scissorFoot(moves, y);
+        const kick = play(attacker, "scissor", true, 0.1);
+        kick.time = THREE.MathUtils.clamp(foot.t + c, 0, kick.getClip().duration);
+        kick.paused = true;
+        attacker.root.rotation.set(0, yaw, 0);
+        const toe = tmp.v.set(foot.x, 0, foot.z).applyAxisAngle(THREE.Object3D.DEFAULT_UP, yaw);
+        attacker.root.position.set(lerp(a.x, spot.x - toe.x, step), 0, lerp(a.z, spot.z - toe.z, step));
+      } else {
+        const head = play(attacker, "header", true, 0.12);
+        head.paused = true;
+        if (s.air === "header") {
+          head.time = THREE.MathUtils.clamp(moves.headerAt + c, 0, head.getClip().duration);
+          attacker.root.rotation.set(0, yaw, 0);
+          const up = Math.max(0, 1 - (c * c) / (AIR_UP * AIR_UP));
+          attacker.root.position.set(
+            lerp(a.x, spot.x - fx * HEADER_REACH, step),
+            Math.max(0, y - HEAD_Y) * up,
+            lerp(a.z, spot.z - fz * HEADER_REACH, step),
+          );
+        } else {
+          // In at it head first, and down on the grass.
+          head.time = moves.headerAt;
+          const over = THREE.MathUtils.smoothstep(c, -DIVE_S, 0);
+          const fall = THREE.MathUtils.smoothstep(c, 0, 0.45);
+          const pitch = lerp(DIVE_PITCH * over, DIVE_FLAT, fall);
+          attacker.root.quaternion.setFromEuler(airEuler.set(pitch, yaw, 0, "YXZ"));
+          const reach = DIVE_BODY * Math.sin(DIVE_PITCH);
+          const slide = DIVE_SLIDE * Math.max(0, c);
+          attacker.root.position.set(
+            lerp(a.x, spot.x - fx * reach, step) + fx * slide,
+            lerp(Math.max(0, y - DIVE_BODY * Math.cos(DIVE_PITCH)) * over, 0.1, fall),
+            lerp(a.z, spot.z - fz * reach, step) + fz * slide,
+          );
+        }
+      }
+    } else if (end?.flight) {
+      // Scored in the air, up off the grass: off to the corner.
+      attacker.root.rotation.set(0, Math.atan2(end.flight.kick.velocity.x, end.flight.kick.velocity.z), 0);
+      attacker.root.position.set(end.flight.from.x, 0, end.flight.from.z);
+      if (end.outcome === "goal") play(attacker, CELEBRATIONS[setup.seed % CELEBRATIONS.length], true, 0.3).paused = false;
+      else play(attacker, "idle", false, 0.4);
+    } else if (!s.claim && (end?.outcome === "tackle" || end?.outcome === "dispossessed")) {
+      // Into the keeper at his feet, or taken off them: he goes over.
       play(attacker, "trip", true, 0.1).paused = false;
+      attacker.root.position.set(a.x, 0, a.z);
+    } else if (s.cur.windup > 0) {
+      // The pass: the strike timed for the ball to leave as the wind-up ends.
+      const target = s.cur.men[s.cur.target];
+      const toLeft = !!target && (target.x - a.x) * a.hz - (target.z - a.z) * a.hx > 0;
+      if (s.cur.windup >= PASS_WINDUP - 1) s.passClip = `${s.cur.mode >= PASS_CROSS ? "shot" : "pass"}_${toLeft ? "r" : "l"}`;
+      const clip = play(attacker, s.passClip, true, 0.08);
+      clip.time = THREE.MathUtils.clamp(moves.strikes[s.passClip].contact - s.cur.windup * TICK * PASS_CLIP_SPEED, 0, clip.getClip().duration);
+      clip.paused = true;
       attacker.root.position.set(a.x, 0, a.z);
     } else if (end) {
       play(attacker, "idle", false, 0.3);
+      attacker.root.position.set(a.x, 0, a.z);
+    } else if (s.cur.air?.reach && (s.cur.crossIn ?? 1) <= 0) {
+      // Bringing the cross down.
+      const trap = play(attacker, "receive", true, 0.12);
+      trap.time = RECEIVE_TRAP - (s.cur.crossIn ?? 0) * TICK;
+      trap.paused = true;
       attacker.root.position.set(a.x, 0, a.z);
     } else if (styleMove && s.run - (s.feintAt ?? 0) < (moves.clips[styleMove]?.duration ?? 0)) {
       // A style feint (the roulette): the same sidestep in the engine, the
@@ -620,11 +935,11 @@ function Players({
       attacker.root.position.set(a.x, 0, a.z);
     }
     attacker.mixer.update(s.dt);
-    if (end?.flight && s.plan) plantFoot(attacker, bones.feet, moves.strikes[s.plan.clip], s.plan, end.flight, t, tmp.a);
+    if (end?.flight && s.plan) plantFoot(attacker, actor.feet, moves.strikes[s.plan.clip], s.plan, end.flight, t, tmp.a);
     // His stride: the foot behind him is the next to come through (the
     // other is coming down to plant) — the one he'll strike with.
     if (!end) {
-      const feet = bones.feet;
+      const feet = actor.feet;
       if (feet && a.speed > STRIDE_FROM && !s.cur.feintTicks) {
         attacker.root.updateMatrixWorld(true);
         const l = feet[0].getWorldPosition(tmp.a);
@@ -652,6 +967,9 @@ function Players({
       const clip = play(keeper, s.cur.lungeDir > 0 ? "gk_dive_left" : "gk_dive_right", true, 0.08);
       clip.timeScale = 1.6;
       clip.paused = false;
+    } else if (s.take === "catch" && s.claim) {
+      // Up off his line for the cross.
+      play(keeper, "gk_catch_high", true, 0.08).timeScale = 1.6;
     } else if (end?.outcome === "tackle") {
       // Down at the attacker's feet and the ball gathered in.
       const scoop = play(keeper, "gk_scoop", true, 0.08);
@@ -702,14 +1020,95 @@ function Players({
 
   return (
     <>
-      <primitive object={attacker.root} />
+      <primitive object={man.p.root} />
       <primitive object={keeper.root} position={[0, 0, KEEPER_START_Z]} />
-      <Others asset={asset} moves={moves} materials={materials} stage={stage} quality={quality} />
+      {squad ? (
+        <TeamCast asset={asset} moves={moves} stage={stage} squad={squad} />
+      ) : (
+        <Others asset={asset} moves={moves} materials={materials} stage={stage} quality={quality} />
+      )}
       {/* The line the keeper starts from, for the scale of how far he came. */}
       <mesh rotation-x={-Math.PI / 2} position={[setup.start.x, 0.01, setup.start.z]}>
         <ringGeometry args={[0.5, 0.62, 28]} />
         <meshBasicMaterial color="#c6e63a" transparent opacity={0.35} depthWrite={false} />
       </mesh>
+    </>
+  );
+}
+
+/** The team episodes' others, where the engine has them: the teammates
+ * (the passer finishing his strike), the defenders (sliding in, down on the
+ * grass, getting up). */
+function TeamCast({ asset, moves, stage, squad }: {
+  asset: FootballerAsset;
+  moves: Moves;
+  stage: StageRef;
+  squad: { mates: Actor[]; defs: SkinnedPlayer[] };
+}) {
+  const downFor = useMemo(() => new Map<SkinnedPlayer, number>(), []);
+  useFrame((_, delta) => {
+    const s = stage.current;
+    const k = s.end ? 1 : Math.min(1, s.acc / TICK);
+    const scored = s.end?.outcome === "goal" && s.t > (s.end.flight?.end.t ?? 0) + 0.4;
+    s.cast.mates.forEach((m, i) => {
+      const a = s.prev.men[i];
+      const b = s.cur.men[i];
+      if (!a || !b) return;
+      const speed = s.end ? 0 : Math.hypot(b.vx, b.vz);
+      m.p.root.position.set(lerp(a.x, b.x, k), 0, lerp(a.z, b.z, k));
+      const yaw = speed > 0.6 ? Math.atan2(b.vx, b.vz) : Math.atan2(s.ball.x - b.x, s.ball.z - b.z);
+      m.p.root.rotation.y += wrapAngle(yaw - m.p.root.rotation.y) * (1 - Math.exp(-10 * delta));
+      if (m.kick && !s.end) {
+        const clip = moves.clips[m.kick.clip];
+        const time = moves.strikes[m.kick.clip].contact + m.kick.t * PASS_CLIP_SPEED;
+        m.kick.t += s.dt;
+        if (time < clip.duration - 0.05) {
+          const act = play(m.p, m.kick.clip, true, 0.05);
+          act.time = time;
+          act.paused = true;
+        } else m.kick = null;
+      } else if (scored) play(m.p, "celebrate", true, 0.3).paused = false;
+      else if (speed < 0.4) play(m.p, "idle", false, 0.3);
+      else runAt(m.p, speed, asset);
+      m.p.mixer.update(s.dt);
+    });
+    s.cast.defs.forEach((p, i) => {
+      const a = s.prev.defs[i];
+      const b = s.cur.defs[i];
+      if (!a || !b) return;
+      p.root.position.set(lerp(a.x, b.x, k), 0, lerp(a.z, b.z, k));
+      const speed = s.end ? 0 : Math.hypot(b.vx, b.vz);
+      if (b.mode === "lunge") {
+        p.root.rotation.y = Math.atan2(b.dirX, b.dirZ);
+        const slide = play(p, b.dirX * b.dirZ > 0 ? "slide_l" : "slide_r", true, 0.06);
+        slide.timeScale = slide.getClip().duration / (DEF_LUNGE_TICKS * TICK * 1.6);
+        slide.paused = false;
+        downFor.set(p, 0);
+      } else if (b.mode === "down") {
+        downFor.set(p, (downFor.get(p) ?? 0) + delta);
+      } else {
+        if (downFor.has(p)) {
+          // Back up from the grass.
+          play(p, "gk_getup", true, 0.1).paused = false;
+          downFor.delete(p);
+        }
+        const yaw = speed > 0.6 ? Math.atan2(b.vx, b.vz) : Math.atan2(s.ball.x - b.x, s.ball.z - b.z);
+        p.root.rotation.y += wrapAngle(yaw - p.root.rotation.y) * (1 - Math.exp(-10 * delta));
+        if (scored && speed < 1.5) play(p, "gk_miss", true, 0.35);
+        else if (speed < 0.4) play(p, "idle", false, 0.3);
+        else runAt(p, speed, asset);
+      }
+      p.mixer.update(s.dt);
+    });
+  }, -0.4);
+  return (
+    <>
+      {squad.mates.map((m, i) => (
+        <primitive key={i} object={m.p.root} />
+      ))}
+      {squad.defs.map((p, i) => (
+        <primitive key={`d${i}`} object={p.root} />
+      ))}
     </>
   );
 }
@@ -830,9 +1229,21 @@ function Ball({ stage, flight, skin: skinCode, quality }: { stage: StageRef; fli
     let x: number;
     let y = BALL_RADIUS;
     let z: number;
-    if (f && aftermath) {
+    if (s.claim === "catch" && s.cur.ball) {
+      // Taken out of the air: into his gloves.
+      const k = Math.min(1, s.t / INTO_HANDS);
+      x = lerp(s.cur.ball.x, s.hands.x, k);
+      y = lerp(s.cur.ball.y, s.hands.y, k);
+      z = lerp(s.cur.ball.z, s.hands.z, k);
+    } else if (s.claim && s.cur.ball) {
+      // Punched or headed away (a cross gone astray just carries on).
       const t = s.t;
-      const p = t < 0 ? { x: f.from.x, y: BALL_RADIUS, z: f.from.z } : t <= f.end.t ? flightAt(f, t).ball : aftermathAt(aftermath, t);
+      x = s.cur.ball.x + s.away.x * t;
+      y = Math.max(BALL_RADIUS, s.cur.ball.y + s.away.y * t - 4.9 * t * t);
+      z = s.cur.ball.z + s.away.z * t;
+    } else if (f && aftermath) {
+      const t = s.t;
+      const p = t < 0 ? f.samples[0].ball : t <= f.end.t ? flightAt(f, t).ball : aftermathAt(aftermath, t);
       ({ x, y, z } = p);
       if (t >= s.holdFrom) {
         // Caught: it goes into his gloves and stays there.
@@ -855,6 +1266,18 @@ function Ball({ stage, flight, skin: skinCode, quality }: { stage: StageRef; fli
         y = lerp(BALL_RADIUS, s.hands.y, kk);
         z = lerp(z, s.hands.z, kk);
       }
+    } else if (s.cur.ball) {
+      // A pass on its way (stopped dead where it was cut out).
+      const k = s.end ? 1 : Math.min(1, s.acc / TICK);
+      const from = s.prev.ball ?? s.cur.ball;
+      x = lerp(from.x, s.cur.ball.x, k);
+      y = lerp(from.y, s.cur.ball.y, k);
+      z = lerp(from.z, s.cur.ball.z, k);
+    } else if (end?.outcome === "dispossessed") {
+      // Taken off his feet: it runs on with the slide.
+      const d = s.cur.defs.find((o) => o.mode === "lunge");
+      x = g.position.x + (d ? d.dirX * 5 * s.dt : 0);
+      z = g.position.z + (d ? d.dirZ * 5 * s.dt : 0);
     } else {
       const a = attackerAt(s);
       // Dribbling: a touch every couple of strides runs it a little ahead.
@@ -911,7 +1334,11 @@ const CAM_BACK_FAR = 7.6;
 const CAM_UP_NEAR = 2.6;
 const CAM_UP_FAR = 3.4;
 
-function CameraRig({ stage, flight }: { stage: StageRef; flight: ShotFlight | null }) {
+/** The team episodes want the teammates in the frame: further back, higher. */
+const CAM_WIDE_BACK = 1.75;
+const CAM_WIDE_UP = 2.1;
+
+function CameraRig({ stage, flight, wide }: { stage: StageRef; flight: ShotFlight | null; wide: boolean }) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const aspect = useThree((s) => s.size.width / s.size.height);
   const tmp = useMemo(
@@ -938,7 +1365,8 @@ function CameraRig({ stage, flight }: { stage: StageRef; flight: ShotFlight | nu
       const bz = lerp(-a.z / len, a.hz, 0.35);
       const bl = Math.hypot(bx, bz) || 1;
       const near = Math.min(1, Math.max(0, (a.z - 6) / 14));
-      tmp.want.set(a.x - (bx / bl) * lerp(CAM_BACK_NEAR, CAM_BACK_FAR, near), lerp(CAM_UP_NEAR, CAM_UP_FAR, near), a.z - (bz / bl) * lerp(CAM_BACK_NEAR, CAM_BACK_FAR, near));
+      const back = lerp(CAM_BACK_NEAR, CAM_BACK_FAR, near) * (wide ? CAM_WIDE_BACK : 1);
+      tmp.want.set(a.x - (bx / bl) * back, lerp(CAM_UP_NEAR, CAM_UP_FAR, near) * (wide ? CAM_WIDE_UP : 1), a.z - (bz / bl) * back);
       tmp.look.set(a.x, 0.9, a.z).lerp(tmp.goal, 0.5);
       if (!placed.current) {
         camera.position.copy(tmp.want);

@@ -137,8 +137,11 @@ export class Finger {
 const STICK_RADIUS = 0.13; // of the shorter screen side
 const DEAD = 0.22;
 const SPRINT = 0.88;
+/** Pulled down past this share of the radius, and mostly down: back. */
+const BACK_FROM = 0.4;
+const BACK_SLOPE = 0.8;
 
-export type StickState = { hold: 0 | 1 | 2; steer: number; knob: { x: number; y: number }; anchor: { x: number; y: number } };
+export type StickState = { hold: 0 | 1 | 2 | 3; steer: number; knob: { x: number; y: number }; anchor: { x: number; y: number } };
 
 export class Stick {
   private anchor = { x: 0, y: 0 };
@@ -187,7 +190,9 @@ export class Stick {
     const dx = this.knob.x - this.anchor.x;
     const dy = this.knob.y - this.anchor.y;
     const k = Math.hypot(dx, dy) / r;
-    const hold = !this.down || k < DEAD ? 0 : k >= SPRINT ? 2 : 1;
+    // Pulled towards the player he turns and runs back with the ball.
+    const backs = dy > r * BACK_FROM && dy > Math.abs(dx) * BACK_SLOPE;
+    const hold = !this.down || k < DEAD ? 0 : backs ? 3 : k >= SPRINT ? 2 : 1;
     return { hold, steer: hold ? quantizeSteer(dx / r) : 0, knob: this.knob, anchor: this.anchor };
   }
 }

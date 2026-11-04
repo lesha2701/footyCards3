@@ -51,6 +51,13 @@ CLIPS = {
     'strafe_l': ('jog strafe left', False),
     'strafe_r': ('jog strafe right', False),
     'trip': ('soccer trip', False),
+    # The team episodes: the runner's header, a first touch, the defender's
+    # slide.
+    'header': ('header soccerball', False),
+    'scissor': ('scissor kick', False),
+    'receive': ('receive soccerball', False),
+    'slide_r': ('soccer tackle', False),
+    'slide_l': ('soccer tackle', True),
     # Goal celebrations: down on his knees, arms up on the run, the leap.
     'cheer_knees': ('rk:12_Goal_Celebration_01:1:210', False),
     'cheer_arms': ('rk:13_Goal_Celebration_02:1:213', False),

@@ -18,6 +18,7 @@ export const ONE_ON_ONE_MOVES_URL = "/one-on-one-3d/moves.glb";
 const STRIKES = ["shot_r", "shot_l", "power_r", "power_l", "pass_r", "pass_l", "chip_r", "chip_l"] as const;
 const OTHERS = [
   "strafe_l", "strafe_r", "trip", "cheer_knees", "cheer_arms", "cheer_leap", "gk_set", "roulette_r", "roulette_l",
+  "header", "scissor", "receive", "slide_r", "slide_l",
   "gk_scoop", "gk_catch_high", "gk_catch_low", "gk_block_l", "gk_block_r", "gk_miss", "gk_getup",
 ] as const;
 export type Strike = (typeof STRIKES)[number];
@@ -43,11 +44,17 @@ const PLANT_DOWN = 0.02;
 /** The plant is looked for this long before the contact (s). */
 const PLANT_WINDOW = 0.5;
 
+export type FootAt = { t: number; y: number; x: number; z: number };
+
 export type Moves = {
   clips: Record<Move, THREE.AnimationClip>;
   strikes: Record<Strike, StrikeTiming>;
   /** When the keeper's hands are lowest in the scoop: the ball is his. */
   scoopPickup: number;
+  /** When the head is furthest forward in the header: the ball meets it. */
+  headerAt: number;
+  /** The scissor kick's striking foot on its way up, in the model's frame. */
+  scissorRise: FootAt[];
 };
 
 const SAMPLE = 1 / 60;
@@ -130,6 +137,44 @@ function lowestHands(gltf: GLTF, clip: THREE.AnimationClip): number {
   return at;
 }
 
+/** When a bone is furthest forward (the clip's +z), above `above` m. */
+function furthestForward(gltf: GLTF, clip: THREE.AnimationClip, bone: string, above: number): number {
+  const a = new THREE.Vector3();
+  let far = -Infinity;
+  let at = clip.duration / 2;
+  sample(gltf, clip, (bones, t) => {
+    if (!bones[bone]) return;
+    bones[bone].getWorldPosition(a);
+    if (a.y > above && a.z > far) {
+      far = a.z;
+      at = t;
+    }
+  });
+  return at;
+}
+
+/** A foot rising through the clip, up to its highest. */
+function footRise(gltf: GLTF, clip: THREE.AnimationClip, bone: string): FootAt[] {
+  const a = new THREE.Vector3();
+  const path: FootAt[] = [];
+  sample(gltf, clip, (bones, t) => {
+    if (!bones[bone]) return;
+    bones[bone].getWorldPosition(a);
+    path.push({ t, y: a.y, x: a.x, z: a.z });
+  });
+  let top = 0;
+  path.forEach((p, i) => {
+    if (p.y > path[top].y) top = i;
+  });
+  return path.slice(0, top + 1);
+}
+
+/** Where the scissor kick's foot gets to this height. */
+export function scissorFoot(moves: Moves, y: number): FootAt {
+  const rise = moves.scissorRise;
+  return rise.find((p) => p.y >= y) ?? rise[rise.length - 1] ?? { t: 0.8, y, x: 0, z: 0.4 };
+}
+
 export function prepareMoves(model: GLTF, moves: GLTF): Moves {
   const byName: Record<string, THREE.AnimationClip> = {};
   for (const clip of moves.animations) byName[clip.name] = clip;
@@ -146,7 +191,13 @@ export function prepareMoves(model: GLTF, moves: GLTF): Moves {
   for (const name of STRIKES) {
     if (clips[name]) strikes[name] = strikeTiming(model, clips[name], name.endsWith("_l") ? "left" : "right");
   }
-  return { clips, strikes, scoopPickup: clips.gk_scoop ? lowestHands(model, clips.gk_scoop) : 0.8 };
+  return {
+    clips,
+    strikes,
+    scoopPickup: clips.gk_scoop ? lowestHands(model, clips.gk_scoop) : 0.8,
+    headerAt: clips.header ? furthestForward(model, clips.header, "Head", 1) : 0.5,
+    scissorRise: clips.scissor ? footRise(model, clips.scissor, "RightToeBase") : [],
+  };
 }
 
 /** Puts the moves on a player's mixer next to its own clips. */

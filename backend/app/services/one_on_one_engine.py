@@ -48,6 +48,7 @@ RUN_ACCEL = 7.5
 RUN_BRAKE = 8
 STEER_SPREAD = 1.3
 TURN_K = 0.16
+TURN_ROUND = 0.3
 SPRINT_PACE = 1.2
 SPRINT_TURN_K = 0.08
 SPRINT_LEAD = 0.95
@@ -86,6 +87,12 @@ SHOT_CHIP_LOFT = 0.6
 AIM_REF = 18
 CHIP_HEIGHT = 1.8
 CHIP_KEEPER_OUT = 2
+VOLLEY_Y = 0.95
+HEADER_Y = 1.4
+HEADER_SPEED = 11
+DIVING_HEADER_SPEED = 14
+BLOCK_RADIUS = 0.34
+BLOCK_HEIGHT = 1.85
 
 
 def _lerp(a: float, b: float, k: float) -> float:
@@ -107,6 +114,7 @@ class Keeper:
     fall_ticks: int
     shot_react: float
     dive_speed: float
+    max_out: float = KEEPER_MAX_OUT
 
 
 @dataclass
@@ -140,7 +148,7 @@ def create_episode(seed: int, rating: int = 75) -> EpisodeSetup:
 
 @dataclass
 class Flight:
-    outcome: str  # goal | save | miss
+    outcome: str  # goal | save | miss | blocked
     from_x: float
     from_z: float
     keeper_x: float
@@ -156,7 +164,9 @@ class Flight:
 
 @dataclass
 class EpisodeEnd:
-    outcome: str  # goal | save | tackle | miss | lost
+    # goal | save | tackle | miss | lost; the team episodes' (team_attack_engine):
+    # dispossessed | intercepted | offside | cleared | blocked
+    outcome: str
     tick: int
     feint: str | None  # bit | read
     chip: bool
@@ -182,6 +192,13 @@ class State:
     k_ticks: int = 0
     lunge_dir: int = 0
     ended: EpisodeEnd | None = None
+    # The ball off his feet (a pass on its way) at this height, the men in
+    # the way of a shot and the team episodes' own state (team_attack_engine).
+    free: list[float] | None = None
+    from_y: float | None = None
+    blockers: list[tuple[float, float]] = field(default_factory=list)
+    scatter: float = 0
+    team: object = None
 
 
 def init_state(setup: EpisodeSetup) -> State:
@@ -190,6 +207,8 @@ def init_state(setup: EpisodeSetup) -> State:
 
 
 def _ball(s: State) -> tuple[float, float]:
+    if s.free is not None:
+        return s.free[0], s.free[1]
     return s.x + s.hx * s.lead, s.z + s.hz * s.lead
 
 
@@ -240,7 +259,7 @@ def _keeper_step(setup: EpisodeSetup, s: State) -> None:
         s.k_mode = "rush"
     else:
         gl = max(0.5, math.sqrt(bx * bx + bz * bz))
-        out = _clamp(gl - k.keep_gap, KEEPER_START_Z, KEEPER_MAX_OUT)
+        out = _clamp(gl - k.keep_gap, KEEPER_START_Z, k.max_out)
         tx = (bx / gl) * out
         tz = (bz / gl) * out
         speed = k.set_speed
@@ -264,8 +283,12 @@ def _step_run(setup: EpisodeSetup, s: State, hold: int, steer_milli: int) -> Non
     steer = _clamp(steer_milli, -1000, 1000) / 1000
     sx = steer * STEER_SPREAD
     dl = math.sqrt(sx * sx + 1)
+    back = hold == 3
     want_x = sx / dl
-    want_z = -1 / dl
+    want_z = (1 if back else -1) / dl
+    if (s.hz < -TURN_ROUND) if back else (s.hz > TURN_ROUND):
+        want_x = 1 if sx > 0 or (sx == 0 and s.hx >= 0) else -1
+        want_z = 0
     sprint = hold == 2
     turn_k = SPRINT_TURN_K if sprint else TURN_K
     hx = s.hx + (want_x - s.hx) * turn_k
@@ -367,13 +390,22 @@ def _hit_lying(p, x0, x1, y, z, r):
 def shoot(setup: EpisodeSetup, s: State, q: Swipe) -> Flight:
     """Mirrors `shoot` (minus the render samples)."""
     fx, fz = _ball(s)
+    from_y = BALL_RADIUS if s.from_y is None else s.from_y
     dist = math.sqrt(fx * fx + fz * fz)
     kick_setup = fk.Setup(
-        setup.seed, setup.edge, (fx, BALL_RADIUS, fz), [], 99, 0, 0, 0,
+        setup.seed, setup.edge, (fx, from_y, fz), [], 99, 0, 0, 0,
         min_speed=SHOT_MIN_SPEED, lift_scale=SHOT_LIFT_SCALE, aim_scale=_clamp(AIM_REF / dist, 1, 3),
         chip_loft=SHOT_CHIP_LOFT,
     )
     velocity, kick_spin = fk.swipe_to_kick(kick_setup, q)
+    if from_y > VOLLEY_Y:
+        # Off the head: placed, not hit.
+        pace = math.sqrt(velocity[0] * velocity[0] + velocity[1] * velocity[1] + velocity[2] * velocity[2])
+        top = HEADER_SPEED if s.from_y > HEADER_Y else DIVING_HEADER_SPEED
+        if pace > top:
+            velocity = ((velocity[0] / pace) * top, (velocity[1] / pace) * top, (velocity[2] / pace) * top)
+    if s.scatter:
+        velocity = (velocity[0] + velocity[2] * s.scatter, velocity[1], velocity[2])
 
     kx, kz = s.kx, s.kz
     if s.k_mode == "lunge":
@@ -391,7 +423,7 @@ def shoot(setup: EpisodeSetup, s: State, q: Swipe) -> Flight:
     kdz = fz - kz
     spread = lying_for == 0 and kdx * kdx + kdz * kdz < SPREAD_DIST * SPREAD_DIST
 
-    px, py, pz = fx, BALL_RADIUS, fz
+    px, py, pz = fx, from_y, fz
     vx, vy, vz = velocity
     sx, sy, sz = kick_spin
     hand_x, hand_y = kx, KEEPER_HANDS_Y
@@ -455,6 +487,18 @@ def shoot(setup: EpisodeSetup, s: State, q: Swipe) -> Flight:
             over_y = py
 
         p = (px, py, pz)
+        block_normal = None
+        for bx, bz in s.blockers:
+            block_normal = fk._hit_vertical_capsule(p, bx, bz, BLOCK_RADIUS, BLOCK_HEIGHT - BLOCK_RADIUS, BLOCK_RADIUS)
+            if block_normal:
+                break
+        if block_normal:
+            vx, vy, vz = fk._reflect((vx, vy, vz), block_normal, 0.35)
+            outcome = "blocked"
+            events.append("wall")
+            decided_at = t
+            break
+
         if t < lying_for:
             keeper_normal = _hit_lying(p, kx - FALLEN_HALF, kx + FALLEN_HALF, FALLEN_Y, kz, FALLEN_RADIUS)
         else:

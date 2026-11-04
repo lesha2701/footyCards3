@@ -1,27 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type RefObject } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { fetchCollection } from "@/api/collection";
 import { claimOneOnOneReward, playOneOnOneAttack, startOneOnOne } from "@/api/games";
 import CardPickerModal from "@/components/cards/CardPickerModal";
-import ErrorBoundary from "@/components/common/ErrorBoundary";
 import GameHero from "@/components/common/GameHero";
 import { IconCoin } from "@/components/icons";
-import SceneCrash from "@/components/freeKick3d/SceneCrash";
-import { OutcomeCaption, ScoreBug } from "@/components/oneOnOne/Broadcast";
-import FeintPicker from "@/components/oneOnOne/FeintPicker";
-import OneOnOneScene3D, { type LiveInput } from "@/components/oneOnOne/OneOnOneScene3D";
+import AttackRun from "@/components/oneOnOne/AttackRun";
 import { formatGameError } from "@/lib/errors";
-import { useCrashLog } from "@/lib/freeKick3d/crashLog";
-import { crowdChant, crowdHush, crowdTension, playFreeKickSfx, startCrowd } from "@/lib/freeKick3d/sfx";
-import type { ShotIntent } from "@/lib/oneOnOne/aim";
-import { createEpisode, type EpisodeEnd } from "@/lib/oneOnOne/engine";
-import { Finger, Stick } from "@/lib/oneOnOne/gesture";
-import { EpisodeRecorder } from "@/lib/oneOnOne/recorder";
-import { FOOT_LABEL, KIND_LABEL, techniqueOf } from "@/lib/oneOnOne/technique";
-import { audio } from "@/lib/sound";
-import { haptic, hapticNotify, showConfirm } from "@/lib/telegram";
+import { hapticNotify, showConfirm } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import type { OneOnOneAttack, OneOnOneOutcome, OneOnOneResult, OneOnOneStartResult, UserCard } from "@/types";
 
@@ -31,11 +19,11 @@ const OUTCOME: Record<OneOnOneOutcome, { label: string; className: string }> = {
   tackle: { label: "Вратарь забрал", className: "text-accent-cyan" },
   miss: { label: "Мимо", className: "text-ink-mist" },
   lost: { label: "Момент упущен", className: "text-ink-mist" },
-};
-
-const BONUS: Record<OneOnOneResult["bonuses"][number], string> = {
-  feint: "после финта",
-  chip: "парашютом",
+  dispossessed: { label: "Отбор", className: "text-ink-mist" },
+  intercepted: { label: "Перехват", className: "text-ink-mist" },
+  offside: { label: "Офсайд", className: "text-ink-mist" },
+  cleared: { label: "Вынесли", className: "text-ink-mist" },
+  blocked: { label: "Блок", className: "text-accent-cyan" },
 };
 
 type Series = OneOnOneStartResult & { card: UserCard };
@@ -165,10 +153,17 @@ export default function OneOnOnePage() {
 
   return (
     <AttackRun
-      series={series}
-      attack={attack}
-      total={total}
+      seed={attack.seed}
+      index={attack.attack_index}
+      total={series.total_attacks}
+      rating={series.rating}
+      name={series.card.player.display_name}
+      ball={series.ball}
+      feint={series.feint}
+      coins={total}
       results={results.map((r) => r.outcome)}
+      nextLabel={attack.attack_index + 1 >= series.total_attacks ? "Итоги серии" : "Следующая атака"}
+      submit={(timeline) => playOneOnOneAttack(series.session_id, timeline)}
       onBack={async () => {
         if (await showConfirm("Серия не закончена — оставшиеся атаки сгорят. Выйти?")) navigate("/play");
       }}
@@ -182,443 +177,5 @@ export default function OneOnOnePage() {
         }
       }}
     />
-  );
-}
-
-/** The shot button's power bar fills over this (ms) — after a tap's length
- * for the shot button, a tap there being the auto shot — and is red past
- * the top of the goal. */
-const CHARGE_MS = 900;
-const TAP_GRACE_MS = 200;
-const OVER_POWER = 0.9;
-const BAR_R = 46;
-const BAR_LENGTH = 2 * Math.PI * BAR_R;
-
-/** The bar round a button (an SVG ring the page fills by its ref). */
-function PowerRing({ barRef }: { barRef: RefObject<SVGCircleElement> }) {
-  return (
-    <svg viewBox="0 0 100 100" className="pointer-events-none absolute -inset-1.5 h-[calc(100%+12px)] w-[calc(100%+12px)] -rotate-90">
-      <circle
-        ref={barRef}
-        cx={50}
-        cy={50}
-        r={BAR_R}
-        fill="none"
-        stroke="#c6e63a"
-        strokeWidth={6}
-        strokeLinecap="round"
-        strokeDasharray={BAR_LENGTH}
-        strokeDashoffset={BAR_LENGTH}
-      />
-    </svg>
-  );
-}
-
-/** One attack: the 3D episode, the two thumbs, the server's verdict. */
-function AttackRun({
-  series,
-  attack,
-  total,
-  results,
-  onBack,
-  onFeint,
-  onResult,
-  onNext,
-}: {
-  series: Series;
-  attack: OneOnOneAttack;
-  total: number;
-  results: OneOnOneOutcome[];
-  onBack: () => void;
-  onFeint: (code: string | null) => void;
-  onResult: (r: OneOnOneResult) => void;
-  onNext: (r: OneOnOneResult) => void;
-}) {
-  const setup = useMemo(() => createEpisode(attack.seed, series.rating), [attack.seed, series.rating]);
-  const recorder = useMemo(() => new EpisodeRecorder(setup), [setup]);
-  const input = useRef<LiveInput>({ live: false, hold: 0, steer: 0, feint: 0, shot: null, aiming: false, aim: 0, power: null, lob: false, stride: null });
-  const stick = useRef(new Stick(window.innerWidth, window.innerHeight));
-  const pad = useRef(new Finger(window.innerWidth, window.innerHeight));
-  const knob = useRef<HTMLDivElement | null>(null);
-  const anchor = useRef<HTMLDivElement | null>(null);
-  const homeStick = useRef<HTMLDivElement | null>(null);
-  const chipBtn = useRef<HTMLDivElement | null>(null);
-  const shotBar = useRef<SVGCircleElement | null>(null);
-  const chipBar = useRef<SVGCircleElement | null>(null);
-  // The button held now: which, since when (performance.now), and whether
-  // the press turned into a feint (then letting go is no shot).
-  const press = useRef<{ kind: "pad" | "chip"; at: number; feinted: boolean } | null>(null);
-  const fpsRef = useRef<HTMLSpanElement | null>(null);
-  const crashLog = useCrashLog();
-  const [ready, setReady] = useState(false);
-  const [started, setStarted] = useState(false);
-  const [feintUsed, setFeintUsed] = useState(false);
-  const [ended, setEnded] = useState<EpisodeEnd | null>(null);
-  const [shown, setShown] = useState(false);
-
-  const play = useMutation({
-    mutationFn: () => playOneOnOneAttack(series.session_id, recorder.timeline),
-    onSuccess: onResult,
-  });
-  const verdict = play.data;
-
-  useEffect(() => startCrowd(), []);
-  useEffect(() => {
-    if (ready) crowdChant();
-  }, [ready]);
-  useEffect(() => {
-    const onResize = () => {
-      stick.current.resize(window.innerWidth, window.innerHeight);
-      pad.current.resize(window.innerWidth, window.innerHeight);
-    };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-
-  const onReady = useCallback(() => setReady(true), []);
-  const { mutate: submit } = play;
-  const onEnded = useCallback(
-    (end: EpisodeEnd) => {
-      setEnded(end);
-      submit();
-    },
-    [submit],
-  );
-  const onDecided = useCallback(() => setShown(true), []);
-  // Which foot and how (shown with the outcome; the same for this timeline).
-  const technique = useMemo(() => (ended ? techniqueOf(recorder.state, recorder.timeline, input.current.stride) : null), [ended, recorder]);
-
-  // The crowd reacts the moment the outcome is on screen — on the local
-  // episode, which is the server's own computation.
-  const local = shown ? ended?.outcome ?? null : null;
-  useEffect(() => {
-    if (!local) return;
-    crowdHush();
-    crowdTension(false);
-    hapticNotify(local === "goal" ? "success" : local === "save" || local === "tackle" ? "warning" : "error");
-    playFreeKickSfx(local === "goal" ? "roar" : "groan");
-  }, [local]);
-
-  const playing = ready && !ended;
-  const placeStick = () => {
-    const st = stick.current.read();
-    const r = stick.current.radius;
-    if (anchor.current) {
-      anchor.current.style.opacity = stick.current.down ? "1" : "0";
-      anchor.current.style.width = anchor.current.style.height = `${r * 2}px`;
-      anchor.current.style.transform = `translate(${st.anchor.x - r}px, ${st.anchor.y - r}px)`;
-      anchor.current.style.borderColor = st.hold === 2 ? "rgba(198,230,58,1)" : "rgba(255,255,255,0.85)";
-    }
-    // The resting stick steps aside while the thumb holds the live one.
-    if (homeStick.current) homeStick.current.style.opacity = stick.current.down ? "0" : "1";
-    if (knob.current) {
-      knob.current.style.opacity = stick.current.down ? "1" : "0";
-      knob.current.style.transform = `translate(${st.knob.x - 20}px, ${st.knob.y - 20}px)`;
-    }
-  };
-  const syncStick = () => {
-    const st = stick.current.read();
-    input.current.hold = st.hold;
-    // While the right thumb is down the lean aims the shot and no longer
-    // turns him (else aiming at a corner runs him off towards it).
-    input.current.aim = st.steer;
-    input.current.steer = input.current.aiming ? 0 : st.steer;
-    placeStick();
-  };
-  // Which finger is which: the one that came down on the left half is the
-  // stick, on the right half the action thumb (on the small button — the chip).
-  const fingers = useRef(new Map<number, "stick" | "pad" | "chip">());
-
-  /** The power bar of the button held: fills over CHARGE_MS (the shot's
-   * from the end of a tap on), red once it is past the top of the goal. */
-  const powerOf = (p: NonNullable<typeof press.current>, now: number) =>
-    Math.min(1, Math.max(0, now - p.at - (p.kind === "pad" ? TAP_GRACE_MS : 0)) / CHARGE_MS);
-  const drawBars = () => {
-    const p = press.current;
-    const power = p && !p.feinted ? powerOf(p, performance.now()) : 0;
-    input.current.power = p && !p.feinted ? power : null;
-    input.current.lob = p?.kind === "chip";
-    for (const [bar, kind] of [[shotBar.current, "pad"], [chipBar.current, "chip"]] as const) {
-      if (!bar) continue;
-      const k = p?.kind === kind ? power : 0;
-      bar.style.strokeDashoffset = `${BAR_LENGTH * (1 - k)}`;
-      bar.style.stroke = k > OVER_POWER ? "#f87171" : "#c6e63a";
-    }
-    if (p) requestAnimationFrame(drawBars);
-  };
-  const startPress = (kind: "pad" | "chip") => {
-    press.current = { kind, at: performance.now(), feinted: false };
-    input.current.aiming = true;
-    syncStick();
-    requestAnimationFrame(drawBars);
-  };
-  const endPress = () => {
-    const p = press.current;
-    press.current = null;
-    input.current.aiming = false;
-    syncStick();
-    drawBars();
-    return p ? powerOf(p, performance.now()) : 0;
-  };
-  const shootNow = (shot: ShotIntent) => {
-    input.current.shot = shot;
-    haptic("medium");
-    crowdTension(true);
-  };
-
-  const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
-    if (!playing) return;
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      // Not every WebView lets a pointer be captured; the controls still work.
-    }
-    audio(); // resume the audio context inside the gesture (mobile autoplay rules)
-    input.current.live = true;
-    if (!started) setStarted(true);
-    const left = e.clientX < window.innerWidth / 2;
-    const chip = chipBtn.current?.getBoundingClientRect();
-    const onChip =
-      !!chip && Math.hypot(e.clientX - (chip.left + chip.width / 2), e.clientY - (chip.top + chip.height / 2)) < chip.width * 0.75;
-    if (left && !stick.current.down) {
-      fingers.current.set(e.pointerId, "stick");
-      stick.current.start({ x: e.clientX, y: e.clientY });
-      syncStick();
-    } else if (!left && !press.current && onChip) {
-      fingers.current.set(e.pointerId, "chip");
-      startPress("chip");
-    } else if (!left && !press.current && !pad.current.down) {
-      fingers.current.set(e.pointerId, "pad");
-      pad.current.start({ x: e.clientX, y: e.clientY, t: e.timeStamp });
-      startPress("pad");
-    }
-  };
-  const feint = (dir: number) => {
-    if (dir === 0 || feintUsed || recorder.state.feintUsed) return;
-    input.current.feint = dir;
-    setFeintUsed(true);
-    haptic("light");
-  };
-  const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
-    const role = fingers.current.get(e.pointerId);
-    if (!playing || !role) return;
-    if (role === "stick") {
-      stick.current.move({ x: e.clientX, y: e.clientY });
-      syncStick();
-    } else if (role === "pad") {
-      const dir = pad.current.move({ x: e.clientX, y: e.clientY, t: e.timeStamp });
-      if (dir !== 0 && press.current) press.current.feinted = true;
-      feint(dir);
-    }
-  };
-  const release = (e: PointerEvent<HTMLDivElement>, cancelled: boolean) => {
-    const role = fingers.current.get(e.pointerId);
-    fingers.current.delete(e.pointerId);
-    if (role === "stick") {
-      stick.current.end();
-      syncStick();
-    } else if (role === "chip") {
-      const power = endPress();
-      if (!cancelled && playing) shootNow({ kind: "chip", power, aim: input.current.aim / 1000 });
-    } else if (role === "pad") {
-      const feinted = press.current?.feinted;
-      const power = endPress();
-      if (cancelled) return pad.current.cancel();
-      const intent = pad.current.end({ x: e.clientX, y: e.clientY, t: e.timeStamp });
-      if (!playing || feinted) return;
-      // As in FIFA: where it goes is the left stick's lean; the button held
-      // and let go is a drive as hard as its bar, a swipe up off it the
-      // finesse, a tap leaves it all to the striker.
-      const aim = input.current.aim / 1000;
-      if (intent.feint) feint(intent.feint);
-      else if (intent.shot) shootNow({ kind: "finesse", swipe: intent.shot, aim });
-      else if (intent.tap) shootNow({ kind: "auto" });
-      else shootNow({ kind: "drive", power, aim });
-    }
-  };
-
-  const isLast = attack.attack_index + 1 >= series.total_attacks;
-  const outcome = shown && verdict ? verdict.outcome : null;
-
-  return (
-    <div className="fixed inset-0 z-50 select-none overflow-hidden bg-bg-base text-ink-chalk">
-      <ErrorBoundary fallback={(error, retry) => <SceneCrash error={error} retry={retry} log={crashLog.current} />}>
-        <OneOnOneScene3D
-          setup={setup}
-          recorder={recorder}
-          input={input}
-          onEnded={onEnded}
-          onDecided={onDecided}
-          onReady={onReady}
-          fpsRef={fpsRef}
-          ball={series.ball}
-          feint={series.feint}
-        />
-      </ErrorBoundary>
-
-      {/* Touch surface over the canvas; the stick shows where the finger steers from. */}
-      <div
-        className="absolute inset-0"
-        style={{ touchAction: "none" }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={(e) => release(e, false)}
-        onPointerCancel={(e) => release(e, true)}
-      >
-        <div
-          ref={anchor}
-          className="pointer-events-none absolute left-0 top-0 rounded-full border-[3px] border-white/85 bg-black/45 opacity-0 shadow-lg"
-        />
-        <div
-          ref={knob}
-          className="pointer-events-none absolute left-0 top-0 h-10 w-10 rounded-full border-2 border-black/50 bg-accent-lime opacity-0 shadow-lg"
-        />
-        {playing && (
-          // Where the thumbs go: shown the whole attack, dark enough to read
-          // over the pitch; the labels only until the first touch.
-          <div
-            className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-between px-5 text-center text-caption font-semibold text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.9)]"
-            style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 36px)" }}
-          >
-            <div
-              ref={homeStick}
-              className="flex h-24 w-24 flex-col items-center justify-center rounded-full border-[3px] border-white/70 bg-black/45 shadow-lg transition-opacity"
-            >
-              {started ? (
-                <div className="h-10 w-10 rounded-full border-2 border-black/50 bg-accent-lime/80" />
-              ) : (
-                <>
-                  Бег
-                  <span className="px-2 font-normal leading-tight text-white/80">край — спринт</span>
-                </>
-              )}
-            </div>
-            <div className="relative h-24 w-24">
-              <PowerRing barRef={shotBar} />
-              <div className="flex h-full w-full flex-col items-center justify-center rounded-full border-[3px] border-accent-lime/90 bg-accent-lime/25 shadow-lg">
-                Удар
-                <span className="px-2 font-normal leading-tight text-white/80">{started ? "держи · ↑" : "держи, ↑ — закрутка"}</span>
-              </div>
-              {/* The chip: a small button, an arc for a sign. */}
-              <div ref={chipBtn} className="absolute -left-3 -top-14 h-12 w-12" aria-label="Парашют">
-                <PowerRing barRef={chipBar} />
-                <div className="flex h-full w-full items-center justify-center rounded-full border-[3px] border-white/80 bg-black/50 shadow-lg">
-                  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="#fff" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M4 18 Q12 1 20 18" />
-                    <path d="M16.5 15.5 L20 18 L20.8 13.8" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-4">
-        <button
-          type="button"
-          onClick={onBack}
-          className="pointer-events-auto rounded-full bg-bg-surface/80 px-3 py-1.5 text-sm font-semibold"
-        >
-          ← Выйти
-        </button>
-        <div>
-          <ScoreBug
-            index={attack.attack_index}
-            total={series.total_attacks}
-            results={results}
-            coins={total}
-            name={series.card.player.display_name}
-            rating={series.rating}
-            extra={
-              started && !ended ? (
-                <span className={feintUsed ? "text-white/40" : "text-accent-lime"}>· {feintUsed ? "финт сделан" : "финт готов"}</span>
-              ) : null
-            }
-          />
-          <span ref={fpsRef} className="hidden" />
-        </div>
-      </div>
-
-      {!started && (
-        <div className="pointer-events-none absolute inset-x-0 top-24 px-6 text-center text-sm text-ink-chalk/90 drop-shadow">
-          {ready ? (
-            <>
-              Джойстик — бег, до края — спринт, наклон — угол удара.
-              <br />
-              «Удар»: держи — сила (выше), ↑ — закрутка, тап — авто, рывок вбок — финт. ⌒ — парашют.
-            </>
-          ) : (
-            "Загружаем…"
-          )}
-          {ready && (
-            <div className="mt-3 flex justify-center">
-              <FeintPicker value={series.feint ?? null} onChange={onFeint} />
-            </div>
-          )}
-        </div>
-      )}
-
-      {shown && !verdict && play.isPending && (
-        <div className="absolute inset-x-0 bottom-10 text-center text-sm text-ink-mist">Судья смотрит повтор…</div>
-      )}
-
-      {play.isError && (
-        <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 p-6 pb-10">
-          <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-300">
-            {formatGameError(play.error, "Атака не засчитана")}
-          </p>
-          <button type="button" onClick={() => play.mutate()} className="rounded-xl bg-accent px-6 py-3 font-semibold text-black">
-            Отправить ещё раз
-          </button>
-        </div>
-      )}
-
-      <OutcomeCaption outcome={local} />
-
-      {outcome && verdict && (
-        <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 bg-gradient-to-t from-bg-base/90 to-transparent p-6 pb-10 pt-16">
-          {technique && (
-            <div className="text-sm text-ink-chalk">
-              {FOOT_LABEL[technique.foot]} {KIND_LABEL[technique.kind]}
-            </div>
-          )}
-          {(verdict.bonuses.length > 0 || verdict.feint) && (
-            <div className="text-caption text-ink-chalk/80">
-              {verdict.bonuses.length > 0
-                ? verdict.bonuses.map((b) => (b === "chip" && technique?.kind === "chip" ? "бонус за парашют" : BONUS[b])).join(", ")
-                : verdict.feint === "read"
-                  ? "вратарь не купился на финт"
-                  : "вратарь купился на финт"}
-            </div>
-          )}
-          {verdict.coins_this_attack > 0 && (
-            <div className="flex items-center gap-1 font-mono text-lg font-bold text-accent-lime">
-              +{verdict.coins_this_attack}
-              <IconCoin size={16} />
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              // Same scene, next attack: no WebGL context churn between attacks.
-              input.current = { live: false, hold: 0, steer: 0, feint: 0, shot: null, aiming: false, aim: 0, power: null, lob: false, stride: null };
-              stick.current.end();
-              pad.current.cancel();
-              fingers.current.clear();
-              placeStick();
-              setStarted(false);
-              setFeintUsed(false);
-              setEnded(null);
-              setShown(false);
-              play.reset();
-              onNext(verdict);
-            }}
-            className="mt-1 rounded-xl bg-accent px-6 py-3 font-semibold text-black">
-            {isLast ? "Итоги серии" : "Следующая атака"}
-          </button>
-        </div>
-      )}
-    </div>
   );
 }

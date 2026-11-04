@@ -59,6 +59,17 @@ describe("the left thumb's stick", () => {
     expect(s.read()).toMatchObject({ hold: 0, steer: 0 });
   });
 
+  it("pulled down he runs back; leaning off it he runs on", () => {
+    const stick = new Stick(W, H);
+    stick.start({ x: 100, y: 600 });
+    stick.move({ x: 100, y: 600 + stick.radius * 0.7 });
+    expect(stick.read().hold).toBe(3);
+    stick.move({ x: 100 + stick.radius * 0.7, y: 600 + stick.radius * 0.3 });
+    expect(stick.read().hold).not.toBe(3);
+    stick.move({ x: 100, y: 600 - stick.radius * 0.7 });
+    expect(stick.read().hold).not.toBe(3);
+  });
+
   it("dragged past the rim the stick follows the thumb", () => {
     const s = new Stick(400, 800);
     s.start({ x: 100, y: 600 });

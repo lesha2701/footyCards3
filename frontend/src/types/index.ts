@@ -1710,7 +1710,9 @@ export interface OneOnOneStartResult {
   feint?: string | null;
 }
 
-export type OneOnOneOutcome = "goal" | "save" | "tackle" | "miss" | "lost";
+export type OneOnOneOutcome =
+  | "goal" | "save" | "tackle" | "miss" | "lost"
+  | "dispossessed" | "intercepted" | "offside" | "cleared" | "blocked";
 
 export interface OneOnOneResult {
   outcome: OneOnOneOutcome;

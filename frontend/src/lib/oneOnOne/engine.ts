@@ -50,6 +50,8 @@ import {
   type Vec3,
 } from "@/lib/freeKick3d/trajectory";
 
+import type { PassOrder, TeamRun } from "./team";
+
 // ---------------------------------------------------------------------------
 // Constants (engine tuning — the economy lives in GameConfig).
 // ---------------------------------------------------------------------------
@@ -70,6 +72,8 @@ const RUN_BRAKE = 8;
 const STEER_SPREAD = 1.3;
 /** Share of the way to the wanted heading turned each tick. */
 const TURN_K = 0.16;
+/** Heading further than this the wrong way along z, he turns via the side. */
+const TURN_ROUND = 0.3;
 /** The sprint (stick pushed to the rim): this much faster, turning this
  * much wider, the ball pushed this far ahead (easier for the keeper to
  * smother); the ball's distance from the foot follows by LEAD_K a tick. */
@@ -129,6 +133,15 @@ export const AIM_REF = 18;
 /** A goal over a keeper who came out at least CHIP_KEEPER_OUT m: «парашют». */
 const CHIP_HEIGHT = 1.8;
 const CHIP_KEEPER_OUT = 2;
+/** Struck from above this (m) it is a header, and no faster than this
+ * (m/s); under HEADER_Y he throws himself at it, and it goes harder. */
+export const VOLLEY_Y = 0.95;
+export const HEADER_Y = 1.4;
+const HEADER_SPEED = 11;
+const DIVING_HEADER_SPEED = 14;
+/** A man in the way of a shot: a capsule this wide and this tall (m). */
+const BLOCK_RADIUS = 0.34;
+const BLOCK_HEIGHT = 1.85;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -151,6 +164,8 @@ export type EpisodeKeeper = {
   shotReact: number;
   /** How fast his hands travel in a dive (m/s). */
   diveSpeed: number;
+  /** He comes no further out than this (m; default KEEPER_MAX_OUT). */
+  maxOut?: number;
 };
 
 export type EpisodeSetup = {
@@ -163,7 +178,11 @@ export type EpisodeSetup = {
 
 export type KeeperMode = "wait" | "set" | "rush" | "lunge" | "fallen";
 export type FeintResult = "bit" | "read";
-export type EpisodeOutcome = "goal" | "save" | "tackle" | "miss" | "lost";
+/** dispossessed, intercepted, offside, cleared and blocked: the team
+ * episodes' (team.ts). */
+export type EpisodeOutcome =
+  | "goal" | "save" | "tackle" | "miss" | "lost"
+  | "dispossessed" | "intercepted" | "offside" | "cleared" | "blocked";
 
 export type EpisodeState = {
   /** Ticks stepped so far. */
@@ -187,13 +206,24 @@ export type EpisodeState = {
   kTicks: number;
   lungeDir: number;
   ended: EpisodeEnd | null;
+  /** The ball off his feet: a pass on its way (team.ts) — at this height. */
+  free?: { x: number; z: number } | null;
+  fromY?: number;
+  /** Men in the way of a shot (m; team.ts). */
+  blockers?: { x: number; z: number }[];
+  /** A shot struck first time goes this far off line (team.ts; a share of
+   * its pace across). */
+  scatter?: number;
+  /** The team episodes' own state (team.ts). */
+  team?: TeamRun;
 };
 
 /** One tick's input: the finger held (run) and its steer in thousandths
  * (−1000 left … 1000 right); a feint (−1 / 1) on the tick it's made; the
  * shot once released (it waits for a feint in progress to finish). */
-/** hold: 0 — stop, 1 — run with the ball, 2 — sprint. */
-export type TickInput = { hold: number; steer: number; feint: number; shot: QuantizedSwipe | null };
+/** hold: 0 — stop, 1 — run with the ball, 2 — sprint, 3 — back, away from the goal. */
+/** `pass` (team.ts): the pass on the tick it's played. */
+export type TickInput = { hold: number; steer: number; feint: number; shot: QuantizedSwipe | null; pass?: PassOrder | null };
 
 export type FlightSample = {
   t: number;
@@ -204,10 +234,10 @@ export type FlightSample = {
   lying: boolean;
 };
 
-export type FlightEvent = { t: number; type: "post" | "bounce" | "save" | "goal" | "miss" };
+export type FlightEvent = { t: number; type: "post" | "bounce" | "save" | "goal" | "miss" | "wall" };
 
 export type ShotFlight = {
-  outcome: "goal" | "save" | "miss";
+  outcome: "goal" | "save" | "miss" | "blocked";
   kick: KickParams;
   from: { x: number; z: number };
   keeper: { x: number; z: number; lyingFor: number; reaction: number; spread: boolean };
@@ -234,6 +264,8 @@ export type EpisodeTimeline = {
   controls: [number, number, number][];
   feint: { tick: number; dir: number } | null;
   shot: ({ tick: number } & QuantizedSwipe) | null;
+  /** The team episodes' passes (team.ts). */
+  passes?: ({ tick: number } & PassOrder)[];
 };
 
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
@@ -290,10 +322,11 @@ export function initState(setup: EpisodeSetup): EpisodeState {
 }
 
 export function ballOf(s: EpisodeState): { x: number; z: number } {
+  if (s.free) return s.free;
   return { x: s.x + s.hx * s.lead, z: s.z + s.hz * s.lead };
 }
 
-function keeperDown(s: EpisodeState): boolean {
+export function keeperDown(s: EpisodeState): boolean {
   return s.kMode === "lunge" || s.kMode === "fallen";
 }
 
@@ -304,7 +337,7 @@ function keeperDown(s: EpisodeState): boolean {
 /** The sidestep starts; the keeper bites (lunges the wrong way and goes
  * down) when its chance — best at FEINT_SWEET metres from him — beats his
  * composure. */
-function startFeint(setup: EpisodeSetup, s: EpisodeState, dir: number) {
+export function startFeint(setup: EpisodeSetup, s: EpisodeState, dir: number) {
   s.feintUsed = true;
   s.feintTicks = FEINT_TICKS;
   s.feintDir = dir;
@@ -325,7 +358,7 @@ function startFeint(setup: EpisodeSetup, s: EpisodeState, dir: number) {
 
 /** The keeper over one tick: waits, closes the angle, rushes the ball — or
  * lunges and lies there after biting on a feint. */
-function keeperStep(setup: EpisodeSetup, s: EpisodeState) {
+export function keeperStep(setup: EpisodeSetup, s: EpisodeState) {
   const k = setup.keeper;
   if (s.kMode === "lunge") {
     s.kx += s.lungeDir * (LUNGE / LUNGE_TICKS);
@@ -357,7 +390,7 @@ function keeperStep(setup: EpisodeSetup, s: EpisodeState) {
   } else {
     // On the line goal centre → ball, keepGap short of it.
     const gl = Math.max(0.5, Math.sqrt(b.x * b.x + b.z * b.z));
-    const out = clamp(gl - k.keepGap, KEEPER_START_Z, KEEPER_MAX_OUT);
+    const out = clamp(gl - k.keepGap, KEEPER_START_Z, k.maxOut ?? KEEPER_MAX_OUT);
     tx = (b.x / gl) * out;
     tz = (b.z / gl) * out;
     speed = k.setSpeed;
@@ -376,16 +409,22 @@ function keeperStep(setup: EpisodeSetup, s: EpisodeState) {
   }
 }
 
-function end(s: EpisodeState, outcome: EpisodeOutcome, flight: ShotFlight | null = null, chip = false) {
+export function end(s: EpisodeState, outcome: EpisodeOutcome, flight: ShotFlight | null = null, chip = false) {
   s.ended = { outcome, tick: s.tick, feint: s.feint, chip, flight };
 }
 
-function stepRun(setup: EpisodeSetup, s: EpisodeState, input: TickInput) {
+export function stepRun(setup: EpisodeSetup, s: EpisodeState, input: TickInput) {
   const steer = clamp(input.steer, -1000, 1000) / 1000;
   const sx = steer * STEER_SPREAD;
   const dl = Math.sqrt(sx * sx + 1);
-  const wantX = sx / dl;
-  const wantZ = -1 / dl;
+  const back = input.hold === 3;
+  let wantX = sx / dl;
+  let wantZ = (back ? 1 : -1) / dl;
+  // Turning right round he goes through the side, not on the spot.
+  if (back ? s.hz < -TURN_ROUND : s.hz > TURN_ROUND) {
+    wantX = sx > 0 || (sx === 0 && s.hx >= 0) ? 1 : -1;
+    wantZ = 0;
+  }
   const sprint = input.hold === 2;
   const turnK = sprint ? SPRINT_TURN_K : TURN_K;
   const hx = s.hx + (wantX - s.hx) * turnK;
@@ -436,7 +475,7 @@ export function advance(setup: EpisodeSetup, s: EpisodeState, input: TickInput):
   stepRun(setup, s, input);
 }
 
-function isChip(f: ShotFlight): boolean {
+export function isChip(f: ShotFlight): boolean {
   return f.outcome === "goal" && f.overY !== null && f.overY >= CHIP_HEIGHT && f.keeper.z >= CHIP_KEEPER_OUT;
 }
 
@@ -483,11 +522,13 @@ function hitLying(p: Vec3, x0: number, x1: number, y: number, z: number, r: numb
 
 export function shoot(setup: EpisodeSetup, s: EpisodeState, q: QuantizedSwipe, sampleEvery = 2): ShotFlight {
   const from = ballOf(s);
+  const fromY = s.fromY ?? BALL_RADIUS;
+  const blockers = s.blockers ?? [];
   const dist = Math.sqrt(from.x * from.x + from.z * from.z);
   const kickSetup: ShotSetup = {
     seed: setup.seed,
     edge: setup.edge,
-    ball: { x: from.x, y: BALL_RADIUS, z: from.z },
+    ball: { x: from.x, y: fromY, z: from.z },
     wall: [],
     wallJumpAt: 99,
     minSpeed: SHOT_MIN_SPEED,
@@ -497,6 +538,14 @@ export function shoot(setup: EpisodeSetup, s: EpisodeState, q: QuantizedSwipe, s
     keeper: { x: 0, reaction: 0, speed: 0, guess: null, readsDrop: true, reach: 0 },
   };
   const kick = swipeToKick(kickSetup, q);
+  if (fromY > VOLLEY_Y) {
+    // Off the head: placed, not hit.
+    const u = kick.velocity;
+    const pace = Math.sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
+    const top = (s.fromY as number) > HEADER_Y ? HEADER_SPEED : DIVING_HEADER_SPEED;
+    if (pace > top) kick.velocity = { x: (u.x / pace) * top, y: (u.y / pace) * top, z: (u.z / pace) * top };
+  }
+  if (s.scatter) kick.velocity = { ...kick.velocity, x: kick.velocity.x + kick.velocity.z * s.scatter };
 
   const kx = s.kx;
   const kz = s.kz;
@@ -507,7 +556,7 @@ export function shoot(setup: EpisodeSetup, s: EpisodeState, q: QuantizedSwipe, s
   const kdz = from.z - kz;
   const spread = lyingFor === 0 && kdx * kdx + kdz * kdz < SPREAD_DIST * SPREAD_DIST;
 
-  let p: Vec3 = { x: from.x, y: BALL_RADIUS, z: from.z };
+  let p: Vec3 = { x: from.x, y: fromY, z: from.z };
   let v: Vec3 = { ...kick.velocity };
   const spin: Vec3 = { ...kick.spin };
   let handX = kx;
@@ -578,6 +627,19 @@ export function shoot(setup: EpisodeSetup, s: EpisodeState, q: QuantizedSwipe, s
     }
 
     if (overY === null && prevZ > kz && p.z <= kz) overY = p.y;
+
+    let blockNormal: Vec3 | null = null;
+    for (const b of blockers) {
+      blockNormal = hitVerticalCapsule(p, b.x, b.z, BLOCK_RADIUS, BLOCK_HEIGHT - BLOCK_RADIUS, BLOCK_RADIUS);
+      if (blockNormal) break;
+    }
+    if (blockNormal) {
+      v = reflect(v, blockNormal, 0.35);
+      outcome = "blocked";
+      events.push({ t, type: "wall" });
+      decidedAt = t;
+      break;
+    }
 
     const keeperNormal =
       t < lyingFor

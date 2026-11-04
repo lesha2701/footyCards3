@@ -425,7 +425,7 @@ class OneOnOneShotIn(BaseModel):
 
 class OneOnOneAttackRequest(BaseModel):
     """The input timeline only — never an outcome: control changes
-    [tick, hold 0/1/2 (stop, run, sprint), steer −1000..1000] in strictly ascending ticks, the
+    [tick, hold 0/1/2/3 (stop, run, sprint, back), steer −1000..1000] in strictly ascending ticks, the
     feint and the shot with the tick they were made on."""
     controls: list[list[int]] = Field(max_length=_ONE_ON_ONE_MAX_TICK + 1)
     feint: Optional[OneOnOneFeintIn] = None
@@ -439,7 +439,7 @@ class OneOnOneAttackRequest(BaseModel):
             if len(c) != 3:
                 raise ValueError("a control is [tick, hold, steer]")
             tick, hold, steer = c
-            if not (last < tick <= _ONE_ON_ONE_MAX_TICK) or hold not in (0, 1, 2) or not -1000 <= steer <= 1000:
+            if not (last < tick <= _ONE_ON_ONE_MAX_TICK) or hold not in (0, 1, 2, 3) or not -1000 <= steer <= 1000:
                 raise ValueError("bad control")
             last = tick
         return v

@@ -1,5 +1,4 @@
 import { AnimatePresence, motion } from "framer-motion";
-import type { ReactNode } from "react";
 
 import { IconCoin } from "@/components/icons";
 import type { OneOnOneOutcome } from "@/types";
@@ -13,6 +12,11 @@ const DOT: Record<OneOnOneOutcome, string> = {
   tackle: "bg-red-500",
   miss: "bg-red-500",
   lost: "bg-red-500",
+  dispossessed: "bg-red-500",
+  intercepted: "bg-red-500",
+  offside: "bg-red-500",
+  cleared: "bg-red-500",
+  blocked: "bg-red-500",
 };
 
 /** The score bug: the series (one dot per attack), the coins, and under it
@@ -24,7 +28,6 @@ export function ScoreBug({
   coins,
   name,
   rating,
-  extra,
 }: {
   index: number;
   total: number;
@@ -32,7 +35,6 @@ export function ScoreBug({
   coins: number;
   name: string;
   rating: number;
-  extra?: ReactNode;
 }) {
   return (
     <div className="flex flex-col items-end gap-1 font-display">
@@ -62,7 +64,6 @@ export function ScoreBug({
         <span className="h-3 w-0.5 bg-accent-lime" />
         <span className="font-semibold">{name}</span>
         <span className="font-mono text-accent-lime">{rating}</span>
-        {extra}
       </div>
     </div>
   );
@@ -74,6 +75,11 @@ const CAPTION: Record<OneOnOneOutcome, { text: string; band: string; fill: strin
   tackle: { text: "ВРАТАРЬ ЗАБРАЛ", band: "from-sky-500/0 via-sky-700/80 to-sky-500/0", fill: "from-white to-sky-200", glow: "#38bdf8" },
   miss: { text: "МИМО", band: "from-red-500/0 via-red-700/80 to-red-500/0", fill: "from-white to-red-200", glow: "#ef4444" },
   lost: { text: "МОМЕНТ УПУЩЕН", band: "from-red-500/0 via-red-700/80 to-red-500/0", fill: "from-white to-red-200", glow: "#ef4444" },
+  dispossessed: { text: "ОТБОР", band: "from-red-500/0 via-red-700/80 to-red-500/0", fill: "from-white to-red-200", glow: "#ef4444" },
+  intercepted: { text: "ПЕРЕХВАТ", band: "from-red-500/0 via-red-700/80 to-red-500/0", fill: "from-white to-red-200", glow: "#ef4444" },
+  offside: { text: "ОФСАЙД", band: "from-amber-500/0 via-amber-600/85 to-amber-500/0", fill: "from-white to-amber-200", glow: "#f59e0b" },
+  cleared: { text: "ВЫНЕСЛИ", band: "from-red-500/0 via-red-700/80 to-red-500/0", fill: "from-white to-red-200", glow: "#ef4444" },
+  blocked: { text: "БЛОК", band: "from-sky-500/0 via-sky-700/80 to-sky-500/0", fill: "from-white to-sky-200", glow: "#38bdf8" },
 };
 
 /** The caption of the outcome: a slanted band across the screen and the

@@ -3,7 +3,7 @@
  * spot across the goal; the shot button held and let go is a drive, its
  * power bar how hard and so how high (full — over the bar); a swipe up off
  * it is the finesse, bent the way his place on the pitch calls for; the
- * chip button lifts it over; a tap and the shot picks itself. Whatever it
+ * lofted button lifts it over; a tap and the shot picks itself. Whatever it
  * was, the result is an ordinary swipe the server replays like any other
  * (it never sees the stick or the buttons). */
 import { GOAL_HALF_WIDTH, GRAVITY, type QuantizedSwipe } from "@/lib/freeKick3d/trajectory";
@@ -14,12 +14,17 @@ import { AIM_REF, ballOf, shoot, type EpisodeSetup, type EpisodeState } from "./
 export const AIM_POST = GOAL_HALF_WIDTH - 0.5;
 /** The tap's shot goes a little less wide: aiming yourself pays. */
 const AUTO_SPOT = GOAL_HALF_WIDTH - 1.1;
-/** The tap's drive (m/s, m high over the line), and its chip over a keeper
- * who is on top of him. */
+/** The tap's drive (m/s, m high over the line), and how close a keeper on
+ * top of him has it chipped instead. */
 const AUTO_SPEED = 25;
 const AUTO_CROSS = 0.5;
-const AUTO_CHIP: QuantizedSwipe = { dx: 0, dy: -300, curve: 0, durationMs: 600 };
 const AUTO_CHIP_DIST = 3.2;
+/** The tap's chip, scooped from this to this by the way to the goal (m):
+ * any more from close in and it clears the bar too. */
+const TAP_CHIP_LOW = 0.15;
+const TAP_CHIP_HIGH = 0.26;
+const TAP_CHIP_NEAR = 7;
+const TAP_CHIP_FAR = 11;
 /** swipeToKick's aim: clamp(dx / up, ±0.8) · 0.35 · aimScale. */
 const AIM_GAIN = 0.35;
 const AIM_MAX = 0.8;
@@ -69,7 +74,7 @@ export type ShotIntent =
   | { kind: "drive"; power: number; aim: number }
   | { kind: "finesse"; swipe: QuantizedSwipe; aim: number }
   | { kind: "chip"; power: number; aim: number }
-  | { kind: "auto" };
+  | { kind: "auto"; chip?: boolean };
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
@@ -95,7 +100,7 @@ function leanFor(s: EpisodeState, tx: number): number {
  * to cross the goal line at `cross` m high, aimed at `tx`: estimated, then
  * corrected by flying it (with the keeper out of the way). */
 function strike(setup: EpisodeSetup, s: EpisodeState, tx: number, speed: number, cross: number, curve: number): QuantizedSwipe {
-  const clear: EpisodeState = { ...s, kx: 50, kMode: "wait", kTicks: 0 };
+  const clear: EpisodeState = { ...s, kx: 50, kMode: "wait", kTicks: 0, blockers: [], scatter: 0 };
   // The bend doesn't land exactly on the chord, drag and dip pull it down:
   // the spot and the height are corrected against the real flight.
   let wantX = tx;
@@ -182,11 +187,15 @@ export function resolveShot(setup: EpisodeSetup, s: EpisodeState, intent: ShotIn
     return strike(setup, s, tx, lerp(FINESSE_SOFT, FINESSE_HARD, power), lerp(FINESSE_LOW, FINESSE_HIGH, height), curve);
   }
   // The tap: over a keeper standing on top of him, else low to the side
-  // he leaves open.
+  // he leaves open; on the lofted button, over him to that side.
   const b = ballOf(s);
-  const near = Math.hypot(s.kx - b.x, s.kz - b.z) < AUTO_CHIP_DIST;
-  if (near && (s.kMode === "rush" || s.kMode === "set")) return AUTO_CHIP;
   const len = Math.hypot(b.x, b.z);
   const across = (s.kx - b.x) * (b.z / len) + (s.kz - b.z) * (-b.x / len);
-  return strike(setup, s, (across > 0 ? -1 : 1) * AUTO_SPOT, AUTO_SPEED, AUTO_CROSS, 0);
+  const open = (across > 0 ? -1 : 1) * AUTO_SPOT;
+  const near = Math.hypot(s.kx - b.x, s.kz - b.z) < AUTO_CHIP_DIST;
+  if (intent.chip || (near && (s.kMode === "rush" || s.kMode === "set"))) {
+    const up = lerp(TAP_CHIP_LOW, TAP_CHIP_HIGH, clamp((len - TAP_CHIP_NEAR) / (TAP_CHIP_FAR - TAP_CHIP_NEAR), 0, 1));
+    return aimSwipe(s, open, { dx: 0, dy: -Math.round(up * 1000), curve: 0, durationMs: CHIP_MS });
+  }
+  return strike(setup, s, open, AUTO_SPEED, AUTO_CROSS, 0);
 }
