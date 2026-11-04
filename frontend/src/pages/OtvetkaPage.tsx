@@ -103,7 +103,7 @@ export default function OtvetkaPage() {
   if (!match || !episode) {
     return (
       <div className="flex flex-col gap-5">
-        <GameHero game="one-on-one" title="Ответка" />
+        <GameHero game="otvetka" title="Ответка" />
         <p className="text-sm text-ink-mist">
           Матч из 10 эпизодов: пенальти, штрафные, выходы 1 на 1, 2 на 1, 3 на 2, пасы в разрез и навесы. Ты играешь
           эпизод, соперник на него отвечает. Ничья — серия пенальти до первой ошибки. Пока соперник — бот.

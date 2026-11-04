@@ -164,7 +164,7 @@ export default function PlayPage() {
       description: "Выход один на один в 3D: беги с мячом, обведи вратаря финтом и бей", limitKey: "one_on_one",
     },
     {
-      path: "/play/otvetka", art: artOf("one-on-one"), Icon: IconBall, tint: "bg-emerald-600", title: "Ответка", group: "quick", time: "6 мин", bot: true,
+      path: "/play/otvetka", art: artOf("otvetka"), Icon: IconBall, tint: "bg-emerald-600", title: "Ответка", group: "quick", time: "6 мин", bot: true,
       description: "Матч из 10 случайных эпизодов: ты забил — соперник отвечает", limitKey: "otvetka",
     },
     {
