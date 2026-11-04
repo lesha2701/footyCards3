@@ -1,6 +1,7 @@
 /** The footballers' heads. The team keeps a shape that breathes with the ball
- * (three flat lines without it, a build-up from the back and a full box with it, a high man-for-man press in their third, the back line holding offside);
- * who presses, who covers and who marks is settled a few times a second; the
+ * (three flat lines of zones without it, a build-up from the back and a full box with it, the back line holding offside);
+ * one man presses, one covers, and everybody else holds his zone and picks up
+ * whoever is free in it, a few times a second; the
  * forwards time runs on the line; the man on the ball weighs a shot against
  * every pass and against carrying it on. */
 import {
@@ -41,7 +42,7 @@ const reachTime = (p: Player, x: number, z: number) => dist(p.x, p.z, x, z) / sp
 
 // --- the team --------------------------------------------------------------------------------------
 
-export function thinkTeam(s: MatchState, team: 0 | 1) {
+export function thinkTeam(s: MatchState, team: 0 | 1, slots: readonly Slot[]) {
   const b = s.ball;
   const men = s.players.filter((p) => p.team === team);
   const others = s.players.filter((p) => p.team !== team);
@@ -84,11 +85,13 @@ export function thinkTeam(s: MatchState, team: 0 | 1) {
   const pressing = ax < 20 ? 1 : dist(byDist[0].x, byDist[0].z, b.x, b.z) < 26 ? 1 : 0;
   if (pressing && byDist[0]) byDist[0].duty = 1;
   if (byDist[1] && dist(byDist[1].x, byDist[1].z, b.x, b.z) < 16) byDist[1].duty = 2;
-  // Nobody watches a man run past him: whoever the ball comes near steps in,
-  // and close to our goal it's always two on him. The human's man counts as one
-  // of them only if he really goes.
-  for (const m of outfield) if (dist(m.x, m.z, b.x, b.z) < 4.5) m.duty = 1;
-  if (ax < 12 && byDist[1] && dist(byDist[1].x, byDist[1].z, b.x, b.z) < 14) byDist[1].duty = 1;
+  // One presses and one covers, the zones hold. Nobody watches a man run past
+  // him all the same: the ball comes within a stride and he steps in, and close
+  // to our goal it's two on him. Never a third.
+  if (ax < -28 && byDist[1] && dist(byDist[1].x, byDist[1].z, b.x, b.z) < 14) byDist[1].duty = 1;
+  for (const m of outfield) {
+    if (dist(m.x, m.z, b.x, b.z) < 3 && outfield.filter((q) => q.duty === 1).length < 2) m.duty = 1;
+  }
   // Just lost it up the pitch: the two nearest go at once, before it gets away.
   if (s.tick - s.lostAt[team] < 150 && ax > -12 && byDist[1]) byDist[1].duty = 1;
   // The human called a second man: the nearest who isn't him goes at the ball.
@@ -96,34 +99,24 @@ export function thinkTeam(s: MatchState, team: 0 | 1) {
     const helper = byDist.find((m) => m.i !== s.user);
     if (helper) helper.duty = 1;
   }
+  // The rest are zones: the most dangerous free man first, picked up by whoever
+  // has him in his zone, measured from the zone and not from where he stands.
   const free = outfield.filter((m) => m.duty === 0);
+  const dirT = dirOf(team);
   const danger = others
-    .filter((o) => o.role !== "GK" && o.i !== carrier.i && o.x * dirOf(team) < 12)
-    .sort((p, q) => p.x * dirOf(team) - q.x * dirOf(team));
-  for (const o of danger) {
-    // Picks up whoever comes into his zone; he doesn't follow him out of it.
-    let at = -1, near = 11;
+    .filter((o) => o.role !== "GK" && o.i !== carrier.i)
+    .map((o) => ({ o, v: dist(o.x, o.z, -dirT * HALF_L, 0) * 0.6 + dist(o.x, o.z, b.x, b.z) * 0.4 }))
+    .sort((p, q) => p.v - q.v || p.o.i - q.o.i);
+  const reach = hunting ? 20 : 15;
+  for (const { o } of danger) {
+    let at = -1, near = reach;
     free.forEach((m, n) => {
-      if (m.mark < 0) {
-        const d = dist(m.x, m.z, o.x, o.z);
-        if (d < near) { near = d; at = n; }
-      }
+      if (m.mark >= 0) return;
+      const z = blockSpot(m, slots[m.slot], b.x, b.z, hunting);
+      const d = dist(z.x, z.z, o.x, o.z) + dist(m.x, m.z, o.x, o.z) * 0.25;
+      if (d < near) { near = d; at = n; }
     });
     if (at >= 0) free[at].mark = o.i;
-  }
-  // A high press is man for man: everyone in front of the back four takes one.
-  if (hunting) {
-    const taken = new Set(free.map((m) => m.mark));
-    for (const m of free) {
-      if (m.mark >= 0 || m.role === "CB" || m.role === "FB") continue;
-      let at = -1, near = 24;
-      for (const o of others) {
-        if (o.role === "GK" || o.i === carrier.i || taken.has(o.i)) continue;
-        const d = dist(m.x, m.z, o.x, o.z);
-        if (d < near) { near = d; at = o.i; }
-      }
-      if (at >= 0) { m.mark = at; taken.add(at); }
-    }
   }
 }
 
@@ -147,7 +140,7 @@ const LINE_GAP: Record<Player["role"], number> = { GK: 0, CB: 0, FB: 0, DM: 7, C
 function blockSpot(p: Player, slot: Slot, ballX: number, ballZ: number, high: boolean) {
   const dir = dirOf(p.team);
   const ax = Math.max(backLine(ballX * dir, high), -HALF_L + 5) + LINE_GAP[slot.role] * (high ? 1.25 : 1);
-  const z = slot.z * (high ? 0.85 : 0.6) + clamp(ballZ, -26, 26) * (high ? 0.25 : 0.5);
+  const z = slot.z * (high ? 0.9 : 0.74) + clamp(ballZ, -26, 26) * (high ? 0.25 : 0.42);
   return { x: ax * dir, z: clamp(z, -HALF_W + 3, HALF_W - 3) };
 }
 
@@ -175,15 +168,16 @@ function shapeSpot(s: MatchState, p: Player, slot: Slot): { x: number; z: number
   const ballAx = b.x * dir;
   const has = s.poss === p.team;
   if (!has) return blockSpot(p, slot, b.x, b.z, pressingHigh(s, p.team));
-  const block = clamp(ballAx * 0.62 + 9, -20, 26);
+  const block = clamp(ballAx * 0.7 + 12, -20, 30);
   let ax = block + slot.ax * 1.05;
   const line = offsideLine(s, p.team);
   const back = -offsideLine(s, p.team === 0 ? 1 : 0);
-  let z = slot.z * 1.02 + clamp(b.z, -24, 24) * 0.2;
+  // The wide men hug the line on both flanks: that's what a switch of play goes to.
+  let z = slot.role === "W" ? slot.z * 1.14 + clamp(b.z, -24, 24) * 0.06 : slot.z * 1.02 + clamp(b.z, -24, 24) * 0.2;
   if (slot.role === "CB" || slot.role === "FB") {
     ax = Math.max(ax, -HALF_L + 8);
     // The line holds together, a bit behind the block, never deep for no reason.
-    ax = Math.min(ax, ballAx - 1 + (slot.role === "FB" ? 14 : 0));
+    ax = Math.min(ax, ballAx - 1 + (slot.role === "FB" ? 18 : 0));
   }
   ax = Math.min(ax, Math.max(line - 0.7, ballAx));
   if (slot.role !== "CB") ax = Math.max(ax, back);
@@ -209,7 +203,10 @@ function chooseRun(s: MatchState, p: Player, home: { x: number; z: number }) {
   let best = -1e9, bx = home.x, bz = home.z;
   const forward = p.role === "ST" || p.role === "W";
   const offers = forward ? 8 : 6;
+  // Only those near the ball come short for it: the rest keep the pitch big.
+  const support = dist(p.x, p.z, b.x, b.z) < 24;
   for (let n = 0; n < offers; n++) {
+    if ((n === 4 || n === 5) && !support) continue;
     let cx = home.x, cz = home.z;
     if (n === 1) { cx += dir * 6; }
     else if (n === 2) { cx += dir * 3; cz += 7; }
@@ -227,11 +224,35 @@ function chooseRun(s: MatchState, p: Player, home: { x: number; z: number }) {
       if (o.role !== "GK") lane = Math.min(lane, segDist2(b.x, b.z, cx, cz, o.x, o.z));
     }
     const fromBall = dist(b.x, b.z, cx, cz);
-    const v = Math.min(Math.sqrt(near), 10) * 0.5 + Math.min(Math.sqrt(lane), 5) * 0.8
+    let v = Math.min(Math.sqrt(near), 10) * 0.5 + Math.min(Math.sqrt(lane), 5) * 0.8
       + ((cx - b.x) * dir) * 0.09 - Math.abs(fromBall - 16) * 0.07 - dist(p.x, p.z, cx, cz) * 0.05 + rnd(s) * 1.4;
+    // Two men in one place are one option: he goes where no team-mate is going.
+    for (const m of s.players) {
+      if (m.team !== p.team || m.i === p.i || m.role === "GK") continue;
+      const at = m.i === b.owner ? 1e9 : dist(m.runX, m.runZ, cx, cz);
+      const gap = Math.min(at, dist(m.x, m.z, cx, cz));
+      if (gap < 11) v -= (11 - gap) * 0.32;
+    }
     if (v > best) { best = v; bx = cx; bz = cz; }
   }
   p.runX = bx; p.runZ = bz; p.runT = 50 + Math.floor(rnd(s) * 60);
+}
+
+/** The gap in their back line nearest to him, where a run hurts most. */
+function channel(s: MatchState, p: Player, line: number) {
+  const dir = dirOf(p.team);
+  let top = -1, at = p.z;
+  for (const off of [0, -7, 7, -14, 14]) {
+    const z = clamp(p.z + off, -HALF_W + 4, HALF_W - 4);
+    let gap = 12;
+    for (const o of s.players) {
+      if (o.team === p.team || o.role === "GK") continue;
+      if (Math.abs(o.x * dir - line) < 12) gap = Math.min(gap, Math.abs(o.z - z));
+    }
+    const v = gap - Math.abs(off) * 0.25;
+    if (v > top) { top = v; at = z; }
+  }
+  return at;
 }
 
 /** How fast he gets back to his place: flat out when the ball is lost behind him. */
@@ -251,9 +272,11 @@ export function thinkOffBall(s: MatchState, p: Player, slot: Slot) {
 
   if (p.duty === 1 && b.owner < 0) {
     // After the ball: where he can cut it off.
-    let q = predAt(s, 0);
+    // Where it comes down to him, not under it on its way over his head.
+    let q = predAt(s, 168);
     for (let k = 6; k < 170; k += 8) {
       const c = predAt(s, k);
+      if (c.y > 2.2) continue;
       q = c;
       if (reachTime(p, c.x, c.z) <= k * TICK + 0.1) break;
     }
@@ -286,13 +309,19 @@ export function thinkOffBall(s: MatchState, p: Player, slot: Slot) {
     }
     const line0 = offsideLine(s, p.team);
     const gap = line0 - p.x * dir;
-    const up = p.role === "ST" || p.role === "W" || (p.role === "CM" && rnd(s) < 0.3);
-    if (up && b.owner >= 0 && gap > -1 && gap < 9 && (p.x - b.x) * dir > 4 && line0 < HALF_L - 9 && p.stamina > 0.3 && rnd(s) < 0.16) {
-      p.dash = 96;
-      p.runX = clamp(line0 + 14, -HALF_L, HALF_L - 7) * dir;
-      p.runZ = clamp(p.z * 0.75 + (b.z - p.z) * 0.1, -HALF_W + 4, HALF_W - 4);
-      p.tx = p.runX; p.tz = p.runZ; p.want = sprintOf(p);
-      return;
+    // Forwards go, a midfielder arrives late, a full-back overlaps on the ball's side.
+    const overlap = p.role === "FB" && p.z * b.z > 0 && b.x * dir > -5 && (p.x - b.x) * dir > -14;
+    const up = p.role === "ST" || p.role === "W" || overlap || (p.role === "CM" && b.x * dir > -5 && rnd(s) < 0.4);
+    if (up && b.owner >= 0 && gap > -1 && gap < 16 && (p.x - b.x) * dir > (p.role === "ST" || p.role === "W" ? 1 : -14) && line0 < HALF_L - 9 && p.stamina > 0.3 && rnd(s) < 0.2) {
+      let gone = 0;
+      for (const m of s.players) if (m.team === p.team && m.dash > 0) gone += 1;
+      if (gone < 2) {
+        p.dash = 150;
+        p.runX = clamp(line0 + 18, -HALF_L, HALF_L - 7) * dir;
+        p.runZ = overlap ? Math.sign(p.z) * (HALF_W - 5) : channel(s, p, line0);
+        p.tx = p.runX; p.tz = p.runZ; p.want = sprintOf(p);
+        return;
+      }
     }
     if (p.runT <= 0) chooseRun(s, p, home);
     const urgent = dist(p.x, p.z, p.runX, p.runZ) > 7;
@@ -340,12 +369,15 @@ export function thinkOffBall(s: MatchState, p: Player, slot: Slot) {
     const gd = dist(m.x, m.z, gx, 0) || 1;
     const box = m.x * dir < -30;
     const hunting = pressingHigh(s, p.team) && p.role !== "CB" && p.role !== "FB";
-    const close = box ? 1.6 : hunting ? 2.6 : 3;
-    // Tight at the goal or pressing; otherwise he stays on his line and only leans.
-    const lean = hunting ? 40 : box ? 9 : 4;
-    const leanX = hunting || box ? lean : 2;
-    p.tx = home.x + clamp(m.x + ((gx - m.x) / gd) * close - home.x, -leanX, leanX);
-    p.tz = home.z + clamp(m.z + (-m.z / gd) * close - home.z, -lean, lean);
+    // Goal-side of him: tight if he can get it next, a few strides off if not,
+    // and never out of his zone. A back line drops with a runner, it doesn't step out.
+    const live = dist(m.x, m.z, b.x, b.z) < 20;
+    const close = box ? 1.6 : live ? 2 : 3.6;
+    const back = p.role === "CB" || p.role === "FB";
+    const reach = hunting ? 18 : box ? 12 : 10;
+    const ahead = clamp((m.x + ((gx - m.x) / gd) * close - home.x) * dir, back && !box ? -4.5 : -reach, back ? 2.5 : reach);
+    p.tx = home.x + ahead * dir;
+    p.tz = home.z + clamp(m.z + (-m.z / gd) * close - home.z, -reach, reach);
     p.want = recover(p, p.tx, p.tz);
     p.faceBall = true;
     return;
@@ -460,7 +492,14 @@ export function thinkCarrier(s: MatchState, p: Player) {
     else if (d0 > 16 && open > 6.5 && gain > 6) {
       // Over the top only to a man with room, going forward: otherwise it's a
       // coin toss, and a side that tosses coins never keeps the ball.
-      options.push({ v: v - 2 + (ax < -20 && near < 4 ? 1 : 0), go: () => startKick(s, p, planLob(s, p, mx, mz, m.i, 0.5)) });
+      options.push({ v: v - 3.2 + (ax < -20 && near < 4 ? 1.6 : 0), go: () => startKick(s, p, planLob(s, p, mx, mz, m.i, 0.5)) });
+    }
+    // The other flank is empty when they all come over to this one: switch it.
+    if (Math.abs(mz - p.z) > 24 && open > 8 && ax > -30) {
+      let crowd = 0;
+      for (const o of s.players) if (o.team !== p.team && dist(o.x, o.z, p.x, p.z) < 15) crowd += 1;
+      const lead = 1.5;
+      if (crowd >= 3) options.push({ v: crowd * 0.6 + Math.min(gain, 10) * 0.12 + rnd(s) * 1.2, go: () => startKick(s, p, planLob(s, p, m.x + m.vx * lead, m.z + m.vz * lead, m.i, 0.5)) });
     }
     // The ball behind them for a man running on to it.
     const runner = m.dash > 0 || ((m.role === "ST" || m.role === "W" || m.role === "CM") && (m.x - p.x) * dir > 2);
@@ -471,7 +510,7 @@ export function thinkCarrier(s: MatchState, p: Player) {
       for (const o of s.players) if (o.team !== p.team) them = Math.min(them, reachTime(o, plan.tx, plan.tz));
       const lm = laneMargin(s, p, plan.tx, plan.tz, plan.speed);
       if (mine < them + 0.45 && lm > -0.7 && plan.tx * dir > line - 10) {
-        options.push({ v: 3.4 + (m.dash > 0 ? 2 : 0) + (plan.tx - p.x) * dir * 0.05 + lm * 0.4 + rnd(s) * 1.5, go: () => startKick(s, p, plan) });
+        options.push({ v: 4 + (m.dash > 0 ? 4.5 : 0) + (plan.tx - p.x) * dir * 0.05 + lm * 0.4 + rnd(s) * 1.5, go: () => startKick(s, p, plan) });
       }
     }
   }

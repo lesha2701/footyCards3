@@ -38,8 +38,9 @@ const GRAVITY = 9.81;
 const DRAG_K = 0.0135;
 const MAGNUS_K = 0.006;
 const SPIN_DECAY = 0.08;
-const RESTITUTION = 0.52;
-const BOUNCE_FRICTION = 0.86;
+const RESTITUTION = 0.46;
+/** Grass takes the pace off a landing ball: it sits up, it doesn't skid on. */
+const BOUNCE_FRICTION = 0.68;
 /** A rolling ball slows by this (m/s²); pass planning relies on it. */
 /** Constant, so a pass can be planned exactly: see `rollPace`. */
 export const ROLL_DECEL = 4.2;

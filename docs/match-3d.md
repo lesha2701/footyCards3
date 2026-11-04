@@ -87,6 +87,21 @@ The help a human gets, all in `engine.ts`:
   he is off and running, on the ground if the lane is open, otherwise over the
   top). Without the ball the same touch makes him the human's man.
 
+Long balls: a man with nobody on him brings a high ball down off the chest or the
+thigh however hot it is, and waits for one that is dropping; the man it was hit to
+has the better of a real jump, and a header goes on to a team-mate when one is
+there. Grass kills a landing ball (`BOUNCE_FRICTION`, `planLob` hangs it longer).
+Out of the keeper's hands a throw or a punt goes over a man standing in front of
+him, and a keeper picks a way past that man (`inHisWay`).
+
+Without the ball the side plays zones (`thinkTeam`): one presses, one covers, two
+at most near their own goal, and everyone else picks up the most dangerous free man
+measured from his zone, not from where he stands, and doesn't leave it. With the
+ball men keep apart (`chooseRun`), wingers hold both touchlines, runs go into the
+gap in the back line (`channel`), a full-back overlaps on the ball's side, and when
+the ball's side is crowded the far flank gets a switch: for the human «Навес» with the
+stick across (`bestMate` with `air`). `bench/shape.mjs` measures all of this.
+
 Stamina (`Player.stamina`): the ring under the human's man is the gauge. Ten seconds of sprint
 empties it, twelve of walking fills it, and tired legs lose a sixth of the top speed.
 At a sprint the ball runs further from the foot, the turns get wider and feints

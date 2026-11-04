@@ -185,7 +185,7 @@ export function planThrough(s: MatchState, p: Player, m: Player, power: number):
 export function planLob(s: MatchState, p: Player, tx: number, tz: number, to: number, power: number): KickPlan {
   const d = dist(p.x, p.z, tx, tz);
   return {
-    kind: Kick.Lob, tx, ty: 0.9, tz, speed: clamp(d * (0.62 - power * 0.12) + 5, 9, 25), curl: 0, to, ground: false,
+    kind: Kick.Lob, tx, ty: 0.9, tz, speed: clamp(d * (0.44 - power * 0.1) + 5, 9, 22), curl: 0, to, ground: false,
     err: 0.12 + (1 - p.pass) * 0.32 + pressureOn(s, p) * 0.16,
   };
 }

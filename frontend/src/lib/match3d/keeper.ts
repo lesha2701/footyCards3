@@ -109,6 +109,19 @@ function readShot(s: MatchState, p: Player, c: { z: number; y: number; ticks: nu
 /** Beyond this he throws it. */
 const GROUND_MAX = 26;
 
+/** Somebody stands in the way of the first metres of the ball. */
+function inHisWay(s: MatchState, p: Player, m: Player) {
+  const d = dist(p.x, p.z, m.x, m.z) || 1;
+  const ux = (m.x - p.x) / d, uz = (m.z - p.z) / d;
+  for (const o of s.players) {
+    if (o.team === p.team) continue;
+    const along = (o.x - p.x) * ux + (o.z - p.z) * uz;
+    if (along < -1 || along > 13) continue;
+    if (Math.abs((o.x - p.x) * uz - (o.z - p.z) * ux) < 2.8) return true;
+  }
+  return false;
+}
+
 function distribute(s: MatchState, p: Player) {
   const us = s.players.filter((m) => m.team === p.team && m.i !== p.i);
   const opps = s.players.filter((m) => m.team !== p.team);
@@ -117,7 +130,7 @@ function distribute(s: MatchState, p: Player) {
   let score = -1e9;
   for (const m of us) {
     const d = dist(p.x, p.z, m.x, m.z);
-    if (d < 12 || d > 42) continue;
+    if (d < 12 || d > 42 || inHisWay(s, p, m)) continue;
     let near = 1e9;
     for (const o of opps) near = Math.min(near, dist(m.x, m.z, o.x, o.z));
     // Rolled, the lane has to be clear; thrown, it only has to land free.

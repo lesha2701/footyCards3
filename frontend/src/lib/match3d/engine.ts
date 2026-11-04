@@ -196,7 +196,7 @@ function offsideNow(s: MatchState, p: Player, m: Player) {
   return v > offsideLine(s, p.team) + 0.1 && v > s.ball.x * dir + 0.1 && v > 0;
 }
 
-function bestMate(s: MatchState, p: Player, ux: number, uz: number, wantFwd: boolean): Player | null {
+function bestMate(s: MatchState, p: Player, ux: number, uz: number, wantFwd: boolean, air = false): Player | null {
   const dir = dirOf(p.team);
   const stick = ux !== 0 || uz !== 0;
   let best: Player | null = null, top = -1e9;
@@ -209,8 +209,9 @@ function bestMate(s: MatchState, p: Player, ux: number, uz: number, wantFwd: boo
     let open = 1e9;
     for (const o of s.players) if (o.team !== p.team) open = Math.min(open, dist(o.x, o.z, m.x, m.z));
     // The stick says the direction; in that direction, whoever is really on.
-    const lane = clamp(laneMargin(s, p, m.x, m.z, rollPace(d, 7)), -4, 1);
-    const v = along * 6 - d * 0.1 + Math.min(open, 6) * 0.35 + lane * 1.8 + (wantFwd ? (dx * dir) * 0.06 : 0) - (m.role === "GK" ? 4 : 0) - (offsideNow(s, p, m) ? 4 : 0);
+    // Over the top the lane doesn't matter, and the far flank is as near as the next man.
+    const lane = air ? 0 : clamp(laneMargin(s, p, m.x, m.z, rollPace(d, 7)), -4, 1);
+    const v = along * 6 - d * (air ? 0.02 : 0.1) + Math.min(open, 6) * 0.35 + lane * 1.8 + (wantFwd ? (dx * dir) * 0.06 : 0) + (wantFwd && m.dash > 0 ? 2.5 : 0) - (m.role === "GK" ? 4 : 0) - (offsideNow(s, p, m) ? 4 : 0);
     if (v > top) { top = v; best = m; }
   }
   return best;
@@ -229,7 +230,7 @@ function bestBall(s: MatchState, p: Player, m: Player) {
   const power = clamp(d / 34, 0.2, 0.9);
   const plan = planPass(s, p, m, power);
   if (d < 34 && laneMargin(s, p, plan.tx, plan.tz, plan.speed) > -0.3) return plan;
-  return planLob(s, p, m.x + m.vx * 0.9, m.z + m.vz * 0.9, m.i, 0.5);
+  return planLob(s, p, m.x + m.vx * 1.5, m.z + m.vz * 1.5, m.i, 0.5);
 }
 
 function userPress(s: MatchState, p: Player, inp: Input) {
@@ -311,8 +312,8 @@ function userPress(s: MatchState, p: Player, inp: Input) {
         startKick(s, p, planCross(s, p, tx, tz, to, press.power));
         return;
       }
-      const m = bestMate(s, p, ux, uz, true);
-      if (m) startKick(s, p, planLob(s, p, m.x + m.vx * 0.9, m.z + m.vz * 0.9, m.i, press.power));
+      const m = bestMate(s, p, ux, uz, true, true);
+      if (m) startKick(s, p, planLob(s, p, m.x + m.vx * 1.5, m.z + m.vz * 1.5, m.i, press.power));
       return;
     }
     case "shot": {
@@ -808,7 +809,8 @@ function stepCarried(s: MatchState) {
   const k = p.act === Act.Feint ? 0.28 : 0.4;
   const nx = b.x + (tx - b.x) * k, nz = b.z + (tz - b.z) * k;
   b.vx = (nx - b.x) / TICK; b.vz = (nz - b.z) / TICK; b.vy = 0;
-  b.x = nx; b.z = nz; b.y = BALL_R;
+  // Brought down off the chest or the thigh, not teleported to his feet.
+  b.x = nx; b.z = nz; b.y = b.y > BALL_R + 0.02 ? BALL_R + (b.y - BALL_R) * 0.8 : BALL_R;
   b.roll += Math.sqrt(b.vx * b.vx + b.vz * b.vz) * TICK / BALL_R;
   s.teams[p.team].possTicks += 1;
 }
@@ -830,7 +832,7 @@ function take(s: MatchState, p: Player) {
   if (was >= 0 && was !== p.i) s.prevTouch = was;
   if (s.poss !== p.team) s.lostAt[s.poss] = s.tick;
   b.owner = p.i; b.last = p.i; b.kick = Kick.None; b.to = -1; b.since = 0;
-  b.vy = 0; b.y = BALL_R;
+  b.vy = 0;
   p.touch = 8;
   givePossession(s, p);
   toUser(s, p);
@@ -845,6 +847,24 @@ function offside(s: MatchState, p: Player) {
   s.ev.push({ t: "offside", p: p.i });
   const other: 0 | 1 = p.team === 0 ? 1 : 0;
   restart(s, "free", other, clamp(p.x, -HALF_L + 2, HALF_L - 2), p.z);
+}
+
+/** The team-mate worth a header: near enough, up the pitch, with some room. */
+function headedTo(s: MatchState, p: Player): Player | null {
+  const dir = dirOf(p.team);
+  let best: Player | null = null, top = 0;
+  for (const m of s.players) {
+    if (m.team !== p.team || m.i === p.i || m.role === "GK" || m.act === Act.Down) continue;
+    const d = dist(p.x, p.z, m.x, m.z);
+    if (d < 5 || d > 19) continue;
+    if (offsideNow(s, p, m)) continue;
+    let open = 1e9;
+    for (const o of s.players) if (o.team !== p.team) open = Math.min(open, dist(o.x, o.z, m.x, m.z));
+    if (open < 3) continue;
+    const v = Math.min(open, 8) + (m.x - p.x) * dir * 0.2 + 2;
+    if (v > top) { top = v; best = m; }
+  }
+  return best;
 }
 
 /** Struck first time: on goal or away, whoever it is. */
@@ -879,15 +899,25 @@ function headOrVolley(s: MatchState, p: Player, foot: boolean) {
     s.teams[p.team].shots += 1;
     if (Math.abs(tz) < GOAL_HALF) s.teams[p.team].onTarget += 1;
   } else {
-    // Away: forwards and out, towards a team-mate if one is that way.
-    const pace = foot ? 15 : 10 + rnd(s) * 4;
-    let ux = dir, uz = rndN(s);
-    if (x < -20) uz += p.z > 0 ? 0.6 : -0.6;
-    // Under pressure at his own goal he gets anything on it: behind, for a corner.
-    if (x < -HALF_L + 16 && rnd(s) < 0.4) ux = -dir * (0.7 + rnd(s) * 0.5);
-    const l = Math.sqrt(ux * ux + uz * uz);
-    ux /= l; uz /= l;
-    b.vx = ux * pace; b.vz = uz * pace; b.vy = 1.5 + rnd(s) * 3;
+    // Nodded on to a team-mate if one is there, else away from danger.
+    const to = x > -HALF_L + 22 ? headedTo(s, p) : null;
+    if (to) {
+      const d = dist(b.x, b.z, to.x, to.z) || 1;
+      const pace = clamp(d / 0.95, 7, 15);
+      const off = rndN(s) * 0.12;
+      const ux = (to.x - b.x) / d, uz = (to.z - b.z) / d;
+      b.vx = (ux - uz * off) * pace; b.vz = (uz + ux * off) * pace; b.vy = 3.6;
+      b.to = to.i;
+    } else {
+      const pace = foot ? 12 : 8 + rnd(s) * 4;
+      let ux = dir, uz = rndN(s);
+      if (x < -20) uz += p.z > 0 ? 0.6 : -0.6;
+      // Under pressure at his own goal he gets anything on it: behind, for a corner.
+      if (x < -HALF_L + 16 && rnd(s) < 0.4) ux = -dir * (0.7 + rnd(s) * 0.5);
+      const l = Math.sqrt(ux * ux + uz * uz);
+      ux /= l; uz /= l;
+      b.vx = ux * pace; b.vz = uz * pace; b.vy = 1.5 + rnd(s) * 3;
+    }
     b.kick = Kick.Header;
   }
   b.sx = 0; b.sy = 0; b.sz = 0;
@@ -901,16 +931,19 @@ function contacts(s: MatchState) {
   const b = s.ball;
   if (b.inNet) return;
   const fast = speedOf(b);
+  const keeperBall = b.last >= 0 && s.players[b.last].role === "GK" && b.since < 26 && b.y > 0.5 && (b.kick === Kick.GkPunt || b.kick === Kick.Lob);
   let best: Player | null = null, top = 1e9;
   for (const p of s.players) {
     if (p.role === "GK") continue;
     if (p.act === Act.Down || p.act === Act.Getup || p.act === Act.Slide) continue;
     if (p.i === b.last && b.since < 14) continue;
     if (p.cool > 0 && p.act === Act.Tackle) continue;
+    // Out of the keeper's hands it goes over a man standing in front of him.
+    if (keeperBall && p.team !== s.players[b.last].team) continue;
     const dx = b.x - p.x, dz = b.z - p.z;
     const q = dx * dx + dz * dz;
     if (q > 2.6) continue;
-    const r = q + (p.i === b.to ? -0.3 : 0);
+    const r = q + (p.i === b.to ? -0.6 : 0);
     if (r < top) { top = r; best = p; }
   }
   if (!best) return;
@@ -952,20 +985,25 @@ function contacts(s: MatchState) {
     take(s, p);
     return;
   }
-  if (b.y < 2.75 && d < 1.05) {
+  if (b.y < 2.75 && d < 1.3) {
     if (b.since < 6) return;
-    // Nobody near: he brings it down.
-    if (b.y < 1.75 && fast < 13) {
-      let alone = true;
-      for (const o of s.players) {
-        if (o.team !== p.team && o.role !== "GK" && dist(o.x, o.z, b.x, b.z) < 2.4) alone = false;
-      }
-      const chance = inBox(p.x, p.z, dirOf(p.team)) && Math.abs(p.z) < 15;
-      if (alone && !chance && p.act === Act.None) {
+    // Nobody on him: he brings it down, chest or thigh, however it comes.
+    let alone = true;
+    for (const o of s.players) {
+      if (o.team !== p.team && o.role !== "GK" && dist(o.x, o.z, b.x, b.z) < (p.i === b.to ? 1.3 : 1.8)) alone = false;
+    }
+    const ours = b.last >= 0 && s.players[b.last].team === p.team;
+    const crossed = b.kick === Kick.Cross || b.kick === Kick.Corner;
+    const chance = crossed && inBox(p.x, p.z, dirOf(p.team)) && Math.abs(p.z) < 15;
+    if (alone && !(chance && ours) && (p.act === Act.None || p.act === Act.Trap)) {
+      if (b.y < 2.1 && fast < 25) {
         take(s, p);
         return;
       }
+      // It is coming down to him: he waits for it rather than heading it at nobody.
+      if (b.vy < 0) return;
     }
+    if (d > 1.05) return;
     // The nearest of each side jumps: the better one gets there first.
     let rival: Player | null = null, rv = 1.5;
     for (const o of s.players) {
@@ -974,7 +1012,9 @@ function contacts(s: MatchState) {
       if (e < rv) { rv = e; rival = o; }
     }
     let win = p;
-    if (rival && rnd(s) < 0.45 + (rival.defend - p.defend) * 0.5) win = rival;
+    // The man it was hit to knows it's coming: he has the better of the jump.
+    const edge = rival && rival.i === b.to ? 0.17 : p.i === b.to ? -0.17 : 0;
+    if (rival && rnd(s) < 0.45 + edge + (rival.defend - p.defend) * 0.5) win = rival;
     const high = b.y > 1.35;
     headOrVolley(s, win, !high);
   }
@@ -1096,7 +1136,7 @@ export function stepMatch(s: MatchState, inp: Input) {
   }
 
   // Brains.
-  if (s.tick % 6 === 0) { thinkTeam(s, 0); thinkTeam(s, 1); }
+  if (s.tick % 6 === 0) { thinkTeam(s, 0, SLOTS[0]); thinkTeam(s, 1, SLOTS[1]); }
   for (const p of s.players) {
     const slot = SLOTS[p.team][p.slot];
     if (p.role === "GK") { thinkPlayer(s, p, slot); continue; }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { Act, BALL_R, HZ, MATCH_SECONDS, Phase, ballAt, predict, type MatchState } from "./core";
+import { planLob } from "./actions";
+import { Act, BALL_R, HALF_W, HZ, Kick, MATCH_SECONDS, Phase, ballAt, launch, predict, stepBall, type MatchState } from "./core";
 import { NO_INPUT, createMatch, stepMatch, type Input } from "./engine";
 
 const SETUP = { seed: 1234, home: "A", away: "B", homeRating: 0.78, awayRating: 0.76 };
@@ -237,5 +238,93 @@ describe("match3d engine", () => {
       if (s.ball.owner < 0 || s.players[s.ball.owner].team === 0) won += 1;
     }
     expect(won).toBeGreaterThanOrEqual(4);
+  });
+
+  const inPlay = (seed: number) => {
+    const s = createMatch({ ...SETUP, seed }, null);
+    for (let i = 0; i < 900 && s.phase !== Phase.Play; i++) stepMatch(s, NO_INPUT);
+    return s;
+  };
+
+  /** Everyone else far away from (x, z). */
+  const clear = (s: MatchState, x: number, z: number, keep: number[]) => {
+    for (const p of s.players) {
+      if (keep.includes(p.i) || p.role === "GK") continue;
+      const side = p.team === 0 ? -1 : 1;
+      p.x = x + side * (24 + p.slot); p.z = z > 0 ? -30 + p.slot : 30 - p.slot;
+    }
+  };
+
+  it("a long ball to a man on his own is brought down, not headed anywhere", () => {
+    let kept = 0;
+    for (const seed of [21, 22, 23, 24, 25, 26]) {
+      const s = inPlay(seed);
+      const c = s.players.find((p) => p.team === 0 && p.role === "CM")!;
+      const m = s.players.find((p) => p.team === 0 && p.role === "W")!;
+      c.x = -25; c.z = 0; m.x = 10; m.z = 20; m.vx = 0; m.vz = 0;
+      clear(s, 10, 20, [c.i, m.i]);
+      ballAt(s.ball, -24.6, BALL_R, 0);
+      s.ball.owner = -1; s.ball.last = c.i; s.ball.to = m.i; s.ball.since = 0; s.ball.kick = Kick.Lob; s.poss = 0;
+      launch(s, planLob(s, c, m.x, m.z, m.i, 0.5));
+      predict(s);
+      for (let i = 0; i < 300 && s.ball.owner < 0 && s.phase === Phase.Play; i++) stepMatch(s, NO_INPUT);
+      if (s.ball.owner === m.i) kept += 1;
+    }
+    expect(kept).toBeGreaterThanOrEqual(5);
+  });
+
+  it("a ball that comes down sits up instead of running half the pitch", () => {
+    const s = inPlay(31);
+    for (const p of s.players) { p.x = 0; p.z = HALF_W + 2; p.act = Act.Down; p.actLen = 9999; }
+    ballAt(s.ball, -30, BALL_R, 0);
+    s.ball.owner = -1; s.ball.last = -1; s.ball.to = -1;
+    const c = s.players[3];
+    c.x = -30.4; c.z = 0;
+    launch(s, planLob(s, c, 10, 0, -1, 0.5));
+    let land = 1e9, wasUp = false;
+    for (let i = 0; i < 600; i++) {
+      stepBall(s);
+      if (s.ball.y > 1) wasUp = true;
+      if (wasUp && land === 1e9 && s.ball.y < 0.3) land = s.ball.x;
+    }
+    expect(land).toBeLessThan(14);
+    expect(s.ball.x - land).toBeLessThan(26);
+  });
+
+  it("a keeper doesn't throw it at the man standing in front of him", () => {
+    for (const seed of [41, 42, 43, 44]) {
+      const s = inPlay(seed);
+      const k = s.players.find((p) => p.team === 1 && p.role === "GK")!;
+      const o = s.players.find((p) => p.team === 0 && p.role === "ST")!;
+      k.x = 44; k.z = 0; k.vx = 0; k.vz = 0;
+      o.x = 41.5; o.z = 0;
+      ballAt(s.ball, k.x, 1.05, k.z);
+      s.ball.owner = k.i; s.ball.last = k.i; s.ball.to = -1; s.poss = 1;
+      k.act = Act.Hold; k.actT = 0; k.actLen = 1;
+      const left = (ticks: number) => {
+        for (let i = 0; i < ticks && s.phase === Phase.Play; i++) { o.vx = 0; o.vz = 0; stepMatch(s, NO_INPUT); o.x = 41.5; o.z = 0; if (s.ball.owner !== k.i && s.ball.since > 34) return true; }
+        return false;
+      };
+      expect(left(170)).toBe(true);
+      expect(s.ball.last === o.i || s.ball.owner === o.i).toBe(false);
+    }
+  });
+
+  it("the side without the ball holds its zones: two go, the rest pick up men", () => {
+    for (const seed of [51, 52]) {
+      const s = createMatch({ ...SETUP, seed }, null);
+      let n = 0, onBall = 0, bunched = 0;
+      while (s.phase !== Phase.FullTime && s.tick < HZ * 60 * 6) {
+        stepMatch(s, NO_INPUT);
+        const b = s.ball;
+        if (s.phase !== Phase.Play || b.owner < 0 || s.tick % 20 !== 0) continue;
+        const them = s.players.filter((p) => p.team !== s.players[b.owner].team && p.role !== "GK");
+        n += 1;
+        onBall += them.filter((p) => p.duty === 1).length;
+        for (const p of them) if (them.filter((q) => (q.x - p.x) ** 2 + (q.z - p.z) ** 2 < 36).length > 3) bunched += 1;
+      }
+      expect(onBall / n).toBeLessThanOrEqual(2);
+      expect(bunched / n).toBeLessThan(0.3);
+    }
   });
 });
