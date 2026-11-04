@@ -3,8 +3,8 @@
  * `stepMatch` are the whole interface: the scene reads the state, feeds it
  * one `Input` per tick, and draws what happened. */
 import {
-  Act, BALL_R, CLOCK_RATE, END_MIN, GOAL_H, GOAL_HALF, HALF_L, HALF_W, Kick, PEN_SPOT, Phase, START_MIN, SIX_D, TICK,
-  ballAt, clamp, dirOf, dist, dist2, freshState, predAt, predict, rnd, rndN, speedOf, stepBall,
+  Act, BALL_R, CLOCK_RATE, END_MIN, GOAL_H, GOAL_HALF, HALF_L, HALF_W, HZ, Kick, PEN_SPOT, Phase, START_MIN, SIX_D, TICK, WALK_DRIBBLE,
+  ballAt, clamp, dirOf, dist, dist2, freshState, predAt, predict, rnd, rndN, speedOf, stepBall, touchFoot,
   type Feint, type MatchState, type Player, type SceneKick, type SceneOutcome, type SetKind, type SetPiece, type Setup,
 } from "./core";
 import {
@@ -41,8 +41,13 @@ const REACH = 0.85;
 const GOAL_PAUSE = 150;
 /** Ticks before a restart can be taken. */
 const SET_MIN = 90;
+/** Metres a stride cycle of the run clips, and a step of the walking dribble. */
+const RUN_CYCLE = 2.95;
+const WALK_STEP = 0.55;
 /** What a stride of the carrier's pace takes off a tackle's chance, per m/s. */
 const TACKLE_RUNNING = 0.05;
+/** How near his own line a keeper on the ball will go (m from halfway). */
+const KEEPER_LINE = HALF_L - 3;
 /** How long a press for the ball on its way holds (ticks). */
 const FIRST_TIME = 60;
 /** A free kick closer than this (m), not too wide, goes to the swipe scene. */
@@ -77,7 +82,7 @@ export function createMatch(setup: Setup, userTeam: 0 | 1 | null = 0): MatchStat
       x: f.ax * dirOf(team), z: f.z, vx: 0, vz: 0, hx: dirOf(team), hz: 0,
       tx: 0, tz: 0, want: 0, faceBall: false,
       act: Act.None, actT: 0, actLen: 0, side: 1, sub: 0, air: 0, plan: null, cool: 0,
-      beat: 0, beatX: 0, beatZ: 0, off: false, stamina: 1, runUp: 0, dash: 0, touch: 0,
+      beat: 0, beatX: 0, beatZ: 0, off: false, stamina: 1, runUp: 0, dash: 0, touch: 0, touchLen: 1,
       runT: 0, runX: 0, runZ: 0, duty: 0, mark: -1, react: -1, saves: false, hands: 0,
     };
   };
@@ -220,7 +225,7 @@ function bestMate(s: MatchState, p: Player, ux: number, uz: number, wantFwd: boo
     // The stick says the direction; in that direction, whoever is really on.
     // Over the top the lane doesn't matter, and the far flank is as near as the next man.
     const lane = air ? 0 : clamp(laneMargin(s, p, m.x, m.z, rollPace(d, 7)), -4, 1);
-    const v = along * 6 - d * (air ? 0.02 : 0.1) + Math.min(open, 6) * 0.35 + lane * 1.8 + (wantFwd ? (dx * dir) * 0.06 : 0) + (wantFwd && m.dash > 0 ? 2.5 : 0) - (m.role === "GK" ? 4 : 0) - (offsideNow(s, p, m) ? 4 : 0);
+    const v = along * 6 - d * (air ? 0.02 : 0.1) + Math.min(open, 6) * 0.35 + lane * 1.8 + (wantFwd ? (dx * dir) * 0.06 : 0) + (wantFwd && m.dash > 0 ? 2.5 : 0) - (m.role === "GK" ? (along > 0.75 ? 0.5 : 5) : 0) - (offsideNow(s, p, m) ? 4 : 0);
     if (v > top) { top = v; best = m; }
   }
   return best;
@@ -333,6 +338,12 @@ function userPress(s: MatchState, p: Player, inp: Input) {
       return;
     }
     case "shot": {
+      // At the back it's a clearance to the man the stick says, not a shot at the far goal.
+      if (p.role === "GK") {
+        const m = bestMate(s, p, ux, uz, true, true);
+        if (m) startKick(s, p, { ...planLob(s, p, m.x, m.z, m.i, 0.8), kind: Kick.GkPunt, speed: clamp(dist(p.x, p.z, m.x, m.z) * 0.42, 14, 24) });
+        return;
+      }
       // The stick across picks the corner; straight at goal, the far one.
       const aim = Math.abs(uz) > 0.25 ? clamp(uz * 1.05, -1, 1) : (p.z >= 0 ? -0.55 : 0.55);
       startKick(s, p, planShot(s, p, aim, press.power, press.curl, press.chip));
@@ -430,7 +441,7 @@ function receiver(s: MatchState): Player | null {
   const b = s.ball;
   if (s.user < 0 || b.owner >= 0 || b.to < 0 || s.phase !== Phase.Play) return null;
   const r = s.players[b.to];
-  return r.team === s.players[s.user].team && r.role !== "GK" && r.act !== Act.Down ? r : null;
+  return r.team === s.players[s.user].team && r.act !== Act.Down ? r : null;
 }
 
 function userAutoSwitch(s: MatchState) {
@@ -750,6 +761,8 @@ function stepPlayers(s: MatchState, inp: Input) {
             ux = nx / n; uz = nz / n;
           }
         }
+        // The thumb is still down from the back pass: no walking it into his own net.
+        if (has && p.role === "GK" && ux * dirOf(p.team) < 0 && (p.x + p.vx * 0.6) * dirOf(p.team) < -KEEPER_LINE) ux = 0;
         const top = inp.sprint ? sprintOf(p) * (has ? 0.94 : 1) : has ? 5.4 : 6;
         const v = top * clamp(l * 1.25, 0, 1);
         const fast = has && p.vx * p.vx + p.vz * p.vz > 42;
@@ -820,16 +833,23 @@ function stepCarried(s: MatchState) {
   }
   if (s.phase === Phase.Dead || s.phase === Phase.Kickoff) return;
   const v = Math.sqrt(p.vx * p.vx + p.vz * p.vz);
+  // A touch a stride cycle at a run, one each foot at a walk: the clips are
+  // locked to this count, so the foot is at the ball when it goes.
   p.touch -= 1;
-  const period = v > 7 ? 26 : v > 4.5 ? 21 : 18;
-  if (p.touch <= 0) p.touch = period;
-  const phase = p.touch / period;
+  if (p.touch <= 0) {
+    p.touchLen = v > WALK_DRIBBLE ? Math.floor((HZ * RUN_CYCLE) / v) : v > 0.5 ? Math.floor((HZ * WALK_STEP) / v) : 30;
+    p.touch = p.touchLen;
+  }
+  // Out from the foot and back: it rolls away, and he catches it up.
+  const u = 1 - p.touch / p.touchLen;
+  const hump = 4 * u * (1 - u);
   const lead = p.act === Act.Kick ? 0.55
     : p.act === Act.Feint ? (p.sub === 1 ? 0.3 : 0.42)
-      : 0.46 + v * 0.05 + phase * v * 0.075 + (v > 6.5 ? (v - 6.5) * 0.16 : 0);
+      : 0.46 + hump * (v * 0.1 + (v > 6.5 ? (v - 6.5) * 0.22 : 0));
   const ux = v > 0.5 ? p.vx / v : p.hx, uz = v > 0.5 ? p.vz / v : p.hz;
-  const tx = p.x + ux * lead, tz = p.z + uz * lead;
-  const k = p.act === Act.Feint ? 0.28 : 0.4;
+  const off = p.act === Act.None || p.act === Act.Trap ? touchFoot(p) * (v > WALK_DRIBBLE ? 0.13 : 0.08) : 0;
+  const tx = p.x + ux * lead - uz * off, tz = p.z + uz * lead + ux * off;
+  const k = p.act === Act.Feint ? 0.28 : 0.5;
   const nx = b.x + (tx - b.x) * k, nz = b.z + (tz - b.z) * k;
   b.vx = (nx - b.x) / TICK; b.vz = (nz - b.z) / TICK; b.vy = 0;
   // Brought down off the chest or the thigh, not teleported to his feet.
@@ -856,7 +876,7 @@ function take(s: MatchState, p: Player) {
   if (s.poss !== p.team) s.lostAt[s.poss] = s.tick;
   b.owner = p.i; b.last = p.i; b.kick = Kick.None; b.to = -1; b.since = 0;
   b.vy = 0;
-  p.touch = 8;
+  p.touch = 12; p.touchLen = 12;
   givePossession(s, p);
   toUser(s, p);
   for (const m of s.players) m.off = false;
@@ -965,8 +985,10 @@ function contacts(s: MatchState) {
   const fast = speedOf(b);
   const keeperBall = b.last >= 0 && s.players[b.last].role === "GK" && b.since < 26 && b.y > 0.5 && (b.kick === Kick.GkPunt || b.kick === Kick.Lob);
   let best: Player | null = null, top = 1e9;
+  const passedBy = b.last >= 0 ? s.players[b.last].team : -1;
   for (const p of s.players) {
-    if (p.role === "GK") continue;
+    // A keeper plays a team-mate's ball like anyone else, off the foot.
+    if (p.role === "GK" && !(passedBy === p.team && b.last !== p.i && b.kick !== Kick.Header && b.kick !== Kick.Save)) continue;
     if (p.act === Act.Down || p.act === Act.Getup || p.act === Act.Slide) continue;
     if (p.i === b.last && b.since < 14) continue;
     if (p.cool > 0 && p.act === Act.Tackle) continue;

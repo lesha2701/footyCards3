@@ -40,7 +40,14 @@ describe("match3d engine", () => {
     const { s } = play(null);
     expect(s.phase).toBe(Phase.FullTime);
     expect(s.tick / HZ).toBeGreaterThanOrEqual(MATCH_SECONDS);
-    expect(s.teams[0].shots + s.teams[1].shots).toBeGreaterThan(0);
+    // Over a few matches: one quiet match between two bots proves nothing.
+    let shots = s.teams[0].shots + s.teams[1].shots;
+    for (const seed of [71, 72, 73]) {
+      const m = createMatch({ ...SETUP, seed }, null);
+      while (m.phase !== Phase.FullTime && m.tick < HZ * 60 * 12) stepMatch(m, NO_INPUT);
+      shots += m.teams[0].shots + m.teams[1].shots;
+    }
+    expect(shots).toBeGreaterThan(4);
   });
 
   it("starts at 0:0", () => {
@@ -410,6 +417,36 @@ describe("match3d engine", () => {
     const s = onBall(from, -10, 5);
     stepMatch(s, { ...NO_INPUT, mx: 1, press: { k: "feint" } });
     expect(s.players[from].act).toBe(Act.Feint);
+  });
+
+  it("a keeper plays a back pass with his feet and can be the human's man", () => {
+    const from = outfield(createMatch(SETUP, 0), -1)[0].i;
+    const s = onBall(from, -30, 3);
+    const k = s.players.find((p) => p.team === 0 && p.role === "GK")!;
+    clear(s, 30, 0, [from]);
+    k.x = -48; k.z = 0;
+    for (let i = 0; i < 3; i++) stepMatch(s, NO_INPUT);
+    const shots = s.teams[0].shots;
+    stepMatch(s, { ...NO_INPUT, mx: -1, press: { k: "pass", power: 0.4 } });
+    expect(s.ball.to === k.i || s.players[from].plan?.to === k.i).toBe(true);
+    for (let i = 0; i < 240 && s.ball.owner !== k.i; i++) stepMatch(s, { ...NO_INPUT });
+    expect(s.ball.owner).toBe(k.i);
+    expect(k.act).not.toBe(Act.Hold);
+    expect(k.act).not.toBe(Act.Dive);
+    expect(s.user).toBe(k.i);
+    // The stick still held back from the pass doesn't take it into his own net.
+    for (let i = 0; i < 240; i++) stepMatch(s, { ...NO_INPUT, mx: -1, sprint: true });
+    expect(s.teams[1].goals).toBe(0);
+    expect(s.ball.owner).toBe(k.i);
+    expect(s.ball.x).toBeGreaterThan(-52.5);
+    // He runs with it and passes on, like anyone.
+    for (let i = 0; i < 30; i++) stepMatch(s, { ...NO_INPUT, mx: 1 });
+    expect(s.ball.owner).toBe(k.i);
+    expect(k.vx).toBeGreaterThan(2);
+    stepMatch(s, { ...NO_INPUT, mx: 1, press: { k: "pass", power: 0.4 } });
+    for (let i = 0; i < 30 && s.ball.owner === k.i; i++) stepMatch(s, NO_INPUT);
+    expect(s.ball.owner).toBe(-1);
+    expect(s.teams[0].shots).toBe(shots);
   });
 
   it("the side without the ball holds its zones: two go, the rest pick up men", () => {

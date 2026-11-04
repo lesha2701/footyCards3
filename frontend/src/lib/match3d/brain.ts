@@ -564,7 +564,8 @@ export function thinkCarrier(s: MatchState, p: Player) {
   // isn't being closed down gets rid of it the moment it arrives.
   const room = near > 7 ? 5.5 : near > 4 ? 3.8 : 0;
   const settle = b.since < 110 && near > 3 ? 2.6 : 0;
-  const carry = carryV * 0.9 + room + settle + rnd(s) * 0.7 + p.dribble * 0.6;
+  // A keeper doesn't go for a walk with it: a touch, a look, and it's gone.
+  const carry = carryV * 0.9 + room + settle + rnd(s) * 0.7 + p.dribble * 0.6 - (p.role === "GK" ? 5 : 0);
 
   let bestV = carry, go: (() => void) | null = null;
   for (const o of options) if (o.v > bestV) { bestV = o.v; go = o.go; }

@@ -111,6 +111,8 @@ export type Player = {
   runUp: number;
   /** Next ball touch in the dribble (ticks). */
   touch: number;
+  /** The length of this count, ticks. */
+  touchLen: number;
   /** Ticks left of a run in behind, offside if the pass comes late. */
   dash: number;
   /** Attacking runs. */
@@ -266,6 +268,11 @@ export function segDist2(ax: number, az: number, bx: number, bz: number, px: num
 }
 
 export const dirOf = (team: 0 | 1) => (team === 0 ? 1 : -1);
+
+/** Under this pace (m/s) a man walks the ball; above it he runs with it. */
+export const WALK_DRIBBLE = 2.4;
+/** Which foot he plays it with: 1 right, −1 left. One man in four is left-footed. */
+export const touchFoot = (p: Player) => (p.i % 4 === 3 ? -1 : 1);
 export const speedOf = (b: Ball) => Math.sqrt(b.vx * b.vx + b.vy * b.vy + b.vz * b.vz);
 
 // --- the ball in flight --------------------------------------------------------------------------

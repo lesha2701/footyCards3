@@ -192,11 +192,27 @@ export function thinkKeeper(s: MatchState, p: Player) {
   }
   if (p.act === Act.GkThrow || p.act === Act.GkKick || p.act === Act.Kick) return;
   if (p.act === Act.Dive || p.act === Act.Down || p.act === Act.Getup) return;
+  // At his feet he's an outfield player: `thinkCarrier` or the human has him.
+  if (b.owner === p.i) return;
+  // A team-mate's pass isn't a shot: he comes and plays it.
+  const mate = b.owner < 0 && b.last >= 0 && b.last !== p.i && s.players[b.last].team === p.team;
+  const passed = mate && (b.kick === Kick.Pass || b.kick === Kick.Through || b.kick === Kick.Lob || b.kick === Kick.Throw);
+  if (passed && b.to === p.i) {
+    let q = predAt(s, 0);
+    for (let k = 0; k < 170; k += 8) {
+      const c = predAt(s, k);
+      q = c;
+      if (dist(p.x, p.z, c.x, c.z) / 6.5 <= k * TICK + 0.05) break;
+    }
+    p.tx = q.x; p.tz = q.z; p.want = 7;
+    p.faceBall = true;
+    return;
+  }
 
   if (b.owner < 0 && s.phase === Phase.Play && p.act !== Act.Catch) {
     const c = crossing(s, p);
     const coming = c && Math.abs(c.z) < GOAL_HALF + 1.2 && c.y < GOAL_H + 0.8 && c.ticks < 120 && speedOf(b) > 6;
-    if (coming && b.last >= 0 && (s.players[b.last].team !== p.team || b.since > 8)) {
+    if (coming && !passed && b.last >= 0 && (s.players[b.last].team !== p.team || b.since > 8)) {
       if (p.react < 0) p.react = Math.floor(7 + (1 - p.save) * 14 + rnd(s) * 5);
       if (p.react > 0) p.react -= 1;
       if (p.react === 0) {

@@ -82,7 +82,7 @@ async function load(onProgress: (share: number) => void): Promise<MatchAssets> {
     near: merged, far, baked, moves, map, hairMap, grass, stands, fans: null, led,
     paces: {
       run: asset.timing.runSpeed, sprint: asset.timing.sprintSpeed, back: asset.timing.backSpeed,
-      dribble: 3.4, dribbleFast: 6.4,
+      dribble: 1.13,
     },
   };
 }

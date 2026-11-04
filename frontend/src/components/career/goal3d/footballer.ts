@@ -12,6 +12,8 @@ import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js
 
 import { DEFAULT_TIMING, type ClipName, type ClipTiming } from "@/lib/footballerMotion";
 
+import { printNumber } from "./shirtNumber";
+
 export const FOOTBALLER_URL = "/career-3d/footballer.glb";
 export const MOVES_URL = "/career-3d/footballer-moves.glb";
 
@@ -245,8 +247,8 @@ const KIT_LIFT = 1.18;
 export class MaterialCache {
   private cache = new Map<string, THREE.Material>();
   constructor(private readonly quality: "lambert" | "standard" = "lambert") {}
-  get(base: THREE.Material, colour: string, part: PartKind = "other"): THREE.Material {
-    const key = `${base.uuid}:${colour}:${part}`;
+  get(base: THREE.Material, colour: string, part: PartKind = "other", number?: number): THREE.Material {
+    const key = `${base.uuid}:${colour}:${part}:${number ?? ""}`;
     let mat = this.cache.get(key);
     if (!mat) {
       const src = base as THREE.MeshStandardMaterial;
@@ -263,6 +265,7 @@ export class MaterialCache {
               envMapIntensity: part === "skin" ? 0.6 : 0.45,
             })
           : new THREE.MeshLambertMaterial({ map: src.map ?? null, color: tint });
+      if (number !== undefined) printNumber(mat, number, colour);
       this.cache.set(key, mat);
     }
     return mat;
@@ -273,7 +276,8 @@ export class MaterialCache {
   }
 }
 
-export function makePlayer(asset: FootballerAsset, look: PlayerLook, materials: MaterialCache): SkinnedPlayer {
+/** `number`: what he has on his back, 0 for nothing; without it, the model's own. */
+export function makePlayer(asset: FootballerAsset, look: PlayerLook, materials: MaterialCache, number?: number): SkinnedPlayer {
   const model = cloneSkinned(asset.gltf.scene);
   model.traverse((o) => {
     const mesh = o as THREE.SkinnedMesh;
@@ -291,7 +295,7 @@ export function makePlayer(asset: FootballerAsset, look: PlayerLook, materials: 
       return;
     }
     const part: PartKind = kit ? "kit" : /Body/i.test(mesh.name) ? "skin" : /Hair/i.test(mesh.name) ? "hair" : "other";
-    mesh.material = materials.get(mesh.material as THREE.Material, colour, part);
+    mesh.material = materials.get(mesh.material as THREE.Material, colour, part, /Shirt/i.test(mesh.name) ? number : undefined);
   });
   const root = new THREE.Group();
   root.add(model);

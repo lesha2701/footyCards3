@@ -718,7 +718,7 @@ function Players({
   const style = feint ? FEINTS[feint] : undefined;
   const materials = useMemo(() => new MaterialCache("standard"), []);
   const man = useMemo(() => {
-    const p = makePlayer(asset, ATTACKER_LOOK, materials);
+    const p = makePlayer(asset, ATTACKER_LOOK, materials, 10);
     addMoves(p, moves);
     p.root.rotation.order = "YXZ";
     return { p, feet: feetOf(p), kick: null } as Actor;
@@ -727,21 +727,21 @@ function Players({
   const hasTeam = "team" in setup;
   const squad = useMemo(() => {
     if (!hasTeam) return null;
-    const mates = [0, 1].map(() => {
-      const p = makePlayer(asset, ATTACKER_LOOK, materials);
+    const mates = [7, 11].map((number) => {
+      const p = makePlayer(asset, ATTACKER_LOOK, materials, number);
       addMoves(p, moves);
       p.root.rotation.order = "YXZ";
       return { p, feet: feetOf(p), kick: null } as Actor;
     });
-    const defs = [DEFENDER_LOOK, DEFENDER_LOOK_2, DEFENDER_LOOK].map((look) => {
-      const p = makePlayer(asset, look, materials);
+    const defs = [DEFENDER_LOOK, DEFENDER_LOOK_2, DEFENDER_LOOK].map((look, i) => {
+      const p = makePlayer(asset, look, materials, [4, 5, 3][i]);
       addMoves(p, moves);
       return p;
     });
     return { mates, defs };
   }, [hasTeam, asset, moves, materials]);
   const keeper = useMemo(() => {
-    const p = makePlayer(asset, KEEPER_LOOK, materials);
+    const p = makePlayer(asset, KEEPER_LOOK, materials, 1);
     addMoves(p, moves);
     return p;
   }, [asset, moves, materials]);
@@ -1137,8 +1137,8 @@ function Others({ asset, moves, materials, stage, quality }: {
 }) {
   const others = useMemo<Other[]>(
     () =>
-      EXTRAS.filter((e) => quality === "high" || e.low).map((spec) => {
-        const p = makePlayer(asset, spec.look, materials);
+      EXTRAS.filter((e) => quality === "high" || e.low).map((spec, i) => {
+        const p = makePlayer(asset, spec.look, materials, spec.role === "ref" ? 0 : 14 + i);
         addMoves(p, moves);
         p.root.traverse((o) => {
           if ((o as THREE.Mesh).isMesh) o.castShadow = quality === "high";

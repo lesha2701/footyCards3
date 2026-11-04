@@ -3,6 +3,8 @@
  * the grass for the sun's shadows. A pose is two rows of the bake and a blend. */
 import * as THREE from "three";
 
+import { SHIRT_INK_DARK, SHIRT_INK_LIGHT, SHIRT_NUMBER_GLSL, digitAtlas, inkOn } from "@/components/career/goal3d/shirtNumber";
+
 import type { Baked, Merged } from "./baked";
 import { SUN } from "./stadium";
 
@@ -48,21 +50,23 @@ function geometryOf(m: Merged): THREE.BufferGeometry {
 }
 
 export type Kit = { shirt: string; shorts: string; socks: string };
-export type Look = { kit: Kit; skin: string; hair: string; bald?: boolean };
+export type Look = { kit: Kit; skin: string; hair: string; bald?: boolean; number: number };
 
 /** Per-instance data of one mesh (an instance slot can hold anyone). */
 type Layer = { mesh: THREE.InstancedMesh; pose: THREE.InstancedBufferAttribute; look: THREE.InstancedBufferAttribute };
 
-/** Colours per person: skin, shirt, shorts, socks, hair. In a texture, not in
- * attributes: phones allow 16 of those, and a matrix alone takes four. */
+/** Colours per person: skin, shirt, shorts, socks, hair, then his number and its
+ * ink. In a texture, not in attributes: phones allow 16 of those, and a matrix
+ * alone takes four. */
 function lookTexture(looks: Look[]) {
-  const data = new Float32Array(looks.length * 5 * 4);
+  const data = new Float32Array(looks.length * 6 * 4);
   looks.forEach((l, i) => {
     [skinTone(l.skin), tint(l.kit.shirt, 1.18), tint(l.kit.shorts, 1.18), tint(l.kit.socks, 1.18), tint(l.hair)].forEach((c, k) => {
-      data.set([c.r, c.g, c.b, 1], (i * 5 + k) * 4);
+      data.set([c.r, c.g, c.b, 1], (i * 6 + k) * 4);
     });
+    data.set([l.number, inkOn(l.kit.shirt), 0, 1], (i * 6 + 5) * 4);
   });
-  const t = new THREE.DataTexture(data, 5, looks.length, THREE.RGBAFormat, THREE.FloatType);
+  const t = new THREE.DataTexture(data, 6, looks.length, THREE.RGBAFormat, THREE.FloatType);
   t.minFilter = t.magFilter = THREE.NearestFilter;
   t.needsUpdate = true;
   return t;
@@ -80,20 +84,23 @@ function layer(merged: Merged, baked: Baked, map: THREE.Texture | null, hairMap:
     sh.uniforms.uBake = { value: baked.texture };
     sh.uniforms.uLooks = { value: looks };
     sh.uniforms.uHairMap = { value: hairMap };
+    sh.uniforms.uDigits = { value: digitAtlas() };
     sh.vertexShader = (`${head(baked)}uniform highp sampler2D uLooks; attribute float aLook;
-varying vec3 vMcTint; varying float vMcHair;
+varying vec3 vMcTint; varying float vMcHair; varying vec2 vMcShirt;
 ` + sh.vertexShader)
       .replace("#include <beginnormal_vertex>", "mat4 mcS = mcSkin();\nvec3 objectNormal = normalize(mat3(mcS) * vec3(normal));")
       .replace("#include <begin_vertex>", `vec3 transformed = (mcS * vec4(position, 1.)).xyz;
         vMcTint = aPart < 4.5 ? texelFetch(uLooks, ivec2(int(aPart + .5), int(aLook + .5)), 0).rgb : vec3(1.);
-        vMcHair = aPart > 3.5 && aPart < 4.5 ? 1. : 0.;`);
+        vMcHair = aPart > 3.5 && aPart < 4.5 ? 1. : 0.;
+        vMcShirt = aPart > .5 && aPart < 1.5 ? texelFetch(uLooks, ivec2(5, int(aLook + .5)), 0).rg : vec2(-1., 0.);`);
     sh.fragmentShader = (`uniform sampler2D uHairMap;
-varying vec3 vMcTint; varying float vMcHair;
-` + sh.fragmentShader).replace(
+varying vec3 vMcTint; varying float vMcHair; varying vec2 vMcShirt;
+${SHIRT_NUMBER_GLSL}` + sh.fragmentShader).replace(
       "#include <map_fragment>",
-      `#include <map_fragment>
+      `diffuseColor *= shirtCloth(map, vMapUv, vMcShirt.x);
        if (vMcHair > .5) diffuseColor.rgb = texture2D(uHairMap, vMapUv).rgb * 1.6;
-       diffuseColor.rgb *= vMcTint;`,
+       diffuseColor.rgb *= vMcTint;
+       diffuseColor.rgb = mix(diffuseColor.rgb, vMcShirt.y > .5 ? ${SHIRT_INK_LIGHT} : ${SHIRT_INK_DARK}, shirtInk(vMapUv, vMcShirt.x));`,
     );
   };
   mat.customProgramCacheKey = () => "match3d-player";

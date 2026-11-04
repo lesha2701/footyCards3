@@ -4,7 +4,7 @@
  * nothing here feeds back into the simulation. */
 import { CELEBRATIONS, type Moves, type Strike } from "@/components/oneOnOne/moves";
 import { windupOf } from "@/lib/match3d/actions";
-import { Act, HZ, Kick, type MatchState, type Player } from "@/lib/match3d/core";
+import { Act, HZ, Kick, WALK_DRIBBLE, touchFoot, type MatchState, type Player } from "@/lib/match3d/core";
 
 import { BAKE_FPS, type Baked } from "./baked";
 
@@ -16,8 +16,15 @@ const QUICK = 0.08;
 /** When the ball leaves the hands or the foot in the match's own clips (s). */
 const CONTACT: Record<string, number> = { throw_in: 0.68, penalty: 0.73, gk_throw: 1.53, gk_roll: 1.13, gk_dropkick: 2.1 };
 
+/** When each foot is furthest forward in the loops a man carries the ball in (s). */
+const FOOT_AT: Record<string, { r: number; l: number }> = {
+  run: { r: 0.55, l: 0.18 }, sprint: { r: 0.42, l: 0.15 }, dribble_jog: { r: 0.7, l: 0.18 },
+};
+/** How hard the loop is pulled on to the engine's touch count (1/s). */
+const LOCK = 7;
+
 /** Natural speed of the loops (m/s). */
-export type Paces = { run: number; sprint: number; back: number; dribble: number; dribbleFast: number };
+export type Paces = { run: number; sprint: number; back: number; dribble: number };
 
 type Pick = { name: string; loop: boolean; speed: number; fade: number; t0?: number };
 
@@ -144,15 +151,20 @@ export class Motion {
     const v = Math.sqrt(p.vx * p.vx + p.vz * p.vz);
     const keeper = p.role === "GK";
     if (v < 0.5) {
-      if (keeper) return { name: s.ball.owner < 0 || Math.abs(s.ball.x - p.x) < 40 ? this.or("gk_set", "gk_idle") : "gk_idle", loop: true, speed: 1, fade: FADE };
+      if (keeper && s.ball.owner !== p.i) return { name: s.ball.owner < 0 || Math.abs(s.ball.x - p.x) < 40 ? this.or("gk_set", "gk_idle") : "gk_idle", loop: true, speed: 1, fade: FADE };
       return { name: this.or("offensive_idle", "idle"), loop: true, speed: 1, fade: FADE };
     }
     const along = (p.vx * p.hx + p.vz * p.hz) / v;
     const across = (p.hx * p.vz - p.hz * p.vx) / v;
     const has = s.ball.owner === p.i;
     if (has) {
-      if (v > 6.4 && this.has("dribble_run")) return { name: "dribble_run", loop: true, speed: v / this.paces.dribbleFast, fade: FADE };
-      if (this.has("dribble_jog")) return { name: "dribble_jog", loop: true, speed: Math.max(0.7, v / this.paces.dribble), fade: FADE };
+      // Walking it, the close-control take. At a pace he runs like anybody
+      // else, or his feet would skate: the takes were played at under 2 m/s.
+      if (v < (this.clip[p.i] === "dribble_jog" ? WALK_DRIBBLE : WALK_DRIBBLE - 0.3) && this.has("dribble_jog")) {
+        return { name: "dribble_jog", loop: true, speed: Math.max(0.8, Math.min(2, v / this.paces.dribble)), fade: FADE };
+      }
+      if (v > (this.clip[p.i] === "sprint" ? 5.9 : 6.5)) return { name: "sprint", loop: true, speed: v / this.paces.sprint, fade: FADE };
+      return { name: "run", loop: true, speed: Math.max(0.55, v / this.paces.run), fade: FADE };
     }
     if (along < -0.45 && v < 6.5) return { name: "run_back", loop: true, speed: v / this.paces.back, fade: FADE };
     if (Math.abs(across) > 0.72 && v < 5.5) {
@@ -228,6 +240,23 @@ export class Motion {
       if (pick.name !== this.clip[i]) { this.step(i, dt, Math.max(0.55, pick.speed)); return; }
     }
     this.step(i, dt, pick.speed);
+    if (s.ball.owner === i) this.lockStride(i, p);
+  }
+
+  /** The stride follows the ball: his foot is at it on the engine's touch. */
+  private lockStride(i: number, p: Player) {
+    const name = this.clip[i], at = FOOT_AT[name];
+    if (!at || p.act !== Act.None || this.fade[i] < 1) return;
+    const r = this.baked.rows[name];
+    if (!r) return;
+    const u = 1 - p.touch / p.touchLen;
+    const walking = name === "dribble_jog";
+    const span = walking ? r.duration / 2 : r.duration;
+    const want = (walking ? at.l : touchFoot(p) > 0 ? at.r : at.l) + u * span;
+    let d = (want - this.t[i]) % span;
+    if (d > span / 2) d -= span;
+    if (d < -span / 2) d += span;
+    this.t[i] += d * Math.min(1, LOCK / HZ);
   }
 
   /** The officials: only ever walking or running. */

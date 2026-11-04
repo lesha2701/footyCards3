@@ -18,6 +18,8 @@ import { PEOPLE, REFEREE, makeSquad, type Look, type Squad } from "./squad";
 import { SUN, makeStadium, type Stadium } from "./stadium";
 import { whistle } from "./whistle";
 
+/** A touch over its real size, to be seen on a phone, not more. */
+const BALL_SHOWN = 1.1;
 const HOME = { shirt: "#d4202f", shorts: "#ffffff", socks: "#d4202f" };
 const AWAY = { shirt: "#f2f4f8", shorts: "#1c3f94", socks: "#1c3f94" };
 const KEEPER_HOME = { shirt: "#1bb36b", shorts: "#10243d", socks: "#1bb36b" };
@@ -31,7 +33,7 @@ function looks(seed: number): Look[] {
   for (let i = 0; i < PEOPLE; i++) {
     const n = Math.imul(i + 3, seed | 1) >>> 7;
     const kit = i >= 22 ? OFFICIAL : i === 0 ? KEEPER_HOME : i === 11 ? KEEPER_AWAY : i < 11 ? HOME : AWAY;
-    out.push({ kit, skin: SKINS[n % SKINS.length], hair: HAIRS[(n >>> 3) % HAIRS.length] });
+    out.push({ kit, skin: SKINS[n % SKINS.length], hair: HAIRS[(n >>> 3) % HAIRS.length], number: i >= 22 ? 0 : i % 11 + 1 });
   }
   return out;
 }
@@ -175,11 +177,11 @@ export class MatchGame {
 
     const geo = ballGeometry();
     geo.computeBoundingSphere();
-    const shown = (BALL_R * 1.45) / geo.boundingSphere!.radius;
+    const shown = (BALL_R * BALL_SHOWN) / geo.boundingSphere!.radius;
     this.ball = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
     this.ball.scale.setScalar(shown);
     this.scene.add(this.ball);
-    const blob = new THREE.Mesh(new THREE.CircleGeometry(BALL_R * 1.5, 18), new THREE.MeshBasicMaterial({ color: "#071a0c", transparent: true, opacity: 0.45, depthWrite: false }));
+    const blob = new THREE.Mesh(new THREE.CircleGeometry(BALL_R * BALL_SHOWN, 18), new THREE.MeshBasicMaterial({ color: "#071a0c", transparent: true, opacity: 0.45, depthWrite: false }));
     blob.rotation.x = -Math.PI / 2;
     this.ballShadow = blob;
     this.scene.add(blob);
@@ -699,7 +701,7 @@ export class MatchGame {
       g0: s.teams[0].goals, g1: s.teams[1].goals, clock: clockText(s),
       attack: !!(u && (s.ball.owner === u.i || taking || (s.phase === Phase.Play && s.ball.owner < 0 && !(s.ball.to >= 0 && s.players[s.ball.to].team !== u.team)))),
       setKind: taking ? set!.kind : null,
-      keeper: !!(u && u.role === "GK" && (s.ball.owner === u.i || taking)),
+      keeper: !!(u && u.role === "GK" && (s.ball.owner === u.i || taking) && u.act !== Act.None),
       chipHere: !!u && !set && u.x * (u.team === 0 ? 1 : -1) > HALF_L - 26 && Math.abs(u.z) < 16,
       replay: this.replayF >= 0,
       ended: s.phase === Phase.FullTime,

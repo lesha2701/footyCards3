@@ -45,6 +45,10 @@ calls. Presentation code may use anything: it never feeds the simulation.
   column. So the bake is an atlas of frames side by side (`Baked.columns`). A
   texture over the cap fails silently: every bone is zero and the people
   collapse to a point.
+- The texture has a «7» painted on the back of the shirt. `shirtNumber.ts` covers it
+  in the shader with the cloth beside it and draws each man's number from one atlas
+  of digits (`squad.ts` per instance, `makePlayer`'s `number` for «Атака 1 на 1» and
+  «Ответка»). No branches around its lookups: gradients go wrong at a branch's edge.
 - `dragback` ends turned 180°. While it plays the body's heading waits
   (`Motion.turning`), and the switch at its end is a cut, not a blend.
 
@@ -87,6 +91,20 @@ The help a human gets, all in `engine.ts`:
   he is off and running, on the ground if the lane is open, otherwise over the
   top). Without the ball the same touch makes him the human's man.
 
+Dribbling: the ball leaves the foot once a stride cycle at a run (`RUN_CYCLE`, 2.95 m,
+what the run and sprint clips cover) and once a step at a walk (`stepCarried`:
+`touch` / `touchLen`, the side from `touchFoot`). With the ball a man under
+`WALK_DRIBBLE` plays the dribble clip, above it the ordinary run and sprint at their
+true pace, and `lockStride` (`motion.ts`) keeps the clip's phase on the touch so that
+the foot is at the ball when it goes. Two more clips of a run with the ball were not
+needed for this; feet no longer skate because `paces` are the clips' measured ones.
+
+The keeper at his feet: a team-mate's ball on the ground is a back pass, not a shot.
+He meets it, plays it with his feet (no hands) and is an ordinary man from then on:
+he is the human's, runs, feints and passes. «Удар» from him is a long ball to a
+team-mate. On the ball he goes no nearer than 3 m to his own line (`KEEPER_LINE`):
+the thumb is usually still held back from the pass.
+
 Long balls: a man with nobody on him brings a high ball down off the chest or the
 thigh however hot it is, and waits for one that is dropping; the man it was hit to
 has the better of a real jump, and a header goes on to a team-mate when one is
@@ -105,8 +123,8 @@ stick across (`bestMate` with `air`). `bench/shape.mjs` measures all of this.
 Pressing with the ball on its way (`want`): as long as no opponent has it or is
 about to get a pass, the buttons stay «Удар», «Пас», «Разрез», «Навес», and the press is
 played first time when he reaches it, a header included. «Отбор» is only there
-against a man on the ball. Feints: the «Финт» button or a short drag sideways across
-the big button, with the stick choosing which one.
+against a man on the ball. Feints: a short drag sideways across the big button, with the
+stick choosing which one; there is no button of their own.
 
 A won tackle really wins it (`stepTackle`): he comes away with it or it squirts his
 way, and the man who lost it can't pick it straight back up. A carrier who stands on
