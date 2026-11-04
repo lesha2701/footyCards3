@@ -207,6 +207,11 @@ export type MatchState = {
   prevTouch: number;
   /** Ticks the user's press is remembered for an aerial chance. */
   wantShot: number;
+  /** The human's press with the ball on its way: played first time when he gets to it. */
+  want: { k: "pass" | "through" | "lob" | "shot"; power: number; curl: number; chip: boolean } | null;
+  wantX: number;
+  wantZ: number;
+  wantT: number;
   /** User's stick idle for this many ticks. */
   idle: number;
   /** The human calls a second man to the ball. */
@@ -461,6 +466,6 @@ export function freshState(setup: Setup, players: Player[]): MatchState {
     teams: [team(setup.home, setup.homeRating), team(setup.away, setup.awayRating)],
     set: null, user: -1, poss: 0, chaser: [-1, -1],
     pred: new Float64Array(PRED_MAX * 3), predN: 0, predFrom: 0,
-    lastGoal: null, prevTouch: -1, wantShot: 0, idle: 0, contain: false, switchT: 0, locked: false, lockX: 0, lockZ: 0, stickX: 0, stickZ: 0, lostAt: [-9999, -9999], ev: [],
+    lastGoal: null, prevTouch: -1, wantShot: 0, want: null, wantX: 0, wantZ: 0, wantT: 0, idle: 0, contain: false, switchT: 0, locked: false, lockX: 0, lockZ: 0, stickX: 0, stickZ: 0, lostAt: [-9999, -9999], ev: [],
   };
 }

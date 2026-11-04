@@ -102,6 +102,16 @@ gap in the back line (`channel`), a full-back overlaps on the ball's side, and w
 the ball's side is crowded the far flank gets a switch: for the human «Навес» with the
 stick across (`bestMate` with `air`). `bench/shape.mjs` measures all of this.
 
+Pressing with the ball on its way (`want`): as long as no opponent has it or is
+about to get a pass, the buttons stay «Удар», «Пас», «Разрез», «Навес», and the press is
+played first time when he reaches it, a header included. «Отбор» is only there
+against a man on the ball. Feints: the «Финт» button or a short drag sideways across
+the big button, with the stick choosing which one.
+
+A won tackle really wins it (`stepTackle`): he comes away with it or it squirts his
+way, and the man who lost it can't pick it straight back up. A carrier who stands on
+the ball (`standing`) gets closed down wherever he is and tackled from any side.
+
 Penalties and close free kicks: when the human's team has a penalty, or a free
 kick under 30 m out and under 20 m wide, and when he faces a penalty, the match
 stops at the whistle (`set.scene`, `sceneOf`) and the kick is played in the game's

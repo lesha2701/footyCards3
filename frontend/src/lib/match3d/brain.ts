@@ -36,6 +36,12 @@ export const FORMATIONS: Record<"433" | "442", Slot[]> = {
 /** A man stands this far from the centre at a kick-off (the circle is 9.15 m). */
 const CIRCLE_CLEAR = 10.2;
 const JOG = 4.2;
+/** A carrier under this pace (m/s) for a while after his touch is standing on it. */
+const STILL = 2.2;
+const STILL_AFTER = 50;
+export const standing = (s: MatchState, c: Player) => s.ball.since > STILL_AFTER && c.vx * c.vx + c.vz * c.vz < STILL * STILL;
+/** How far a foot gets round a man standing on the ball, the ball measured from the tackler (m). */
+export const STILL_REACH = 2.1;
 const RUN = 6.2;
 /** Time for him to get to a point (s). */
 const reachTime = (p: Player, x: number, z: number) => dist(p.x, p.z, x, z) / sprintOf(p) + 0.12;
@@ -82,7 +88,8 @@ export function thinkTeam(s: MatchState, team: 0 | 1, slots: readonly Slot[]) {
   const high = ax > backLine(ax, hunting) + 9;
   const cost = (p: Player) => dist(p.x, p.z, b.x, b.z) + (high && (p.role === "CB" || p.role === "FB") ? 12 : 0);
   const byDist = [...outfield].sort((p, q) => cost(p) - cost(q));
-  const pressing = ax < 20 ? 1 : dist(byDist[0].x, byDist[0].z, b.x, b.z) < 26 ? 1 : 0;
+  // Deep in their half the block waits; a man who just stands there gets closed down anyway.
+  const pressing = ax < 20 || b.since > 150 || dist(byDist[0].x, byDist[0].z, b.x, b.z) < 26 ? 1 : 0;
   if (pressing && byDist[0]) byDist[0].duty = 1;
   if (byDist[1] && dist(byDist[1].x, byDist[1].z, b.x, b.z) < 16) byDist[1].duty = 2;
   // One presses and one covers, the zones hold. Nobody watches a man run past
@@ -344,12 +351,14 @@ export function thinkOffBall(s: MatchState, p: Player, slot: Slot) {
     // Between him and the goal, a stride off, giving ground at his pace: the
     // carrier meets a body, not a man jogging beside him.
     const d = dist(p.x, p.z, c.x, c.z);
-    const stand = d < 5 ? 1.2 : 0.6;
+    // A man standing with it doesn't get a stride: he goes right up and takes it.
+    const pace = Math.sqrt(c.vx * c.vx + c.vz * c.vz);
+    const still = standing(s, c);
+    const stand = still ? 0.4 : d < 5 ? 1.2 : 0.6;
     const lead = clamp(d * 0.09, 0.15, 0.6);
     p.tx = c.x + c.vx * lead + ((gx - c.x) / gd) * stand;
     p.tz = c.z + c.vz * lead + (-c.z / gd) * stand;
-    const pace = Math.sqrt(c.vx * c.vx + c.vz * c.vz);
-    p.want = d > 3.2 ? sprintOf(p) : Math.min(sprintOf(p), pace + 1.4);
+    p.want = d > 3.2 ? sprintOf(p) : Math.min(sprintOf(p), pace + (still ? 3 : 1.4));
     p.faceBall = d < 5;
     return;
   }
@@ -394,7 +403,8 @@ export function thinkTackle(s: MatchState, p: Player) {
   const c = s.players[b.owner];
   if (c.team === p.team || c.act === Act.Hold) return;
   const d = dist(p.x, p.z, b.x, b.z);
-  if (d < 1.4 && rnd(s) < 0.04 + p.defend * 0.08) startTackle(p);
+  const still = standing(s, c);
+  if (d < (still ? STILL_REACH : 1.4) && rnd(s) < 0.04 + p.defend * 0.08) startTackle(p);
   else if (p.i !== s.user && d < 3 && d > 1.6 && p.defend > 0.6 && p.vx * c.vx + p.vz * c.vz > 12 && rnd(s) < 0.015 && p.x * dirOf(p.team) > -36) startSlide(p);
 }
 

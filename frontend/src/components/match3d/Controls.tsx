@@ -24,7 +24,10 @@ const SMALL = 52;
 const RIGHT = 20;
 const BOTTOM = 36;
 /** The arc, as offsets of a small button from the big one's corner. */
-const ARC = { top: { left: 7, top: -70 }, side: { left: -70, top: 21 }, mid: { left: -50, top: -40 } };
+const ARC = { top: { left: 7, top: -70 }, side: { left: -70, top: 21 }, mid: { left: -50, top: -40 }, feint: { left: -118, top: -28 } };
+/** A drag this long (px) across the big button, mostly sideways, is a feint. */
+const FEINT_DRAG = 26;
+const FEINT_SLOPE = 1.3;
 const DEAD = 0.22;
 const BAR_R = 46;
 const BAR_LENGTH = 2 * Math.PI * BAR_R;
@@ -57,6 +60,7 @@ export default function Controls({ game, hud, w, h, toBox }: { game: MatchGame; 
   const fingers = useRef(new Map<number, Role>());
   const held = useRef<Held | null>(null);
   const stickDown = useRef({ x: 0, y: 0, t: 0 });
+  const padDown = useRef({ x: 0, y: 0 });
   const bigBar = useRef<SVGCircleElement>(null);
   const midBar = useRef<SVGCircleElement>(null);
   const anchor = useRef<HTMLDivElement>(null);
@@ -146,13 +150,14 @@ export default function Controls({ game, hud, w, h, toBox }: { game: MatchGame; 
       return Math.sqrt((p.x - c.x) ** 2 + (p.y - c.y) ** 2) / SMALL;
     };
     const fight = now.current.attack;
-    const near = ((fight ? ["top", "side", "mid"] : ["top", "side"]) as Slot[]).reduce((a, b) => (off(b) < off(a) ? b : a));
+    const near = ((fight ? ["top", "side", "mid", "feint"] : ["top", "side"]) as Slot[]).reduce((a, b) => (off(b) < off(a) ? b : a));
     const onArc = off(near) < BUTTON_REACH;
     if (onArc) {
       fingers.current.set(e.pointerId, near);
       haptic("light");
       if (fight && near === "top") game.act({ k: "pass", power: 0.4 });
       else if (fight && near === "side") game.act({ k: "through", power: 0.5 });
+      else if (fight && near === "feint") game.act({ k: "feint" });
       else if (fight) startHold("mid");
       else if (near === "top") game.act({ k: "switch" });
       else game.act({ k: "slide" });
@@ -164,6 +169,7 @@ export default function Controls({ game, hud, w, h, toBox }: { game: MatchGame; 
     if (!held.current && !pad.down) {
       fingers.current.set(e.pointerId, "pad");
       pad.start({ ...p, t: e.timeStamp });
+      padDown.current = p;
       if (fight) startHold("pad");
       else { game.act({ k: "tackle" }); haptic("light"); }
     }
@@ -177,8 +183,9 @@ export default function Controls({ game, hud, w, h, toBox }: { game: MatchGame; 
       stick.move(p);
       syncStick();
     } else if (role === "pad") {
-      const dir = pad.move({ ...p, t: e.timeStamp });
-      if (dir !== 0 && held.current && now.current.attack) {
+      pad.move({ ...p, t: e.timeStamp });
+      const dx = Math.abs(p.x - padDown.current.x), dy = Math.abs(p.y - padDown.current.y);
+      if (dx > FEINT_DRAG && dx > dy * FEINT_SLOPE && held.current && !held.current.feinted && now.current.attack) {
         held.current.feinted = true;
         game.act({ k: "feint" });
         haptic("light");
@@ -211,7 +218,6 @@ export default function Controls({ game, hud, w, h, toBox }: { game: MatchGame; 
       if (cancelled) { pad.cancel(); return; }
       const intent = pad.end({ ...p, t: e.timeStamp });
       if (!now.current.attack || hold.feinted) return;
-      if (intent.feint) { game.act({ k: "feint" }); return; }
       haptic("medium");
       if (intent.shot) {
         // The finesse: curls the way the thumb bent it.
@@ -242,11 +248,12 @@ export default function Controls({ game, hud, w, h, toBox }: { game: MatchGame; 
             <Ring barRef={bigBar} />
             <div style={{ ...face, background: LIME, color: "#000", fontSize: 14, fontWeight: 700, border: 0, flexDirection: "column", textShadow: "none" }}>
               {hud.keeper ? "Выбить" : "Удар"}
-              {!started && !hud.keeper && <span style={{ fontSize: 9, fontWeight: 500, marginTop: 3, opacity: 0.7 }}>держи, вбок — финт</span>}
+              {!started && !hud.keeper && <span style={{ fontSize: 9, fontWeight: 500, marginTop: 3, opacity: 0.7 }}>вбок — финт</span>}
             </div>
             {small("top", "Пас")}
             {small("side", "Разрез")}
             {small("mid", hud.chipHere ? "Парашют" : "Навес", "rgba(252,211,77,.8)", true)}
+            {small("feint", "Финт")}
           </>
         ) : (
           <>

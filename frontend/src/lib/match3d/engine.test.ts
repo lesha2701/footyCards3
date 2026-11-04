@@ -370,6 +370,48 @@ describe("match3d engine", () => {
     expect(s.set?.kind).toBe("penalty");
   });
 
+  it("a tackle that wins it wins it: the man who stands still doesn't get it back", () => {
+    const held: number[] = [];
+    for (const seed of [61, 62, 63, 64]) {
+      const s = createMatch({ ...SETUP, seed }, 0);
+      let since = -1;
+      while (s.phase !== Phase.FullTime && s.tick < HZ * 150) {
+        stepMatch(s, NO_INPUT);
+        const mine = s.phase === Phase.Play && s.ball.owner >= 0 && s.ball.owner === s.user;
+        if (mine && since < 0) since = s.tick;
+        else if (!mine && since >= 0) { held.push(s.tick - since); since = -1; }
+      }
+      if (since >= 0) held.push(s.tick - since);
+    }
+    expect(Math.max(...held)).toBeLessThan(HZ * 20);
+  });
+
+  it("a press with the ball on its way is played first time", () => {
+    const from = outfield(createMatch(SETUP, 0), -1)[0].i;
+    const s = onBall(from, -10, 5);
+    const m = outfield(s, from)[0];
+    m.x = 12; m.z = -6; m.vx = 0; m.vz = 0;
+    clear(s, 12, -6, [from, m.i, ...outfield(s, from).slice(1, 3).map((p) => p.i)]);
+    stepMatch(s, { ...NO_INPUT, press: { k: "pass", power: 0.5 } });
+    for (let i = 0; i < 40 && s.ball.owner === from; i++) stepMatch(s, NO_INPUT);
+    expect(s.ball.owner).toBe(-1);
+    stepMatch(s, { ...NO_INPUT, mx: 1, press: { k: "pass", power: 0.5 } });
+    expect(s.want?.k).toBe("pass");
+    let passes = 0;
+    for (let i = 0; i < 200 && s.phase === Phase.Play && !passes; i++) {
+      stepMatch(s, NO_INPUT);
+      if (s.ball.owner === s.user && s.players[s.user].act === Act.Kick) passes = 1;
+    }
+    expect(passes).toBe(1);
+  });
+
+  it("a feint on the ball starts a feint", () => {
+    const from = outfield(createMatch(SETUP, 0), -1)[0].i;
+    const s = onBall(from, -10, 5);
+    stepMatch(s, { ...NO_INPUT, mx: 1, press: { k: "feint" } });
+    expect(s.players[from].act).toBe(Act.Feint);
+  });
+
   it("the side without the ball holds its zones: two go, the rest pick up men", () => {
     for (const seed of [51, 52]) {
       const s = createMatch({ ...SETUP, seed }, null);

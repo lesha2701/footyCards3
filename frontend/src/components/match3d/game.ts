@@ -697,7 +697,7 @@ export class MatchGame {
     const taking = !!(u && set && set.taker === u.i);
     const hud: Hud = {
       g0: s.teams[0].goals, g1: s.teams[1].goals, clock: clockText(s),
-      attack: !!(u && (s.ball.owner === u.i || taking)),
+      attack: !!(u && (s.ball.owner === u.i || taking || (s.phase === Phase.Play && s.ball.owner < 0 && !(s.ball.to >= 0 && s.players[s.ball.to].team !== u.team)))),
       setKind: taking ? set!.kind : null,
       keeper: !!(u && u.role === "GK" && (s.ball.owner === u.i || taking)),
       chipHere: !!u && !set && u.x * (u.team === 0 ? 1 : -1) > HALF_L - 26 && Math.abs(u.z) < 16,

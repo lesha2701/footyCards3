@@ -10,7 +10,7 @@ import {
 import {
   feintBites, fell, inBox, laneMargin, offsideLine, planCross, planLob, planPass, planShot, planThrough, releaseKick, rollPace, sprintOf, startFeint, startKick, startSlide, startTackle, windupOf,
 } from "./actions";
-import { FORMATIONS, setPieceSpot, takeSetPiece, thinkCarrier, thinkPlayer, thinkTackle, thinkTeam } from "./brain";
+import { FORMATIONS, STILL_REACH, setPieceSpot, standing, takeSetPiece, thinkCarrier, thinkPlayer, thinkTackle, thinkTeam } from "./brain";
 import { holdBall, keeperSpot, releaseHands, stepKeeper } from "./keeper";
 
 /** What the human does this tick. Stick in world axes (−1..1). */
@@ -41,6 +41,10 @@ const REACH = 0.85;
 const GOAL_PAUSE = 150;
 /** Ticks before a restart can be taken. */
 const SET_MIN = 90;
+/** What a stride of the carrier's pace takes off a tackle's chance, per m/s. */
+const TACKLE_RUNNING = 0.05;
+/** How long a press for the ball on its way holds (ticks). */
+const FIRST_TIME = 60;
 /** A free kick closer than this (m), not too wide, goes to the swipe scene. */
 const FREE_SCENE_MAX = 30;
 const FREE_SCENE_WIDE = 20;
@@ -284,7 +288,14 @@ function userPress(s: MatchState, p: Player, inp: Input) {
     return;
   }
   if (!has) {
-    if (press.k === "shot") { s.wantShot = 24; return; }
+    // The ball on its way: whatever he asks for is played first time.
+    if (b.owner < 0 && (press.k === "pass" || press.k === "through" || press.k === "lob" || press.k === "shot")) {
+      const shot = press.k === "shot";
+      s.want = { k: press.k, power: press.power, curl: shot ? press.curl : 0, chip: shot && press.chip };
+      s.wantX = ux; s.wantZ = uz; s.wantT = s.tick + FIRST_TIME;
+      if (shot) s.wantShot = FIRST_TIME;
+      return;
+    }
     if (press.k === "tackle" && free && p.cool === 0) startTackle(p);
     else if (press.k === "slide" && free && p.cool === 0) startSlide(p);
     return;
@@ -550,23 +561,29 @@ function stepTackle(s: MatchState, p: Player) {
   const c = b.owner >= 0 ? s.players[b.owner] : null;
   if (p.actT === 8 && c && c.team !== p.team) {
     const d = dist(p.x, p.z, b.x, b.z);
-    if (d < 1.55) {
+    if (d < (standing(s, c) ? STILL_REACH + 0.1 : 1.55)) {
+      // A ball out of his stride is there to be won; one at a man on the move isn't, so much.
       const exposed = clamp(speedOf(b) / 8, 0, 1) * 0.12;
-      const chance = 0.4 + p.defend * 0.46 - c.dribble * 0.28 + exposed;
+      const going = Math.sqrt(c.vx * c.vx + c.vz * c.vz);
+      const chance = 0.32 + p.defend * 0.46 - c.dribble * 0.28 + exposed - Math.min(going, 8) * TACKLE_RUNNING;
       const behind = c.hx * p.hx + c.hz * p.hz > 0.5;
       if (behind && rnd(s) < 0.22) {
         foul(s, p, c);
       } else if (rnd(s) < chance) {
-        // Poked away, more often than not to him.
-        b.owner = -1; b.last = p.i; b.kick = Kick.Tackle; b.kicker = p.i; b.to = -1; b.since = 0;
-        const ux = p.hx + rndN(s) * 0.5, uz = p.hz + rndN(s) * 0.5;
-        const v = 3 + rnd(s) * 4;
-        b.vx = ux * v; b.vz = uz * v;
+        // Won: he comes away with it, or it squirts loose his way. Either way
+        // the man who lost it is out of it for a moment.
         c.cool = 34;
-        c.beat = 14; c.beatX = 0; c.beatZ = 0;
-        predict(s);
+        c.beat = 26; c.beatX = 0; c.beatZ = 0;
+        b.owner = -1; b.last = p.i; b.kick = Kick.Tackle; b.kicker = p.i; b.to = -1; b.since = 14;
         s.teams[p.team].tackles += 1;
         s.ev.push({ t: "tackle", p: p.i, won: true });
+        if (rnd(s) < 0.6) take(s, p);
+        else {
+          const l = dist(p.x, p.z, c.x, c.z) || 1;
+          const tx = (p.x - c.x) / l, tz = (p.z - c.z) / l, off = rndN(s) * 0.9, v = 3 + rnd(s) * 3.5;
+          b.vx = (tx - tz * off) * v; b.vz = (tz + tx * off) * v;
+          predict(s);
+        }
       } else {
         p.cool = 54;
         s.ev.push({ t: "tackle", p: p.i, won: false });
@@ -589,6 +606,7 @@ function stepSlide(s: MatchState, p: Player) {
         // Ball first: it's knocked away, and he goes over.
         b.owner = -1;
         c.cool = 40;
+        c.beat = 26; c.beatX = 0; c.beatZ = 0;
         if (dist(p.x, p.z, c.x, c.z) < 0.9 && rnd(s) < 0.3) fell(s, c, false);
         s.teams[p.team].tackles += 1;
         s.ev.push({ t: "tackle", p: p.i, won: true });
@@ -846,6 +864,12 @@ function take(s: MatchState, p: Player) {
     p.act = Act.Trap; p.actT = 0; p.actLen = speed > 11 ? 20 : 14;
     p.side = p.hx * (b.z - p.z) - p.hz * (b.x - p.x) > 0 ? 1 : -1;
   }
+  const w = s.want;
+  s.want = null;
+  if (w && p.i === s.user && s.tick <= s.wantT) {
+    const press: Press = w.k === "shot" ? { k: "shot", power: w.power, curl: w.curl, chip: w.chip } : { k: w.k, power: w.power };
+    userPress(s, p, { mx: s.wantX, mz: s.wantZ, sprint: false, press, contain: false });
+  }
 }
 
 function offside(s: MatchState, p: Player) {
@@ -888,7 +912,10 @@ function headOrVolley(s: MatchState, p: Player, foot: boolean) {
   p.act = foot ? Act.Volley : Act.Header; p.actT = 0; p.actLen = 26;
   p.cool = 14;
   b.fromX = b.x; b.fromZ = b.z;
-  const near = x > HALF_L - 18 && Math.abs(p.z) < 16;
+  const want = human && s.tick <= s.wantT ? s.want : null;
+  s.want = null;
+  const elsewhere = want !== null && want.k !== "shot";
+  const near = !elsewhere && (x > HALF_L - 18 || (asked && x > HALF_L - 30)) && Math.abs(p.z) < 16;
   const gx = dir * HALF_L;
   if (near) {
     const k = s.players.find((q) => q.team !== p.team && q.role === "GK");
@@ -905,7 +932,7 @@ function headOrVolley(s: MatchState, p: Player, foot: boolean) {
     if (Math.abs(tz) < GOAL_HALF) s.teams[p.team].onTarget += 1;
   } else {
     // Nodded on to a team-mate if one is there, else away from danger.
-    const to = x > -HALF_L + 22 ? headedTo(s, p) : null;
+    const to = elsewhere ? bestMate(s, p, s.wantX, s.wantZ, want.k !== "pass") : x > -HALF_L + 22 ? headedTo(s, p) : null;
     if (to) {
       const d = dist(b.x, b.z, to.x, to.z) || 1;
       const pace = clamp(d / 0.95, 7, 15);
@@ -943,6 +970,8 @@ function contacts(s: MatchState) {
     if (p.act === Act.Down || p.act === Act.Getup || p.act === Act.Slide) continue;
     if (p.i === b.last && b.since < 14) continue;
     if (p.cool > 0 && p.act === Act.Tackle) continue;
+    // He just lost it: it isn't his to pick straight back up.
+    if (p.beat > 0 && b.kick === Kick.Tackle) continue;
     // Out of the keeper's hands it goes over a man standing in front of him.
     if (keeperBall && p.team !== s.players[b.last].team) continue;
     const dx = b.x - p.x, dz = b.z - p.z;
