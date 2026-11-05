@@ -39,6 +39,8 @@ const JOG = 4.2;
 /** A carrier under this pace (m/s) for a while after his touch is standing on it. */
 const STILL = 2.2;
 const STILL_AFTER = 50;
+/** How far off (m) a man on his feet goes in: the lunge covers the rest. */
+const LUNGE_FROM = 2.3;
 export const standing = (s: MatchState, c: Player) => s.ball.since > STILL_AFTER && c.vx * c.vx + c.vz * c.vz < STILL * STILL;
 /** How far a foot gets round a man standing on the ball, the ball measured from the tackler (m). */
 export const STILL_REACH = 2.1;
@@ -175,7 +177,9 @@ function shapeSpot(s: MatchState, p: Player, slot: Slot): { x: number; z: number
   const ballAx = b.x * dir;
   const has = s.poss === p.team;
   if (!has) return blockSpot(p, slot, b.x, b.z, pressingHigh(s, p.team));
-  const block = clamp(ballAx * 0.7 + 12, -20, 30);
+  // The team goes up with the ball: past halfway the midfield and the wide men
+  // are level with it or ahead of it, or the man on it has nobody to give it to.
+  const block = clamp(ballAx * (ballAx > 0 ? 0.95 : 0.7) + 12, -20, 42);
   let ax = block + slot.ax * 1.05;
   const line = offsideLine(s, p.team);
   const back = -offsideLine(s, p.team === 0 ? 1 : 0);
@@ -202,6 +206,10 @@ function shapeSpot(s: MatchState, p: Player, slot: Slot): { x: number; z: number
 // --- without the ball ---------------------------------------------------------------------------------
 
 /** A run: into the channel behind the line, or to where he's open. */
+/** Where a run into the box can end: metres from the line, and across. */
+const BOX_DEPTHS = [7, 11, 15, 20];
+const BOX_WIDTHS = [-11, -4, 4, 11];
+
 function chooseRun(s: MatchState, p: Player, home: { x: number; z: number }) {
   const dir = dirOf(p.team);
   const b = s.ball;
@@ -210,12 +218,16 @@ function chooseRun(s: MatchState, p: Player, home: { x: number; z: number }) {
   let best = -1e9, bx = home.x, bz = home.z;
   const forward = p.role === "ST" || p.role === "W";
   const offers = forward ? 8 : 6;
+  // The ball in their half: the free places in and around their box are offers too.
+  const boxing = (forward || p.role === "CM") && b.owner >= 0 && b.x * dir > -2;
   // Only those near the ball come short for it: the rest keep the pitch big.
   const support = dist(p.x, p.z, b.x, b.z) < 24;
-  for (let n = 0; n < offers; n++) {
+  for (let n = 0; n < offers + (boxing ? 16 : 0); n++) {
     if ((n === 4 || n === 5) && !support) continue;
+    const inTheBox = n >= offers;
     let cx = home.x, cz = home.z;
-    if (n === 1) { cx += dir * 6; }
+    if (inTheBox) { cx = dir * (HALF_L - BOX_DEPTHS[(n - offers) & 3]); cz = BOX_WIDTHS[(n - offers) >> 2]; }
+    else if (n === 1) { cx += dir * 6; }
     else if (n === 2) { cx += dir * 3; cz += 7; }
     else if (n === 3) { cx += dir * 3; cz -= 7; }
     else if (n === 4) { cx = b.x - dir * 6; cz = b.z + (home.z > b.z ? 10 : -10); }
@@ -232,7 +244,8 @@ function chooseRun(s: MatchState, p: Player, home: { x: number; z: number }) {
     }
     const fromBall = dist(b.x, b.z, cx, cz);
     let v = Math.min(Math.sqrt(near), 10) * 0.5 + Math.min(Math.sqrt(lane), 5) * 0.8
-      + ((cx - b.x) * dir) * 0.09 - Math.abs(fromBall - 16) * 0.07 - dist(p.x, p.z, cx, cz) * 0.05 + rnd(s) * 1.4;
+      + ((cx - b.x) * dir) * 0.09 - Math.abs(fromBall - 16) * 0.07 - dist(p.x, p.z, cx, cz) * 0.05 + rnd(s) * 1.4
+      + (inTheBox ? threat(cx, cz, dir) * 0.45 : 0);
     // Two men in one place are one option: he goes where no team-mate is going.
     for (const m of s.players) {
       if (m.team !== p.team || m.i === p.i || m.role === "GK") continue;
@@ -293,6 +306,22 @@ export function thinkOffBall(s: MatchState, p: Player, slot: Slot) {
 
   if (has) {
     if (b.owner === p.i) return;
+    // The cross is on its way: they go and attack it, none of them waits for it.
+    if (b.owner < 0 && (b.kick === Kick.Cross || b.kick === Kick.Corner) && b.last >= 0 && s.players[b.last].team === p.team && p.role !== "FB" && p.role !== "DM") {
+      let k = 0, q = predAt(s, 0);
+      for (; k < 120; k += 6) {
+        q = predAt(s, k);
+        if (q.y < 2.3) break;
+      }
+      if (dist(p.x, p.z, q.x, q.z) < 17) {
+        // One at the ball, the others to either side of it and at the back.
+        const spot = p.i === b.to ? 0 : p.slot % 3;
+        p.tx = q.x + (spot === 0 ? 0 : -dir * 2); p.tz = q.z + (spot === 1 ? 4 : spot === 2 ? -4 : 0);
+        p.want = sprintOf(p);
+        p.dash = 0;
+        return;
+      }
+    }
     // The ball out wide near the byline: the box fills, near post, far post, spot.
     if (b.owner >= 0 && Math.abs(b.z) > 13 && b.x * dir > HALF_L - 38 && (p.role === "ST" || p.role === "W" || p.role === "CM")) {
       const near = b.z > 0 ? 1 : -1;
@@ -322,7 +351,7 @@ export function thinkOffBall(s: MatchState, p: Player, slot: Slot) {
     if (up && b.owner >= 0 && gap > -1 && gap < 16 && (p.x - b.x) * dir > (p.role === "ST" || p.role === "W" ? 1 : -14) && line0 < HALF_L - 9 && p.stamina > 0.3 && rnd(s) < 0.2) {
       let gone = 0;
       for (const m of s.players) if (m.team === p.team && m.dash > 0) gone += 1;
-      if (gone < 2) {
+      if (gone < (b.x * dir > 5 ? 3 : 2)) {
         p.dash = 150;
         p.runX = clamp(line0 + 18, -HALF_L, HALF_L - 7) * dir;
         p.runZ = overlap ? Math.sign(p.z) * (HALF_W - 5) : channel(s, p, line0);
@@ -334,6 +363,8 @@ export function thinkOffBall(s: MatchState, p: Player, slot: Slot) {
     const urgent = dist(p.x, p.z, p.runX, p.runZ) > 7;
     p.tx = p.runX; p.tz = p.runZ;
     p.want = urgent ? RUN : JOG;
+    // Going into the box is a run, not a jog.
+    if (b.x * dir > -2 && p.runX * dir > 26 && dist(p.x, p.z, p.runX, p.runZ) > 2) p.want = sprintOf(p) - 0.8;
     // Late into the channel: full pace once the line can be beaten.
     const line = offsideLine(s, p.team);
     if ((p.role === "ST" || p.role === "W") && Math.abs(p.runX * dir - (line - 0.5)) < 1.5 && b.owner >= 0) {
@@ -404,8 +435,14 @@ export function thinkTackle(s: MatchState, p: Player) {
   if (c.team === p.team || c.act === Act.Hold) return;
   const d = dist(p.x, p.z, b.x, b.z);
   const still = standing(s, c);
-  if (d < (still ? STILL_REACH : 1.4) && rnd(s) < 0.04 + p.defend * 0.08) startTackle(p);
-  else if (p.i !== s.user && d < 3 && d > 1.6 && p.defend > 0.6 && p.vx * c.vx + p.vz * c.vz > 12 && rnd(s) < 0.015 && p.x * dirOf(p.team) > -36) startSlide(p);
+  // The time to go in is when the ball is off his foot: at his feet it is a
+  // gamble, and a man who keeps gambling gets gone round.
+  const u = 1 - c.touch / c.touchLen;
+  const off = u > 0.15 && u < 0.8;
+  const rate = still ? 0.04 + p.defend * 0.08 : off ? 0.018 + p.defend * 0.04 : 0.005;
+  if (d < (still ? STILL_REACH : LUNGE_FROM) && rnd(s) < rate) startTackle(s, p);
+  // Chasing a man who has gone past him: the last thing left is to go to ground.
+  else if (p.i !== s.user && d < 3.8 && d > 1.8 && p.defend > 0.55 && p.vx * c.vx + p.vz * c.vz > 12 && rnd(s) < 0.03 && p.x * dirOf(p.team) > -34) startSlide(s, p);
 }
 
 // --- on the ball --------------------------------------------------------------------------------------
@@ -496,6 +533,16 @@ export function thinkCarrier(s: MatchState, p: Player) {
     return;
   }
 
+  // One man on him, in front of him, in their half: he takes him on. A carrier
+  // who only ever lays it off is a carrier who can always be pressed.
+  const o = pressed.o;
+  if (o && near < 3.2 && ax > -8 && p.role !== "GK" && (o.x - p.x) * p.hx + (o.z - p.z) * p.hz > 0.4 && rnd(s) < 0.05 + p.dribble * 0.1) {
+    const r = rnd(s);
+    const kind = (r < 0.45 ? 0 : r < 0.75 ? 2 : r < 0.9 ? 3 : 1) as Feint;
+    startFeint(s, p, kind, (o.x - p.x) * p.hz - (o.z - p.z) * p.hx > 0 ? 1 : -1);
+    return;
+  }
+
   const options: Option[] = [];
   const line = offsideLine(s, p.team);
   // The longer they have had it, the less the safe ball is the right one: a
@@ -524,6 +571,8 @@ export function thinkCarrier(s: MatchState, p: Player) {
     // A little square ball with nobody on him gets the side nowhere.
     if (near > 4 && gain < 3) v -= 0.5;
     if (ax > 0) v += gain > 6 ? urge * 0.7 : gain < 0 ? -urge * 0.9 : 0;
+    // Not through the man coming at him: by the time his foot swings he is there.
+    if (o && near < 5.5 && ((o.x - p.x) * (mx - p.x) + (o.z - p.z) * (mz - p.z)) / ((near || 1) * (dist(p.x, p.z, mx, mz) || 1)) > 0.75) v -= 2;
     const lofted = d0 > 16 && !blockedLob(s, p, mx, mz);
     if (d0 < 32 && margin > 0) options.push({ v, go: () => startKick(s, p, planPass(s, p, m, clamp(d0 / 30 + 0.1, 0.25, 1))) });
     else if (lofted && open > 6.5 && gain > 6) {
@@ -554,13 +603,17 @@ export function thinkCarrier(s: MatchState, p: Player) {
   }
   // A cross when wide near the byline.
   if (Math.abs(p.z) > 12 && ax > HALF_L - 34) {
-    let men = 0, bx = 0, bz = 0, bi = -1;
+    // To where the freest man is getting to, not to where he stands.
+    let men = 0, bx = 0, bz = 0, bi = -1, freest = -1;
     for (const m of s.players) {
       if (m.team !== p.team || m.role === "GK" || m.i === p.i) continue;
-      if (m.x * dir > HALF_L - 22 && Math.abs(m.z) < 14) {
-        men += 1;
-        if (bi < 0 || rnd(s) < 0.4) { bx = m.x + dir * 2; bz = m.z; bi = m.i; }
-      }
+      const ex = clamp(m.tx * dir, m.x * dir, HALF_L - 5) * dir, ez = clamp(m.tz, -14, 14);
+      if (ex * dir < HALF_L - 22 || Math.abs(m.z) > 18) continue;
+      men += 1;
+      let open = 1e9;
+      for (const o of s.players) if (o.team !== p.team && o.role !== "GK") open = Math.min(open, dist(o.x, o.z, ex, ez));
+      const v = open + rnd(s) * 1.5;
+      if (v > freest) { freest = v; bx = ex; bz = ez; bi = m.i; }
     }
     if (men > 0) {
       const plan = planCross(s, p, bx, bz, bi, 0.6);
@@ -599,7 +652,9 @@ export function thinkCarrier(s: MatchState, p: Player) {
 
   let bestV = carry, go: (() => void) | null = null;
   for (const o of options) if (o.v > bestV) { bestV = o.v; go = o.go; }
-  if (go && (b.since >= COMPOSED || near < 2.4)) {
+  // Somebody flying at him is on him already: his foot has to swing before he arrives.
+  const closing = o ? ((p.x - o.x) * o.vx + (p.z - o.z) * o.vz) / (near || 1) : 0;
+  if (go && (b.since >= COMPOSED || near - Math.max(closing, 0) * 0.45 < 2.4)) {
     go();
     return;
   }

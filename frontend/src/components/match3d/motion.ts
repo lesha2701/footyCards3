@@ -3,8 +3,8 @@
  * foot meets the ball on the tick the engine releases it. Presentation only:
  * nothing here feeds back into the simulation. */
 import { CELEBRATIONS, type Moves, type Strike } from "@/components/oneOnOne/moves";
-import { windupOf } from "@/lib/match3d/actions";
-import { Act, HZ, Kick, WALK_DRIBBLE, touchFoot, type MatchState, type Player } from "@/lib/match3d/core";
+import { SLIDE_LEN, windupOf } from "@/lib/match3d/actions";
+import { Act, FROM_SLIDE, HZ, Kick, WALK_DRIBBLE, touchFoot, type MatchState, type Player } from "@/lib/match3d/core";
 
 import { BAKE_FPS, type Baked } from "./baked";
 
@@ -13,6 +13,9 @@ const FADE = 0.2;
  * change gait every other step. */
 const GAIT_MIN = 0.28;
 const QUICK = 0.08;
+/** The slide clip (s): the last strides of its run-up, and where it starts to get up. */
+const SLIDE_IN = 0.62;
+const SLIDE_UP = 1.9;
 /** When the ball leaves the hands or the foot in the match's own clips (s). */
 const CONTACT: Record<string, number> = { throw_in: 0.68, penalty: 0.73, gk_throw: 1.53, gk_roll: 1.13, gk_dropkick: 2.1 };
 
@@ -96,6 +99,11 @@ export class Motion {
     return r && p.actLen > 0 ? Math.max(min, Math.min(max, r.duration / (p.actLen / HZ))) : 1;
   }
 
+  private slideUp(f: string, p: Player) {
+    const r = this.baked.rows[`slide_${f}`];
+    return r && p.actLen > 0 ? (r.duration - SLIDE_UP) / (p.actLen / HZ) : 1;
+  }
+
   /** One-off moves are chosen once, as they start. */
   private oneOff(p: Player, s: MatchState): Pick | null {
     const f = p.side >= 0 ? "r" : "l";
@@ -107,12 +115,14 @@ export class Motion {
         if (s.ball.y > 0.95 && this.has("chest_trap")) return { name: "chest_trap", loop: false, speed: 1.3, fade: QUICK, t0: 0.42 };
         return { name: this.or(`trap_${f}`, "receive"), loop: false, speed: 1.2, fade: QUICK, t0: 0.1 };
       case Act.Tackle: return { name: this.or(`tackle_${f}`, `slide_${f}`), loop: false, speed: 1.15, fade: QUICK, t0: 0.12 };
-      case Act.Slide: return { name: `slide_${f}`, loop: false, speed: 1, fade: QUICK };
+      // The clip is a run-up, the slide and getting up: he is already running.
+      case Act.Slide: return { name: `slide_${f}`, loop: false, speed: (SLIDE_UP - SLIDE_IN) / (SLIDE_LEN / HZ), fade: QUICK, t0: SLIDE_IN };
       case Act.Down: {
         const name = this.or("fall_side", "trip");
         return { name, loop: false, speed: this.fit(name, p), fade: QUICK };
       }
       case Act.Getup: {
+        if (p.sub === FROM_SLIDE) return { name: `slide_${f}`, loop: false, speed: this.slideUp(f, p), fade: 0.03, t0: SLIDE_UP };
         const name = this.or("getup_front", "gk_getup");
         return { name, loop: false, speed: this.fit(name, p), fade: name === "getup_front" ? 0.03 : FADE };
       }

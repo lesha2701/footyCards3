@@ -128,7 +128,12 @@ him, and a keeper picks a way past that man (`inHisWay`).
 Without the ball the side plays zones (`thinkTeam`): one presses, one covers, two
 at most near their own goal, and everyone else picks up the most dangerous free man
 measured from his zone, not from where he stands, and doesn't leave it. With the
-ball men keep apart (`chooseRun`), wingers hold both touchlines, runs go into the
+ball the team goes up with it (`shapeSpot`: `block`, level with the ball past halfway),
+forwards and midfielders also get the free places in and around their box as offers
+(`BOX_DEPTHS` × `BOX_WIDTHS`, worth what `threat` says, clamped to the offside line)
+and sprint there. A cross goes where the freest man is arriving, and everybody within
+17 m attacks where it comes down, one at the ball, the others to either side. Men
+keep apart (`chooseRun`), wingers hold both touchlines, runs go into the
 gap in the back line (`channel`), a full-back overlaps on the ball's side, and when
 the ball's side is crowded the far flank gets a switch: for the human «Навес» with the
 stick across (`bestMate` with `air`). `bench/shape.mjs` measures all of this.
@@ -138,6 +143,17 @@ about to get a pass, the buttons stay «Удар», «Пас», «Разрез»
 played first time when he reaches it, a header included. «Отбор» is only there
 against a man on the ball. Feints: a short drag sideways across the big button, with the
 stick choosing which one; there is no button of their own.
+
+A duel moves. A tackle is a lunge: until `TACKLE_AT` he drives his weight at where the
+ball is about to be (`LUNGE`), and a miss carries him past. Pressed from too far, it
+waits up to `TACKLE_WAIT` and goes in as soon as he is in range (`s.tackleT`). The AI
+goes in when the ball is off the carrier's foot (`thinkTackle`) and can be beaten by a
+feint: a carrier with a man in front of him takes him on (`thinkCarrier`). A slide
+plays the middle of the `slide_*` clip over `SLIDE_LEN` (`SLIDE_IN`..`SLIDE_UP`), and
+`Getup` with `FROM_SLIDE` plays its end, so he never stands up out of nothing; the
+clip's run-up is cut because the man is already running. A ball hit as somebody closes
+it down (`b.since < 8`) comes off his shin or gets past him: it doesn't arrive at
+his feet, and the AI doesn't pass through the man coming at it.
 
 A won tackle really wins it (`stepTackle`): he comes away with it or it squirts his
 way, and the man who lost it can't pick it straight back up. A carrier who stands on

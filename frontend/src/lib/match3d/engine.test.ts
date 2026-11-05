@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { planLob } from "./actions";
-import { Act, BALL_R, HALF_W, HZ, Kick, MATCH_SECONDS, Phase, ballAt, dist, launch, predict, stepBall, type MatchState, type SceneOutcome } from "./core";
+import { SLIDE_LEN, planLob } from "./actions";
+import { Act, BALL_R, FROM_SLIDE, HALF_W, HZ, Kick, MATCH_SECONDS, Phase, ballAt, dist, launch, predict, stepBall, type MatchState, type SceneOutcome } from "./core";
 import { NO_INPUT, createMatch, sceneOf, stepMatch, type Input } from "./engine";
 
 const SETUP = { seed: 1234, home: "A", away: "B", homeRating: 0.78, awayRating: 0.76 };
@@ -520,6 +520,94 @@ describe("match3d engine", () => {
     const t = s.players[s.set!.taker];
     expect(Math.abs(t.x)).toBeGreaterThan(50);
     expect(s.players.filter((p) => p.x > 30 && Math.abs(p.z) < 20).length).toBeGreaterThan(10);
+  });
+
+  /** A carrier of theirs jogging at x, the human's man `gap` metres goal-side of him. */
+  const duel = (gap: number) => {
+    const me = outfield(createMatch(SETUP, 0), -1)[0].i;
+    const s = onBall(me, 0, 0);
+    const c = s.players.find((p) => p.team === 1 && p.role === "CM")!;
+    const u = s.players[me];
+    clear(s, 40, 28, [me, c.i]);
+    c.x = 0; c.z = 0; c.hx = -1; c.hz = 0; c.vx = -5; c.vz = 0; c.act = Act.None; c.cool = 0; c.plan = null;
+    u.x = -gap; u.z = 0.3; u.hx = 1; u.hz = 0; u.vx = 0; u.vz = 0; u.act = Act.None; u.cool = 0;
+    s.user = me;
+    ballAt(s.ball, -0.5, BALL_R, 0);
+    s.ball.owner = c.i; s.ball.last = c.i; s.ball.kick = Kick.None; s.ball.to = -1; s.ball.since = 90;
+    return { s, u, c };
+  };
+
+  it("a tackle is a lunge at the ball, not a kick at the air on the spot", () => {
+    const { s, u } = duel(2.2);
+    const from = u.x;
+    stepMatch(s, { ...NO_INPUT, press: { k: "tackle" } });
+    expect(u.act).toBe(Act.Tackle);
+    for (let i = 0; i < 8; i++) stepMatch(s, NO_INPUT);
+    expect(u.x - from).toBeGreaterThan(0.3);
+    expect(Math.sqrt(u.vx * u.vx + u.vz * u.vz)).toBeGreaterThan(4);
+  });
+
+  it("a tackle pressed from too far goes in as soon as he gets there", () => {
+    const { s, u } = duel(6);
+    stepMatch(s, { ...NO_INPUT, press: { k: "tackle" } });
+    expect(u.act).toBe(Act.None);
+    let went = false;
+    for (let i = 0; i < 50 && !went; i++) {
+      stepMatch(s, { ...NO_INPUT, mx: 1, mz: 0, sprint: true });
+      went = u.act === Act.Tackle;
+    }
+    expect(went).toBe(true);
+  });
+
+  it("a slide goes along the ground, loses its pace there and he gets up from it", () => {
+    const { s, u } = duel(3);
+    u.vx = 7;
+    stepMatch(s, { ...NO_INPUT, press: { k: "slide" } });
+    expect(u.act).toBe(Act.Slide);
+    const from = u.x;
+    let down = 0;
+    while (u.act === Act.Slide && down < 200) { stepMatch(s, NO_INPUT); down += 1; }
+    expect(down).toBeGreaterThanOrEqual(SLIDE_LEN - 2);
+    expect(u.x - from).toBeGreaterThan(2.5);
+    if (u.act !== Act.None) {
+      expect(u.act).toBe(Act.Getup);
+      expect(u.sub).toBe(FROM_SLIDE);
+    }
+  });
+
+  it("a ball hit as a man closes it down doesn't land at his feet", () => {
+    let clean = 0, plays = 0;
+    for (let n = 0; n < 24; n++) {
+      const { s, u, c } = duel(1);
+      c.vx = 0;
+      const b = s.ball;
+      b.owner = -1; b.last = c.i; b.kicker = c.i; b.kick = Kick.Pass; b.to = -1; b.since = 1;
+      s.rng = (s.rng + n * 7919) | 0;
+      ballAt(b, u.x + 1, BALL_R, u.z);
+      b.vx = -10; b.vy = 0; b.vz = 0;
+      predict(s);
+      for (let i = 0; i < 8 && b.owner < 0; i++) stepMatch(s, NO_INPUT);
+      plays += 1;
+      if (b.owner === u.i) clean += 1;
+    }
+    expect(clean).toBeLessThan(plays / 2);
+  });
+
+  it("with the ball at their box the side has men in it", () => {
+    let there = 0, samples = 0;
+    for (const seed of [31, 32, 33, 34, 35, 36]) {
+      const s = createMatch({ ...SETUP, seed }, null);
+      while (s.phase !== Phase.FullTime && s.tick < HZ * 200) {
+        stepMatch(s, NO_INPUT);
+        if (s.phase !== Phase.Play || s.ball.owner < 0 || s.tick % 15) continue;
+        const o = s.players[s.ball.owner], dir = o.team === 0 ? 1 : -1;
+        if (o.x * dir < 28) continue;
+        samples += 1;
+        for (const m of s.players) if (m.team === o.team && m.i !== o.i && m.x * dir > 34 && Math.abs(m.z) < 22) there += 1;
+      }
+    }
+    expect(samples).toBeGreaterThan(20);
+    expect(there / samples).toBeGreaterThan(1);
   });
 
   it("the man on the ball keeps to a way, he doesn't weave", () => {

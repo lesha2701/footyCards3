@@ -214,6 +214,8 @@ export type MatchState = {
   prevTouch: number;
   /** Ticks the user's press is remembered for an aerial chance. */
   wantShot: number;
+  /** «Отбор» pressed too far off: until this tick he goes in once he is close enough. */
+  tackleT: number;
   /** The human's press with the ball on its way: played first time when he gets to it. */
   want: { k: "pass" | "through" | "lob" | "shot"; power: number; curl: number; chip: boolean } | null;
   wantX: number;
@@ -275,6 +277,8 @@ export function segDist2(ax: number, az: number, bx: number, bz: number, px: num
 export const dirOf = (team: 0 | 1) => (team === 0 ? 1 : -1);
 
 /** Under this pace (m/s) a man walks the ball; above it he runs with it. */
+/** `Player.sub` of a Getup that comes out of a slide. */
+export const FROM_SLIDE = 9;
 export const WALK_DRIBBLE = 2.4;
 /** Which foot he plays it with: 1 right, −1 left. One man in four is left-footed. */
 export const touchFoot = (p: Player) => (p.i % 4 === 3 ? -1 : 1);
@@ -478,6 +482,6 @@ export function freshState(setup: Setup, players: Player[]): MatchState {
     teams: [team(setup.home, setup.homeRating), team(setup.away, setup.awayRating)],
     set: null, user: -1, poss: 0, chaser: [-1, -1],
     pred: new Float64Array(PRED_MAX * 3), predN: 0, predFrom: 0,
-    lastGoal: null, prevTouch: -1, wantShot: 0, want: null, wantX: 0, wantZ: 0, wantT: 0, idle: 0, contain: false, switchT: 0, locked: false, lockX: 0, lockZ: 0, stickX: 0, stickZ: 0, lostAt: [-9999, -9999], ev: [],
+    lastGoal: null, prevTouch: -1, wantShot: 0, tackleT: 0, want: null, wantX: 0, wantZ: 0, wantT: 0, idle: 0, contain: false, switchT: 0, locked: false, lockX: 0, lockZ: 0, stickX: 0, stickZ: 0, lostAt: [-9999, -9999], ev: [],
   };
 }

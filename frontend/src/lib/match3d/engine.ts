@@ -5,7 +5,7 @@
 import {
   Act, BALL_R, CLOCK_RATE, END_MIN, GOAL_H, GOAL_HALF, HALF_L, HALF_W, HZ, Kick, PEN_SPOT, Phase, START_MIN, SIX_D, TICK, WALK_DRIBBLE,
   ballAt, clamp, dirOf, dist, dist2, freshState, predAt, predict, rnd, rndN, speedOf, stepBall, touchFoot,
-  type Feint, type MatchState, type Player, type SceneKick, type SceneOutcome, type SetKind, type SetPiece, type Setup,
+  FROM_SLIDE, type Feint, type MatchState, type Player, type SceneKick, type SceneOutcome, type SetKind, type SetPiece, type Setup,
 } from "./core";
 import {
   feintBites, fell, inBox, laneMargin, offsideLine, planCross, planLob, planPass, planShot, planThrough, releaseKick, rollPace, sprintOf, startFeint, startKick, startSlide, startTackle, windupOf,
@@ -46,6 +46,12 @@ const RUN_CYCLE = 2.95;
 const WALK_STEP = 0.55;
 /** What a stride of the carrier's pace takes off a tackle's chance, per m/s. */
 const TACKLE_RUNNING = 0.05;
+/** A tackle: from how far he goes in (m), how hard, and the tick it arrives on. */
+const TACKLE_FROM = 2.6;
+const LUNGE = 6.8;
+const TACKLE_AT = 9;
+/** How long «Отбор» pressed from too far off stays good (ticks). */
+const TACKLE_WAIT = 60;
 /** How far in front of him (m) the ball is when his foot gets to it. */
 const FOOT_LEAD = 0.46;
 /** How much a touch's roll slows down: 0.5 leaves the foot at one and a half
@@ -327,8 +333,10 @@ function userPress(s: MatchState, p: Player, inp: Input) {
       if (shot) s.wantShot = FIRST_TIME;
       return;
     }
-    if (press.k === "tackle" && free && p.cool === 0) startTackle(p);
-    else if (press.k === "slide" && free && p.cool === 0) startSlide(p);
+    if (press.k === "tackle" && free && p.cool === 0) {
+      if (dist(p.x, p.z, b.x, b.z) < TACKLE_FROM) startTackle(s, p);
+      else s.tackleT = s.tick + TACKLE_WAIT;
+    } else if (press.k === "slide" && free && p.cool === 0) startSlide(s, p);
     return;
   }
   if (!free) return;
@@ -596,24 +604,37 @@ function stepTackle(s: MatchState, p: Player) {
   p.actT += 1;
   const b = s.ball;
   const c = b.owner >= 0 ? s.players[b.owner] : null;
-  if (p.actT === 8 && c && c.team !== p.team) {
+  if (p.actT < TACKLE_AT) {
+    // The lunge: his weight goes in at the ball, where it is about to be.
+    const dx = b.x + b.vx * 0.12 - p.x, dz = b.z + b.vz * 0.12 - p.z;
+    const d = Math.sqrt(dx * dx + dz * dz) || 1;
+    const pace = Math.max(LUNGE, Math.sqrt(p.vx * p.vx + p.vz * p.vz));
+    moveToward(p, (dx / d) * pace, (dz / d) * pace, 46);
+    faceTo(p, dx / d, dz / d, 0.3);
+    return;
+  }
+  if (p.actT === TACKLE_AT && c && c.team !== p.team) {
     const d = dist(p.x, p.z, b.x, b.z);
     if (d < (standing(s, c) ? STILL_REACH + 0.1 : 1.55)) {
       // A ball out of his stride is there to be won; one at a man on the move isn't, so much.
       const exposed = clamp(speedOf(b) / 8, 0, 1) * 0.12;
       const going = Math.sqrt(c.vx * c.vx + c.vz * c.vz);
-      const chance = 0.32 + p.defend * 0.46 - c.dribble * 0.28 + exposed - Math.min(going, 8) * TACKLE_RUNNING;
+      const chance = 0.28 + p.defend * 0.46 - c.dribble * 0.28 + exposed - Math.min(going, 8) * TACKLE_RUNNING;
       const behind = c.hx * p.hx + c.hz * p.hz > 0.5;
       if (behind && rnd(s) < 0.22) {
         foul(s, p, c);
       } else if (rnd(s) < chance) {
-        // Won: he comes away with it, or it squirts loose his way. Either way
-        // the man who lost it is out of it for a moment.
+        // Won: he comes away with it, or it squirts loose his way. The man who
+        // lost it is knocked off his line, or off his feet if he was at a pace.
         c.cool = 34;
-        c.beat = 26; c.beatX = 0; c.beatZ = 0;
+        const l0 = dist(p.x, p.z, c.x, c.z) || 1;
+        const shoveX = (c.x - p.x) / l0, shoveZ = (c.z - p.z) / l0;
+        c.beat = 26; c.beatX = (c.vx * 0.5 + shoveX * 2.6) / 2.4; c.beatZ = (c.vz * 0.5 + shoveZ * 2.6) / 2.4;
         b.owner = -1; b.last = p.i; b.kick = Kick.Tackle; b.kicker = p.i; b.to = -1; b.since = 14;
         s.teams[p.team].tackles += 1;
         s.ev.push({ t: "tackle", p: p.i, won: true });
+        if (going > 4 && rnd(s) < 0.3) fell(s, c, false);
+        p.act = Act.None;
         if (rnd(s) < 0.6) take(s, p);
         else {
           const l = dist(p.x, p.z, c.x, c.z) || 1;
@@ -626,16 +647,22 @@ function stepTackle(s: MatchState, p: Player) {
         s.ev.push({ t: "tackle", p: p.i, won: false });
       }
     } else p.cool = 40;
+    if (p.act !== Act.Tackle) return;
   }
-  p.vx *= 0.92; p.vz *= 0.92;
-  if (p.actT >= p.actLen) { p.act = Act.None; if (p.cool < 20) p.cool = 20; }
+  // Missed: his weight was going, and it takes him past.
+  p.vx *= 0.975; p.vz *= 0.975;
+  if (p.actT >= p.actLen) {
+    p.act = Act.None;
+    if (p.cool < 20) p.cool = 20;
+    p.beat = 12; p.beatX = p.vx / 2.4; p.beatZ = p.vz / 2.4;
+  }
 }
 
 function stepSlide(s: MatchState, p: Player) {
   p.actT += 1;
   const b = s.ball;
-  p.vx *= 0.97; p.vz *= 0.97;
-  if (p.actT > 6 && p.actT < 32) {
+  p.vx *= 0.965; p.vz *= 0.965;
+  if (p.actT > 6 && p.actT < 38 && p.sub === 0) {
     const c = b.owner >= 0 ? s.players[b.owner] : null;
     const db = dist(p.x + p.vx * 0.05, p.z + p.vz * 0.05, b.x, b.z);
     if (db < 1.15 && b.y < 0.6 && (c ? c.team !== p.team : true) && p.plan === null) {
@@ -653,14 +680,16 @@ function stepSlide(s: MatchState, p: Player) {
       const side = rndN(s) * 3;
       b.vx = (p.vx / l) * 7 - (p.vz / l) * side;
       b.vz = (p.vz / l) * 7 + (p.vx / l) * side;
-      p.actT = Math.max(p.actT, 32);
+      // That was his touch. The slide itself runs its length, its clip with it.
+      p.sub = 1;
       predict(s);
     } else if (c && c.team !== p.team && dist(p.x, p.z, c.x, c.z) < 0.95) {
       foul(s, p, c);
     }
   }
   if (p.actT >= p.actLen) {
-    p.act = Act.Getup; p.actT = 0; p.actLen = 30; p.cool = 40;
+    // The slide's own clip goes on into him getting up.
+    p.act = Act.Getup; p.actT = 0; p.actLen = 34; p.sub = FROM_SLIDE; p.cool = 40;
   }
 }
 
@@ -756,6 +785,10 @@ function stepPlayers(s: MatchState, inp: Input) {
   const live = (inp.mx !== 0 || inp.mz !== 0) && !s.locked;
   for (const p of s.players) {
     if (p.cool > 0) p.cool -= 1;
+    if (p.i === userP && s.tick <= s.tackleT && p.act === Act.None && p.cool === 0 && b.owner >= 0 && s.players[b.owner].team !== p.team && dist(p.x, p.z, b.x, b.z) < TACKLE_FROM) {
+      startTackle(s, p);
+      s.tackleT = 0;
+    }
     if (p.role === "GK") stepKeeper(s, p);
     if (p.act !== Act.None && p.role === "GK" && (p.act === Act.Dive || p.act === Act.Catch || p.act === Act.Hold)) {
       p.x += p.act === Act.Dive ? 0 : p.vx * TICK;
@@ -914,7 +947,9 @@ function take(s: MatchState, p: Player) {
   givePossession(s, p);
   toUser(s, p);
   for (const m of s.players) m.off = false;
-  if (speed > 5 && p.act === Act.None) {
+  // Nobody stops to control it in front of an open goal: the shot comes at once.
+  const finish = p.i !== s.user && inBox(p.x, p.z, dirOf(p.team));
+  if (speed > 5 && p.act === Act.None && !finish) {
     p.act = Act.Trap; p.actT = 0; p.actLen = speed > 11 ? 20 : 14;
     p.side = p.hx * (b.z - p.z) - p.hz * (b.x - p.x) > 0 ? 1 : -1;
   }
@@ -1042,6 +1077,17 @@ function contacts(s: MatchState) {
   if (b.y < 0.75) {
     if (d > REACH + (p.i === b.to || p.i === s.user ? 0.55 : 0.25)) return;
     const mine = b.last >= 0 && s.players[b.last].team === p.team;
+    // Closed down as he hit it: it comes off the man's shin and drops loose, it
+    // doesn't arrive at his feet.
+    if (!mine && b.since < 8 && fast > 4 && p.act !== Act.Tackle && p.act !== Act.Slide) {
+      if (rnd(s) < 0.5) { p.cool = 10; return; } // It's past him before he gets a foot to it.
+      b.vx = b.vx * 0.3 + rndN(s) * 2.5; b.vz = b.vz * 0.3 + rndN(s) * 2.5; b.vy = 0.5 + rnd(s) * 2;
+      b.last = p.i; b.since = 2; b.kicker = p.i; b.to = -1; b.kick = Kick.Tackle;
+      p.cool = 14;
+      predict(s);
+      s.ev.push({ t: "kick", p: p.i, kind: Kick.Tackle, speed: 5 });
+      return;
+    }
     if (fast > 13 && !mine) {
       // A hard ball at an opponent: it comes off him more often than he stops it.
       const stop = clamp(0.62 + p.defend * 0.25 - (fast - 13) * 0.045, 0.1, 0.9);

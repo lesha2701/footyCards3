@@ -236,23 +236,39 @@ export function planClear(s: MatchState, p: Player): KickPlan {
 
 // --- tackles --------------------------------------------------------------------------------------
 
-export function startTackle(p: Player) {
-  p.act = Act.Tackle; p.actT = 0; p.actLen = 24;
-  p.side = p.hx * p.vz - p.hz * p.vx > 0 ? -1 : 1;
+/** The foot nearer the ball. */
+const footFor = (s: MatchState, p: Player) => (p.hx * (s.ball.z - p.z) - p.hz * (s.ball.x - p.x) > 0 ? -1 : 1);
+
+/** The lunge: `stepTackle` carries him at the ball, he doesn't stop to poke at it. */
+export function startTackle(s: MatchState, p: Player) {
+  p.act = Act.Tackle; p.actT = 0; p.actLen = 30;
+  p.side = footFor(s, p);
 }
 
-export function startSlide(p: Player) {
-  p.act = Act.Slide; p.actT = 0; p.actLen = 46;
-  const v = Math.sqrt(p.vx * p.vx + p.vz * p.vz) || 1;
-  // Goes in along where he's running, fast.
-  const k = Math.max(8.2, v) / v;
-  if (v > 1) { p.vx *= k; p.vz *= k; } else { p.vx = p.hx * 8.2; p.vz = p.hz * 8.2; }
-  p.side = 1;
+export const SLIDE_LEN = 52;
+/** How far ahead (s) a slide meets a ball it can see. */
+const SLIDE_LOOK = 0.32;
+const SLIDE_PACE = 8.8;
+
+/** Down and along the grass: at where the ball will be if it's near enough to
+ * judge, otherwise the way he is running. */
+export function startSlide(s: MatchState, p: Player) {
+  p.act = Act.Slide; p.actT = 0; p.actLen = SLIDE_LEN; p.sub = 0;
+  const b = s.ball;
+  const v = Math.sqrt(p.vx * p.vx + p.vz * p.vz);
+  const tx = b.x + b.vx * SLIDE_LOOK - p.x, tz = b.z + b.vz * SLIDE_LOOK - p.z;
+  const d = Math.sqrt(tx * tx + tz * tz);
+  let ux = v > 1 ? p.vx / v : p.hx, uz = v > 1 ? p.vz / v : p.hz;
+  if (d > 0.5 && d < 7) { ux = tx / d; uz = tz / d; }
+  p.side = footFor(s, p);
+  const pace = Math.max(SLIDE_PACE, v);
+  p.vx = ux * pace; p.vz = uz * pace;
+  p.hx = ux; p.hz = uz;
 }
 
 /** Knocks him down: he loses the ball. */
 export function fell(s: MatchState, p: Player, hard: boolean) {
-  p.act = Act.Down; p.actT = 0; p.actLen = hard ? 60 : 40;
+  p.act = Act.Down; p.actT = 0; p.actLen = hard ? 60 : 40; p.sub = 0;
   p.plan = null;
   if (s.ball.owner === p.i) s.ball.owner = -1;
 }

@@ -7,6 +7,7 @@ const E = require("./out/engine.cjs");
 const matches = Number(process.argv[2] ?? 20);
 const c = { spells: 0, ticks: 0, passes: 0, into3rd: 0, intoBox: 0, shots: 0, lost: 0, out: 0, gained: 0, back: 0, fwd: 0, side: 0, flips: 0, carryTicks: 0, stepped: 0 };
 const ends = {};
+const box = { shots: 0, goals: 0, all: 0, men: 0, n: 0, tackles: 0, slides: 0 };
 for (let m = 0; m < matches; m++) {
   const s = E.createMatch({ seed: 500 + m * 11, home: "A", away: "B", homeRating: 0.78, awayRating: 0.78 }, null);
   let was = -1, sp = null, ux = 0, uz = 0, tackled = -99, lastKick = 0;
@@ -33,6 +34,15 @@ for (let m = 0; m < matches; m++) {
       }
       if (e.t === "out" && sp) close("out_" + e.set);
     }
+    for (const e of s.ev) {
+      if (e.t === "goal" && e.p >= 0) { box.all++; const p = s.players[e.p]; if (Math.abs(p.x) > 36 && Math.abs(p.z) < 20) box.goals++; }
+      if (e.t === "kick" && (e.kind === 5)) { const p = s.players[e.p]; if (Math.abs(p.x) > 36 && Math.abs(p.z) < 20) box.shots++; }
+    }
+    for (const p of s.players) { if (p.act === 3 && p.actT === 1) box.tackles++; if (p.act === 4 && p.actT === 1) box.slides++; }
+    if (s.phase === 1 && s.ball.owner >= 0) {
+      const o = s.players[s.ball.owner], d = o.team === 0 ? 1 : -1;
+      if (o.x * d > 17) { box.n++; for (const m of s.players) if (m.team === o.team && m.x * d > 36 && Math.abs(m.z) < 20) box.men++; }
+    }
     if (s.phase !== 1) { close("dead"); continue; }
     const b = s.ball;
     if (b.owner >= 0) {
@@ -56,3 +66,4 @@ for (let m = 0; m < matches; m++) {
 const n = c.spells;
 console.log(JSON.stringify({ spells_per_match: +(n / matches).toFixed(1), sec_per_spell: +(c.ticks / n / 60).toFixed(1), passes_per_spell: +(c.passes / n).toFixed(2), gained_m: +(c.gained / n).toFixed(1), reach_third: +(c.into3rd / n).toFixed(2), reach_box: +(c.intoBox / n).toFixed(2), shots_per_match: +(c.shots / matches).toFixed(1), fwd: c.fwd, side: c.side, back: c.back, sharp_turns_per_10s_carry: +(c.flips / (c.carryTicks / 600)).toFixed(1) }));
 console.log(JSON.stringify(ends));
+console.log("in the box: shots", box.shots, "goals", box.goals, "of all goals", box.all, "| men in the box when the ball is in the last third", +(box.men / Math.max(1, box.n)).toFixed(2), "| tackles", box.tackles, "slides", box.slides);

@@ -69,7 +69,7 @@ for (let m = 0; m < matches; m++) {
     }
     void wasOwner;
   }
-  c.corners = (c.corners ?? 0) + s.teams[0].corners; c.shots += s.teams[0].shots; c.onT += s.teams[0].onTarget; c.g0 += s.teams[0].goals; c.g1 += s.teams[1].goals;
+  c.aiShots = (c.aiShots ?? 0) + s.teams[1].shots; c.aiOn = (c.aiOn ?? 0) + s.teams[1].onTarget; c.aiPoss = (c.aiPoss ?? 0) + s.teams[1].possTicks; c.usPoss = (c.usPoss ?? 0) + s.teams[0].possTicks; c.corners = (c.corners ?? 0) + s.teams[0].corners; c.shots += s.teams[0].shots; c.onT += s.teams[0].onTarget; c.g0 += s.teams[0].goals; c.g1 += s.teams[1].goals;
   for (const p of s.players) if (p.stamina !== undefined) { c.staminaEnd += p.stamina; c.staminaN++; }
 }
 const pct = (a, b) => (b ? Math.round(a / b * 100) : 0);
@@ -80,3 +80,4 @@ console.log(`defending: within 2 m of the nearest man ${pct(c.defNearest, c.defT
 console.log(`shape without the ball: back four ${(c.lineSpread / (c.defTicks || 1)).toFixed(1)} m deep, back to midfield ${(c.lineGap / (c.defTicks || 1)).toFixed(1)} m`);
 console.log(`crosses ${((c.crosses ?? 0) / matches).toFixed(1)}, corners ${(c.corners / matches).toFixed(1)}`);
 console.log(`shots ${(c.shots / matches).toFixed(1)}, on target ${(c.onT / matches).toFixed(1)}; goals ${(c.g0 / matches).toFixed(1)}:${(c.g1 / matches).toFixed(1)}; stamina at the end ${c.staminaN ? (c.staminaEnd / c.staminaN).toFixed(2) : "-"}`);
+console.log(`the AI: shots ${(c.aiShots / matches).toFixed(1)}, on target ${(c.aiOn / matches).toFixed(1)}, possession ${(100 * c.aiPoss / (c.aiPoss + c.usPoss)).toFixed(0)}%`);
