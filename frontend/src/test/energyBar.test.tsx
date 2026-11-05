@@ -1,7 +1,9 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { EnergyBar } from "@/components/career/EnergyBar";
+import { EnergyBar, EnergyBattery } from "@/components/career/EnergyBar";
+import { FormTriangle } from "@/components/career/PlayerTile";
+import { ChemistryFlask } from "@/components/squad/Chemistry";
 import { energyLevel, energyOf } from "@/lib/careerEnergy";
 
 describe("player energy", () => {
@@ -23,5 +25,28 @@ describe("player energy", () => {
     expect(container.querySelector(".bg-red-400")).toHaveStyle({ width: "20%" });
     rerender(<EnergyBar fatigue={50} thin />);
     expect(screen.getByLabelText("Энергия 50% — немного устал")).toBeInTheDocument();
+  });
+});
+
+describe("pitch card numbers", () => {
+  it("shows the energy percentage inside the battery", () => {
+    render(<EnergyBattery fatigue={35} />);
+    expect(screen.getByRole("img", { name: /Энергия 65%/ })).toHaveTextContent("65%");
+  });
+
+  it("shows form as a triangle with its number, nothing at zero", () => {
+    const { container, rerender } = render(<FormTriangle form={2} />);
+    expect(screen.getByRole("img", { name: "Форма +2" })).toHaveTextContent("2");
+    rerender(<FormTriangle form={-1} />);
+    expect(screen.getByRole("img", { name: "Форма -1" })).toHaveTextContent("1");
+    rerender(<FormTriangle form={0} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("shows chemistry inside the flask, without a plus at zero", () => {
+    const { rerender } = render(<ChemistryFlask points={3} max={3} onPosition />);
+    expect(screen.getByRole("img", { name: "Химия 3 из 3" })).toHaveTextContent("+3");
+    rerender(<ChemistryFlask points={0} max={3} onPosition={false} />);
+    expect(screen.getByRole("img", { name: "Химия 0 из 3" })).not.toHaveTextContent("+");
   });
 });

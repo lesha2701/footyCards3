@@ -2,12 +2,12 @@ import { useMutation } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { setCareerLineup, type CareerSeason, type CareerSlot, type CareerSquadCard, type CareerView, type TacticsCatalog } from "@/api/career";
-import { ChemistryDiamonds, ChemistryLinksOverlay, ChemistrySummary } from "@/components/squad/Chemistry";
+import { ChemistryFlask, ChemistryLinksOverlay, ChemistrySummary } from "@/components/squad/Chemistry";
 import { SquadBuilder } from "@/components/career/Offseason";
 import { EnergyBar } from "@/components/career/EnergyBar";
-import { DuelStyleBadge } from "@/components/career/FlankDuels";
-import { TraitBadge } from "@/components/career/Morale";
-import { PlayerTile } from "@/components/career/PlayerTile";
+import { DUEL_STYLE_KEYS, DuelStyleBadge, DuelStyleChip } from "@/components/career/FlankDuels";
+import { TRAIT_KEYS, TraitBadge, TraitChip } from "@/components/career/Morale";
+import { FormTriangle, PitchTile, PlayerTile } from "@/components/career/PlayerTile";
 import { SquadTacticLayer } from "@/components/career/SquadTacticLayer";
 import { VALUE_ICONS } from "@/components/career/TacticIcons";
 import { energyOf } from "@/lib/careerEnergy";
@@ -26,6 +26,16 @@ const LINES: { category: "GK" | "DEF" | "MID" | "FWD"; label: string }[] = [
   { category: "MID", label: "Полузащита" }, { category: "FWD", label: "Атака" },
 ];
 
+/** The icons beside a card: duel style and character. */
+function SideIcons({ entry }: { entry?: CareerSquadCard }) {
+  return (
+    <>
+      <DuelStyleBadge style={entry?.duel_style} className="!bg-transparent !px-0 !text-[12px]" />
+      <TraitBadge trait={entry?.trait} className="!bg-transparent !px-0 !text-[12px]" />
+    </>
+  );
+}
+
 function PitchCard({ slot, entry, chemPoints, chemMax, onClick, target = false, dimmed = false }: {
   slot: CareerSlot; entry?: CareerSquadCard; chemPoints?: { points: number; on_position: boolean }; chemMax: number;
   onClick: () => void;
@@ -37,24 +47,28 @@ function PitchCard({ slot, entry, chemPoints, chemMax, onClick, target = false, 
   const off = info && !onIdealPosition(info.position, slot.ideal_position);
   return (
     <button
-      data-chem-slot={slot.code}
       onClick={onClick}
-      className={`relative flex min-w-0 flex-col items-center rounded-[12px] transition active:scale-95 ${
+      className={`relative flex min-w-0 flex-col items-center rounded-[10px] transition active:scale-95 ${
         target ? "animate-pulse ring-2 ring-accent-lime ring-offset-1 ring-offset-transparent" : ""
       } ${dimmed ? "opacity-35" : ""}`}
       aria-label={info ? `${slot.code}: ${info.name}` : `${slot.code}: пусто`}
     >
-      {info && <DuelStyleBadge style={entry?.duel_style} className="absolute -left-0.5 -top-0.5 z-10" />}
-      {info && <TraitBadge trait={entry?.trait} className="absolute -left-0.5 top-3 z-10" />}
       {info ? (
-        <PlayerTile info={info} entry={entry} width="w-[42px] min-[400px]:w-[47px]" offPosition={!!off}>
-          {chemPoints && <ChemistryDiamonds points={chemPoints.points} max={chemMax} onPosition={chemPoints.on_position} />}
-          {entry && <EnergyBar fatigue={entry.fatigue} card />}
-        </PlayerTile>
+        <PitchTile
+          info={info}
+          entry={entry}
+          anchor={slot.code}
+          offPosition={!!off}
+          chemistry={chemPoints && <ChemistryFlask points={chemPoints.points} max={chemMax} onPosition={chemPoints.on_position} />}
+          side={<SideIcons entry={entry} />}
+        />
       ) : (
-        <div className="flex w-[42px] flex-col items-center gap-1 rounded-xl border border-dashed border-white/25 bg-black/30 p-2 min-[400px]:w-[47px]">
-          <span className="text-lg leading-none text-ink-mist-dim">+</span>
-          <span className="font-mono text-micro text-ink-mist-dim">{slot.ideal_position}</span>
+        <div
+          data-chem-slot={slot.code}
+          className="flex aspect-square w-[40px] flex-col items-center justify-center rounded-[9px] border border-dashed border-white/25 bg-black/30 min-[400px]:w-[44px]"
+        >
+          <span className="text-base leading-none text-ink-mist-dim">+</span>
+          <span className="font-mono text-[9px] leading-none text-ink-mist-dim">{slot.ideal_position}</span>
         </div>
       )}
     </button>
@@ -92,7 +106,7 @@ function BenchCard({ entry, onClick, gain, selected, onPitch = false }: {
   );
 }
 
-/** A small bench tile for the sideways strip: photo, rating, position, surname. */
+/** A bench player for the sideways strip: the same card as on the pitch. */
 function BenchTile({ entry, onClick, selected }: { entry: CareerSquadCard; onClick: () => void; selected: boolean }) {
   const info = playerInfo(entry);
   if (!info) return null;
@@ -103,13 +117,11 @@ function BenchTile({ entry, onClick, selected }: { entry: CareerSquadCard; onCli
       disabled={out}
       aria-pressed={selected}
       aria-label={`${info.name}, ${info.position}, ${info.rating}`}
-      className={`w-[52px] shrink-0 snap-start rounded-[12px] ${out ? "opacity-45 grayscale" : "active:scale-95"} ${
+      className={`shrink-0 snap-start rounded-[10px] p-0.5 ${out ? "opacity-45 grayscale" : "active:scale-95"} ${
         selected ? "ring-2 ring-accent-lime" : ""
       }`}
     >
-      <PlayerTile info={info} entry={entry}>
-        <EnergyBar fatigue={entry.fatigue} card />
-      </PlayerTile>
+      <PitchTile info={info} entry={entry} side={<SideIcons entry={entry} />} />
     </button>
   );
 }
@@ -136,35 +148,75 @@ function TacticLegend({ tactic, catalog }: { tactic: NonNullable<CareerSeason["t
   );
 }
 
-/** What the bar under each card means — tap to read. */
-function EnergyLegend() {
+/** The top of the replace sheet: who stands here — the name that the pitch
+ * card doesn't show, and all his numbers in words. */
+function PlayerSheet({ entry, slot, chemPoints, chemMax }: { entry?: CareerSquadCard; slot: CareerSlot; chemPoints?: number; chemMax: number }) {
+  const info = playerInfo(entry);
+  if (!entry || !info) return <p className="font-display text-base font-bold text-ink-chalk">Позиция {slot.ideal_position}</p>;
+  return (
+    <div className="mb-3 flex flex-col gap-1.5">
+      <div>
+        <p className="font-display text-base font-bold leading-tight text-ink-chalk">{info.name}</p>
+        <p className="text-caption text-ink-mist">
+          Позиция {slot.ideal_position} · {info.position} · рейтинг {info.rating}{info.club ? ` · ${info.club}` : ""}
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="rounded-full bg-white/10 px-2 py-0.5 text-micro font-semibold text-ink-chalk">🔋 {energyOf(entry.fatigue)}%</span>
+        {chemPoints != null && <span className="rounded-full bg-white/10 px-2 py-0.5 text-micro font-semibold text-ink-chalk">⚗️ Химия {chemPoints}/{chemMax}</span>}
+        {entry.duel_style && <DuelStyleChip style={entry.duel_style} />}
+        {entry.trait && <TraitChip trait={entry.trait} />}
+      </div>
+    </div>
+  );
+}
+
+/** How to read a card: the flask, the battery and every icon beside it. */
+function CardLegend({ duels, traits }: { duels: boolean; traits: boolean }) {
   const [open, setOpen] = useState(false);
   return (
-    <button onClick={() => setOpen((v) => !v)} className="-mt-1 flex flex-col gap-1 rounded-xl bg-white/5 px-3 py-2 text-left">
-      <span className="flex items-center justify-between gap-2 text-micro">
-        <span className="font-semibold text-ink-chalk">🔋 Батарейка под карточкой — энергия игрока</span>
-        <span className="text-ink-mist-dim">{open ? "▲" : "что это?"}</span>
-      </span>
-      <span className="flex items-center gap-3 text-micro text-ink-mist">
-        <span className="flex items-center gap-1"><span className="h-1.5 w-4 rounded-full bg-accent-lime" />60–100% свежий</span>
-        <span className="flex items-center gap-1"><span className="h-1.5 w-4 rounded-full bg-amber-400" />30–59% устал</span>
-        <span className="flex items-center gap-1"><span className="h-1.5 w-4 rounded-full bg-red-400" />&lt;30% выжат</span>
-      </span>
+    <div className="flex flex-col gap-2 rounded-xl bg-white/5 px-3 py-2">
+      <button onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex items-center justify-between gap-2 text-left text-micro">
+        <span className="font-semibold text-ink-chalk">Как читать карточку</span>
+        <span className="text-ink-mist-dim">{open ? "▲" : "▼"}</span>
+      </button>
       {open && (
-        <span className="text-micro leading-snug text-ink-mist">
-          Энергия тратится в матчах (больше — при прессинге и полном матче) и восстанавливается между турами.
-          Чем меньше энергии, тем слабее игрок играет. Уставших (жёлтых и красных) лучше подменять из запаса — свежие
-          ждут там. ▲ — хорошая форма после прошлого матча, ✚ — травма, 🟥 — дисквалификация (число — сколько туров).
-        </span>
+        <div className="flex flex-col gap-2 text-micro leading-snug text-ink-mist">
+          <p>Нажми на карточку: откроются имя и все данные игрока, там же можно его заменить.</p>
+          <div className="flex items-center gap-2">
+            <ChemistryFlask points={3} max={3} onPosition />
+            <span>Колба — химия игрока: чем выше, тем сильнее он в матче. Не на своей позиции — 0.</span>
+          </div>
+          <p className="flex items-center gap-3">
+            <span className="flex items-center gap-1"><span className="h-1.5 w-4 rounded-full bg-accent-lime" />60–100% свежий</span>
+            <span className="flex items-center gap-1"><span className="h-1.5 w-4 rounded-full bg-amber-300" />30–59% устал</span>
+            <span className="flex items-center gap-1"><span className="h-1.5 w-4 rounded-full bg-red-400" />&lt;30% выжат</span>
+          </p>
+          <p>Батарейка — энергия: тратится в матчах, восстанавливается между турами. Усталых лучше подменять.</p>
+          <p className="flex items-center gap-2"><FormTriangle form={2} /><FormTriangle form={-1} /><span>Треугольник — форма после прошлых матчей: вверх — на подъёме, вниз — на спаде.</span></p>
+          {duels && (
+            <div>
+              <p className="mb-1 font-semibold text-ink-chalk">Стиль в дуэлях</p>
+              <div className="flex flex-wrap gap-1">{DUEL_STYLE_KEYS.map((k) => <DuelStyleChip key={k} style={k} />)}</div>
+            </div>
+          )}
+          {traits && (
+            <div>
+              <p className="mb-1 font-semibold text-ink-chalk">Характер</p>
+              <div className="flex flex-wrap gap-1">{TRAIT_KEYS.map((k) => <TraitChip key={k} trait={k} />)}</div>
+            </div>
+          )}
+          <p>Линии — химия соседей: яркая зелёная — один клуб и страна, жёлтая — что-то одно, точки — ничего общего.</p>
+        </div>
       )}
-    </button>
+    </div>
   );
 }
 
 /** Career squad: the XI on a pitch (rows follow the formation) with photos,
- * rarity frames and live chemistry links; the bench as a grid grouped by
- * line so every player is visible; a picker with each candidate's chemistry
- * gain. Unsaved swaps recompute chemistry client-side (lib/chemistry, the
+ * rarity frames and live chemistry links; the bench as a sideways strip
+ * with a line filter; a tap on a card names the player and offers each
+ * candidate with his chemistry gain. Unsaved swaps recompute chemistry client-side (lib/chemistry, the
  * server's rules and adjacency); what plays is what the server saves. */
 export default function CareerSquad({ season, catalog = null, onView, onError }: { season: CareerSeason; catalog?: TacticsCatalog | null } & Handlers) {
   const [slots, setSlots] = useState<Record<string, number>>(season.lineup);
@@ -236,6 +288,8 @@ export default function CareerSquad({ season, catalog = null, onView, onError }:
       .sort((a, b) => Number(isOut(a)) - Number(isOut(b)) || (playerInfo(b)?.rating ?? 0) - (playerInfo(a)?.rating ?? 0))
     : [];
   const rows = pitchRows(season.formation, season.slots.map((s) => s.code));
+  const ratings = season.slots.flatMap((s) => playerInfo(byId.get(slots[s.code]))?.rating ?? []);
+  const averageRating = ratings.length ? Math.round(ratings.reduce((sum, r) => sum + r, 0) / ratings.length) : null;
 
   const put = (slot: CareerSlot, entry: CareerSquadCard) => {
     const next = { ...slots };
@@ -294,21 +348,16 @@ export default function CareerSquad({ season, catalog = null, onView, onError }:
       {squadEditable && (
         <p className="-mt-1 text-micro text-ink-mist-dim">Заявку можно менять до первого тура, состав — перед каждым туром.</p>
       )}
-      <EnergyLegend />
-      {chemistry?.enabled && <ChemistrySummary chemistry={chemistry} />}
-      <button onClick={bestEleven} className="-mt-1 self-start rounded-full bg-accent-cyan/15 px-3 py-1 text-caption font-semibold text-accent-cyan active:scale-95">
-        ⚡ Лучший состав с учётом энергии
-      </button>
-
+      {chemistry?.enabled && <ChemistrySummary chemistry={chemistry} meter={{ slots: season.slots.length, averageRating }} />}
 
       <div
         ref={pitchRef}
         className="relative overflow-hidden rounded-[22px] bg-gradient-to-b from-[#17633a] via-[#12512f] to-[#0e4026] px-1 pb-3 pt-7 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
       >
         <SquadTacticLayer containerRef={pitchRef} tactic={season.tactic} layoutKey={season.formation} />
-        <ChemistryLinksOverlay containerRef={pitchRef} chemistry={chemistry} />
+        <ChemistryLinksOverlay containerRef={pitchRef} chemistry={chemistry} thin />
         {/* Room between the lines for the tactic drawn under them. */}
-        <div className="relative flex flex-col gap-6">
+        <div className="relative flex flex-col gap-5">
           {rows.map((row) => (
             <div key={row.key} data-row={row.category} className="flex justify-evenly gap-0.5">
               {inRow(row, season.slots).map((slot) => {
@@ -331,8 +380,11 @@ export default function CareerSquad({ season, catalog = null, onView, onError }:
         </div>
       </div>
 
-      {season.tactic && catalog && <TacticLegend tactic={season.tactic} catalog={catalog} />}
+      <button onClick={bestEleven} className="self-start rounded-full bg-accent-cyan/15 px-3 py-1 text-caption font-semibold text-accent-cyan active:scale-95">
+        ⚡ Лучший состав с учётом энергии
+      </button>
 
+      {season.tactic && catalog && <TacticLegend tactic={season.tactic} catalog={catalog} />}
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
@@ -359,11 +411,11 @@ export default function CareerSquad({ season, catalog = null, onView, onError }:
         </div>
         {benchPick ? (
           <p className="flex items-center justify-between gap-2 rounded-xl bg-accent-lime/10 px-3 py-1.5 text-caption text-accent-lime">
-            <span>Нажми на поле, кого заменит {playerInfo(benchPick)?.short}</span>
+            <span>{playerInfo(benchPick)?.name}: нажми на поле, кого заменит</span>
             <button onClick={() => setBenchPick(null)} className="font-semibold text-ink-mist">Отмена</button>
           </p>
         ) : (
-          <p className="text-micro text-ink-mist-dim">Нажми на игрока запаса, потом на позицию на поле · 🔋 — энергия</p>
+          <p className="text-micro text-ink-mist-dim">Нажми на игрока запаса, потом на позицию на поле</p>
         )}
         <div className="-mx-1 flex snap-x gap-1.5 overflow-x-auto px-1 pb-1">
           {benchShown.map((entry) => (
@@ -378,10 +430,7 @@ export default function CareerSquad({ season, catalog = null, onView, onError }:
         </div>
       </div>
 
-      <p className="text-micro leading-snug text-ink-mist-dim">
-        Нажми на игрока на поле, чтобы заменить. Линии между игроками — химия соседей: зелёная — один клуб и страна,
-        жёлтая — что-то одно, красная — ничего общего.
-      </p>
+      <CardLegend duels={season.squad.some((e) => e.duel_style)} traits={season.squad.some((e) => e.trait)} />
       {dirty ? (
         // Unsaved changes stay in view until saved or undone — a change
         // that was never saved is what plays otherwise.
@@ -413,7 +462,7 @@ export default function CareerSquad({ season, catalog = null, onView, onError }:
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/20" />
-            <p className="font-display text-base font-bold text-ink-chalk">Позиция {picking.ideal_position}</p>
+            <PlayerSheet entry={byId.get(slots[picking.code])} slot={picking} chemPoints={chemBySlot.get(picking.code)?.points} chemMax={chemMax} />
             <p className="mb-3 text-caption text-ink-mist">
               Под карточкой — энергия и как изменится химия. «На поле» — поменяются местами.
             </p>

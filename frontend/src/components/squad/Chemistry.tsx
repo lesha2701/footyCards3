@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState, type RefObject } from "react";
+import { useId, useLayoutEffect, useState, type RefObject } from "react";
 
 import { chemistryFrozenText, type ChemistrySwapHint } from "@/lib/chemistry";
 import type { ChemistryLinkLevel, ChemistryOut } from "@/types";
@@ -18,6 +18,11 @@ interface Segment {
   y1: number;
   x2: number;
   y2: number;
+  /** Card centres, for the `thin` style. */
+  ax: number;
+  ay: number;
+  bx: number;
+  by: number;
 }
 
 const MIN_LINK_PX = 22;
@@ -52,9 +57,13 @@ function edgePoint(box: Box, tx: number, ty: number, gap = 2): { x: number; y: n
 export function ChemistryLinksOverlay({
   containerRef,
   chemistry,
+  thin = false,
 }: {
   containerRef: RefObject<HTMLElement>;
   chemistry: ChemistryOut | undefined;
+  /** Fine lines in the project's floodlight colours, drawn card centre to
+   * card centre UNDER the cards; «no link» is a barely visible dotted thread. */
+  thin?: boolean;
 }) {
   const [segments, setSegments] = useState<Segment[]>([]);
   // Stable empty array: a fresh [] each render would re-run the effect forever.
@@ -90,7 +99,7 @@ export function ChemistryLinksOverlay({
           const len = Math.min(Math.max(gap, MIN_LINK_PX), dist * 0.6);
           const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
           return [{
-            key: `${l.a}-${l.b}`, level: l.level,
+            key: `${l.a}-${l.b}`, level: l.level, ax, ay, bx, by,
             x1: mx - (ux * len) / 2, y1: my - (uy * len) / 2, x2: mx + (ux * len) / 2, y2: my + (uy * len) / 2,
           }];
         }),
@@ -113,6 +122,7 @@ export function ChemistryLinksOverlay({
   }, [containerRef, links]);
 
   if (segments.length === 0) return null;
+  if (thin) return <ThinLinks segments={segments} />;
   return (
     <svg className="pointer-events-none absolute inset-0 z-10 h-full w-full" aria-hidden>
       {segments.map((s) => (
@@ -134,6 +144,36 @@ export function ChemistryLinksOverlay({
   );
 }
 
+function ThinLinks({ segments }: { segments: Segment[] }) {
+  const id = useId();
+  return (
+    <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden>
+      <defs>
+        {segments.filter((s) => s.level === "strong").map((s) => (
+          <linearGradient key={s.key} id={`${id}-${s.key}`} gradientUnits="userSpaceOnUse" x1={s.ax} y1={s.ay} x2={s.bx} y2={s.by}>
+            <stop offset="0%" stopColor="#22d3c4" />
+            <stop offset="55%" stopColor="#3ed17e" />
+            <stop offset="100%" stopColor="#c6e63a" />
+          </linearGradient>
+        ))}
+      </defs>
+      {segments.map((s) => {
+        const at = { x1: s.ax, y1: s.ay, x2: s.bx, y2: s.by };
+        if (s.level === "none") {
+          return <line key={s.key} {...at} stroke="#ffffff" strokeOpacity={0.22} strokeWidth={1} strokeDasharray="1 5" strokeLinecap="round" />;
+        }
+        const stroke = s.level === "strong" ? `url(#${id}-${s.key})` : "#e8d44d";
+        return (
+          <g key={s.key}>
+            <line {...at} stroke={stroke} strokeOpacity={0.2} strokeWidth={5} strokeLinecap="round" />
+            <line {...at} stroke={stroke} strokeWidth={s.level === "strong" ? 1.75 : 1.25} strokeLinecap="round" />
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 /** 0–max chemistry diamonds under a card. */
 export function ChemistryDiamonds({ points, max, onPosition }: { points: number; max: number; onPosition: boolean }) {
   if (max <= 0) return null;
@@ -151,29 +191,78 @@ export function ChemistryDiamonds({ points, max, onPosition }: { points: number;
   );
 }
 
-/** «Химия N/M» counter with the strength bonus and a short rules hint. */
-export function ChemistrySummary({ chemistry }: { chemistry: ChemistryOut | undefined }) {
+/** A player's chemistry as a flask: the liquid rises with his points, the
+ * number sits inside it. */
+export function ChemistryFlask({ points, max, onPosition }: { points: number; max: number; onPosition: boolean }) {
+  const id = useId();
+  const color = points >= 3 ? "#3ed17e" : points === 2 ? "#a3e635" : points === 1 ? "#facc15" : "#ef4444";
+  const level = 22 - 16 * (max > 0 ? Math.min(1, points / max) : 0);
+  const glass = "M6.2 1h5.6v1.2h-.8v3.3l5.9 11.1c1 1.9-.3 4.4-2.5 4.4H3.6c-2.2 0-3.5-2.5-2.5-4.4L7 5.5V2.2h-.8z";
+  return (
+    <svg
+      viewBox="0 0 18 22" width="18" height="22" role="img"
+      aria-label={`Химия ${points} из ${max}`}
+    >
+      <title>{onPosition ? `Химия ${points}/${max}` : "Не на своей позиции — химия 0"}</title>
+      <defs><clipPath id={id}><path d={glass} /></clipPath></defs>
+      <path d={glass} fill="#04130c" fillOpacity={0.8} />
+      <rect x="0" y={level} width="18" height={22 - level} fill={color} fillOpacity={0.85} clipPath={`url(#${id})`} />
+      <path d={glass} fill="none" stroke="#ffffff" strokeOpacity={0.75} strokeWidth={1} strokeLinejoin="round" />
+      <text
+        x="9" y="18.2" textAnchor="middle" fontSize="9" fontWeight="700" fontFamily="ui-monospace, monospace"
+        fill="#ffffff" stroke="#04130c" strokeWidth={1.8} paintOrder="stroke"
+      >
+        {points > 0 ? `+${points}` : "0"}
+      </text>
+    </svg>
+  );
+}
+
+const ONE_DECIMAL = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+
+/** «Химия N/M» counter with the strength bonus and a short rules hint.
+ * `meter` adds a progress bar, what chemistry gives a player in a match on
+ * average and the XI's average rating. */
+export function ChemistrySummary({ chemistry, meter }: {
+  chemistry: ChemistryOut | undefined;
+  meter?: { slots: number; averageRating: number | null };
+}) {
   const [open, setOpen] = useState(false);
   if (!chemistry?.enabled) return null;
   const rules = chemistry.rules;
+  const effect = meter ? chemistry.players.reduce((sum, p) => sum + p.rating_bonus, 0) / Math.max(1, meter.slots) : 0;
+  const share = chemistry.team_max > 0 ? Math.min(100, (chemistry.team / chemistry.team_max) * 100) : 0;
   return (
     <div className="mb-3">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between rounded-xl bg-white/5 px-3 py-2 active:scale-[0.99]"
+        className="flex w-full flex-col gap-1.5 rounded-xl bg-white/5 px-3 py-2 active:scale-[0.99]"
       >
-        <span className="flex items-center gap-2">
-          <span className="text-micro uppercase tracking-wide text-ink-mist-dim">Химия</span>
-          <span className="font-mono text-sm font-bold text-ink-chalk">{chemistry.team}/{chemistry.team_max}</span>
+        <span className="flex w-full items-center justify-between">
+          <span className="flex items-center gap-2">
+            <span className="text-micro uppercase tracking-wide text-ink-mist-dim">Химия</span>
+            <span className="font-mono text-sm font-bold text-ink-chalk">{chemistry.team}/{chemistry.team_max}</span>
+          </span>
+          <span className="flex items-center gap-2 text-caption">
+            {meter && (
+              <span className={`font-mono font-bold ${effect < 0 ? "text-red-400" : "text-accent-green"}`}>
+                {effect > 0 ? "+" : ""}{ONE_DECIMAL.format(effect)} к рейтингу
+              </span>
+            )}
+            {meter?.averageRating != null && <span className="font-mono text-ink-mist">сред. {meter.averageRating}</span>}
+            {chemistry.strength_bonus != null && chemistry.strength_bonus !== 0 && (
+              <span className="font-mono font-bold text-accent-green">
+                {chemistry.strength_bonus > 0 ? "+" : ""}{chemistry.strength_bonus} к силе
+              </span>
+            )}
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/10 text-micro font-bold text-ink-mist-dim">?</span>
+          </span>
         </span>
-        <span className="flex items-center gap-2 text-caption">
-          {chemistry.strength_bonus != null && chemistry.strength_bonus !== 0 && (
-            <span className="font-mono font-bold text-accent-green">
-              {chemistry.strength_bonus > 0 ? "+" : ""}{chemistry.strength_bonus} к силе
-            </span>
-          )}
-          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/10 text-micro font-bold text-ink-mist-dim">?</span>
-        </span>
+        {meter && (
+          <span className="block h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+            <span className="block h-full rounded-full bg-accent-green" style={{ width: `${share}%` }} />
+          </span>
+        )}
       </button>
       {open && rules && (
         <div className="mt-1.5 rounded-xl bg-white/5 px-3 py-2 text-caption leading-relaxed text-ink-mist">

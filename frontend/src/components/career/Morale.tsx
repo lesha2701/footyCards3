@@ -30,6 +30,15 @@ const TRAITS: Record<string, { icon: string; label: string; hint: string }> = {
   grumbler: { icon: "😤", label: "Ворчун", hint: "Остался без игры — мораль команды после матча ниже." },
 };
 
+/** The trait with its name: the legend and the player's sheet. */
+export function TraitChip({ trait }: { trait: string }) {
+  const meta = TRAITS[trait];
+  if (!meta) return null;
+  return <span title={meta.hint} className="rounded-full bg-white/10 px-2 py-0.5 text-micro font-semibold text-ink-chalk">{meta.icon} {meta.label}</span>;
+}
+
+export const TRAIT_KEYS = Object.keys(TRAITS);
+
 export function TraitBadge({ trait, className = "" }: { trait?: string | null; className?: string }) {
   const meta = trait ? TRAITS[trait] : undefined;
   if (!meta) return null;
