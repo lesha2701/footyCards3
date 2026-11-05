@@ -1,9 +1,10 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { claimAnniversary } from "@/api/anniversary";
+import { fetchCardOffers } from "@/api/cardOffers";
 import RewardModal, { RewardCard, RewardCoins, RewardPack } from "@/components/common/RewardModal";
 import ShareButton from "@/components/common/ShareButton";
 import { UserBadge } from "@/components/common/UserBadge";
@@ -52,6 +53,9 @@ export default function AnniversaryPage() {
   const [error, setError] = useState<string | null>(null);
   const [reward, setReward] = useState<Reward | null>(null);
   const [story, setStory] = useState(false);
+  const collectionId = data?.collection?.id;
+  const { data: offers } = useQuery({ queryKey: ["card-offers"], queryFn: fetchCardOffers, enabled: collectionId != null });
+  const edition = offers?.find((o) => o.player?.collection_id === collectionId && o.player?.edition_size != null);
 
   const claim = useMutation({
     mutationFn: (what: "calendar" | "community" | "recap") => claimAnniversary(what),
@@ -119,6 +123,24 @@ export default function AnniversaryPage() {
             Альбом
           </button>
         </section>
+      )}
+
+      {edition?.player && (
+        <button
+          onClick={() => navigate("/packs?tab=cards")}
+          className="anni-sky flex items-center gap-3 rounded-3xl p-4 text-left ring-1 ring-amber-300/40 active:scale-[0.98]"
+        >
+          <span className="gold100-frame flex h-16 w-12 shrink-0 items-center justify-center rounded-xl font-display text-sm font-black text-black">
+            {edition.player.rating}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-display text-sm font-bold text-amber-100">Золотая карта: {edition.player.display_name}</span>
+            <span className="block text-xs text-white/75">
+              Всего {edition.player.edition_size} номерных копий · {edition.left ? `осталось ${edition.left}` : "раскупили"}
+            </span>
+          </span>
+          <span className="whitespace-nowrap rounded-xl bg-amber-300 px-3 py-2 text-xs font-bold text-black">{edition.stars_price} ⭐</span>
+        </button>
       )}
 
       <AnimatePresence>{story && recap && <RecapStory recap={recap} onClose={() => setStory(false)} />}</AnimatePresence>

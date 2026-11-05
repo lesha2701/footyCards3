@@ -65,6 +65,8 @@ export interface Player {
   collection_name: string | null;
   /** The collection's special frame («Ночь живых Легенд»: "zombie" / "vampire"). */
   collection_skin?: string | null;
+  /** Numbered edition: copies that will ever exist; null = a regular card. */
+  edition_size?: number | null;
   /** «Академия»: set = a path card with this talent. */
   path_talent_code?: string | null;
   /** «Один футболист» key; null = by the display name. */
@@ -3986,6 +3988,8 @@ export interface CardOfferAdminInput {
   per_user_limit: number;
   is_active: boolean;
   sort_order: number;
+  /** Footballers only: `stock` is a numbered edition («№37 из 100»). */
+  numbered?: boolean;
 }
 
 export interface CardOfferAdmin extends Omit<CardOfferAdminInput, "player_id"> {

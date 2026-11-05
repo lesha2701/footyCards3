@@ -2,6 +2,7 @@ from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import ConflictError
 from app.models.card import UserCard
 from app.models.coach import Coach
 from app.models.enums import CardSource
@@ -33,6 +34,10 @@ async def create_user_card(
     # any player that belongs to a card collection.
     await db.refresh(player, attribute_names=["next_serial_number"], with_for_update=True)
     serial_number = player.next_serial_number
+    # A numbered edition is a promise: only a paid order (never refused) may
+    # pass it — see card_offer_service.reserve_for_invoice.
+    if player.edition_size is not None and serial_number > player.edition_size and source != CardSource.stars_purchase:
+        raise ConflictError(f"Тираж карты {player.display_name} закончился")
     player.next_serial_number += 1
     db.add(player)
 

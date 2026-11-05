@@ -142,7 +142,7 @@ async def validate(db: AsyncSession, invoice: StarsInvoice) -> tuple[bool, str]:
     if kind == "card_offer":
         from app.services import card_offer_service
 
-        return await card_offer_service.validate_stars(db, invoice.user_id, int(arg), invoice.stars_amount)
+        return await card_offer_service.validate_stars(db, invoice, int(arg))
     if kind == "free_kick_refill":
         from app.services import free_kick_service
 

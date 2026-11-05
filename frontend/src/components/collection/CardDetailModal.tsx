@@ -158,7 +158,7 @@ export default function CardDetailModal({
                 <p className="font-display text-lg font-bold leading-tight text-ink-chalk">{player.display_name}</p>
                 <p className="mt-0.5 text-sm text-ink-mist">{POSITION_LABELS[player.position]} · {player.club}</p>
                 <p className="mt-1 text-xs text-ink-mist">
-                  {isPath ? "🌱 Академия" : RARITY_LABELS[player.rarity]} · № {card.serial_number}
+                  {isPath ? "🌱 Академия" : RARITY_LABELS[player.rarity]} · № {card.serial_number}{player.edition_size != null && ` из ${player.edition_size}`}
                 </p>
                 {(card.prestige ?? 0) > 0 && (
                   <p className={`mt-1 inline-block rounded-full px-2 py-0.5 text-caption font-bold ${prestigeStyle(card.prestige!).chip}`}>

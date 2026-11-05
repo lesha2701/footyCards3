@@ -96,7 +96,7 @@ from app.models.fan_battle import FanBattleLedger, FanBattleMember
 from app.models.halloween import HalloweenLedger, HalloweenWallet
 from app.models.kontra import KontraBattle, KontraGear
 from app.models.weekly_top import WeeklyTopAward, WeeklyTopRun
-from app.models.card_offer import CardOffer, CardOfferPurchase, CardOfferView
+from app.models.card_offer import CardOffer, CardOfferPurchase, CardOfferReservation, CardOfferView
 from app.models.server_error import ServerError
 from app.models.magnate import MagnateMatch, MagnateSeat
 from app.models.task import TaskActivity, TaskChestClaim, TaskDefinition, UserTask
@@ -172,6 +172,7 @@ __all__ = [
     "WeeklyTopRun",
     "CardOffer",
     "CardOfferPurchase",
+    "CardOfferReservation",
     "CardOfferView",
     "ServerError",
     "MordoboiQueueEntry",

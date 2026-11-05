@@ -7,8 +7,8 @@ admin to fill.
 The event is switched on with its dates (21.11 – 30.11 Moscow, right after
 «Битва фанатов»): it starts by itself at midnight of the 21st.
 
-Revision ID: 0241
-Revises: 0240
+Revision ID: 0260
+Revises: 0259
 Create Date: 2026-11-02
 """
 import json
@@ -18,8 +18,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0241"
-down_revision: Union[str, None] = "0240"
+revision: str = "0260"
+down_revision: Union[str, None] = "0259"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
