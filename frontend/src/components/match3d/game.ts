@@ -177,7 +177,7 @@ export class MatchGame {
     sun.position.copy(SUN).multiplyScalar(100);
     this.scene.add(sun);
 
-    this.stadium = makeStadium(assets);
+    this.stadium = makeStadium(assets, [HOME.shirt, AWAY.shorts]);
     this.scene.add(this.stadium.group);
     this.squad = makeSquad(assets.near, assets.far, assets.baked, assets.map, assets.hairMap, looks(setup.seed));
     this.scene.add(this.squad.group);
@@ -390,6 +390,7 @@ export class MatchGame {
       }
       case "goal":
         this.goalTick = s.tick;
+        this.stadium.cheer(e.team);
         playFreeKickSfx(e.team === you ? "roar" : "groan");
         this.hooks.onMessage(e.long ? "ГОЛ! Дальний удар!" : e.kind === Kick.Header ? "ГОЛ! Головой!" : "ГОЛ!", true);
         crowdHush();
@@ -650,7 +651,8 @@ export class MatchGame {
     this.replayEnd = this.goalTick + 36;
     const s = this.s;
     const dir = s.ball.x > 0 ? 1 : -1;
-    this.camPos.set(dir * (HALF_L + 12), 3.8, s.ball.z * 0.5 + 3);
+    // In front of the first row: further back he'd be among the fans.
+    this.camPos.set(dir * (HALF_L + 8), 3.8, s.ball.z * 0.5 + 3);
     this.fov = 19;
     this.look.set(s.ball.x, 1, s.ball.z);
     this.sendHud();

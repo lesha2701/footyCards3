@@ -1,9 +1,10 @@
-/** The ground of «Матч 3D»: a real pitch with its lines painted into the grass, two goals whose
+/** The ground of «Ферги Тайм»: a real pitch with its lines painted into the grass, two goals whose
  * nets take the ball, a bowl of stands under a roof, boards, masts and sky.
  * All static, a dozen draws; only the nets and the boards move. */
 import * as THREE from "three";
 
 import { NET_TILE, daySkyTexture, ledTexture, netTexture } from "@/components/freeKick3d/textures";
+import { type Bowl, makeCrowd } from "./crowd";
 import { BOX_D, BOX_HALF, GOAL_H, GOAL_HALF, HALF_L, HALF_W, NET_DEPTH, PEN_SPOT, SIX_D, SIX_HALF } from "@/lib/match3d/core";
 
 /** Where the sun is (a direction): the shadows on the grass fall from it. */
@@ -114,20 +115,50 @@ function goal(side: 1 | -1, group: THREE.Group, tex: THREE.Texture): Net {
   return { uniform, force: 0, vel: 0, y: 1, z: 0 };
 }
 
-/** A tier of the bowl: rounded-rectangle rings from the low edge to the high one. */
+const BOWL_POWER = 0.42;
+const ringPoint = (t: number, a: number, b: number) => {
+  const c = Math.cos(t), s = Math.sin(t);
+  return [Math.sign(c) * Math.abs(c) ** BOWL_POWER * a, Math.sign(s) * Math.abs(s) ** BOWL_POWER * b] as const;
+};
+
+/** Evenly spaced along the ring, however unevenly `t` runs: on the straights of a
+ * rounded rectangle a step of `t` covers ten times the ground it does in a corner. */
+function ringWalk(a: number, b: number, step: number) {
+  const fine = 3600;
+  const len = new Float64Array(fine + 1);
+  let [px, pz] = ringPoint(0, a, b);
+  for (let i = 1; i <= fine; i++) {
+    const [x, z] = ringPoint((i / fine) * Math.PI * 2, a, b);
+    len[i] = len[i - 1] + Math.sqrt((x - px) ** 2 + (z - pz) ** 2);
+    px = x; pz = z;
+  }
+  const total = len[fine];
+  const out: { t: number; u: number }[] = [];
+  const count = Math.round(total / step);
+  let k = 0;
+  for (let n = 0; n < count; n++) {
+    const want = (n / count) * total;
+    while (k < fine && len[k + 1] < want) k += 1;
+    out.push({ t: (k / fine) * Math.PI * 2, u: want / total });
+  }
+  return out;
+}
+
+const BOWL: Bowl = { point: ringPoint, walk: ringWalk };
+
+/** A tier of the bowl: rounded-rectangle rings from the low edge to the high one,
+ * its texture laid by the metre round the ring. */
 function tier(a0: number, b0: number, y0: number, a1: number, b1: number, y1: number, repeatU: number): THREE.BufferGeometry {
-  const seg = 96, power = 0.42;
-  const ring = (t: number, a: number, b: number) => {
-    const c = Math.cos(t), s = Math.sin(t);
-    return [Math.sign(c) * Math.abs(c) ** power * a, Math.sign(s) * Math.abs(s) ** power * b] as const;
-  };
+  const seg = 180;
+  const ways = ringWalk(a0, b0, 1);
   const pos: number[] = [], uv: number[] = [], index: number[] = [];
   for (let i = 0; i <= seg; i++) {
-    const t = (i / seg) * Math.PI * 2;
-    const [x0, z0] = ring(t, a0, b0);
-    const [x1, z1] = ring(t, a1, b1);
+    const w = ways[Math.floor((i / seg) * ways.length) % ways.length];
+    const t = i === seg ? Math.PI * 2 : w.t, u = i === seg ? 1 : w.u;
+    const [x0, z0] = ringPoint(t, a0, b0);
+    const [x1, z1] = ringPoint(t, a1, b1);
     pos.push(x0, y0, z0, x1, y1, z1);
-    uv.push((i / seg) * repeatU, 0, (i / seg) * repeatU, 1);
+    uv.push(u * repeatU, 0, u * repeatU, 1);
     if (i < seg) {
       const k = i * 2;
       index.push(k, k + 2, k + 1, k + 1, k + 2, k + 3);
@@ -209,24 +240,31 @@ ${LINES_GLSL}
   return mat;
 }
 
-/** The people in the stands: a sharper mip than the angle asks for, a harder
- * contrast, and the roof's shade falling towards the back. */
-function crowdMaterial(map: THREE.Texture) {
-  const mat = new THREE.MeshBasicMaterial({ map, color: "#ffffff" });
-  mat.onBeforeCompile = (sh) => {
-    sh.fragmentShader = sh.fragmentShader.replace(
-      "#include <map_fragment>",
-      `vec4 crowd = texture2D(map, vMapUv, -1.4);
-       crowd.rgb = clamp((crowd.rgb - .22) * 1.3 + .22, 0., 1.);
-       diffuseColor.rgb *= crowd.rgb * mix(.98, .66, vMapUv.y * vMapUv.y);`,
-    );
-  };
-  mat.customProgramCacheKey = () => "match3d-crowd";
-  return mat;
+/** One bay of seats between two aisles: the rows, and the steps of the aisle at
+ * its edge. What shows between the people. */
+const AISLE = 0.07;
+function seatsTexture(rows: number) {
+  const c = document.createElement("canvas");
+  c.width = 128; c.height = rows * 6;
+  const x = c.getContext("2d")!;
+  for (let i = 0; i < rows; i++) {
+    x.fillStyle = "#26364d"; x.fillRect(0, i * 6, c.width, 4);
+    x.fillStyle = "#161f2d"; x.fillRect(0, i * 6 + 4, c.width, 2);
+  }
+  x.fillStyle = "#4b5461"; x.fillRect(0, 0, c.width * AISLE, c.height);
+  x.fillStyle = "#3a424e";
+  for (let i = 0; i < rows; i++) x.fillRect(0, i * 6 + 4, c.width * AISLE, 2);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = THREE.RepeatWrapping;
+  t.anisotropy = 4;
+  return t;
 }
 
 export type Stadium = {
   group: THREE.Group;
+  /** The team's fans are up: it has scored. */
+  cheer: (team: 0 | 1) => void;
   /** The ball went into this end's net, at this height and across position, this hard. */
   netHit: (end: 1 | -1, y: number, z: number, speed: number) => void;
   update: (dt: number) => void;
@@ -234,9 +272,9 @@ export type Stadium = {
 };
 
 const SIGN_L = "FOOTY CARDS";
-const SIGN_R = "МАТЧ 3D";
+const SIGN_R = "ФЕРГИ ТАЙМ";
 
-export function makeStadium(textures: { grass: THREE.Texture; stands: THREE.Texture; fans: THREE.Texture | null; led: THREE.Texture }): Stadium {
+export function makeStadium(textures: { grass: THREE.Texture; fans: THREE.Texture; led: THREE.Texture }, colours: readonly [string, string]): Stadium {
   const group = new THREE.Group();
   const disposable: (THREE.BufferGeometry | THREE.Material | THREE.Texture)[] = [];
   const add = <T extends THREE.Object3D>(o: T) => { group.add(o); return o; };
@@ -258,15 +296,29 @@ export function makeStadium(textures: { grass: THREE.Texture; stands: THREE.Text
   netTex.generateMipmaps = true;
   const nets: Record<string, Net> = { "1": goal(1, group, netTex), "-1": goal(-1, group, netTex) };
 
-  // The stands: two tiers of people, a band between them, and a roof.
-  const st = textures.stands;
-  st.wrapS = THREE.RepeatWrapping;
-  st.anisotropy = 8;
-  const crowdMat = own(crowdMaterial(st));
-  add(new THREE.Mesh(own(tier(61, 43, 1.2, 84, 66, 15, 16)), crowdMat));
-  add(new THREE.Mesh(own(tier(86, 68, 19, 112, 94, 42, 20)), crowdMat));
-  add(new THREE.Mesh(own(tier(84, 66, 15, 86, 68, 19, 8)), own(new THREE.MeshBasicMaterial({ color: "#20344e" }))));
-  add(new THREE.Mesh(own(tier(112, 94, 42, 88, 70, 51, 8)), own(new THREE.MeshBasicMaterial({ color: "#c7ced8", side: THREE.DoubleSide }))));
+  // The stands: two tiers of seats, a ribbon of LED between them, and a roof.
+  const low = { lo: { a: 61, b: 43, y: 1.2 }, hi: { a: 84, b: 66, y: 15 } };
+  const high = { lo: { a: 86, b: 68, y: 19 }, hi: { a: 112, b: 94, y: 42 } };
+  const seats = (t: typeof low, rows: number, bays: number) => {
+    const map = own(seatsTexture(rows));
+    add(new THREE.Mesh(own(tier(t.lo.a, t.lo.b, t.lo.y, t.hi.a, t.hi.b, t.hi.y, bays)), own(new THREE.MeshBasicMaterial({ map }))));
+  };
+  // A bay of seats about 14 m wide round the low edge of each tier.
+  seats(low, 22, 24);
+  seats(high, 28, 28);
+  const fans = textures.fans;
+  fans.anisotropy = 4;
+  const crowd = makeCrowd(fans, BOWL, [
+    { ...low, tiles: 24, aisle: AISLE, shade: [1, 0.74] },
+    { ...high, tiles: 28, aisle: AISLE, shade: [0.72, 0.5] },
+  ], colours);
+  add(crowd.mesh);
+  const ribbon = own(ledTexture(`${SIGN_L}   ${SIGN_R}`, "#7cd1ff"));
+  ribbon.wrapS = THREE.RepeatWrapping;
+  add(new THREE.Mesh(own(tier(84, 66, 15, 84.5, 66.5, 16.7, 13)), own(new THREE.MeshBasicMaterial({ map: ribbon, toneMapped: false }))));
+  add(new THREE.Mesh(own(tier(84.5, 66.5, 16.7, 86, 68, 19, 8)), own(new THREE.MeshBasicMaterial({ color: "#20344e" }))));
+  // The roof is lit from below only by what comes off the pitch.
+  add(new THREE.Mesh(own(tier(112, 94, 42, 88, 70, 51, 8)), own(new THREE.MeshBasicMaterial({ color: "#7c8694", side: THREE.DoubleSide }))));
   add(new THREE.Mesh(own(tier(58, 40, 0, 61, 43, 1.2, 8)), own(new THREE.MeshBasicMaterial({ color: "#1d2c3f" }))));
 
   // Boards along the far side and behind the goals, each with its own scroll.
@@ -314,8 +366,12 @@ export function makeStadium(textures: { grass: THREE.Texture; stands: THREE.Text
     }
   }
 
+  disposable.push({ dispose: crowd.dispose } as unknown as THREE.Material);
+  let clock = 0;
+
   return {
     group,
+    cheer: crowd.cheer,
     netHit: (end, y, z, speed) => {
       const n = nets[String(end)];
       n.y = y; n.z = end > 0 ? z : -z;
@@ -329,6 +385,9 @@ export function makeStadium(textures: { grass: THREE.Texture; stands: THREE.Text
         n.uniform.value.set(n.y, n.z, n.force, Math.max(n.force, 0) * -0.25);
       }
       boards.forEach((t, i) => { t.offset.x += dt * (i % 2 ? 0.05 : -0.05); });
+      ribbon.offset.x -= dt * 0.03;
+      clock += dt;
+      crowd.update(dt, clock);
     },
     dispose: () => disposable.forEach((d) => d.dispose()),
   };
