@@ -56,7 +56,7 @@ function Radar({ game }: { game: MatchGame | null }) {
   return <canvas ref={ref} width={168} height={108} style={{ position: "absolute", left: "50%", bottom: 6, width: 112, height: 72, transform: "translateX(-50%)", pointerEvents: "none" }} />;
 }
 
-function Final({ end, onAgain, onExit }: { end: GameEnd; onAgain: () => void; onExit: () => void }) {
+function Final({ end, reward, onAgain, onExit }: { end: GameEnd; reward?: string | null; onAgain: () => void; onExit: () => void }) {
   const t = end.s.teams;
   const won = end.g0 > end.g1, draw = end.g0 === end.g1;
   const row = (name: string, a: string | number, b: string | number) => (
@@ -75,6 +75,7 @@ function Final({ end, onAgain, onExit }: { end: GameEnd; onAgain: () => void; on
         {row("Владение", `${Math.round((t[0].possTicks / poss) * 100)}%`, `${Math.round((t[1].possTicks / poss) * 100)}%`)}
         {row("Точность передач", `${Math.round((t[0].passesOk / (t[0].passes || 1)) * 100)}%`, `${Math.round((t[1].passesOk / (t[1].passes || 1)) * 100)}%`)}
         {row("Угловые", t[0].corners, t[1].corners)}
+        {reward && <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700, color: "#ffd21f" }}>{reward}</div>}
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
           <button type="button" onClick={onExit} style={{ flex: 1, padding: 11, borderRadius: 10, border: 0, background: "rgba(255,255,255,.14)", color: "#fff", fontWeight: 700 }}>Выйти</button>
           <button type="button" onClick={onAgain} style={{ flex: 1, padding: 11, borderRadius: 10, border: 0, background: "#d6ff3f", color: "#0c1a10", fontWeight: 800 }}>Ещё матч</button>
@@ -84,9 +85,9 @@ function Final({ end, onAgain, onExit }: { end: GameEnd; onAgain: () => void; on
   );
 }
 
-type Props = { onExit: () => void; demo?: boolean; onGame?: (g: MatchGame) => void; onKickOff?: () => void; onFullTime?: () => void };
+type Props = { onExit: () => void; demo?: boolean; onGame?: (g: MatchGame) => void; onKickOff?: () => void; onFullTime?: () => void; reward?: string | null };
 
-export default function Match3DGame({ onExit, demo = false, onGame, onKickOff, onFullTime }: Props) {
+export default function Match3DGame({ onExit, demo = false, onGame, onKickOff, onFullTime, reward }: Props) {
   const [box, setBox] = useState<Box>(measure);
   const [stage, setStage] = useState<"intro" | "loading" | "play" | "end">(demo ? "loading" : "intro");
   const [share, setShare] = useState(0);
@@ -271,7 +272,7 @@ export default function Match3DGame({ onExit, demo = false, onGame, onKickOff, o
             <button type="button" onClick={() => pause(false)} style={{ padding: "12px 26px", borderRadius: 10, border: 0, background: "#d6ff3f", color: "#0c1a10", fontWeight: 800 }}>Продолжить</button>
           </div>
         )}
-        {stage === "end" && end && <Final end={end} onAgain={again} onExit={onExit} />}
+        {stage === "end" && end && <Final end={end} reward={reward} onAgain={again} onExit={onExit} />}
       </div>
     </div>
   );

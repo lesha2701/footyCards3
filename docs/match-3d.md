@@ -246,10 +246,9 @@ the match from above, twelve moments at a time.
 
 ## Before rewards
 
-The mode pays nothing itself. `fergie_service` only records a match played to the
-end (a `GameSession` of type `fergie_time`, not before `MIN_SECONDS`), so the tasks
-(`played:game:fergie_time`) and the «Путь дебютанта» can count it. The score isn't
-sent: the server can't check it, so no task may depend on a win.
-
-Rewards from the match itself and tasks on the result need agreed numbers in
-`GameConfig`, the counter pairs on `User` with a migration, and the server replay in V8.
+`fergie_service` records a match played to the end (a `GameSession` of type
+`fergie_time`, not before `MIN_SECONDS`) and pays a flat fee for it, the same for a
+win and a defeat (`GameConfig.fergie_match_coins`, up to `fergie_daily_limit` a day,
+then it still counts). The tasks (`played:game:fergie_time`) and the «Путь дебютанта»
+count it too. The score isn't sent: the server can't check it, so no reward may
+depend on a win. Paying for the result needs the server replay in V8.

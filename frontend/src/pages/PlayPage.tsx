@@ -169,7 +169,7 @@ export default function PlayPage() {
     },
     {
       path: "/play/fergie-time", art: artOf("fergie-time"), Icon: IconBall, tint: "bg-red-600", title: "Ферги Тайм", group: "quick", time: "4 мин", bot: true,
-      description: "Матч 11 на 11 в 3D: концовка при 0:0, вырви победу в добавленное время", noLimit: true,
+      description: "Матч 11 на 11 в 3D: концовка при 0:0, вырви победу в добавленное время", limitKey: "fergie_time",
     },
     {
       path: "/play/free-kick/challenge", art: artOf("free-kick"), Icon: IconTarget, tint: "bg-sky-500", title: "Испытание дня", group: "quick", time: "2 мин",

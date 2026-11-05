@@ -283,8 +283,11 @@ export async function startFergieTime(): Promise<{ session_id: number }> {
   return data;
 }
 
-export async function finishFergieTime(sessionId: number): Promise<void> {
-  await api.post(`/games/fergie-time/${sessionId}/finish`);
+export type FergieFinish = { reward_coins: number; new_balance: number; daily_cap_reached: boolean };
+
+export async function finishFergieTime(sessionId: number): Promise<FergieFinish> {
+  const { data } = await api.post<FergieFinish>(`/games/fergie-time/${sessionId}/finish`);
+  return data;
 }
 
 // --- Football Hangman ---

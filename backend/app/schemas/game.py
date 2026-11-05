@@ -371,6 +371,7 @@ class GameLimitsOut(BaseModel):
     kontra: int = 0
     one_on_one: int = 0
     otvetka: int = 0
+    fergie_time: int = 0
     # When a game's hourly cap is used up: the moment it frees up again
     # (key = the field name above). Games with plays left are absent.
     resets_at: dict[str, datetime] = {}
@@ -541,7 +542,9 @@ class FergieStartOut(BaseModel):
 
 
 class FergieFinishOut(BaseModel):
-    finished: bool
+    reward_coins: int
+    new_balance: int
+    daily_cap_reached: bool
 
 
 # --- Найди пару (card pairs memory match) ---

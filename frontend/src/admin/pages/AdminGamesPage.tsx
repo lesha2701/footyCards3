@@ -1635,6 +1635,17 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Ферги Тайм</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Матч идёт на телефоне, счёт сервер не видит: плата одна и та же за любой матч, сыгранный до конца.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {field("fergie_match_coins", "Монет за матч")}
+          {field("fergie_daily_limit", "Наградных матчей в день")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Футбольные буквы</p>
         <div className="grid grid-cols-2 gap-3">
           {field("hangman_daily_limit", "Лимит наградных попыток/день")}

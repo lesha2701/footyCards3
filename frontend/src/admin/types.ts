@@ -598,6 +598,8 @@ export interface GameConfig {
   otvetka_loss_coins: number;
   otvetka_bot_goal_pct: number;
   otvetka_bot_penalty_pct: number;
+  fergie_match_coins: number;
+  fergie_daily_limit: number;
   pairs_daily_limit: number;
   pairs_reward_perfect: number;
   pairs_reward_min: number;

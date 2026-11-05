@@ -53,8 +53,58 @@ async def test_a_match_cant_be_over_before_it_could_be(db_session):
 async def test_finishing_is_retryable_and_counts_once(db_session):
     user = await _user(db_session)
     session_id = await _played_out(db_session, user)
-    assert (await fergie_service.finish(db_session, user, session_id)).finished
+    balance = (await db_session.get(User, user.id)).balance
+    again = await fergie_service.finish(db_session, user, session_id)
+    assert again.reward_coins == (await get_config(db_session)).fergie_match_coins
+    assert again.new_balance == balance  # paid once
     assert await newbie_service.games_played(db_session, user, "game:fergie_time") == 1
+
+
+@pytest.mark.asyncio
+async def test_a_match_pays_the_flat_fee_up_to_the_daily_cap(db_session):
+    user = await _user(db_session)
+    config = await get_config(db_session)
+    config.fergie_match_coins, config.fergie_daily_limit = 150, 2
+    await db_session.commit()
+    start = (await db_session.get(User, user.id)).balance
+
+    async def play():
+        out = await fergie_service.start(db_session, user)
+        session = await db_session.get(GameSession, out.session_id)
+        session.created_at = session.created_at - timedelta(seconds=fergie_service.MIN_SECONDS + 1)
+        await db_session.commit()
+        return await fergie_service.finish(db_session, user, out.session_id)
+
+    assert (await play()).reward_coins == 150
+    second = await play()
+    assert second.new_balance == start + 300
+    third = await play()
+    assert third.reward_coins == 0 and third.daily_cap_reached and third.new_balance == start + 300
+    # Past the cap it still counts as played, for tasks.
+    assert await newbie_service.games_played(db_session, user, "game:fergie_time") == 3
+
+
+@pytest.mark.asyncio
+async def test_a_blocked_player_gets_nothing(db_session):
+    user = await _user(db_session)
+    user.game_rewards_blocked = True
+    await db_session.commit()
+    out = await fergie_service.start(db_session, user)
+    session = await db_session.get(GameSession, out.session_id)
+    session.created_at = session.created_at - timedelta(seconds=fergie_service.MIN_SECONDS + 1)
+    await db_session.commit()
+    assert (await fergie_service.finish(db_session, user, out.session_id)).reward_coins == 0
+
+
+@pytest.mark.asyncio
+async def test_the_hourly_cap_stops_a_start(db_session):
+    user = await _user(db_session)
+    config = await get_config(db_session)
+    config.hourly_game_limit = 1
+    await db_session.commit()
+    await fergie_service.start(db_session, user)
+    with pytest.raises(ConflictError):
+        await fergie_service.start(db_session, user)
 
 
 @pytest.mark.asyncio

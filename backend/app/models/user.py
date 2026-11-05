@@ -121,6 +121,11 @@ class User(TimestampMixin, Base):
     one_on_one_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     one_on_one_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # «Ферги Тайм» (fergie_service)
+    fergie_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    fergie_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    fergie_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    fergie_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     # «Ответка» (otvetka_service)
     otvetka_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     otvetka_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

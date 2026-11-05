@@ -42,8 +42,8 @@ Main features:
 - «Ферги Тайм» (docs/match-3d.md, code `match3d`): a short real 11-a-side match in landscape on a
   pure 60 Hz engine `lib/match3d` (+ − × ÷ and Math.sqrt only, its own seeded
   generator, so a server can replay it in V8), drawn by instanced baked clips
-  in `components/match3d`; pays nothing itself, `fergie_service.py` only records a
-  match played to the end for tasks and the «Путь дебютанта»;
+  in `components/match3d`; `fergie_service.py` records a match played to the end and
+  pays a flat fee (the server can't see the score, so nothing may depend on it);
 - clubs: squad/tournaments/league plus emblem constructor (`club_emblem_service`,
   paid layers for budget coins or Stars), «Казна за Stars» (`club_treasury_service`),
   spare-card sale/exchange (`club_market_service`), roles (vice-captain, treasurer),
@@ -174,7 +174,7 @@ Main features:
   `CoinTransaction` row; the caller still has to `db.add`/`db.commit`. Any
   coins/cards/packs/exchange mutation should go through this pattern.
 - **Mini-game hourly/daily limits**: each mini-game (memory, arena/match,
-  saboteur, penalty, free_kick, hangman, tactico, pairs, stratego, magnate, otvetka) has two independent
+  saboteur, penalty, free_kick, hangman, tactico, pairs, stratego, magnate, otvetka, fergie) has two independent
   counters on `User`: `<game>_hourly_attempts` / `<game>_hour_started_at`
   (a shared cap, `config.hourly_game_limit`, resets on a rolling 1h window —
   see `game_limits_service.py`) and `<game>_rewarded_attempts_today` /

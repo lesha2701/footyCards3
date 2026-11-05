@@ -615,6 +615,8 @@ class GameConfigOut(BaseModel):
     otvetka_loss_coins: int = 30
     otvetka_bot_goal_pct: int = 35
     otvetka_bot_penalty_pct: int = 70
+    fergie_match_coins: int = 150
+    fergie_daily_limit: int = 5
     pairs_daily_limit: int
     pairs_reward_perfect: int
     pairs_reward_min: int
@@ -1429,6 +1431,8 @@ class GameConfigUpdate(BaseModel):
     otvetka_loss_coins: Optional[int] = Field(default=None, ge=0)
     otvetka_bot_goal_pct: Optional[int] = Field(default=None, ge=0, le=100)
     otvetka_bot_penalty_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    fergie_match_coins: Optional[int] = Field(default=None, ge=0)
+    fergie_daily_limit: Optional[int] = Field(default=None, ge=0)
     pairs_daily_limit: Optional[int] = Field(default=None, ge=0)
     pairs_reward_perfect: Optional[int] = Field(default=None, ge=0)
     pairs_reward_min: Optional[int] = Field(default=None, ge=0)

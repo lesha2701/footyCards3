@@ -330,6 +330,10 @@ class GameConfig(TimestampMixin, Base):
     otvetka_loss_coins: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     otvetka_bot_goal_pct: Mapped[int] = mapped_column(Integer, default=35, nullable=False)
     otvetka_bot_penalty_pct: Mapped[int] = mapped_column(Integer, default=70, nullable=False)
+    # «Ферги Тайм» (fergie_service): a flat fee for a match played to the end,
+    # whatever the score (the server can't see it), up to the daily cap.
+    fergie_match_coins: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    fergie_daily_limit: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
 
     pairs_daily_limit: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
     pairs_reward_perfect: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
