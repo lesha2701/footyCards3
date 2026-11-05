@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import type { MyPlayerCabinet, MyPlayerTrophy } from "@/api/myPlayer";
 import { staticUrl } from "@/lib/api";
 import { SHOWCASE_STYLE } from "@/lib/myPlayer";
@@ -16,12 +17,12 @@ const PER_SHELF = 3;
 const SHELF_TOPS = [35, 59.5, 83];
 const PER_CABINET = PER_SHELF * SHELF_TOPS.length;
 
-export function TrophyImage({ code, icon, imagePath, className = "h-16 w-16" }: {
-  code: string; icon: string; imagePath?: string | null; className?: string;
+export function TrophyImage({ code, icon, imagePath, name, className = "h-16 w-16" }: {
+  code: string; icon: string; imagePath?: string | null; name?: string; className?: string;
 }) {
   // An uploaded image that fails to load falls back to the built-in art, then
   // to the emoji — a broken file never leaves an empty spot on the shelf.
-  const sources = [imagePath && staticUrl(imagePath), trophyArt(code)].filter((s): s is string => !!s);
+  const sources = [imagePath && staticUrl(imagePath), trophyArt(code, name)].filter((s): s is string => !!s);
   const [failed, setFailed] = useState(0);
   const src = sources[failed];
   if (src) {
@@ -47,14 +48,36 @@ function groupTrophies(trophies: MyPlayerTrophy[]): TrophyGroup[] {
   return [...groups.values()];
 }
 
-function tooltip({ trophy, all }: TrophyGroup): string {
-  const lines = all.map((t) => [t.message, season(t.granted_at)].filter(Boolean).join(" · "));
-  return [all.length > 1 ? `${trophy.name} ×${all.length}` : trophy.name, ...lines].join("\n");
+/** What a cup was awarded for: every win of this kind, newest first. */
+function TrophyDetails({ group, onClose }: { group: TrophyGroup; onClose: () => void }) {
+  const { trophy, all } = group;
+  return createPortal(
+    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 p-3" onClick={onClose}>
+      <div className="flex max-h-[80vh] w-full max-w-md flex-col items-center gap-2 overflow-y-auto rounded-3xl bg-bg-surface p-4"
+        role="dialog" aria-label={trophy.name} onClick={(e) => e.stopPropagation()} data-testid="trophy-details">
+        <TrophyImage code={trophy.code} icon={trophy.icon} imagePath={trophy.image_path} name={trophy.name} className="h-32 w-32" />
+        <p className="text-center font-display text-base font-bold text-ink-chalk">
+          {trophy.name}{all.length > 1 && <span className="text-amber-300"> ×{all.length}</span>}
+        </p>
+        <ul className="flex w-full flex-col gap-1.5">
+          {all.map((t) => (
+            <li key={t.id} className="rounded-xl bg-white/5 px-3 py-2">
+              {t.message && <p className="text-sm text-ink-chalk">{t.message}</p>}
+              <p className="text-micro text-ink-mist">{season(t.granted_at)}</p>
+            </li>
+          ))}
+        </ul>
+        <button onClick={onClose} className="w-full rounded-2xl bg-white/5 py-3 text-sm font-semibold text-ink-chalk">Закрыть</button>
+      </div>
+    </div>,
+    document.body,
+  );
 }
 
 /** One cabinet: its art (or gradient with drawn shelves) and up to nine
- * kinds of cups standing on the three shelves. */
-function Cabinet({ code, groups }: { code: string; groups: TrophyGroup[] }) {
+ * kinds of cups standing on the three shelves; a tap on a cup opens what it
+ * was awarded for. */
+function Cabinet({ code, groups, onOpen }: { code: string; groups: TrophyGroup[]; onOpen: (group: TrophyGroup) => void }) {
   const style = SHOWCASE_STYLE[code] ?? SHOWCASE_STYLE.wood;
   const art = cabinetArt(code);
   return (
@@ -71,15 +94,16 @@ function Cabinet({ code, groups }: { code: string; groups: TrophyGroup[] }) {
           )}
           <div className="absolute inset-x-[11%] grid grid-cols-3 items-end gap-1" style={{ bottom: `${100 - top - 0.8}%` }}>
             {groups.slice(shelf * PER_SHELF, shelf * PER_SHELF + PER_SHELF).map((g) => (
-              <div key={g.trophy.code} className="relative flex flex-col items-center" title={tooltip(g)}>
-                <TrophyImage code={g.trophy.code} icon={g.trophy.icon} imagePath={g.trophy.image_path} className="h-[4.6rem] w-[4.6rem]" />
+              <button key={g.trophy.code} type="button" onClick={() => onOpen(g)} aria-label={g.trophy.name}
+                className="relative flex flex-col items-center" data-testid="trophy-cup">
+                <TrophyImage code={g.trophy.code} icon={g.trophy.icon} imagePath={g.trophy.image_path} name={g.trophy.name} className="h-[4.6rem] w-[4.6rem]" />
                 {g.all.length > 1 && (
                   <span className="absolute right-0 top-0 rounded-full bg-amber-400 px-1.5 text-[11px] font-black leading-5 text-black shadow ring-1 ring-black/40"
                     data-testid="trophy-count">
                     ×{g.all.length}
                   </span>
                 )}
-              </div>
+              </button>
             ))}
           </div>
           <div className="absolute inset-x-[11%] grid grid-cols-3 gap-1" style={{ top: `${top + 2.6}%` }}>
@@ -100,6 +124,7 @@ function Cabinet({ code, groups }: { code: string; groups: TrophyGroup[] }) {
 export default function TrophyShowcase({ trophies, emptyHint, cabinet }: {
   trophies: MyPlayerTrophy[]; emptyHint?: string; cabinet?: MyPlayerCabinet | null;
 }) {
+  const [opened, setOpened] = useState<TrophyGroup | null>(null);
   if (!trophies.length && !emptyHint && !cabinet) return null;
   const code = cabinet?.showcase ?? "wood";
   const style = SHOWCASE_STYLE[code] ?? SHOWCASE_STYLE.wood;
@@ -124,9 +149,10 @@ export default function TrophyShowcase({ trophies, emptyHint, cabinet }: {
       )}
       {trophies.length === 0 && emptyHint && <p className="mt-2 text-caption text-ink-mist">{emptyHint}</p>}
       <div className="mt-3 flex flex-col gap-3">
-        {cabinets.map((chunk, i) => <Cabinet key={i} code={code} groups={chunk} />)}
+        {cabinets.map((chunk, i) => <Cabinet key={i} code={code} groups={chunk} onOpen={setOpened} />)}
       </div>
       <p className="mt-2 text-micro text-ink-mist-dim">{style.label}</p>
+      {opened && <TrophyDetails group={opened} onClose={() => setOpened(null)} />}
     </section>
   );
 }

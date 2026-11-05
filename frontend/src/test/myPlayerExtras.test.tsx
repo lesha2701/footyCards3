@@ -91,6 +91,21 @@ describe("«Мой игрок» extras", () => {
     expect(screen.getByTestId("trophy-count")).toHaveTextContent("×3");
   });
 
+  it("tells what a cup was awarded for on tap, every win of a repeat cup", () => {
+    const cup = (id: number, message: string | null) => ({
+      id, code: "player_career_golden_boot", name: "Золотая бутса", icon: "👟", image_path: null, message, granted_at: "2026-10-01T10:00:00Z",
+    });
+    render(<TrophyShowcase trophies={[cup(1, "Октябрь 2026: 129 голов"), cup(2, "Сентябрь 2026: 88 голов")]} />);
+    expect(screen.queryByTestId("trophy-details")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("trophy-cup"));
+    const details = screen.getByTestId("trophy-details");
+    expect(details).toHaveTextContent("Золотая бутса ×2");
+    expect(details).toHaveTextContent("Октябрь 2026: 129 голов");
+    expect(details).toHaveTextContent("Сентябрь 2026: 88 голов");
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть" }));
+    expect(screen.queryByTestId("trophy-details")).not.toBeInTheDocument();
+  });
+
   it("lists the hall of fame by the chosen metric", async () => {
     fetchMyPlayerHallOfFame.mockResolvedValue({
       metric: "goals", entries: [{ place: 1, user_id: 5, user_name: "Коля", value: 42, player }], me: { place: 7, value: 12 },

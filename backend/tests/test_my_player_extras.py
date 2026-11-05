@@ -9,6 +9,7 @@ from app.models.enums import NotificationType, TransactionType
 from app.models.my_player_extras import MyPlayerEdition, MyPlayerGift, MyPlayerSponsorContract
 from app.models.notification import Notification
 from app.models.player_career import PlayerCareerClubRecord
+from app.models.trophy import TrophyDefinition, UserTrophy
 from app.models.user import User
 from app.services import my_player_extras, wallet_service
 from app.services.game_config_service import get_config
@@ -242,3 +243,20 @@ async def test_admin_validates_sponsor_config(client, db_session, bot_token):
     assert resp.status_code == 409
     resp = await client.put(f"{API}/admin/games/config", headers=headers, json={"my_player_sponsor_stars": 59})
     assert resp.status_code == 200 and resp.json()["my_player_sponsor_stars"] == 59
+
+
+async def test_cabinet_shows_every_trophy_the_player_owns(client, db_session, bot_token):
+    """Month cups, «Чемпион карьеры» and a cup an admin handed out under a
+    definition of his own all stand in the cabinet."""
+    user_id, headers = await _player(client, db_session, bot_token, 890071)
+    definitions = [
+        TrophyDefinition(code="player_career_golden_boot", name="Золотая бутса", is_active=True),
+        TrophyDefinition(code="career_champion", name="Чемпион карьеры", is_active=True),
+        TrophyDefinition(code="admin_boot_october", name="Золотая бутса", is_active=True),
+    ]
+    db_session.add_all(definitions)
+    await db_session.flush()
+    db_session.add_all([UserTrophy(user_id=user_id, trophy_definition_id=d.id) for d in definitions])
+    await db_session.commit()
+    view = (await client.get(f"{API}/my-player", headers=headers)).json()
+    assert {t["code"] for t in view["trophies"]} == {"player_career_golden_boot", "career_champion", "admin_boot_october"}

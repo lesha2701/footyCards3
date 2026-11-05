@@ -572,12 +572,13 @@ async def engine_card(db: AsyncSession, user_id: int, config=None) -> Optional[S
 
 
 async def trophies_of(db: AsyncSession, user_id: int) -> list[dict]:
-    """«Карьера игрока» trophies, newest first (the showcase)."""
+    """Every trophy the player owns, newest first (the cabinet): the career
+    cups and the ones an admin handed out under his own definitions alike."""
     from app.models.trophy import TrophyDefinition, UserTrophy
 
     rows = (await db.execute(
         select(UserTrophy).join(TrophyDefinition, TrophyDefinition.id == UserTrophy.trophy_definition_id)
-        .where(UserTrophy.user_id == user_id, TrophyDefinition.code.in_(TROPHY_CODES))
+        .where(UserTrophy.user_id == user_id)
         .order_by(UserTrophy.granted_at.desc(), UserTrophy.id.desc())
     )).unique().scalars().all()
     return [
