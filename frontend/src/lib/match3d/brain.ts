@@ -88,7 +88,13 @@ export function thinkTeam(s: MatchState, team: 0 | 1, slots: readonly Slot[]) {
   // In front of the back four it's the midfield's ball: they don't step out for it.
   const hunting = pressingHigh(s, team);
   const high = ax > backLine(ax, hunting) + 9;
-  const cost = (p: Player) => dist(p.x, p.z, b.x, b.z) + (high && (p.role === "CB" || p.role === "FB") ? 12 : 0);
+  const dirD = dirOf(team);
+  // A man the ball has gone past is no use: only those goal-side of it stop it.
+  const ahead = (p: Player) => (p.x - b.x) * dirD < 1;
+  // Nobody in front of the back four between him and them: the midfield is
+  // beaten, and the back line steps out instead of waiting for him at the box.
+  const screened = outfield.some((m) => m.role !== "CB" && m.role !== "FB" && ahead(m) && dist(m.x, m.z, b.x, b.z) < 12);
+  const cost = (p: Player) => dist(p.x, p.z, b.x, b.z) + (ahead(p) ? 0 : 9) + (high && screened && (p.role === "CB" || p.role === "FB") ? 12 : 0);
   const byDist = [...outfield].sort((p, q) => cost(p) - cost(q));
   // Deep in their half the block waits; a man who just stands there gets closed down anyway.
   const pressing = ax < 20 || b.since > 150 || dist(byDist[0].x, byDist[0].z, b.x, b.z) < 26 ? 1 : 0;
@@ -97,7 +103,7 @@ export function thinkTeam(s: MatchState, team: 0 | 1, slots: readonly Slot[]) {
   // One presses and one covers, the zones hold. Nobody watches a man run past
   // him all the same: the ball comes within a stride and he steps in, and close
   // to our goal it's two on him. Never a third.
-  if (ax < -28 && byDist[1] && dist(byDist[1].x, byDist[1].z, b.x, b.z) < 14) byDist[1].duty = 1;
+  if (ax < (screened ? -28 : -16) && byDist[1] && dist(byDist[1].x, byDist[1].z, b.x, b.z) < 14) byDist[1].duty = 1;
   for (const m of outfield) {
     if (dist(m.x, m.z, b.x, b.z) < 3 && outfield.filter((q) => q.duty === 1).length < 2) m.duty = 1;
   }
@@ -149,7 +155,10 @@ const LINE_GAP: Record<Player["role"], number> = { GK: 0, CB: 0, FB: 0, DM: 7, C
 function blockSpot(p: Player, slot: Slot, ballX: number, ballZ: number, high: boolean) {
   const dir = dirOf(p.team);
   const ax = Math.max(backLine(ballX * dir, high), -HALF_L + 5) + LINE_GAP[slot.role] * (high ? 1.25 : 1);
-  const z = slot.z * (high ? 0.9 : 0.74) + clamp(ballZ, -26, 26) * (high ? 0.25 : 0.42);
+  // Ball coming at the goal through the middle: they close the middle, the
+  // flanks can wait. A flat line that keeps its width leaves a door in it.
+  const inward = high ? 0 : clamp((-ballX * dir - 8) / 24, 0, 1) * clamp((24 - Math.abs(ballZ)) / 12, 0, 1);
+  const z = slot.z * (high ? 0.9 : 0.74 - inward * 0.26) + clamp(ballZ, -26, 26) * (high ? 0.25 : 0.42);
   return { x: ax * dir, z: clamp(z, -HALF_W + 3, HALF_W - 3) };
 }
 
@@ -275,6 +284,17 @@ function channel(s: MatchState, p: Player, line: number) {
   return at;
 }
 
+/** The `n`th nearest outfield team-mate of `c` (0 the nearest). */
+function nearestMate(s: MatchState, c: Player, n: number) {
+  let a = -1, b = -1, da = 1e9, db = 1e9;
+  for (const m of s.players) {
+    if (m.team !== c.team || m.i === c.i || m.role === "GK") continue;
+    const d = dist2(m.x, m.z, c.x, c.z);
+    if (d < da) { db = da; b = a; da = d; a = m.i; } else if (d < db) { db = d; b = m.i; }
+  }
+  return n === 0 ? a : b;
+}
+
 /** How fast he gets back to his place: flat out when the ball is lost behind him. */
 function recover(p: Player, x: number, z: number) {
   const d = dist(p.x, p.z, x, z);
@@ -356,6 +376,22 @@ export function thinkOffBall(s: MatchState, p: Player, slot: Slot) {
         p.runX = clamp(line0 + 18, -HALF_L, HALF_L - 7) * dir;
         p.runZ = overlap ? Math.sign(p.z) * (HALF_W - 5) : channel(s, p, line0);
         p.tx = p.runX; p.tz = p.runZ; p.want = sprintOf(p);
+        return;
+      }
+    }
+    // The man on it is being hunted: the nearest two come off the hunter's
+    // line, at an angle and a little ahead, so there's a ball out of it.
+    if (b.owner >= 0 && p.role !== "ST") {
+      const c = s.players[b.owner];
+      const hunter = nearestOpp(s, c);
+      if (hunter.o && hunter.d < 6 && c.x * dir < 12 && (p.i === nearestMate(s, c, 0) || p.i === nearestMate(s, c, 1))) {
+        const h = hunter.d || 1;
+        const ux = (c.x - hunter.o.x) / h, uz = (c.z - hunter.o.z) / h;
+        const side = (p.x - c.x) * uz - (p.z - c.z) * ux >= 0 ? 1 : -1;
+        p.tx = clamp(c.x + uz * side * 11 + dir * 4 + ux * 2, -HALF_L + 2, HALF_L - 2);
+        p.tz = clamp(c.z - ux * side * 11 + uz * 2, -HALF_W + 1.5, HALF_W - 1.5);
+        p.want = RUN + 1;
+        p.dash = 0;
         return;
       }
     }
@@ -548,6 +584,9 @@ export function thinkCarrier(s: MatchState, p: Player) {
   // The longer they have had it, the less the safe ball is the right one: a
   // move is there to end in something.
   const urge = clamp((s.tick - s.lostAt[p.team === 0 ? 1 : 0] - 240) / 420, 0, 1);
+  // Hunted in his half by more than one: over the top of them, not round them.
+  let hemmed = 0;
+  if (ax < 5) for (const q of s.players) if (q.team !== p.team && q.role !== "GK" && dist(q.x, q.z, p.x, p.z) < 11) hemmed += 1;
   // Now and then he misjudges the line by a step, as people do.
   const misread = rnd(s) < 0.15 ? 1.4 : 0;
   for (const m of s.players) {
@@ -571,6 +610,8 @@ export function thinkCarrier(s: MatchState, p: Player) {
     // A little square ball with nobody on him gets the side nowhere.
     if (near > 4 && gain < 3) v -= 0.5;
     if (ax > 0) v += gain > 6 ? urge * 0.7 : gain < 0 ? -urge * 0.9 : 0;
+    // In his own half the ball goes forward, or the side stays there for ever.
+    else v += clamp(gain, -12, 18) * (0.035 + urge * 0.03);
     // Not through the man coming at him: by the time his foot swings he is there.
     if (o && near < 5.5 && ((o.x - p.x) * (mx - p.x) + (o.z - p.z) * (mz - p.z)) / ((near || 1) * (dist(p.x, p.z, mx, mz) || 1)) > 0.75) v -= 2;
     const lofted = d0 > 16 && !blockedLob(s, p, mx, mz);
@@ -578,7 +619,7 @@ export function thinkCarrier(s: MatchState, p: Player) {
     else if (lofted && open > 6.5 && gain > 6) {
       // Over the top: a coin toss, unless the man has room.
       const air = clamp(0.25 + (open - 5) * 0.06, 0.12, 0.5);
-      options.push({ v: worth(air, mx, mz, dir) + rnd(s) * NOISE, go: () => startKick(s, p, planLob(s, p, mx, mz, m.i, 0.5)) });
+      options.push({ v: worth(air, mx, mz, dir) + hemmed * 0.45 + rnd(s) * NOISE, go: () => startKick(s, p, planLob(s, p, mx, mz, m.i, 0.5)) });
     }
     // The other flank is empty when they all come over to this one: switch it.
     if (lofted && Math.abs(mz - p.z) > 24 && open > 8 && ax > -30) {
@@ -639,6 +680,8 @@ export function thinkCarrier(s: MatchState, p: Player) {
     }
     const safe = clamp(held - blocked * 0.2 + (Math.min(Math.sqrt(room), 9) - 4) * 0.012, 0.15, 0.97);
     let v = worth(safe, qx, qz, dir) + (cx * p.hx + cz * p.hz) * KEEP_GOING;
+    // Grass in front of him in his own half is there to be run into.
+    if (ax < 8 && room > 25 && blocked === 0) v += cx * dir * 0.45;
     // A wide man goes down the line to the byline, whatever the middle promises.
     if (Math.abs(p.z) > 14 && (p.role === "W" || p.role === "FB") && ax > HALF_L - 40) v += cx * dir * (ax < HALF_L - 7 ? 0.5 : -0.5);
     if (v > carryV) { carryV = v; ux = cx; uz = cz; }

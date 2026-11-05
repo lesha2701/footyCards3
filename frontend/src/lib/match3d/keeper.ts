@@ -95,6 +95,8 @@ function readShot(s: MatchState, p: Player, c: { z: number; y: number; ticks: nu
   chance += (p.save - 0.75) * 0.8;
   // From distance he sees it all the way.
   chance += clamp((dist(b.fromX, b.fromZ, goalX(p), 0) - 17) * 0.035, 0, 0.5);
+  // Close in he has made himself big: most of what's near him hits him.
+  if (dist(b.fromX, b.fromZ, goalX(p), 0) < 19 && Math.abs(dz) < 3) chance += 0.35;
   p.saves = wide <= 1 && rnd(s) < chance;
   if (Math.abs(dz) < 0.85 && c.y < 2) {
     p.act = Act.Catch; p.actT = 0; p.actLen = 34;
@@ -218,7 +220,9 @@ export function thinkKeeper(s: MatchState, p: Player) {
     const coming = c && Math.abs(c.z) < GOAL_HALF + 1.2 && c.y < GOAL_H + 0.8 && c.ticks < 120 && speedOf(b) > 6;
     if (coming && !passed && b.last >= 0 && (s.players[b.last].team !== p.team || b.since > 8)) {
       if (c.ticks <= READ_FROM) {
-        if (p.react < 0) p.react = Math.floor(7 + (1 - p.save) * 14 + rnd(s) * 5);
+        // Close in he is set and on his toes: it's a reflex, not a read.
+        const close = dist(b.fromX, b.fromZ, gx, 0) < 19;
+        if (p.react < 0) p.react = Math.floor((close ? 3 : 7) + (1 - p.save) * (close ? 7 : 14) + rnd(s) * (close ? 3 : 5));
         if (p.react > 0) p.react -= 1;
         if (p.react === 0) {
           p.react = -1;
@@ -254,7 +258,8 @@ export function thinkKeeper(s: MatchState, p: Player) {
   // Narrowing the angle: on the line from the ball to the middle of the goal.
   const bx = b.x, bz = b.z;
   const toBall = dist(bx, bz, gx, 0);
-  const depth = clamp(1 + (45 - toBall) * 0.09, 1, DEPTH_MAX) * (toBall < 26 ? 1 : 0.8);
+  // Off his line to meet it: the closer it gets, the more of the goal he covers.
+  const depth = (toBall < 22 ? clamp(DEPTH_MAX + (22 - toBall) * 0.14, 1, Math.max(toBall - 3, 1)) : clamp(1 + (45 - toBall) * 0.09, 1, DEPTH_MAX)) * (toBall < 26 ? 1 : 0.8);
   let px = gx + ((bx - gx) / (toBall || 1)) * depth;
   let pz = (bz / (toBall || 1)) * depth;
   pz = clamp(pz + bz * 0.04, -GOAL_HALF + 0.4, GOAL_HALF - 0.4);

@@ -155,6 +155,21 @@ clip's run-up is cut because the man is already running. A ball hit as somebody 
 it down (`b.since < 8`) comes off his shin or gets past him: it doesn't arrive at
 his feet, and the AI doesn't pass through the man coming at it.
 
+Who goes at the carrier (`thinkTeam`): only men goal-side of the ball count fully
+(`ahead`), and when no midfielder is left in front of him (`screened` false) the back
+line steps out, two of them from 16 m outside their goal line's third, instead of
+waiting at the box. With the ball coming through the middle the line narrows
+(`blockSpot`, `inward`).
+
+Under a press in his own half the AI carrier has the two nearest men coming off the
+hunter's line at an angle (`thinkOffBall`), goes over the top when hemmed in, and his
+own half is valued by metres gained, so the side doesn't sit there. Its pass goes
+before a man flying at him arrives (`closing`). `bench/human.mjs <n> real` plays a
+thumb with reaction time; without `real` the script is a perfect chaser.
+
+The keeper close in (`dist` from the kick < 19 m): a reflex, not a read (`p.react`
+is short), he has come off his line to cover the goal, and what's near him hits him.
+
 A won tackle really wins it (`stepTackle`): he comes away with it or it squirts his
 way, and the man who lost it can't pick it straight back up. A carrier who stands on
 the ball (`standing`) gets closed down wherever he is and tackled from any side.

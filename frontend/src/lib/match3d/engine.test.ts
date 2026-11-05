@@ -610,6 +610,34 @@ describe("match3d engine", () => {
     expect(there / samples).toBeGreaterThan(1);
   });
 
+  it("a man running through the middle is met before the box, the line doesn't part for him", () => {
+    for (const seed of [71, 72, 73]) {
+      const s = createMatch({ ...SETUP, seed, }, 0);
+      for (let i = 0; i < 900 && s.phase !== Phase.Play; i++) stepMatch(s, NO_INPUT);
+      const me = s.players.find((p) => p.team === 0 && p.role === "CM")!;
+      // Just won it in the middle: their midfield and forwards are behind him.
+      for (const p of s.players) {
+        if (p.team === 0 && p.i !== me.i) { p.x = -30 + p.i; p.vx = 0; p.vz = 0; }
+        if (p.team === 1 && p.role !== "GK" && p.role !== "CB" && p.role !== "FB") { p.x = -8 - p.i * 0.5; p.vx = 0; p.vz = 0; }
+        if (p.team === 1 && (p.role === "CB" || p.role === "FB")) { p.x = 30; p.vx = 0; p.vz = 0; }
+      }
+      me.x = 2; me.z = 0; me.vx = 7; me.vz = 0; me.hx = 1; me.hz = 0; me.act = Act.None;
+      ballAt(s.ball, 2.5, BALL_R, 0);
+      s.ball.owner = me.i; s.ball.last = me.i; s.ball.kick = Kick.None; s.ball.to = -1; s.ball.since = 30;
+      s.user = me.i; s.poss = 0;
+      predict(s);
+      let met = 1e9;
+      for (let i = 0; i < HZ * 7 && s.ball.owner === me.i && me.x < 37; i++) {
+        stepMatch(s, { ...NO_INPUT, mx: 1, mz: 0, sprint: true });
+        for (const o of s.players) {
+          if (o.team === 1 && o.role !== "GK" && o.x > me.x - 0.5 && dist(o.x, o.z, me.x, me.z) < 2.5) met = Math.min(met, me.x);
+        }
+      }
+      // Met, at the latest, at the edge of the box (x = 36).
+      expect(met).toBeLessThan(36);
+    }
+  });
+
   it("the man on the ball keeps to a way, he doesn't weave", () => {
     const s = createMatch({ ...SETUP, seed: 88 }, null);
     let turns = 0, carried = 0, was = -1, ux = 0, uz = 0;

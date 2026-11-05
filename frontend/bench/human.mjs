@@ -7,6 +7,11 @@ const require = createRequire(import.meta.url);
 const E = require("./out/engine.cjs");
 
 const matches = Number(process.argv[2] ?? 20);
+// "real": a thumb with reaction time, that doesn't sprint or tackle all the time.
+// Without it the script is a perfect chaser, a press nobody plays.
+const real = process.argv[3] === "real";
+const ai = { spells: 0, furthest: 0, half: 0, third: 0 };
+let spell = null, thumbX = 0, thumbZ = 0;
 const c = { shots: 0, onT: 0, pass: 0, passOurs: 0, passTheirs: 0, passOut: 0, gk: 0, gkOurs: 0, gkTheirs: 0, gkOut: 0, off: 0, defTicks: 0, defNearest: 0, defGap: 0, g0: 0, g1: 0, staminaEnd: 0, staminaN: 0, userGk: 0 };
 
 let seedR = 12345;
@@ -35,9 +40,10 @@ for (let m = 0; m < matches; m++) {
         inp.mx = sx; inp.mz = sz; inp.sprint = true;
       } else {
         const dx = b.x - u.x, dz = b.z - u.z, d = Math.sqrt(dx * dx + dz * dz) || 1;
-        inp.mx = dx / d; inp.mz = dz / d; inp.sprint = d > 4;
+        if (!real || s.tick % 24 === 0) { thumbX = dx / d; thumbZ = dz / d; }
+        inp.mx = thumbX; inp.mz = thumbZ; inp.sprint = real ? d > 6 && s.tick % 240 < 120 : d > 4;
         const o = b.owner >= 0 ? s.players[b.owner] : null;
-        if (o && o.team === 1 && d < 1.5 && s.tick % 30 === 0) inp.press = { k: "tackle" };
+        if (o && o.team === 1 && d < 1.5 && s.tick % (real ? 90 : 30) === 0) inp.press = { k: "tackle" };
       }
     }
     const wasOwner = b.owner;
@@ -68,6 +74,12 @@ for (let m = 0; m < matches; m++) {
       c.lineGap = (c.lineGap ?? 0) + Math.abs(mid.reduce((a, v) => a + v, 0) / mid.length - back.reduce((a, v) => a + v, 0) / back.length);
     }
     void wasOwner;
+    const held = s.phase === 1 && s.ball.owner >= 0 ? s.players[s.ball.owner] : null;
+    if (held?.team === 1) { spell ??= { far: -held.x }; spell.far = Math.max(spell.far, -held.x); }
+    else if (spell && (held || s.phase !== 1)) {
+      ai.spells++; ai.furthest += spell.far; if (spell.far > 0) ai.half++; if (spell.far > 17) ai.third++;
+      spell = null;
+    }
   }
   c.aiShots = (c.aiShots ?? 0) + s.teams[1].shots; c.aiOn = (c.aiOn ?? 0) + s.teams[1].onTarget; c.aiPoss = (c.aiPoss ?? 0) + s.teams[1].possTicks; c.usPoss = (c.usPoss ?? 0) + s.teams[0].possTicks; c.corners = (c.corners ?? 0) + s.teams[0].corners; c.shots += s.teams[0].shots; c.onT += s.teams[0].onTarget; c.g0 += s.teams[0].goals; c.g1 += s.teams[1].goals;
   for (const p of s.players) if (p.stamina !== undefined) { c.staminaEnd += p.stamina; c.staminaN++; }
@@ -80,4 +92,5 @@ console.log(`defending: within 2 m of the nearest man ${pct(c.defNearest, c.defT
 console.log(`shape without the ball: back four ${(c.lineSpread / (c.defTicks || 1)).toFixed(1)} m deep, back to midfield ${(c.lineGap / (c.defTicks || 1)).toFixed(1)} m`);
 console.log(`crosses ${((c.crosses ?? 0) / matches).toFixed(1)}, corners ${(c.corners / matches).toFixed(1)}`);
 console.log(`shots ${(c.shots / matches).toFixed(1)}, on target ${(c.onT / matches).toFixed(1)}; goals ${(c.g0 / matches).toFixed(1)}:${(c.g1 / matches).toFixed(1)}; stamina at the end ${c.staminaN ? (c.staminaEnd / c.staminaN).toFixed(2) : "-"}`);
+console.log(`the AI's spells ${(ai.spells / matches).toFixed(1)}/match: furthest ${(ai.furthest / (ai.spells || 1)).toFixed(1)}, past halfway ${(ai.half / (ai.spells || 1)).toFixed(2)}, last third ${(ai.third / (ai.spells || 1)).toFixed(2)}`);
 console.log(`the AI: shots ${(c.aiShots / matches).toFixed(1)}, on target ${(c.aiOn / matches).toFixed(1)}, possession ${(100 * c.aiPoss / (c.aiPoss + c.usPoss)).toFixed(0)}%`);
