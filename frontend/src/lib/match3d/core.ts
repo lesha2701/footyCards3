@@ -113,6 +113,9 @@ export type Player = {
   touch: number;
   /** The length of this count, ticks. */
   touchLen: number;
+  /** Where the last touch left the ball from. */
+  touchX: number;
+  touchZ: number;
   /** Ticks left of a run in behind, offside if the pass comes late. */
   dash: number;
   /** Attacking runs. */
@@ -176,7 +179,9 @@ export type MatchEvent =
   | { t: "whistle"; n: number } | { t: "out"; set: SetKind; team: 0 | 1 }
   | { t: "tackle"; p: number; won: boolean } | { t: "foul"; p: number; on: number }
   | { t: "offside"; p: number } | { t: "feint"; p: number; beat: number }
-  | { t: "switch"; p: number } | { t: "halfchance" } | { t: "added"; seconds: number };
+  | { t: "switch"; p: number } | { t: "halfchance" } | { t: "added"; seconds: number }
+  /** Everybody was moved at once: the picture cuts. */
+  | { t: "cut" };
 
 export type Setup = { seed: number; home: string; away: string; homeRating: number; awayRating: number; minutes?: number };
 

@@ -48,7 +48,7 @@ export function SkinnedPlayers({ tl, replay, ep, flip, looks, clock, onReady }: 
     socks: l.keeper ? l.kit.gk : l.kit.fill,
     skin: SKINS[(i * 5) % SKINS.length],
     hair: HAIR[(i * 7) % HAIR.length],
-  }, materials)), [asset, looks, materials]);
+  }, materials, l.n)), [asset, looks, materials]);
   useEffect(() => () => players.forEach((p) => p.mixer.stopAllAction()), [players]);
   useEffect(() => {
     onReady?.();

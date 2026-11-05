@@ -16,6 +16,10 @@ const DIVE_REACH = 3.3;
 const DIVE_TIME = 0.5;
 const HOLD_MIN = 80;
 const HOLD_MAX = 150;
+/** He starts to read a ball this long before it gets to him (ticks), and until
+ * then only moves into line: no keeper goes down for a ball still in the air
+ * forty metres away. */
+const READ_FROM = 56;
 /** He comes off his line this far at most, by the ball's distance. */
 const DEPTH_MAX = 6.5;
 
@@ -213,15 +217,17 @@ export function thinkKeeper(s: MatchState, p: Player) {
     const c = crossing(s, p);
     const coming = c && Math.abs(c.z) < GOAL_HALF + 1.2 && c.y < GOAL_H + 0.8 && c.ticks < 120 && speedOf(b) > 6;
     if (coming && !passed && b.last >= 0 && (s.players[b.last].team !== p.team || b.since > 8)) {
-      if (p.react < 0) p.react = Math.floor(7 + (1 - p.save) * 14 + rnd(s) * 5);
-      if (p.react > 0) p.react -= 1;
-      if (p.react === 0) {
-        p.react = -1;
-        readShot(s, p, c);
-        return;
+      if (c.ticks <= READ_FROM) {
+        if (p.react < 0) p.react = Math.floor(7 + (1 - p.save) * 14 + rnd(s) * 5);
+        if (p.react > 0) p.react -= 1;
+        if (p.react === 0) {
+          p.react = -1;
+          readShot(s, p, c);
+          return;
+        }
       }
       // Into line while he reads it.
-      p.tx = gx + dir * 0.6; p.tz = clamp(c.z, -GOAL_HALF, GOAL_HALF); p.want = 5;
+      p.tx = gx + dir * 0.6; p.tz = clamp(c.z, -GOAL_HALF, GOAL_HALF); p.want = c.ticks > READ_FROM ? 6.5 : 5;
       p.faceBall = true;
       return;
     }

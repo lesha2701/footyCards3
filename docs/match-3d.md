@@ -93,7 +93,10 @@ The help a human gets, all in `engine.ts`:
 
 Dribbling: the ball leaves the foot once a stride cycle at a run (`RUN_CYCLE`, 2.95 m,
 what the run and sprint clips cover) and once a step at a walk (`stepCarried`:
-`touch` / `touchLen`, the side from `touchFoot`). With the ball a man under
+`touch` / `touchLen`, the side from `touchFoot`). Between touches it rolls: from where
+the last touch left it (`touchX/Z`) to where his foot will be for the next, quick off
+the foot and dying away (`ROLL_DIES`). It is never tied to the man, so when he turns
+its line bends instead of the ball jumping round him. With the ball a man under
 `WALK_DRIBBLE` plays the dribble clip, above it the ordinary run and sprint at their
 true pace, and `lockStride` (`motion.ts`) keeps the clip's phase on the touch so that
 the foot is at the ball when it goes. Two more clips of a run with the ball were not
@@ -104,6 +107,16 @@ He meets it, plays it with his feet (no hands) and is an ordinary man from then 
 he is the human's, runs, feints and passes. «Удар» from him is a long ball to a
 team-mate. On the ball he goes no nearer than 3 m to his own line (`KEEPER_LINE`):
 the thumb is usually still held back from the pass.
+
+The keeper reads a ball only in its last second (`READ_FROM`). Before that he moves
+into line, so a long ball doesn't bring him down while it is still far away.
+
+The buttons: with the ball theirs on someone's feet, or rolling to one of theirs,
+they are «Отбор», «Подкат», «Смена». Anything loose or in the air is a ball to play,
+so it's «Удар», «Пас», «Разрез», «Навес», headers included.
+
+A corner shows the ball going out for 0.6 s, then cuts to everybody in place
+(`cutToCorner`, event "cut"): nobody runs the length of the line.
 
 Long balls: a man with nobody on him brings a high ball down off the chest or the
 thigh however hot it is, and waits for one that is dropping; the man it was hit to
@@ -146,6 +159,15 @@ At a sprint the ball runs further from the foot, the turns get wider and feints
 stop selling: dribbling is done at walking pace.
 
 ## The team
+
+The man on the ball (`thinkCarrier`) prices every way of playing it the same way:
+`worth` is the chance of it coming off times what the ball is worth there (`threat`),
+less the chance of losing it times what losing it there costs (`exposure`). Decisions
+are asked ten times a second, so the dice is small (`NOISE`), the way he is already
+going counts (`KEEP_GOING`) and with nobody on him he keeps it for 0.7 s (`COMPOSED`).
+The longer a side has had it the more through balls, crosses and forward passes are
+worth and the less a pass back is (`urge`). `bench/attack.mjs` measures how its spells
+end, `bench/log.mjs` prints a stretch of a match as text.
 
 With the ball deep in its own third a side takes up `buildSpot`: the centre-backs
 split to the edges of the box, the holding man drops between them, the

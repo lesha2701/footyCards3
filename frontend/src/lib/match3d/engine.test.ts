@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { planLob } from "./actions";
-import { Act, BALL_R, HALF_W, HZ, Kick, MATCH_SECONDS, Phase, ballAt, launch, predict, stepBall, type MatchState, type SceneOutcome } from "./core";
+import { Act, BALL_R, HALF_W, HZ, Kick, MATCH_SECONDS, Phase, ballAt, dist, launch, predict, stepBall, type MatchState, type SceneOutcome } from "./core";
 import { NO_INPUT, createMatch, sceneOf, stepMatch, type Input } from "./engine";
 
 const SETUP = { seed: 1234, home: "A", away: "B", homeRating: 0.78, awayRating: 0.76 };
@@ -447,6 +447,97 @@ describe("match3d engine", () => {
     for (let i = 0; i < 30 && s.ball.owner === k.i; i++) stepMatch(s, NO_INPUT);
     expect(s.ball.owner).toBe(-1);
     expect(s.teams[0].shots).toBe(shots);
+  });
+
+  it("a keeper stays on his feet while a long ball is still far from him", () => {
+    const from = outfield(createMatch(SETUP, 0), -1)[0].i;
+    const s = onBall(from, -20, 0);
+    const k = s.players.find((p) => p.team === 1 && p.role === "GK")!;
+    clear(s, -60, 0, [from]);
+    const b = s.ball;
+    b.owner = -1; b.last = from; b.kicker = from; b.kick = Kick.Clear; b.to = -1; b.since = 30;
+    ballAt(b, 0, 0.5, 0);
+    b.vx = 20; b.vy = 9; b.vz = 0.4;
+    predict(s);
+    let down = 0;
+    for (let i = 0; i < 200 && s.phase === Phase.Play && s.ball.owner < 0; i++) {
+      stepMatch(s, NO_INPUT);
+      if (k.act === Act.Dive && dist(s.ball.x, s.ball.z, k.x, k.z) > 16) down += 1;
+    }
+    expect(down).toBe(0);
+  });
+
+  it("the ball rolls on from a touch, and its line bends when he turns", () => {
+    const u = outfield(createMatch(SETUP, 0), -1)[0].i;
+    const s = onBall(u, -20, 0);
+    clear(s, 45, 25, [u]);
+    let x = s.ball.x, z = s.ball.z, vx = 0, slowest = 1e9, jump = 0;
+    const step = (mx: number, mz: number) => {
+      stepMatch(s, { ...NO_INPUT, mx, mz, sprint: true });
+      const dx = s.ball.x - x, dz = s.ball.z - z;
+      x = s.ball.x; z = s.ball.z;
+      return { dx, dz };
+    };
+    for (let i = 0; i < 40; i++) step(1, 0);
+    for (let i = 0; i < 90; i++) {
+      const { dx } = step(1, 0);
+      slowest = Math.min(slowest, dx * HZ);
+      // Nothing but a touch changes its pace, and a touch changes it by what a foot can.
+      jump = Math.max(jump, Math.abs(dx * HZ - vx));
+      vx = dx * HZ;
+    }
+    expect(s.ball.owner).toBe(u);
+    expect(slowest).toBeGreaterThan(1.5);
+    expect(jump).toBeLessThan(8.5);
+    let widest = 0;
+    for (let i = 0; i < 70; i++) {
+      const { dx, dz } = step(-0.6, 0.8);
+      widest = Math.max(widest, Math.sqrt(dx * dx + dz * dz));
+    }
+    expect(widest * HZ).toBeLessThan(15);
+    expect(s.ball.owner).toBe(u);
+    expect(dist(s.ball.x, s.ball.z, s.players[u].x, s.players[u].z)).toBeLessThan(2);
+  });
+
+  it("a corner cuts straight to everybody in place", () => {
+    const from = outfield(createMatch(SETUP, 0), -1)[0].i;
+    const s = onBall(from, 40, 20);
+    const them = s.players.find((p) => p.team === 1 && p.role === "CB")!;
+    const b = s.ball;
+    b.owner = -1; b.last = them.i; b.kicker = them.i; b.kick = Kick.Clear; b.to = -1;
+    ballAt(b, 53, 0.3, 20);
+    b.vx = 4; b.vy = 0; b.vz = 0;
+    predict(s);
+    let cut = -1;
+    for (let i = 0; i < 90 && !s.set?.ready; i++) {
+      stepMatch(s, NO_INPUT);
+      if (s.ev.some((e) => e.t === "cut")) cut = i;
+    }
+    expect(s.set?.kind).toBe("corner");
+    expect(cut).toBeGreaterThan(0);
+    expect(cut).toBeLessThan(60);
+    expect(s.set?.ready).toBe(true);
+    const t = s.players[s.set!.taker];
+    expect(Math.abs(t.x)).toBeGreaterThan(50);
+    expect(s.players.filter((p) => p.x > 30 && Math.abs(p.z) < 20).length).toBeGreaterThan(10);
+  });
+
+  it("the man on the ball keeps to a way, he doesn't weave", () => {
+    const s = createMatch({ ...SETUP, seed: 88 }, null);
+    let turns = 0, carried = 0, was = -1, ux = 0, uz = 0;
+    while (s.phase !== Phase.FullTime && s.tick < HZ * 200) {
+      stepMatch(s, NO_INPUT);
+      const o = s.ball.owner >= 0 ? s.players[s.ball.owner] : null;
+      if (!o || s.phase !== Phase.Play) { was = -1; continue; }
+      if (o.i !== was) { was = o.i; ux = 0; uz = 0; }
+      const v = Math.sqrt(o.vx * o.vx + o.vz * o.vz);
+      if (v < 1) continue;
+      carried += 1;
+      if ((ux !== 0 || uz !== 0) && (ux * o.vx + uz * o.vz) / v < 0.5) turns += 1;
+      ux = o.vx / v; uz = o.vz / v;
+    }
+    expect(carried).toBeGreaterThan(HZ * 10);
+    expect(turns / (carried / (HZ * 10))).toBeLessThan(3);
   });
 
   it("the side without the ball holds its zones: two go, the rest pick up men", () => {

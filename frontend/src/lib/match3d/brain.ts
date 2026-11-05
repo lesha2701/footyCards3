@@ -441,6 +441,32 @@ export function shotValue(s: MatchState, p: Player): { xg: number; aim: number }
 
 type Option = { v: number; go: () => void };
 
+/** A lofted ball needs the first metres clear: it is still low there. */
+function blockedLob(s: MatchState, p: Player, x: number, z: number) {
+  const d = dist(p.x, p.z, x, z) || 1;
+  const ex = p.x + ((x - p.x) / d) * 8, ez = p.z + ((z - p.z) / d) * 8;
+  for (const o of s.players) {
+    if (o.team !== p.team && segDist2(p.x, p.z, ex, ez, o.x, o.z) < 5) return true;
+  }
+  return false;
+}
+
+/** Decisions are asked ten times a second: a big dice here means that sooner or
+ * later every bad idea gets rolled. */
+const NOISE = 0.25;
+/** Nobody on him: this long (ticks) with it before he lays it off. A side that
+ * plays everything first time gives everything away. */
+const COMPOSED = 42;
+const KEEP_GOING = 0.35;
+
+/** What the ball is worth at a spot to the side going `dir`: little anywhere
+ * deep, a lot close to goal, with a slope all the way so that forward is forward. */
+const threat = (x: number, z: number, dir: number) => 10 / (1 + dist2(x, z, dir * HALF_L, 0) / 196) + (x * dir + HALF_L) * 0.03;
+/** What it costs to lose it there. */
+const exposure = (x: number, z: number, dir: number) => threat(x, z, -dir) * 0.7 + 0.6;
+/** One way of playing it: getting there with chance `ok`, or losing it there. */
+const worth = (ok: number, x: number, z: number, dir: number) => ok * threat(x, z, dir) - (1 - ok) * exposure(x, z, dir);
+
 export function thinkCarrier(s: MatchState, p: Player) {
   const b = s.ball;
   const dir = dirOf(p.team);
@@ -472,6 +498,9 @@ export function thinkCarrier(s: MatchState, p: Player) {
 
   const options: Option[] = [];
   const line = offsideLine(s, p.team);
+  // The longer they have had it, the less the safe ball is the right one: a
+  // move is there to end in something.
+  const urge = clamp((s.tick - s.lostAt[p.team === 0 ? 1 : 0] - 240) / 420, 0, 1);
   // Now and then he misjudges the line by a step, as people do.
   const misread = rnd(s) < 0.15 ? 1.4 : 0;
   for (const m of s.players) {
@@ -490,26 +519,24 @@ export function thinkCarrier(s: MatchState, p: Player) {
     let open = 1e9;
     for (const o of s.players) if (o.team !== p.team) open = Math.min(open, dist(o.x, o.z, mx, mz));
     const gain = (mx - p.x) * dir;
-    // The ball has to get somewhere: forward and of a useful length beats safe
-    // and short, and sideways near their box gets nobody a shot.
-    let v = gain * (ax > 0 ? 0.26 : 0.2) + Math.min(open, 8) * 0.28 + clamp(margin, -3, 1.2) * 1.6 + Math.min(d0, 18) * 0.05 + rnd(s) * 1.1;
-    if (d0 < 7 && near > 3) v -= 1;
-    if (near > 5 && gain < 3) v -= 2.4;
-    if (mx * dir > HALF_L - 22 && Math.abs(mz) < 18) v += 1.1;
-    // Closed down, the ball goes: that's what team-mates are for.
-    if (near < 2.6) v += 2;
-    if (d0 < 32 && margin > 0) options.push({ v, go: () => startKick(s, p, planPass(s, p, m, clamp(d0 / 34, 0.2, 0.9))) });
-    else if (d0 > 16 && open > 6.5 && gain > 6) {
-      // Over the top only to a man with room, going forward: otherwise it's a
-      // coin toss, and a side that tosses coins never keeps the ball.
-      options.push({ v: v - 3.2 + (ax < -20 && near < 4 ? 1.6 : 0), go: () => startKick(s, p, planLob(s, p, mx, mz, m.i, 0.5)) });
+    const ok = clamp(0.62 + clamp(margin, -3, 1.2) * 0.24 + (Math.min(open, 7) - 3.5) * 0.05 - d0 * 0.003, 0.04, 0.96);
+    let v = worth(ok, mx, mz, dir) + Math.min(open, 8) * 0.05 + rnd(s) * NOISE;
+    // A little square ball with nobody on him gets the side nowhere.
+    if (near > 4 && gain < 3) v -= 0.5;
+    if (ax > 0) v += gain > 6 ? urge * 0.7 : gain < 0 ? -urge * 0.9 : 0;
+    const lofted = d0 > 16 && !blockedLob(s, p, mx, mz);
+    if (d0 < 32 && margin > 0) options.push({ v, go: () => startKick(s, p, planPass(s, p, m, clamp(d0 / 30 + 0.1, 0.25, 1))) });
+    else if (lofted && open > 6.5 && gain > 6) {
+      // Over the top: a coin toss, unless the man has room.
+      const air = clamp(0.25 + (open - 5) * 0.06, 0.12, 0.5);
+      options.push({ v: worth(air, mx, mz, dir) + rnd(s) * NOISE, go: () => startKick(s, p, planLob(s, p, mx, mz, m.i, 0.5)) });
     }
     // The other flank is empty when they all come over to this one: switch it.
-    if (Math.abs(mz - p.z) > 24 && open > 8 && ax > -30) {
+    if (lofted && Math.abs(mz - p.z) > 24 && open > 8 && ax > -30) {
       let crowd = 0;
       for (const o of s.players) if (o.team !== p.team && dist(o.x, o.z, p.x, p.z) < 15) crowd += 1;
       const lead = 1.5;
-      if (crowd >= 3) options.push({ v: crowd * 0.6 + Math.min(gain, 10) * 0.12 + rnd(s) * 1.2, go: () => startKick(s, p, planLob(s, p, m.x + m.vx * lead, m.z + m.vz * lead, m.i, 0.5)) });
+      if (crowd >= 3) options.push({ v: worth(0.65, mx, mz, dir) + crowd * 0.12 + rnd(s) * NOISE, go: () => startKick(s, p, planLob(s, p, m.x + m.vx * lead, m.z + m.vz * lead, m.i, 0.5)) });
     }
     // The ball behind them for a man running on to it.
     const runner = m.dash > 0 || ((m.role === "ST" || m.role === "W" || m.role === "CM") && (m.x - p.x) * dir > 2);
@@ -519,8 +546,9 @@ export function thinkCarrier(s: MatchState, p: Player) {
       let them = 1e9;
       for (const o of s.players) if (o.team !== p.team) them = Math.min(them, reachTime(o, plan.tx, plan.tz));
       const lm = laneMargin(s, p, plan.tx, plan.tz, plan.speed);
-      if (mine < them + 0.45 && lm > -0.7 && plan.tx * dir > line - 10) {
-        options.push({ v: 4 + (m.dash > 0 ? 4.5 : 0) + (plan.tx - p.x) * dir * 0.05 + lm * 0.4 + rnd(s) * 1.5, go: () => startKick(s, p, plan) });
+      if (mine < them + 0.8 && lm > -1 && plan.tx * dir > line - 10) {
+        const in_ = clamp(0.5 + (them - mine) * 0.3 + lm * 0.1, 0.1, 0.85);
+        options.push({ v: worth(in_, plan.tx, plan.tz, dir) + 1 + urge + (m.dash > 0 ? 0.8 : 0) + rnd(s) * NOISE, go: () => startKick(s, p, plan) });
       }
     }
   }
@@ -536,40 +564,42 @@ export function thinkCarrier(s: MatchState, p: Player) {
     }
     if (men > 0) {
       const plan = planCross(s, p, bx, bz, bi, 0.6);
-      options.push({ v: 2.2 + men * 0.5 + (ax - 30) * 0.09 + rnd(s), go: () => startKick(s, p, plan) });
+      options.push({ v: worth(clamp(0.3 + men * 0.05, 0, 0.55), bx, bz, dir) + (ax - 30) * 0.05 + 0.8 + urge + rnd(s) * NOISE, go: () => startKick(s, p, plan) });
     }
   }
 
-  // Carrying it: the best of eight ways against everyone near.
+  // Carrying it: the best of eight ways against everyone near. The way he is
+  // already going counts for something, or he changes his mind every stride.
+  const held = near > 7 ? 0.97 : near > 4 ? 0.92 : near > 2.6 ? 0.8 : 0.62;
   let carryV = -1e9, ux = dir, uz = 0;
   for (let w = 0; w < 8; w++) {
     const cx = w === 0 || w === 1 || w === 7 ? 0.8 : w === 3 || w === 4 || w === 5 ? -0.8 : 0;
     const cz = w >= 1 && w <= 3 ? 0.8 : w >= 5 ? -0.8 : 0;
     const qx = p.x + cx * 7, qz = p.z + cz * 7;
     if (Math.abs(qz) > HALF_W - 1.5 || Math.abs(qx) > HALF_L - 1.5) continue;
-    let room = 1e9;
-    for (const o of s.players) if (o.team !== p.team) room = Math.min(room, dist2(o.x, o.z, qx, qz));
-    let v = Math.min(Math.sqrt(room), 9) * 0.26 + cx * dir * 1.4;
-    // Not through a man: the way has to be free for the next few strides.
+    let room = 1e9, blocked = 0;
     for (const o of s.players) {
-      if (o.team !== p.team && o.role !== "GK" && segDist2(p.x, p.z, qx, qz, o.x, o.z) < 2.2) v -= 1.6;
+      if (o.team === p.team) continue;
+      room = Math.min(room, dist2(o.x, o.z, qx, qz));
+      // Not through a man: the way has to be free for the next few strides.
+      if (o.role !== "GK" && segDist2(p.x, p.z, qx, qz, o.x, o.z) < 2.2) blocked += 1;
     }
-    // A wide man goes down the line to the byline; the others come inside.
-    if (Math.abs(p.z) > 14 && (p.role === "W" || p.role === "FB")) {
-      if (ax > HALF_L - 40) v += cx * dir * (ax < HALF_L - 7 ? 1.3 : -1);
-    } else if (ax > HALF_L - 30) v += (-Math.sign(p.z) * cz) * 0.5;
+    const safe = clamp(held - blocked * 0.2 + (Math.min(Math.sqrt(room), 9) - 4) * 0.012, 0.15, 0.97);
+    let v = worth(safe, qx, qz, dir) + (cx * p.hx + cz * p.hz) * KEEP_GOING;
+    // A wide man goes down the line to the byline, whatever the middle promises.
+    if (Math.abs(p.z) > 14 && (p.role === "W" || p.role === "FB") && ax > HALF_L - 40) v += cx * dir * (ax < HALF_L - 7 ? 0.5 : -0.5);
     if (v > carryV) { carryV = v; ux = cx; uz = cz; }
   }
   // With room he takes it on: a first touch, a look, a few strides. Nobody who
   // isn't being closed down gets rid of it the moment it arrives.
-  const room = near > 7 ? 5.5 : near > 4 ? 3.8 : 0;
-  const settle = b.since < 110 && near > 3 ? 2.6 : 0;
+  const room = near > 7 ? 0.7 : near > 4 ? 0.35 : 0;
+  const settle = b.since < 60 && near > 3 ? 0.8 : 0;
   // A keeper doesn't go for a walk with it: a touch, a look, and it's gone.
-  const carry = carryV * 0.9 + room + settle + rnd(s) * 0.7 + p.dribble * 0.6 - (p.role === "GK" ? 5 : 0);
+  const carry = carryV + room + settle + p.dribble * 0.2 - (p.role === "GK" ? 1.5 : 0);
 
   let bestV = carry, go: (() => void) | null = null;
   for (const o of options) if (o.v > bestV) { bestV = o.v; go = o.go; }
-  if (go) {
+  if (go && (b.since >= COMPOSED || near < 2.4)) {
     go();
     return;
   }

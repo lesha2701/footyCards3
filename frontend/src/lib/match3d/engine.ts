@@ -46,6 +46,13 @@ const RUN_CYCLE = 2.95;
 const WALK_STEP = 0.55;
 /** What a stride of the carrier's pace takes off a tackle's chance, per m/s. */
 const TACKLE_RUNNING = 0.05;
+/** How far in front of him (m) the ball is when his foot gets to it. */
+const FOOT_LEAD = 0.46;
+/** How much a touch's roll slows down: 0.5 leaves the foot at one and a half
+ * times the mean speed and comes to it at half. */
+const ROLL_DIES = 0.5;
+/** A corner: this long (ticks) to see it go out, then the picture cuts to it. */
+const CORNER_CUT = 36;
 /** How near his own line a keeper on the ball will go (m from halfway). */
 const KEEPER_LINE = HALF_L - 3;
 /** How long a press for the ball on its way holds (ticks). */
@@ -82,7 +89,7 @@ export function createMatch(setup: Setup, userTeam: 0 | 1 | null = 0): MatchStat
       x: f.ax * dirOf(team), z: f.z, vx: 0, vz: 0, hx: dirOf(team), hz: 0,
       tx: 0, tz: 0, want: 0, faceBall: false,
       act: Act.None, actT: 0, actLen: 0, side: 1, sub: 0, air: 0, plan: null, cool: 0,
-      beat: 0, beatX: 0, beatZ: 0, off: false, stamina: 1, runUp: 0, dash: 0, touch: 0, touchLen: 1,
+      beat: 0, beatX: 0, beatZ: 0, off: false, stamina: 1, runUp: 0, dash: 0, touch: 0, touchLen: 1, touchX: 0, touchZ: 0,
       runT: 0, runX: 0, runZ: 0, duty: 0, mark: -1, react: -1, saves: false, hands: 0,
     };
   };
@@ -107,6 +114,25 @@ function lineUp(s: MatchState) {
   const t = s.players[s.set!.taker];
   t.x = t.team === 0 ? -0.5 : 0.5; t.z = 0;
   ballAt(s.ball, 0, BALL_R, 0);
+}
+
+/** Everybody in the box and the taker at the flag, at once: no waiting for him
+ * to run the length of the line. */
+function cutToCorner(s: MatchState) {
+  const set = s.set!;
+  for (const p of s.players) {
+    const sp = setPieceSpot(s, p, SLOTS[p.team][p.slot], set);
+    p.x = sp.x; p.z = sp.z; p.tx = p.x; p.tz = p.z;
+    p.vx = 0; p.vz = 0; p.want = 0;
+    p.act = Act.None; p.dash = 0;
+    const d = dist(p.x, p.z, set.x, set.z) || 1;
+    p.hx = (set.x - p.x) / d; p.hz = (set.z - p.z) / d;
+  }
+  const t = s.players[set.taker];
+  t.x = set.x; t.z = set.z; t.tx = t.x; t.tz = t.z;
+  ballAt(s.ball, set.x, BALL_R, set.z);
+  set.t = SET_MIN;
+  s.ev.push({ t: "cut" });
 }
 
 export const userTeam = (s: MatchState): 0 | 1 | null => (s.user >= 0 ? s.players[s.user].team : null);
@@ -839,18 +865,26 @@ function stepCarried(s: MatchState) {
   if (p.touch <= 0) {
     p.touchLen = v > WALK_DRIBBLE ? Math.floor((HZ * RUN_CYCLE) / v) : v > 0.5 ? Math.floor((HZ * WALK_STEP) / v) : 30;
     p.touch = p.touchLen;
+    p.touchX = b.x; p.touchZ = b.z;
   }
-  // Out from the foot and back: it rolls away, and he catches it up.
-  const u = 1 - p.touch / p.touchLen;
-  const hump = 4 * u * (1 - u);
-  const lead = p.act === Act.Kick ? 0.55
-    : p.act === Act.Feint ? (p.sub === 1 ? 0.3 : 0.42)
-      : 0.46 + hump * (v * 0.1 + (v > 6.5 ? (v - 6.5) * 0.22 : 0));
   const ux = v > 0.5 ? p.vx / v : p.hx, uz = v > 0.5 ? p.vz / v : p.hz;
-  const off = p.act === Act.None || p.act === Act.Trap ? touchFoot(p) * (v > WALK_DRIBBLE ? 0.13 : 0.08) : 0;
-  const tx = p.x + ux * lead - uz * off, tz = p.z + uz * lead + ux * off;
-  const k = p.act === Act.Feint ? 0.28 : 0.5;
-  const nx = b.x + (tx - b.x) * k, nz = b.z + (tz - b.z) * k;
+  let nx: number, nz: number;
+  if (p.act === Act.Kick || p.act === Act.Feint) {
+    const lead = p.act === Act.Kick ? 0.55 : p.sub === 1 ? 0.3 : 0.42;
+    const k = p.act === Act.Feint ? 0.28 : 0.5;
+    nx = b.x + (p.x + ux * lead - b.x) * k; nz = b.z + (p.z + uz * lead - b.z) * k;
+    p.touchX = nx; p.touchZ = nz;
+  } else {
+    // A rolling ball: from the last touch to where his foot will be for the
+    // next one, quick off the foot and dying away. It is never tied to the
+    // man: when he turns, its line bends, it doesn't jump round him.
+    const left = p.touch * TICK;
+    const off = touchFoot(p) * (v > WALK_DRIBBLE ? 0.13 : 0.08);
+    const ex = p.x + p.vx * left + ux * FOOT_LEAD - uz * off, ez = p.z + p.vz * left + uz * FOOT_LEAD + ux * off;
+    const u = 1 - (p.touch - 1) / p.touchLen;
+    const rolled = u * (1 + ROLL_DIES) - ROLL_DIES * u * u;
+    nx = p.touchX + (ex - p.touchX) * rolled; nz = p.touchZ + (ez - p.touchZ) * rolled;
+  }
   b.vx = (nx - b.x) / TICK; b.vz = (nz - b.z) / TICK; b.vy = 0;
   // Brought down off the chest or the thigh, not teleported to his feet.
   b.x = nx; b.z = nz; b.y = b.y > BALL_R + 0.02 ? BALL_R + (b.y - BALL_R) * 0.8 : BALL_R;
@@ -876,7 +910,7 @@ function take(s: MatchState, p: Player) {
   if (s.poss !== p.team) s.lostAt[s.poss] = s.tick;
   b.owner = p.i; b.last = p.i; b.kick = Kick.None; b.to = -1; b.since = 0;
   b.vy = 0;
-  p.touch = 12; p.touchLen = 12;
+  p.touch = 12; p.touchLen = 12; p.touchX = b.x; p.touchZ = b.z;
   givePossession(s, p);
   toUser(s, p);
   for (const m of s.players) m.off = false;
@@ -1101,6 +1135,7 @@ function runRestart(s: MatchState, inp: Input) {
   const set = s.set!;
   const b = s.ball;
   set.t += 1;
+  if (set.kind === "corner" && set.t === CORNER_CUT) cutToCorner(s);
   const t = s.players[set.taker];
   const spot = set.kind === "kickoff" ? { x: t.team === 0 ? -0.5 : 0.5, z: 0 } : { x: set.x, z: set.z };
   const dx = spot.x - t.x, dz = spot.z - t.z;

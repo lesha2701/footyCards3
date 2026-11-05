@@ -38,6 +38,14 @@ function looks(seed: number): Look[] {
   return out;
 }
 
+/** Rolling to one of theirs: there's something to contest. Anything in the air
+ * or loose is a ball to play, and the buttons are for playing it. */
+function theirGroundPass(s: MatchState, team: 0 | 1) {
+  const b = s.ball;
+  if (b.to < 0 || s.players[b.to].team === team) return false;
+  return b.kick === Kick.Pass || b.kick === Kick.Through || b.kick === Kick.GkRoll;
+}
+
 export type GameEnd = { home: string; away: string; g0: number; g1: number; s: MatchState };
 
 export type Hud = {
@@ -402,6 +410,11 @@ export class MatchGame {
         whistle(1);
         this.hooks.onMessage("Вне игры");
         break;
+      case "cut":
+        this.savePrev();
+        this.motion.snap(this.s);
+        this.updateCamera(10);
+        break;
       case "out":
         if (e.set === "corner") this.hooks.onMessage("Угловой");
         else if (e.set === "penalty") this.hooks.onMessage("Пенальти!", true);
@@ -699,7 +712,7 @@ export class MatchGame {
     const taking = !!(u && set && set.taker === u.i);
     const hud: Hud = {
       g0: s.teams[0].goals, g1: s.teams[1].goals, clock: clockText(s),
-      attack: !!(u && (s.ball.owner === u.i || taking || (s.phase === Phase.Play && s.ball.owner < 0 && !(s.ball.to >= 0 && s.players[s.ball.to].team !== u.team)))),
+      attack: !!(u && (s.ball.owner === u.i || taking || (s.phase === Phase.Play && s.ball.owner < 0 && !theirGroundPass(s, u.team)))),
       setKind: taking ? set!.kind : null,
       keeper: !!(u && u.role === "GK" && (s.ball.owner === u.i || taking) && u.act !== Act.None),
       chipHere: !!u && !set && u.x * (u.team === 0 ? 1 : -1) > HALF_L - 26 && Math.abs(u.z) < 16,
