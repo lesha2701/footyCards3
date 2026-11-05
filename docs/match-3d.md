@@ -152,9 +152,18 @@ ball is about to be (`LUNGE`), and a miss carries him past. Pressed from too far
 waits up to `TACKLE_WAIT` and goes in as soon as he is in range (`s.tackleT`). The AI
 goes in when the ball is off the carrier's foot (`thinkTackle`) and can be beaten by a
 feint: a carrier with a man in front of him takes him on (`thinkCarrier`). A slide
-plays the middle of the `slide_*` clip over `SLIDE_LEN` (`SLIDE_IN`..`SLIDE_UP`), and
-`Getup` with `FROM_SLIDE` plays its end, so he never stands up out of nothing; the
-clip's run-up is cut because the man is already running. A ball hit as somebody closes
+(`slide_tackle_*`, a real one, feet first on his hip: the older `slide_*` of the
+one-on-one is a dive on to his front) plays `SLIDE_IN`..`SLIDE_UP` over `SLIDE_LEN`
+and `Getup` with `FROM_SLIDE` plays on to `SLIDE_OUT`, so he never stands up out of
+nothing and is still moving as he does. It goes for where the ball will be
+(`slideAim`), leans on to it for `SLIDE_STEER` ticks, drives for `SLIDE_DRIVE`, then
+the grass stops him. What it touches is his leading leg, not his middle (`offLeg`).
+The ball first wins it: the man who had it runs on past it (`beat`) or goes over,
+and it goes to a free team-mate in front or square (`slideOutlet`) or rolls on in
+front of the slider, who gets up on to it quicker. The man first, from the back, is
+a free kick every other time. The AI goes to ground on the run from the front or the
+side, from behind only away from its box (`thinkTackle`). `bench/slide.mjs` gives the
+result for each side and distance, and the numbers in whole matches. A ball hit as somebody closes
 it down (`b.since < 8`) comes off his shin or gets past him: it doesn't arrive at
 his feet, and the AI doesn't pass through the man coming at it.
 

@@ -568,11 +568,81 @@ describe("match3d engine", () => {
     let down = 0;
     while (u.act === Act.Slide && down < 200) { stepMatch(s, NO_INPUT); down += 1; }
     expect(down).toBeGreaterThanOrEqual(SLIDE_LEN - 2);
-    expect(u.x - from).toBeGreaterThan(2.5);
+    expect(u.x - from).toBeGreaterThan(1.5);
     if (u.act !== Act.None) {
       expect(u.act).toBe(Act.Getup);
       expect(u.sub).toBe(FROM_SLIDE);
     }
+  });
+
+  /** A man going in at a carrier from `rx, rz` (a direction), from `gap` metres. */
+  const slideAt = (gap: number, rx: number, rz: number, seed: number) => {
+    const d = duel(gap);
+    const { s, u, c } = d;
+    s.rng = seed;
+    const l = Math.sqrt(rx * rx + rz * rz);
+    u.x = (rx / l) * gap; u.z = (rz / l) * gap;
+    u.hx = -rx / l; u.hz = -rz / l; u.vx = u.hx * 6; u.vz = u.hz * 6;
+    stepMatch(s, { ...NO_INPUT, press: { k: "slide" } });
+    expect(u.act).toBe(Act.Slide);
+    for (let i = 0; i < 60 && s.ball.owner === c.i && s.phase === Phase.Play; i++) stepMatch(s, NO_INPUT);
+    return d;
+  };
+
+  it("a slide takes the ball off him from the front and from the side", () => {
+    // From square on he has to be close: the carrier turns away from it.
+    for (const [rx, rz, gap] of [[-1, 0, 2.5], [-0.7, 0.7, 2.5], [0, 1, 1.6]]) {
+      let won = 0;
+      for (let n = 0; n < 12; n++) {
+        const { s, c } = slideAt(gap, rx, rz, 300 + n * 37);
+        if (s.ball.owner !== c.i) won += 1;
+      }
+      expect(won).toBeGreaterThanOrEqual(10);
+    }
+  });
+
+  it("a ball won in a slide stays his side's, the man who lost it doesn't walk back on to it", () => {
+    let ours = 0;
+    for (let n = 0; n < 12; n++) {
+      const { s, c } = slideAt(2.5, -1, 0, 900 + n * 41);
+      const lost = s.ball.owner !== c.i;
+      for (let i = 0; i < 150 && lost && s.ball.owner < 0 && s.phase === Phase.Play; i++) stepMatch(s, NO_INPUT);
+      if (lost && s.ball.owner >= 0 && s.players[s.ball.owner].team === 0) ours += 1;
+    }
+    expect(ours).toBeGreaterThanOrEqual(10);
+  });
+
+  it("going through the back of a man is as likely a free kick as the ball", () => {
+    let fouls = 0, balls = 0;
+    for (let n = 0; n < 24; n++) {
+      const { s, c } = slideAt(1.5, 1, 0.1, 40 + n * 53);
+      if (s.phase !== Phase.Play || s.set) fouls += 1;
+      else if (s.ball.owner !== c.i) balls += 1;
+    }
+    expect(fouls).toBeGreaterThan(4);
+    expect(balls).toBeGreaterThan(4);
+  });
+
+  it("the AI goes to ground from the front as well, not only chasing", () => {
+    let front = 0, all = 0;
+    for (const seed of [3, 4, 5, 6]) {
+      const s = createMatch({ ...SETUP, seed }, null);
+      const was = new Array(22).fill(0);
+      while (s.phase !== Phase.FullTime && s.tick < 60 * 400) {
+        stepMatch(s, NO_INPUT);
+        for (const p of s.players) {
+          if (p.act === Act.Slide && was[p.i] !== Act.Slide) {
+            all += 1;
+            const c = s.ball.owner >= 0 ? s.players[s.ball.owner] : null;
+            if (c && p.hx * c.hx + p.hz * c.hz < 0.5) front += 1;
+          }
+          was[p.i] = p.act;
+        }
+      }
+    }
+    expect(all / 4).toBeGreaterThan(3);
+    expect(all / 4).toBeLessThan(20);
+    expect(front / all).toBeGreaterThan(0.3);
   });
 
   it("a ball hit as a man closes it down doesn't land at his feet", () => {

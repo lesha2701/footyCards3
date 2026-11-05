@@ -8,7 +8,7 @@ import {
   FROM_SLIDE, type Feint, type MatchState, type Player, type SceneKick, type SceneOutcome, type SetKind, type SetPiece, type Setup,
 } from "./core";
 import {
-  feintBites, fell, inBox, laneMargin, offsideLine, planCross, planLob, planPass, planShot, planThrough, releaseKick, rollPace, sprintOf, startFeint, startKick, startSlide, startTackle, windupOf,
+  SLIDE_DRIVE, SLIDE_GETUP, SLIDE_GETUP_KEEP, SLIDE_STEER, feintBites, fell, inBox, laneMargin, offsideLine, planCross, planLob, planPass, planShot, planThrough, releaseKick, rollPace, sprintOf, slideAim, startFeint, startKick, startSlide, startTackle, windupOf,
 } from "./actions";
 import { FORMATIONS, STILL_REACH, setPieceSpot, standing, takeSetPiece, thinkCarrier, thinkPlayer, thinkTackle, thinkTeam } from "./brain";
 import { holdBall, keeperSpot, releaseHands, stepKeeper } from "./keeper";
@@ -658,38 +658,104 @@ function stepTackle(s: MatchState, p: Player) {
   }
 }
 
+/** His pace getting up from it (m/s). How far off the line of his leading leg a
+ * slide still touches something, the leg's length once it is out, and the ticks in
+ * which it can touch anything. */
+const SLIDE_RISE = 1.4;
+const SLIDE_FOOT = 0.6;
+const SLIDE_LEG = 1.1;
+const SLIDE_LIVE = 30;
+/** After the touch (`p.sub`): it has gone to a team-mate, or it stayed with him. */
+const SLIDE_BALL_GONE = 1, SLIDE_BALL_KEPT = 2;
+
+/** How far `x, z` is from his leading leg, which comes out as he goes down. */
+function offLeg(p: Player, x: number, z: number) {
+  const dx = x - p.x, dz = z - p.z;
+  const along = clamp(dx * p.hx + dz * p.hz, -0.2, Math.min(SLIDE_LEG, 0.5 + p.actT * 0.08));
+  return dist(p.x + p.hx * along, p.z + p.hz * along, x, z);
+}
+
+/** A team-mate a man on the ground can knock it to: in front of him or square,
+ * near, nobody on him. */
+function slideOutlet(s: MatchState, p: Player): Player | null {
+  const b = s.ball;
+  let best: Player | null = null, top = 16;
+  for (const m of s.players) {
+    if (m.team !== p.team || m.i === p.i || m.role === "GK" || m.act === Act.Down || m.act === Act.Slide) continue;
+    const dx = m.x - b.x, dz = m.z - b.z;
+    const d = Math.sqrt(dx * dx + dz * dz);
+    if (d < 4 || d >= top || (dx * p.hx + dz * p.hz) / d < -0.25) continue;
+    let near = 1e9;
+    for (const o of s.players) if (o.team !== m.team) near = Math.min(near, dist2(o.x, o.z, m.x, m.z));
+    if (near < 9) continue;
+    top = d; best = m;
+  }
+  return best;
+}
+
+/** He got the ball. The man who had it runs on past it, off his feet if the slide
+ * took him too; the ball goes to a team-mate or stays with the slider. */
+function slideWins(s: MatchState, p: Player, c: Player | null) {
+  const b = s.ball;
+  if (c) {
+    b.owner = -1;
+    c.cool = 50;
+    c.beat = 44; c.beatX = (c.vx * 0.7) / 2.4; c.beatZ = (c.vz * 0.7) / 2.4;
+    if (dist(p.x, p.z, c.x, c.z) < 1.5 && rnd(s) < 0.45) fell(s, c, false);
+    s.teams[p.team].tackles += 1;
+    s.ev.push({ t: "tackle", p: p.i, won: true });
+  }
+  b.last = p.i; b.kick = Kick.Tackle; b.kicker = p.i; b.to = -1; b.since = 0; b.vy = 0;
+  const m = slideOutlet(s, p);
+  if (m && rnd(s) < 0.45 + p.defend * 0.35) {
+    const dx = m.x + m.vx * 0.3 - b.x, dz = m.z + m.vz * 0.3 - b.z;
+    const d = Math.sqrt(dx * dx + dz * dz) || 1;
+    const v = rollPace(d, 3), off = rndN(s) * 0.1;
+    b.vx = ((dx - dz * off) / d) * v; b.vz = ((dz + dx * off) / d) * v;
+    b.to = m.i;
+    p.sub = SLIDE_BALL_GONE;
+  } else {
+    // Hooked in front of him: it rolls on as he stops, and he gets up on to it.
+    const v = clamp(Math.sqrt(p.vx * p.vx + p.vz * p.vz) * 0.5, 2.6, 3.8), off = rndN(s) * 0.15;
+    b.vx = (p.hx - p.hz * off) * v; b.vz = (p.hz + p.hx * off) * v;
+    p.sub = SLIDE_BALL_KEPT;
+  }
+  predict(s);
+  s.ev.push({ t: "kick", p: p.i, kind: Kick.Tackle, speed: 5 });
+}
+
 function stepSlide(s: MatchState, p: Player) {
   p.actT += 1;
   const b = s.ball;
-  p.vx *= 0.965; p.vz *= 0.965;
-  if (p.actT > 6 && p.actT < 38 && p.sub === 0) {
-    const c = b.owner >= 0 ? s.players[b.owner] : null;
-    const db = dist(p.x + p.vx * 0.05, p.z + p.vz * 0.05, b.x, b.z);
-    if (db < 1.15 && b.y < 0.6 && (c ? c.team !== p.team : true) && p.plan === null) {
-      if (c) {
-        // Ball first: it's knocked away, and he goes over.
-        b.owner = -1;
-        c.cool = 40;
-        c.beat = 26; c.beatX = 0; c.beatZ = 0;
-        if (dist(p.x, p.z, c.x, c.z) < 0.9 && rnd(s) < 0.3) fell(s, c, false);
-        s.teams[p.team].tackles += 1;
-        s.ev.push({ t: "tackle", p: p.i, won: true });
-      }
-      b.last = p.i; b.kick = Kick.Tackle; b.kicker = p.i; b.to = -1; b.since = 0;
-      const l = Math.sqrt(p.vx * p.vx + p.vz * p.vz) || 1;
-      const side = rndN(s) * 3;
-      b.vx = (p.vx / l) * 7 - (p.vz / l) * side;
-      b.vz = (p.vz / l) * 7 + (p.vx / l) * side;
-      // That was his touch. The slide itself runs its length, its clip with it.
-      p.sub = 1;
-      predict(s);
-    } else if (c && c.team !== p.team && dist(p.x, p.z, c.x, c.z) < 0.95) {
-      foul(s, p, c);
+  if (p.actT <= SLIDE_STEER && p.sub === 0) {
+    // Still going down: he can lean it on to the ball, not change his mind.
+    const pace = Math.sqrt(p.vx * p.vx + p.vz * p.vz);
+    const aim = slideAim(s, p, pace);
+    if (aim) {
+      const x = p.hx + (aim.x - p.hx) * 0.3, z = p.hz + (aim.z - p.hz) * 0.3;
+      const l = Math.sqrt(x * x + z * z) || 1;
+      p.hx = x / l; p.hz = z / l;
+      p.vx = p.hx * pace; p.vz = p.hz * pace;
     }
   }
-  if (p.actT >= p.actLen) {
+  if (p.actT > SLIDE_DRIVE) { p.vx *= 0.92; p.vz *= 0.92; }
+  if (p.actT < SLIDE_LIVE && p.sub === 0 && p.plan === null) {
+    const c = b.owner >= 0 ? s.players[b.owner] : null;
+    const theirs = c !== null && c.team !== p.team && c.role !== "GK";
+    if ((theirs || (b.owner < 0 && b.since > 6)) && b.y < 0.6 && offLeg(p, b.x, b.z) < SLIDE_FOOT) {
+      slideWins(s, p, c);
+    } else if (c !== null && theirs && offLeg(p, c.x, c.z) < SLIDE_FOOT - 0.15) {
+      // Him before the ball: through the back of him it's the ref's, from the
+      // side it's mostly a toe that still gets there.
+      const behind = c.hx * p.hx + c.hz * p.hz > 0.5;
+      if (rnd(s) < (behind ? 0.5 : 0.25)) foul(s, p, c);
+      else slideWins(s, p, c);
+    }
+  }
+  if (p.act === Act.Slide && p.actT >= p.actLen) {
     // The slide's own clip goes on into him getting up.
-    p.act = Act.Getup; p.actT = 0; p.actLen = 34; p.sub = FROM_SLIDE; p.cool = 40;
+    const kept = p.sub === SLIDE_BALL_KEPT;
+    p.act = Act.Getup; p.actT = 0; p.actLen = kept ? SLIDE_GETUP_KEEP : SLIDE_GETUP; p.sub = FROM_SLIDE; p.cool = 24;
   }
 }
 
@@ -748,7 +814,8 @@ function stepAct(s: MatchState, p: Player) {
       break;
     case Act.Getup:
       p.actT += 1;
-      p.vx = 0; p.vz = 0;
+      // Up out of a slide he is still going forward; off the floor he isn't.
+      p.vx = p.sub === FROM_SLIDE ? p.hx * SLIDE_RISE : 0; p.vz = p.sub === FROM_SLIDE ? p.hz * SLIDE_RISE : 0;
       if (p.actT >= p.actLen) p.act = Act.None;
       break;
     case Act.Header:

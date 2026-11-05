@@ -463,6 +463,9 @@ export function thinkOffBall(s: MatchState, p: Player, slot: Slot) {
   p.faceBall = true;
 }
 
+/** Near enough to go to ground for it (m). */
+const SLIDE_FROM = 4.4;
+
 /** Defenders on their feet go in when they can, at their own judgement. */
 export function thinkTackle(s: MatchState, p: Player) {
   const b = s.ball;
@@ -478,7 +481,12 @@ export function thinkTackle(s: MatchState, p: Player) {
   const rate = still ? 0.04 + p.defend * 0.08 : off ? 0.018 + p.defend * 0.04 : 0.005;
   if (d < (still ? STILL_REACH : LUNGE_FROM) && rnd(s) < rate) startTackle(s, p);
   // Chasing a man who has gone past him: the last thing left is to go to ground.
-  else if (p.i !== s.user && d < 3.8 && d > 1.8 && p.defend > 0.55 && p.vx * c.vx + p.vz * c.vz > 12 && rnd(s) < 0.03 && p.x * dirOf(p.team) > -34) startSlide(s, p);
+  // Going to ground is for a man on the run: from the front or the side when he
+  // has the angle, from behind only well away from his own box.
+  else if (p.i !== s.user && d < SLIDE_FROM && d > 1.4 && p.defend > 0.4 && !still && p.vx * p.vx + p.vz * p.vz > 12) {
+    const behind = p.hx * c.hx + p.hz * c.hz > 0.5;
+    if (rnd(s) < (behind ? 0.002 : 0.003 + p.defend * 0.004) && (!behind || p.x * dirOf(p.team) > -34)) startSlide(s, p);
+  }
 }
 
 // --- on the ball --------------------------------------------------------------------------------------

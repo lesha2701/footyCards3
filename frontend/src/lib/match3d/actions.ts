@@ -245,25 +245,43 @@ export function startTackle(s: MatchState, p: Player) {
   p.side = footFor(s, p);
 }
 
-export const SLIDE_LEN = 52;
-/** How far ahead (s) a slide meets a ball it can see. */
-const SLIDE_LOOK = 0.32;
-const SLIDE_PACE = 8.8;
+/** Ticks on the ground, and getting up from it (quicker with the ball to go to). */
+export const SLIDE_LEN = 38;
+export const SLIDE_GETUP = 24;
+export const SLIDE_GETUP_KEEP = 16;
+/** Ticks he drives at full pace before the grass starts to stop him, and the
+ * ones he can still lean the slide on to the ball. */
+export const SLIDE_DRIVE = 12;
+export const SLIDE_STEER = 8;
+const SLIDE_PACE = 8.6;
+/** He goes for where the ball will be, this near. */
+const SLIDE_SEES = 8;
 
-/** Down and along the grass: at where the ball will be if it's near enough to
- * judge, otherwise the way he is running. */
+/** Where he has to go to meet the ball (a unit vector), or null if it's too far. */
+export function slideAim(s: MatchState, p: Player, pace: number): { x: number; z: number } | null {
+  const b = s.ball;
+  const c = b.owner >= 0 ? s.players[b.owner] : null;
+  const vx = c ? c.vx : b.vx, vz = c ? c.vz : b.vz;
+  let t = dist(p.x, p.z, b.x, b.z) / pace;
+  let tx = 0, tz = 0, d = 0;
+  // Twice: where it will be by the time he has got to where it will be.
+  for (let i = 0; i < 2; i++) {
+    tx = b.x + vx * t - p.x; tz = b.z + vz * t - p.z;
+    d = Math.sqrt(tx * tx + tz * tz);
+    t = Math.min(d / pace, 0.7);
+  }
+  return d > 0.3 && d < SLIDE_SEES ? { x: tx / d, z: tz / d } : null;
+}
+
 export function startSlide(s: MatchState, p: Player) {
   p.act = Act.Slide; p.actT = 0; p.actLen = SLIDE_LEN; p.sub = 0;
-  const b = s.ball;
   const v = Math.sqrt(p.vx * p.vx + p.vz * p.vz);
-  const tx = b.x + b.vx * SLIDE_LOOK - p.x, tz = b.z + b.vz * SLIDE_LOOK - p.z;
-  const d = Math.sqrt(tx * tx + tz * tz);
-  let ux = v > 1 ? p.vx / v : p.hx, uz = v > 1 ? p.vz / v : p.hz;
-  if (d > 0.5 && d < 7) { ux = tx / d; uz = tz / d; }
+  // He throws himself in: faster than he ran, but a run-up is worth more than none.
+  const pace = clamp(v + 3, 6.5, Math.max(SLIDE_PACE, v));
+  const aim = slideAim(s, p, pace);
+  const ux = aim ? aim.x : v > 1 ? p.vx / v : p.hx, uz = aim ? aim.z : v > 1 ? p.vz / v : p.hz;
+  p.vx = ux * pace; p.vz = uz * pace; p.hx = ux; p.hz = uz;
   p.side = footFor(s, p);
-  const pace = Math.max(SLIDE_PACE, v);
-  p.vx = ux * pace; p.vz = uz * pace;
-  p.hx = ux; p.hz = uz;
 }
 
 /** Knocks him down: he loses the ball. */
