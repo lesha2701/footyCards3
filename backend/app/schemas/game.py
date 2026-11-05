@@ -534,6 +534,16 @@ class OtvetkaClaimOut(BaseModel):
     new_balance: int
 
 
+# --- «Ферги Тайм» ---
+
+class FergieStartOut(BaseModel):
+    session_id: int
+
+
+class FergieFinishOut(BaseModel):
+    finished: bool
+
+
 # --- Найди пару (card pairs memory match) ---
 
 class PairsStartOut(BaseModel):

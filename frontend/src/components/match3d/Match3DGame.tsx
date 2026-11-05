@@ -84,7 +84,9 @@ function Final({ end, onAgain, onExit }: { end: GameEnd; onAgain: () => void; on
   );
 }
 
-export default function Match3DGame({ onExit, demo = false, onGame }: { onExit: () => void; demo?: boolean; onGame?: (g: MatchGame) => void }) {
+type Props = { onExit: () => void; demo?: boolean; onGame?: (g: MatchGame) => void; onKickOff?: () => void; onFullTime?: () => void };
+
+export default function Match3DGame({ onExit, demo = false, onGame, onKickOff, onFullTime }: Props) {
   const [box, setBox] = useState<Box>(measure);
   const [stage, setStage] = useState<"intro" | "loading" | "play" | "end">(demo ? "loading" : "intro");
   const [share, setShare] = useState(0);
@@ -120,7 +122,7 @@ export default function Match3DGame({ onExit, demo = false, onGame }: { onExit: 
       const g = new MatchGame(canvas.current!, assets, { ...SETUP, seed }, {
         onHud: setHud,
         onMessage: (text, big = false) => setMessage({ text, big, id: performance.now() }),
-        onEnd: (e) => { setEnd(e); setStage("end"); },
+        onEnd: (e) => { setEnd(e); setStage("end"); onFullTime?.(); },
         onScene: setScene,
       }, demo);
       g.resize(box.w, box.h);
@@ -128,6 +130,7 @@ export default function Match3DGame({ onExit, demo = false, onGame }: { onExit: 
       onGame?.(g);
       setGame(g);
       setStage("play");
+      onKickOff?.();
     }).catch(() => { if (!gone) setFailed(true); });
     return () => { gone = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per match

@@ -28,6 +28,12 @@ REGULAR_SLOT_COUNT = 5  # the default daily set (GameConfig.task_daily_slots)
 # Not a lifetime counter: how many counted friends (referral_service) played
 # today. Its tasks have no baseline and start from today's value (_assign).
 FRIENDS_ACTIVE_TODAY = "friends_active_today"
+# "played:<mode>" (a newbie_service.known_modes key): finished games of a mode.
+# No hook in the game: the count comes from the mode's own rows when the
+# tasks are read (_refresh_played), so any mode can have a task.
+PLAYED_PREFIX = "played:"
+# A mode an admin can switch off: its tasks aren't handed out meanwhile.
+MODE_SWITCHES = {"blackjack": "blackjack_enabled", "mordoboi": "mordoboi_enabled", "kontra": "kontra_enabled"}
 
 
 async def friends_active_today(db: AsyncSession, user_id: int, now: Optional[datetime] = None) -> int:
@@ -55,6 +61,10 @@ async def _current_metric_value(db: AsyncSession, user: User, metric: Optional[s
         return user.referral_count
     if metric == FRIENDS_ACTIVE_TODAY:
         return 0
+    if metric and metric.startswith(PLAYED_PREFIX):
+        from app.services.newbie_service import games_played
+
+        return await games_played(db, user, metric[len(PLAYED_PREFIX):])
     if metric == "arena_clean_sheet_wins":
         return user.arena_clean_sheet_wins
     if metric == "memory_levels_completed":
@@ -146,10 +156,13 @@ async def _assign(db: AsyncSession, user: User, definition: TaskDefinition, slot
     return row
 
 
-async def _pick(db: AsyncSession, period: str, excluded: set[int]) -> Optional[TaskDefinition]:
+async def _pick(db: AsyncSession, period: str, excluded: set[int], config) -> Optional[TaskDefinition]:
     conditions = [
         TaskDefinition.is_active.is_(True), TaskDefinition.category == TaskCategory.regular, TaskDefinition.period == period,
     ]
+    off = [PLAYED_PREFIX + mode for mode, flag in MODE_SWITCHES.items() if not getattr(config, flag)]
+    if off:
+        conditions.append(or_(TaskDefinition.metric.is_(None), TaskDefinition.metric.notin_(off)))
     if excluded:
         conditions.append(TaskDefinition.id.notin_(excluded))
     return (await db.execute(select(TaskDefinition).where(*conditions).order_by(func.random()).limit(1))).scalar_one_or_none()
@@ -194,12 +207,24 @@ async def _ensure_slots_filled(db: AsyncSession, user: User, now: Optional[datet
         for slot_index in slots:
             if slot_index in occupied:
                 continue
-            definition = await _pick(db, period, excluded)
+            definition = await _pick(db, period, excluded, config)
             if definition is None:
                 break
             definitions[definition.id] = definition
             await _assign(db, user, definition, slot_index, key, rows_by_definition)
             excluded.add(definition.id)
+
+
+async def _refresh_played(db: AsyncSession, user: User) -> None:
+    """Moves the open «played:<mode>» tasks on to the modes' current counts."""
+    metrics = (await db.execute(
+        select(TaskDefinition.metric).join(UserTask, UserTask.task_definition_id == TaskDefinition.id).where(
+            UserTask.user_id == user.id, UserTask.slot_index.isnot(None), UserTask.completed_at.is_(None),
+            TaskDefinition.metric.like(PLAYED_PREFIX + "%"),
+        ).distinct()
+    )).scalars().all()
+    for metric in metrics:
+        await evaluate_metric_progress(db, user, metric, await _current_metric_value(db, user, metric))
 
 
 async def _ensure_premium_assigned(db: AsyncSession, user: User) -> None:
@@ -337,6 +362,7 @@ async def list_my_tasks(db: AsyncSession, user: User) -> TaskListOut:
     from app.services.game_config_service import get_config
 
     await _ensure_slots_filled(db, user)
+    await _refresh_played(db, user)
     await _ensure_premium_assigned(db, user)
     await db.commit()
 
@@ -487,7 +513,7 @@ async def reroll_task(db: AsyncSession, user: User, user_task_id: int) -> TaskRe
         for ut in (await db.execute(select(UserTask).where(UserTask.user_id == locked_user.id))).scalars().all()
     }
     excluded = {did for did, ut in rows_by_definition.items() if ut.slot_index is not None}
-    definition = await _pick(db, "daily", excluded)
+    definition = await _pick(db, "daily", excluded, config)
     if definition is None:
         raise ConflictError("Других заданий сейчас нет")
     slot_index = user_task.slot_index

@@ -23,7 +23,7 @@ the funnel the admin reads."""
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import exists, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -113,33 +113,37 @@ async def _arena_matches(db: AsyncSession, user: User) -> int:
     )).scalar_one())
 
 
-async def _played(db: AsyncSession, user: User, mode: str) -> bool:
-    """A finished game of `mode` since registration (the task popup shows
-    when the game is over, not at its start)."""
+async def games_played(db: AsyncSession, user: User, mode: str) -> int:
+    """Finished games of `mode` (a `known_modes` key) since registration:
+    what the «played:<mode>» tasks count."""
     since = ensure_aware(user.created_at)
     if mode == ARENA:
-        return await _arena_matches(db, user) > 0
+        return await _arena_matches(db, user)
     if mode.startswith("game:"):
         from app.models.enums import GameSessionStatus
 
-        q = select(exists().where(
+        return int((await db.execute(select(func.count()).select_from(GameSession).where(
             GameSession.user_id == user.id, GameSession.game_type == mode[5:], GameSession.created_at >= since,
             GameSession.status != GameSessionStatus.in_progress,
-        ))
-        return bool((await db.execute(q)).scalar())
+        ))).scalar_one())
     from app.services.admin_analytics_service import MODE_SOURCES
 
     src = next((s for s in MODE_SOURCES if s.key == mode), None)
     if src is None:
-        return False
+        return 0
+    total = 0
     for col in src.user_cols:
-        q = select(src.ts).select_from(src.model)
+        q = select(func.count()).select_from(src.model)
         if src.join is not None:
             q = q.join(*src.join)
-        q = q.where(col == user.id, src.ts >= since).limit(1)
-        if (await db.execute(q)).first() is not None:
-            return True
-    return False
+        total += int((await db.execute(q.where(col == user.id, src.ts >= since))).scalar_one())
+    return total
+
+
+async def _played(db: AsyncSession, user: User, mode: str) -> bool:
+    """A finished game of `mode` since registration (the task popup shows
+    when the game is over, not at its start)."""
+    return await games_played(db, user, mode) > 0
 
 
 def _day(progress: NewbieProgress, today: Optional[date] = None) -> int:

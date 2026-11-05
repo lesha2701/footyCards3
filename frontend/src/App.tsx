@@ -350,7 +350,7 @@ export default function App() {
         <Route path="/play/free-kick" element={<FreeKick3DPage />} />
         <Route path="/play/one-on-one" element={<OneOnOnePage />} />
         <Route path="/play/otvetka" element={<OtvetkaPage />} />
-        <Route path="/play/match-3d" element={<Match3DPage />} />
+        <Route path="/play/fergie-time" element={<Match3DPage />} />
         {import.meta.env.DEV && <Route path="/play/team-lab" element={<TeamEpisodesLabPage />} />}
         <Route path="/play/free-kick/challenge" element={<FreeKickChallengePage />} />
         <Route path="/play/free-kick-classic" element={<FreeKickGamePage />} />

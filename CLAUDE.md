@@ -39,10 +39,11 @@ Main features:
   docs/otvetka.md): a match of ten signed episodes of every kind at match
   minutes, the opponent (a bot, for now) answers each, a draw → sudden-death
   penalties; the bot's answers stay in `server_state` until an episode is played;
-- «Матч 3D» (docs/match-3d.md): a short real 11-a-side match in landscape on a
+- «Ферги Тайм» (docs/match-3d.md, code `match3d`): a short real 11-a-side match in landscape on a
   pure 60 Hz engine `lib/match3d` (+ − × ÷ and Math.sqrt only, its own seeded
   generator, so a server can replay it in V8), drawn by instanced baked clips
-  in `components/match3d`; no rewards yet;
+  in `components/match3d`; pays nothing itself, `fergie_service.py` only records a
+  match played to the end for tasks and the «Путь дебютанта»;
 - clubs: squad/tournaments/league plus emblem constructor (`club_emblem_service`,
   paid layers for budget coins or Stars), «Казна за Stars» (`club_treasury_service`),
   spare-card sale/exchange (`club_market_service`), roles (vice-captain, treasurer),
@@ -119,7 +120,9 @@ Main features:
   when outbid, the market fee is burnt, the listed card is held with
   `is_locked_in_trade`; expired lots close lazily on reads and via the bot
   (`POST /internal/auction/sweep`, SKIP LOCKED like «Футбольный магнат»);
-- tasks/achievements, referrals, leaderboards and profile;
+- tasks/achievements (a `played:<mode>` metric counts finished games of any mode
+  from its own rows on reading the tasks, no hook in the game), referrals,
+  leaderboards and profile;
 - Telegram bot (notifications/reminders) and a React-based administrative panel.
 
 ## Stack

@@ -276,6 +276,17 @@ export async function claimOtvetkaReward(sessionId: number): Promise<OneOnOneCla
   return data;
 }
 
+// --- «Ферги Тайм» ---
+
+export async function startFergieTime(): Promise<{ session_id: number }> {
+  const { data } = await api.post<{ session_id: number }>("/games/fergie-time/start");
+  return data;
+}
+
+export async function finishFergieTime(sessionId: number): Promise<void> {
+  await api.post(`/games/fergie-time/${sessionId}/finish`);
+}
+
 // --- Football Hangman ---
 
 export async function startHangman(museDate = false): Promise<HangmanStartResult> {

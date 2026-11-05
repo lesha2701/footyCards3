@@ -14,6 +14,9 @@ NEWBIE_DEFAULT_TASKS = [
     {"code": "hangman", "label": "Угадай слово в «Футбольных буквах»", "mode": "game:football_hangman", "path": "/play/hangman", "coins": 1000},
     {"code": "blackjack", "label": "Сыграй в «21»", "mode": "blackjack", "path": "/play/blackjack", "coins": 1000},
     {"code": "wheel", "label": "Крутани Колесо фортуны", "mode": "wheel", "path": "/wheel", "coins": 1000},
+    {"code": "one_on_one", "label": "Разыграй «Атаку 1 на 1»", "mode": "game:one_on_one", "path": "/play/one-on-one", "coins": 1000},
+    {"code": "otvetka", "label": "Сыграй «Ответку»", "mode": "game:otvetka", "path": "/play/otvetka", "coins": 1000},
+    {"code": "fergie_time", "label": "Вырви победу в «Ферги Тайм»", "mode": "game:fergie_time", "path": "/play/fergie-time", "coins": 1000},
 ]
 
 # «Клубная база» defaults (GameConfig.club_base_buildings / club_base_caps;

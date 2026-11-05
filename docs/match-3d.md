@@ -1,4 +1,7 @@
-# «Матч 3D»
+# «Ферги Тайм»
+
+The mode's name in the game (route `/play/fergie-time`, picture
+`src/assets/games/fergie-time.webp`); the code keeps `match3d`.
 
 A short real 11-a-side match in landscape: 80′ to 90′, 0:0, about three and a
 half minutes of real time. The human plays the ball carrier and switches
@@ -243,6 +246,10 @@ the match from above, twelve moments at a time.
 
 ## Before rewards
 
-Rewards and limits need agreed numbers in `GameConfig`, the counter pairs on
-`User` with a migration, and the server replay in V8. A new mode also goes into
-`admin_analytics_service.MODE_SOURCES`.
+The mode pays nothing itself. `fergie_service` only records a match played to the
+end (a `GameSession` of type `fergie_time`, not before `MIN_SECONDS`), so the tasks
+(`played:game:fergie_time`) and the «Путь дебютанта» can count it. The score isn't
+sent: the server can't check it, so no task may depend on a win.
+
+Rewards from the match itself and tasks on the result need agreed numbers in
+`GameConfig`, the counter pairs on `User` with a migration, and the server replay in V8.

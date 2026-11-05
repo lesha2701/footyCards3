@@ -168,8 +168,8 @@ export default function PlayPage() {
       description: "Матч из 10 случайных эпизодов: ты забил — соперник отвечает", limitKey: "otvetka",
     },
     {
-      path: "/play/match-3d", art: artOf("one-on-one"), Icon: IconBall, tint: "bg-red-600", title: "Матч 3D", group: "quick", time: "4 мин", bot: true,
-      description: "Настоящий матч 11 на 11 в 3D: концовка при 0:0, забей и выиграй", noLimit: true,
+      path: "/play/fergie-time", art: artOf("fergie-time") ?? artOf("one-on-one"), Icon: IconBall, tint: "bg-red-600", title: "Ферги Тайм", group: "quick", time: "4 мин", bot: true,
+      description: "Матч 11 на 11 в 3D: концовка при 0:0, вырви победу в добавленное время", noLimit: true,
     },
     {
       path: "/play/free-kick/challenge", art: artOf("free-kick"), Icon: IconTarget, tint: "bg-sky-500", title: "Испытание дня", group: "quick", time: "2 мин",
