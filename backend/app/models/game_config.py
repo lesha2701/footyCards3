@@ -14,6 +14,9 @@ NEWBIE_DEFAULT_TASKS = [
     {"code": "hangman", "label": "Угадай слово в «Футбольных буквах»", "mode": "game:football_hangman", "path": "/play/hangman", "coins": 1000},
     {"code": "blackjack", "label": "Сыграй в «21»", "mode": "blackjack", "path": "/play/blackjack", "coins": 1000},
     {"code": "wheel", "label": "Крутани Колесо фортуны", "mode": "wheel", "path": "/wheel", "coins": 1000},
+    {"code": "one_on_one", "label": "Разыграй «Атаку 1 на 1»", "mode": "game:one_on_one", "path": "/play/one-on-one", "coins": 1000},
+    {"code": "otvetka", "label": "Сыграй «Ответку»", "mode": "game:otvetka", "path": "/play/otvetka", "coins": 1000},
+    {"code": "fergie_time", "label": "Вырви победу в «Ферги Тайм»", "mode": "game:fergie_time", "path": "/play/fergie-time", "coins": 1000},
 ]
 
 # «Клубная база» defaults (GameConfig.club_base_buildings / club_base_caps;
@@ -327,6 +330,10 @@ class GameConfig(TimestampMixin, Base):
     otvetka_loss_coins: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     otvetka_bot_goal_pct: Mapped[int] = mapped_column(Integer, default=35, nullable=False)
     otvetka_bot_penalty_pct: Mapped[int] = mapped_column(Integer, default=70, nullable=False)
+    # «Ферги Тайм» (fergie_service): a flat fee for a match played to the end,
+    # whatever the score (the server can't see it), up to the daily cap.
+    fergie_match_coins: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    fergie_daily_limit: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
 
     pairs_daily_limit: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
     pairs_reward_perfect: Mapped[int] = mapped_column(Integer, default=40, nullable=False)

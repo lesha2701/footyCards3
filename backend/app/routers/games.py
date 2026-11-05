@@ -39,6 +39,8 @@ from app.schemas.game import (
     OtvetkaEpisodeRequest,
     OtvetkaResultOut,
     OtvetkaStartOut,
+    FergieFinishOut,
+    FergieStartOut,
     PairsClaimOut,
     PairsFlipOut,
     PairsFlipRequest,
@@ -81,6 +83,7 @@ from app.services import (
     hangman_service,
     memory_game_service,
     one_on_one_service,
+    fergie_service,
     otvetka_service,
     pairs_service,
     penalty_service,
@@ -334,6 +337,20 @@ async def otvetka_episode(
 @router.post("/otvetka/{session_id}/claim", response_model=OtvetkaClaimOut)
 async def otvetka_claim(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await otvetka_service.claim_reward(db, user, session_id)
+
+
+# --- «Ферги Тайм» ---
+
+@router.post("/fergie-time/start", response_model=FergieStartOut)
+async def fergie_start(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"fergie_start:{user.id}", max_calls=20, window_seconds=60)
+    return await fergie_service.start(db, user)
+
+
+@router.post("/fergie-time/{session_id}/finish", response_model=FergieFinishOut)
+async def fergie_finish(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"fergie_finish:{user.id}", max_calls=20, window_seconds=60)
+    return await fergie_service.finish(db, user, session_id)
 
 
 # --- Найди пару (card pairs memory match) ---

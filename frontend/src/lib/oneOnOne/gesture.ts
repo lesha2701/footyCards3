@@ -137,6 +137,7 @@ export class Finger {
 const STICK_RADIUS = 0.13; // of the shorter screen side
 const DEAD = 0.22;
 const SPRINT = 0.88;
+export const STICK_SPRINT = SPRINT;
 /** Pulled down past this share of the radius, and mostly down: back. */
 const BACK_FROM = 0.4;
 const BACK_SLOPE = 0.8;

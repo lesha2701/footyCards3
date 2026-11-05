@@ -906,6 +906,7 @@ export interface GameLimits {
   kontra?: number;
   one_on_one?: number;
   otvetka?: number;
+  fergie_time?: number;
   /** Exhausted games only: when the hourly cap frees up again. */
   resets_at?: Partial<Record<string, string>>;
 }

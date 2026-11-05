@@ -276,6 +276,20 @@ export async function claimOtvetkaReward(sessionId: number): Promise<OneOnOneCla
   return data;
 }
 
+// --- «Ферги Тайм» ---
+
+export async function startFergieTime(): Promise<{ session_id: number }> {
+  const { data } = await api.post<{ session_id: number }>("/games/fergie-time/start");
+  return data;
+}
+
+export type FergieFinish = { reward_coins: number; new_balance: number; daily_cap_reached: boolean };
+
+export async function finishFergieTime(sessionId: number): Promise<FergieFinish> {
+  const { data } = await api.post<FergieFinish>(`/games/fergie-time/${sessionId}/finish`);
+  return data;
+}
+
 // --- Football Hangman ---
 
 export async function startHangman(museDate = false): Promise<HangmanStartResult> {

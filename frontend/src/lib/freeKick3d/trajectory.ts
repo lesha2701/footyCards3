@@ -168,12 +168,15 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 /** Ball spot, wall and keeper for a seed. The wall stands 9.15 m from the
  * ball on the line to the goal centre and covers the near-post side; the
  * keeper leans to the far post. */
-export function createSetup(seed: number, rating = 75): ShotSetup {
+export function createSetup(seed: number, rating = 75, at?: { distance: number; offset: number }): ShotSetup {
   const rnd = mulberry32(seed);
   const edge = ratingEdge(rating);
-  const distance = lerp(18, 26, rnd());
+  const seededDistance = lerp(18, 26, rnd());
   const side = rnd() < 0.5 ? -1 : 1;
-  const offset = side * lerp(0, 8, rnd());
+  const seededOffset = side * lerp(0, 8, rnd());
+  // `at`: the foul's real spot, «Матч 3D». Every draw still happens, in order.
+  const distance = at ? at.distance : seededDistance;
+  const offset = at ? at.offset : seededOffset;
   const ball: Vec3 = { x: offset, y: BALL_RADIUS, z: distance };
 
   // Unit vector ball → goal centre (in xz) and its perpendicular.
