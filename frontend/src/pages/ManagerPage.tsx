@@ -40,6 +40,7 @@ import { CupPanel, NewsPanel } from "@/components/manager/CupNewsPanel";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconCoin, IconProfile, IconSearch, IconTrophy } from "@/components/icons";
 import ClubCardSheet from "@/components/manager/ClubCardSheet";
+import AcademyPicker from "@/components/manager/AcademyPicker";
 import AnalyticsPanel from "@/components/manager/AnalyticsPanel";
 import MatchPlanPanel from "@/components/manager/MatchPlanPanel";
 import SectionTitle from "@/components/manager/SectionTitle";
@@ -340,21 +341,8 @@ function ClubTab({ view, club, onView, onError }: TabProps & { club: ManagerClub
         {club.academy_options.length === 0 ? (
           <p className="text-caption text-ink-mist">В коллекции нет карточек «Академии». Они выпадают в паке «Академия».</p>
         ) : (
-          <div className="flex flex-col gap-1.5">
-            {club.academy_options.map((o) => {
-              const on = club.academy_card_id === o.card_id;
-              return (
-                <button key={o.card_id} disabled={locked || patch.isPending}
-                  onClick={() => patch.mutate(on ? { clear_academy: true } : { academy_card_id: o.card_id })}
-                  className={`flex items-center gap-2 rounded-xl p-2.5 text-left disabled:opacity-60 ${on ? "bg-violet-400/15 ring-2 ring-violet-400" : "bg-bg-raised"}`}>
-                  <span className="w-10 font-mono text-micro text-ink-mist">{o.position}</span>
-                  <span className="min-w-0 flex-1 truncate text-sm text-ink-chalk">{o.name}</span>
-                  <b className="text-sm text-violet-300">{o.rating}</b>
-                  <span className="w-5 text-right text-xs text-violet-300">{on ? "✓" : ""}</span>
-                </button>
-              );
-            })}
-          </div>
+          <AcademyPicker options={club.academy_options} selected={club.academy_card_id} locked={locked} busy={patch.isPending}
+            onPick={(id) => patch.mutate({ academy_card_id: id })} onClear={() => patch.mutate({ clear_academy: true })} />
         )}
       </section>
 
