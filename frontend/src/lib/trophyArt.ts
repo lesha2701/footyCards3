@@ -32,8 +32,18 @@ const TROPHY_FILE: Record<string, string> = {
   player_career_national_winner: "national",
 };
 
-export function trophyArt(code: string): string | null {
-  const file = TROPHY_FILE[code];
+/** The same cups handed out by an admin under a definition of his own. */
+const TROPHY_FILE_BY_NAME: Record<string, string> = {
+  "золотой мяч": "golden_ball",
+  "золотая бутса": "golden_boot",
+  "король передач": "top_assist",
+  "золотая перчатка": "golden_glove",
+  "лучший защитник": "best_defender",
+  "лучший бомбардир": "top_scorer",
+};
+
+export function trophyArt(code: string, name?: string): string | null {
+  const file = TROPHY_FILE[code] ?? TROPHY_FILE_BY_NAME[name?.trim().toLowerCase() ?? ""];
   return (file && TROPHIES[file]) || null;
 }
 
