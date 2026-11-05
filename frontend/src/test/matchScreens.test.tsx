@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CareerSeason, CareerSquadCard } from "@/api/career";
 import { PostMatchCard, PreMatchCard } from "@/components/career/MatchScreens";
+import { PrepTabs } from "@/components/career/PrepTabs";
 
 const entry = (card_id: number, name: string, fatigue: number, out = 0): CareerSquadCard => ({
   card: { player: { display_name: `Имя ${name}`, position: "CM", rating: 80 } } as never,
@@ -38,7 +39,7 @@ const wrap = (node: React.ReactNode) => render(<MemoryRouter>{node}</MemoryRoute
 describe("before the match", () => {
   it("the opponent, his form, my tired and missing starters, and a jump to the squad", () => {
     const onSquad = vi.fn();
-    wrap(<PreMatchCard season={season} when="завтра в 19:00" onSquad={onSquad} onTactic={vi.fn()} />);
+    wrap(<PreMatchCard season={season} when="завтра в 19:00" onSquad={onSquad} />);
     const card = screen.getByRole("region", { name: "До матча" });
     expect(card).toHaveTextContent("В гостях: Сокол");
     expect(card).toHaveTextContent("завтра в 19:00");
@@ -53,7 +54,7 @@ describe("before the match", () => {
   });
 
   it("all fresh: the squad is ready", () => {
-    wrap(<PreMatchCard season={{ ...season, squad: [entry(1, "Иванов", 0)], lineup: { MID1: 1 } }} when="" onSquad={vi.fn()} onTactic={vi.fn()} />);
+    wrap(<PreMatchCard season={{ ...season, squad: [entry(1, "Иванов", 0)], lineup: { MID1: 1 } }} when="" onSquad={vi.fn()} />);
     expect(screen.getByText("Состав готов: все свежие и здоровы")).toBeInTheDocument();
   });
 });
@@ -90,5 +91,16 @@ describe("after the match", () => {
   it("nothing before the first round", () => {
     wrap(<PostMatchCard season={{ ...season, rounds_played: 0 }} />);
     expect(screen.queryByRole("region", { name: "Итог тура" })).toBeNull();
+  });
+});
+
+describe("preparation tiles", () => {
+  it("say what stands behind each section and switch it", () => {
+    const onChange = vi.fn();
+    render(<PrepTabs season={{ ...season, slots: [{ code: "MID1" }], training: null } as unknown as CareerSeason} value="tactic" onChange={onChange} />);
+    expect(screen.getByRole("tab", { name: /Тактика/ })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: /Тренировка/ })).toHaveTextContent("Не выбрана");
+    fireEvent.click(screen.getByRole("tab", { name: /Состав/ }));
+    expect(onChange).toHaveBeenCalledWith("squad");
   });
 });

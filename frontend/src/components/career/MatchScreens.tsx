@@ -1,6 +1,6 @@
 /** The round around my match in «Карьера тренера»: «До матча» — the
  * opponent, his form, my chances and who of my starters is tired or out,
- * with a jump to the squad or the tactic; «Итог тура» — the score, the
+ * with a jump to the squad when something is wrong; «Итог тура» — the score, the
  * coins, my place in the table and what happened to my players, until the
  * coach has seen it. Read-only: everything comes from the season view. */
 import { useState } from "react";
@@ -8,7 +8,7 @@ import { useNavigate } from "react-router-dom";
 
 import type { CareerSeason, CareerSquadCard } from "@/api/career";
 import { EnergyBar } from "@/components/career/EnergyBar";
-import { IconCoin } from "@/components/icons";
+import { IconCoin, IconShirt } from "@/components/icons";
 import { TIRED_AT } from "@/lib/careerSubs";
 
 const FORM: Record<string, { label: string; tone: string }> = {
@@ -33,7 +33,7 @@ function myMatchOf(season: CareerSeason, round: number) {
 }
 
 /** Starters of the saved line-up who are tired (most tired first) or out. */
-function readiness(season: CareerSeason) {
+export function readiness(season: CareerSeason) {
   const byId = new Map(season.squad.map((s) => [s.card_id, s]));
   const starters = Object.values(season.lineup ?? {}).map((id) => byId.get(id)).filter((e): e is CareerSquadCard => !!e);
   return {
@@ -47,8 +47,8 @@ const plural = (n: number, one: string, few: string, many: string) => {
   return d === 1 && h !== 11 ? one : d >= 2 && d <= 4 && (h < 12 || h > 14) ? few : many;
 };
 
-export function PreMatchCard({ season, when, onSquad, onTactic }: {
-  season: CareerSeason; when: string; onSquad: () => void; onTactic: () => void;
+export function PreMatchCard({ season, when, onSquad }: {
+  season: CareerSeason; when: string; onSquad: () => void;
 }) {
   const scouting = season.scouting;
   const mine = myMatchOf(season, season.rounds_played);
@@ -115,15 +115,12 @@ export function PreMatchCard({ season, when, onSquad, onTactic }: {
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      {!ok && (
         <button type="button" onClick={onSquad}
-          className={`rounded-2xl py-2.5 text-caption font-bold active:scale-95 ${ok ? "bg-white/10 text-ink-chalk" : "bg-floodlight text-bg-base"}`}>
-          {ok ? "Состав" : "Поправить состав"}
+          className="flex items-center justify-center gap-1.5 rounded-2xl bg-floodlight py-2.5 text-caption font-bold text-bg-base active:scale-95">
+          <IconShirt size={16} aria-hidden="true" />Поправить состав
         </button>
-        <button type="button" onClick={onTactic} className="rounded-2xl bg-white/10 py-2.5 text-caption font-bold text-ink-chalk active:scale-95">
-          Тактика
-        </button>
-      </div>
+      )}
     </section>
   );
 }

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
@@ -27,6 +27,7 @@ import { FlankDuelsCard } from "@/components/career/FlankDuels";
 import { CoachSpecCard, MoraleCard } from "@/components/career/Morale";
 import { LiveMatchCenter } from "@/components/career/CareerLive";
 import { PostMatchCard, PreMatchCard } from "@/components/career/MatchScreens";
+import { PrepTabs, type PrepTab } from "@/components/career/PrepTabs";
 import { CoachExtras } from "@/components/career/CoachExtras";
 import { MarkingCard, PlanHints, RolesCard } from "@/components/career/RolesMarking";
 import { OffseasonPanel, SeasonSummaryView } from "@/components/career/Offseason";
@@ -34,7 +35,7 @@ import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import {
-  IconCalendar, IconChart, IconChevronRight, IconClock, IconCoin, IconProfile, IconShirt, IconTactics, IconTarget, IconTrophy, IconUsers, IconWhistle,
+  IconCalendar, IconChart, IconChevronRight, IconClock, IconCoin, IconProfile, IconTactics, IconTrophy, IconUsers, IconWhistle,
 } from "@/components/icons";
 import GameHero from "@/components/common/GameHero";
 import { EnergyBar } from "@/components/career/EnergyBar";
@@ -44,7 +45,6 @@ import { CATEGORY_POSITIONS } from "@/lib/formation";
 import { haptic } from "@/lib/telegram";
 
 type Tab = "prep" | "calendar" | "profile";
-type PrepTab = "tactic" | "squad" | "training";
 type CalendarTab = "table" | "rounds" | "cup";
 
 /** Round times in the viewer's own time zone (the server schedules them in
@@ -312,6 +312,13 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
   const [tab, setTab] = useState<Tab>("prep");
   const [prep, setPrep] = useState<PrepTab>(season.scouting && hasTactics ? "tactic" : "squad");
   const [cal, setCal] = useState<CalendarTab>("table");
+  const prepTabs = useRef<HTMLDivElement>(null);
+  // The section opens below the tiles: bring it into view.
+  const openPrep = (next: PrepTab) => {
+    setPrep(next);
+    haptic("light");
+    prepTabs.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  };
   const [confirmLeave, setConfirmLeave] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -388,23 +395,10 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
         <>
           {season.scouting && !season.live && <OffseasonPanel season={season} catalog={catalog} onView={onView} onError={onError} />}
           {season.scouting && !season.live && (
-            <PreMatchCard season={season} when={formatWhen(nextRound?.at ?? null)}
-              onSquad={() => setPrep("squad")} onTactic={() => setPrep("tactic")} />
+            <PreMatchCard season={season} when={formatWhen(nextRound?.at ?? null)} onSquad={() => openPrep("squad")} />
           )}
-          <div className="grid grid-cols-3 gap-1 rounded-2xl bg-bg-base/40 p-1" role="tablist" aria-label="Подготовка">
-            {([
-              ["tactic", "Тактика", IconTarget], ["squad", "Состав", IconShirt], ["training", "Тренировка", IconWhistle],
-            ] as const).map(([id, label, Icon]) => (
-              <button
-                key={id}
-                role="tab"
-                aria-selected={prep === id}
-                onClick={() => setPrep(id)}
-                className={`flex items-center justify-center gap-1 rounded-xl py-1.5 text-caption font-semibold ${prep === id ? "bg-bg-raised text-ink-chalk" : "text-ink-mist"}`}
-              >
-                <Icon size={14} aria-hidden="true" />{label}
-              </button>
-            ))}
+          <div ref={prepTabs} className="scroll-mt-20">
+            <PrepTabs season={season} value={prep} onChange={openPrep} />
           </div>
           {prep !== "squad" && season.live && (
             <EmptyState compact icon={IconWhistle} title={`Идёт тур ${season.live.round + 1}`}
@@ -424,7 +418,7 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
               <SquadWarnings warnings={season.squad_warnings} />
               <MoraleCard season={season} onView={onView} onError={onError} />
               <ScoutingCard scouting={season.scouting} catalog={catalog} difficultyLabel={season.difficulty_label} />
-              <FlankDuelsCard season={season} onView={onView} onError={onError} onSquad={() => setPrep("squad")} />
+              <FlankDuelsCard season={season} onView={onView} onError={onError} onSquad={() => openPrep("squad")} />
               <TacticsBoard season={season} catalog={catalog} onView={onView} onError={onError} />
               <RolesCard season={season} catalog={catalog} onView={onView} onError={onError} />
               <MarkingCard season={season} onView={onView} onError={onError} />
