@@ -27,6 +27,7 @@ from app.schemas.club_emblem import (
     ClubEmblemStateOut,
     ClubEmblemUpdateIn,
 )
+from app.services import event_symbols
 from app.services.club_budget_service import debit_club_budget
 from app.services.game_config_service import get_config
 
@@ -44,12 +45,6 @@ DEFAULT_CATALOG: list[tuple[str, str, str, int, int]] = [
     ("pattern", "chevron", "Шеврон", 3000, 0),
     ("pattern", "diamonds", "Ромбы", 3000, 0),
     ("letters", "letters", "Буквы клуба", 3000, 0),
-    ("symbol", "ball", "Мяч", 0, 75),
-    ("symbol", "crown", "Корона", 0, 75),
-    ("symbol", "lion", "Лев", 0, 75),
-    ("symbol", "eagle", "Орёл", 0, 75),
-    ("symbol", "lightning", "Молния", 0, 75),
-    ("symbol", "castle", "Замок", 0, 75),
     ("outline", "bronze", "Бронзовая обводка", 0, 50),
     ("outline", "silver", "Серебряная обводка", 0, 75),
     ("outline", "gold", "Золотая обводка", 0, 100),
@@ -62,12 +57,6 @@ DEFAULT_CATALOG: list[tuple[str, str, str, int, int]] = [
     ("pattern", "quarters", "Четверти", 3000, 0),
     ("pattern", "waves", "Волны", 3500, 0),
     ("pattern", "sunburst", "Солнце", 3500, 0),
-    ("symbol", "star", "Звезда", 0, 75),
-    ("symbol", "trophy", "Кубок", 0, 100),
-    ("symbol", "wings", "Крылья", 0, 100),
-    ("symbol", "anchor", "Якорь", 0, 75),
-    ("symbol", "wolf", "Волк", 0, 100),
-    ("symbol", "swords", "Скрещённые мечи", 0, 100),
     ("outline", "ruby", "Рубиновая обводка", 0, 125),
     ("outline", "emerald", "Изумрудная обводка", 0, 125),
     ("outline", "diamond", "Бриллиантовая обводка", 0, 200),
@@ -77,6 +66,67 @@ DEFAULT_CATALOG: list[tuple[str, str, str, int, int]] = [
     ("effect", "rays", "Сияние", 0, 250),
     ("effect", "orbit", "Мяч на орбите", 0, 250),
     ("effect", "lightning", "Молнии", 0, 300),
+    # Picture symbols (static/emblems/symbols/<key>.webp), tinted with the club colour.
+    ("symbol", "img_star", "Звезда чемпиона", 0, 75),
+    ("symbol", "img_ball", "Мяч", 2000, 0),
+    ("symbol", "img_crown", "Корона королей", 0, 75),
+    ("symbol", "img_tower", "Башня", 2000, 0),
+    ("symbol", "img_mountain", "Горы", 0, 75),
+    ("symbol", "img_wave", "Волна", 0, 75),
+    ("symbol", "img_compass", "Компас", 2000, 0),
+    ("symbol", "img_horseshoe", "Подкова", 0, 75),
+    ("symbol", "img_anchor", "Якорь", 0, 75),
+    ("symbol", "img_lightning", "Молния", 2000, 0),
+    ("symbol", "img_flame", "Пламя", 0, 75),
+    ("symbol", "img_oak", "Дуб", 0, 75),
+    ("symbol", "img_trident", "Трезубец", 0, 100),
+    ("symbol", "img_rose", "Роза", 0, 100),
+    ("symbol", "img_rocket", "Взлёт", 0, 100),
+    ("symbol", "img_crossed_swords", "Дуэль", 0, 100),
+    ("symbol", "img_eagle", "Орёл", 0, 100),
+    ("symbol", "img_bear", "Медведь", 0, 100),
+    ("symbol", "img_bull", "Бык", 0, 100),
+    ("symbol", "img_fox", "Лис", 0, 100),
+    ("symbol", "img_horse", "Конь", 0, 100),
+    ("symbol", "img_owl", "Сова", 0, 100),
+    ("symbol", "img_ram", "Овен", 0, 100),
+    ("symbol", "img_stag", "Олень", 0, 100),
+    ("symbol", "img_hawk", "Ястреб", 0, 100),
+    ("symbol", "img_knight_helmet", "Рыцарский шлем", 0, 100),
+    ("symbol", "img_bison", "Бизон", 0, 100),
+    ("symbol", "img_boar", "Кабан", 0, 100),
+    ("symbol", "img_bat", "Летучая мышь", 0, 100),
+    ("symbol", "img_wolf", "Волк", 0, 100),
+    ("symbol", "img_raven", "Ворон", 0, 100),
+    ("symbol", "img_cobra", "Кобра", 0, 100),
+    ("symbol", "img_panther", "Пантера", 0, 125),
+    ("symbol", "img_rhino", "Носорог", 0, 125),
+    ("symbol", "img_shark", "Акула", 0, 125),
+    ("symbol", "img_scorpion", "Скорпион", 0, 125),
+    ("symbol", "img_crocodile", "Крокодил", 0, 125),
+    ("symbol", "img_tiger", "Тигр", 0, 125),
+    ("symbol", "img_lion", "Лев", 0, 125),
+    ("symbol", "img_winged_ball", "Мяч с крыльями", 0, 150),
+    ("symbol", "img_griffin", "Грифон", 0, 150),
+    ("symbol", "img_pegasus", "Пегас", 0, 150),
+    ("symbol", "img_dragon", "Дракон", 0, 200),
+    ("symbol", "img_phoenix", "Феникс", 0, 200),
+    ("symbol", "img_cerberus", "Цербер", 0, 200),
+    ("symbol", "img_kraken", "Кракен", 0, 200),
+    ("symbol", "img_devil", "Дьявол", 0, 66),
+    ("symbol", "img_devil_trident", "Дьявол с трезубцем", 0, 166),
+    ("symbol", "img_victor_v", "Знак Victor", 0, 999),
+    ("symbol", "img_jack_o_lantern", "Тыква-фонарь", 0, 49),
+    ("symbol", "img_hw_bat", "Ночная мышь", 0, 49),
+    ("symbol", "img_witch_hat", "Шляпа ведьмы", 0, 49),
+    ("symbol", "img_ghost_keeper", "Призрак-вратарь", 0, 79),
+    ("symbol", "img_skull_ball", "Череп-мяч", 0, 99),
+    ("symbol", "img_reaper", "Жнец", 0, 149),
+    ("effect", "frost", "Иней", 0, 200),
+    ("effect", "embers", "Угли", 0, 200),
+    ("effect", "pulse", "Волна силы", 0, 250),
+    ("effect", "halo", "Нимб", 0, 250),
+    ("effect", "champion", "Звёзды чемпиона", 0, 300),
 ]
 
 # Club column per kind (color2 / letters hold a free value; the unlock is the item itself).
@@ -110,6 +160,11 @@ async def ensure_catalog(db: AsyncSession) -> None:
                 await db.flush()
         except IntegrityError:
             pass  # a concurrent request inserted it first
+
+
+def _selling(item: ClubEmblemItem, config) -> bool:
+    """Switched on by the admin, and a limited symbol only while its event runs."""
+    return item.is_active and event_symbols.on_sale(item.style_key, config)
 
 
 async def _catalog(db: AsyncSession) -> list[ClubEmblemItem]:
@@ -154,10 +209,12 @@ async def get_state(db: AsyncSession, user: User) -> ClubEmblemStateOut:
         enabled=config.club_emblems_enabled, club_id=club.id, logo_shape=club.logo_shape, logo_color=club.logo_color,
         emblem=emblem_out(club),
         items=[
-            ClubEmblemCatalogItemOut(**ClubEmblemItemOut.model_validate(i).model_dump(), unlocked=i.id in unlocked)
+            ClubEmblemCatalogItemOut(**ClubEmblemItemOut.model_validate(i).model_dump(), unlocked=i.id in unlocked,
+                                     limited_until=event_symbols.limited_until(i.style_key, config))
             for i in items
-            # Switched-off items only stay visible to a club that already owns them.
-            if i.is_active or i.id in unlocked
+            # Items off sale (switched off, an event's limited symbol after it) stay visible
+            # only to a club that already owns them.
+            if _selling(i, config) or i.id in unlocked
         ],
         budget=club.budget, star_balance=club.star_balance, can_edit=_can_edit(membership),
         can_spend_budget=_can_spend_budget(membership, club),
@@ -184,7 +241,7 @@ async def buy_with_budget(db: AsyncSession, user: User, item_id: int) -> ClubEmb
     item = await db.get(ClubEmblemItem, item_id)
     if item is None:
         raise NotFoundError("Элемент не найден")
-    if not item.is_active:
+    if not _selling(item, config):
         raise ConflictError("Этот элемент не продаётся")
     if item.coins_price <= 0:
         raise ConflictError("Этот элемент продаётся только за звёзды")
@@ -255,7 +312,7 @@ async def buy_with_club_stars(db: AsyncSession, user: User, item_id: int) -> Clu
     item = await db.get(ClubEmblemItem, item_id)
     if item is None:
         raise NotFoundError("Элемент не найден")
-    if not item.is_active or item.stars_price <= 0:
+    if not _selling(item, config) or item.stars_price <= 0:
         raise ConflictError("Этот элемент не продаётся за звёзды")
     club = await _lock_club(db, membership.club_id)
     require_budget_spender(membership, club)
@@ -283,7 +340,7 @@ async def stars_order(db: AsyncSession, user: User, item_id: int) -> tuple[str, 
     item = await db.get(ClubEmblemItem, item_id)
     if item is None:
         raise NotFoundError("Элемент не найден")
-    if not item.is_active or item.stars_price <= 0:
+    if not _selling(item, config) or item.stars_price <= 0:
         raise ConflictError("Этот элемент не продаётся за звёзды")
     if item.id in await unlocked_item_ids(db, club.id):
         raise ConflictError("Уже открыто")
@@ -302,7 +359,8 @@ async def validate_stars(db: AsyncSession, user_id: int, arg: str, stars_amount:
     club_id, item_id = _parse(arg)
     config = await get_config(db)
     item = await db.get(ClubEmblemItem, item_id)
-    if not config.club_emblems_enabled or item is None or not item.is_active or item.stars_price != stars_amount:
+    if (not config.club_emblems_enabled or item is None or not _selling(item, config)
+            or item.stars_price != stars_amount):
         return False, "Этот элемент больше не продаётся"
     club = await db.get(Club, club_id)
     if club is None or club.is_disbanded:

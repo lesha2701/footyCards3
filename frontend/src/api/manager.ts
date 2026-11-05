@@ -89,6 +89,8 @@ export interface ManagerLook {
   /** Stadium skin and champion poster style from «Стиль» ("classic" = default). */
   stands?: string;
   poster?: string;
+  /** The symbol's finish: "metal" = polished metal with a glint ("none" = flat). */
+  finish?: string;
 }
 
 export interface ManagerBase {
@@ -219,13 +221,15 @@ export interface ManagerRules {
 
 export interface ManagerCosmetic {
   code: string;
-  kind: "shape" | "symbol" | "rim" | "fx" | "kit" | "frame" | "theme" | "stadium_name" | "stands" | "poster";
+  kind: "shape" | "symbol" | "rim" | "fx" | "kit" | "frame" | "theme" | "stadium_name" | "stands" | "poster" | "paint" | "finish";
   name: string;
   value: string;
   coins: number;
   stars: number;
   owned: boolean;
   usable: boolean;
+  /** A running event's limited symbol: on sale until then («Лимитка»). */
+  limited_until?: string | null;
 }
 
 export interface ManagerMerchItem {

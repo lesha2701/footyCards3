@@ -183,7 +183,7 @@ export default function BlackjackPage() {
   const buyMutation = useMutation({
     mutationFn: async () => {
       const invoice = await createBlackjackStarsInvoice();
-      const paymentStatus = await openTelegramInvoice(invoice.invoice_link);
+      const paymentStatus = await openTelegramInvoice(invoice.invoice_link, invoice.payload_token);
       if (paymentStatus === "cancelled") return "cancelled" as const;
       if (paymentStatus === "failed") throw new Error("Платёж не прошёл");
       await pollEntryInvoice(invoice.payload_token);

@@ -51,6 +51,7 @@ class ManagerLookIn(BaseModel):
     fx: Optional[str] = Field(default=None, max_length=32)
     stands: Optional[str] = Field(default=None, max_length=32)
     poster: Optional[str] = Field(default=None, max_length=32)
+    finish: Optional[str] = Field(default=None, max_length=32)
 
 
 class ManagerStadiumNameIn(BaseModel):

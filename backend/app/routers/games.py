@@ -31,6 +31,16 @@ from app.schemas.game import (
     MemoryStartOut,
     MemorySubmitOut,
     MemorySubmitRequest,
+    OneOnOneAttackRequest,
+    OneOnOneClaimOut,
+    OneOnOneResultOut,
+    OneOnOneStartOut,
+    OtvetkaClaimOut,
+    OtvetkaEpisodeRequest,
+    OtvetkaResultOut,
+    OtvetkaStartOut,
+    FergieFinishOut,
+    FergieStartOut,
     PairsClaimOut,
     PairsFlipOut,
     PairsFlipRequest,
@@ -72,6 +82,9 @@ from app.services import (
     game_limits_service,
     hangman_service,
     memory_game_service,
+    one_on_one_service,
+    fergie_service,
+    otvetka_service,
     pairs_service,
     penalty_service,
     saboteur_service,
@@ -282,6 +295,62 @@ async def hangman_guess(session_id: int, payload: HangmanGuessRequest, db: Async
 @router.post("/hangman/{session_id}/claim", response_model=HangmanClaimOut)
 async def hangman_claim(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await hangman_service.claim_reward(db, user, session_id)
+
+
+# --- «Атака 1 на 1» ---
+
+@router.post("/one-on-one/start", response_model=OneOnOneStartOut)
+async def one_on_one_start(payload: FreeKickStartRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"one_on_one_start:{user.id}", max_calls=20, window_seconds=60)
+    return await one_on_one_service.start(db, user, payload.user_card_id)
+
+
+@router.post("/one-on-one/{session_id}/attack", response_model=OneOnOneResultOut)
+async def one_on_one_attack(
+    session_id: int, payload: OneOnOneAttackRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    await check_rate_limit(f"one_on_one_attack:{user.id}", max_calls=30, window_seconds=60)
+    return await one_on_one_service.play_attack(db, user, session_id, payload)
+
+
+@router.post("/one-on-one/{session_id}/claim", response_model=OneOnOneClaimOut)
+async def one_on_one_claim(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await one_on_one_service.claim_reward(db, user, session_id)
+
+
+# --- «Ответка» ---
+
+@router.post("/otvetka/start", response_model=OtvetkaStartOut)
+async def otvetka_start(payload: FreeKickStartRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"otvetka_start:{user.id}", max_calls=20, window_seconds=60)
+    return await otvetka_service.start(db, user, payload.user_card_id)
+
+
+@router.post("/otvetka/{session_id}/episode", response_model=OtvetkaResultOut)
+async def otvetka_episode(
+    session_id: int, payload: OtvetkaEpisodeRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    await check_rate_limit(f"otvetka_episode:{user.id}", max_calls=30, window_seconds=60)
+    return await otvetka_service.play_episode(db, user, session_id, payload)
+
+
+@router.post("/otvetka/{session_id}/claim", response_model=OtvetkaClaimOut)
+async def otvetka_claim(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await otvetka_service.claim_reward(db, user, session_id)
+
+
+# --- «Ферги Тайм» ---
+
+@router.post("/fergie-time/start", response_model=FergieStartOut)
+async def fergie_start(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"fergie_start:{user.id}", max_calls=20, window_seconds=60)
+    return await fergie_service.start(db, user)
+
+
+@router.post("/fergie-time/{session_id}/finish", response_model=FergieFinishOut)
+async def fergie_finish(session_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"fergie_finish:{user.id}", max_calls=20, window_seconds=60)
+    return await fergie_service.finish(db, user, session_id)
 
 
 # --- Найди пару (card pairs memory match) ---

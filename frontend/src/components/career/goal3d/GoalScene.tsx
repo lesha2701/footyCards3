@@ -1,8 +1,10 @@
-/** The three.js scene of a goal replay: pitch and stands, both goals,
+/** The three.js scene of a goal replay: a sunny afternoon, as a match looks
+ * on TV — pitch and stands (the free kick's crowd and LED boards), both goals,
  * 22 low-poly footballers (instanced: one draw call per body part), the
  * ball and a camera that follows it. Everything is placed from the
  * episode's key frames (lib/goalReplay3d) once per rendered frame; React
  * never re-renders during playback. */
+import { useTexture } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Component, Suspense, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import * as THREE from "three";
@@ -24,6 +26,8 @@ import {
 import type { CareerReplay } from "@/api/career";
 import { poseTime } from "@/lib/footballerMotion";
 import { PITCH_L, PITCH_W, SLOTS, interpolatePlayer, type Timeline } from "@/lib/matchReplay";
+
+import { daySkyTexture } from "@/components/freeKick3d/textures";
 
 import { SkinnedPlayers } from "./SkinnedPlayers";
 import { crowdTexture, netTexture, numberTexture, pitchTexture } from "./textures";
@@ -85,10 +89,12 @@ export function GoalScene(props: SceneProps) {
   return (
     <>
       <ClockDriver ep={ep} clock={clock} onProgress={onProgress} onEnded={onEnded} />
-      <color attach="background" args={["#0b1424"]} />
-      <fog attach="fog" args={["#0b1424", 90, 190]} />
-      <hemisphereLight args={["#e8f0ff", "#24452c", 1.6]} />
-      <directionalLight position={[25, 60, 30]} intensity={1.9} />
+      <color attach="background" args={["#9cc3ea"]} />
+      <fog attach="fog" args={["#c4d6e6", 140, 330]} />
+      {/* The sun high and to the side, the sky's fill brighter than at night. */}
+      <hemisphereLight args={["#d6e8ff", "#3f6b32", 1.5]} />
+      <directionalLight position={[-40, 60, 25]} intensity={2.1} color="#fff2d8" />
+      <Sky />
       <Stadium />
       <Goal x={PITCH_L / 2} ep={ep} clock={clock} scored={goalX > 0} />
       <Goal x={-PITCH_L / 2} ep={ep} clock={clock} scored={goalX < 0} />
@@ -154,46 +160,120 @@ function AdaptiveDpr({ fpsRef, onSlow, ready }: {
 
 // --- stadium ------------------------------------------------------------------------------
 
+function Sky() {
+  const tex = useMemo(daySkyTexture, []);
+  useEffect(() => () => tex.dispose(), [tex]);
+  return (
+    <mesh>
+      <sphereGeometry args={[340, 24, 16]} />
+      <meshBasicMaterial map={tex} side={THREE.BackSide} fog={false} depthWrite={false} />
+    </mesh>
+  );
+}
+
+/** The free kick's art (public/free-kick-3d): the crowd panorama and the
+ * LED boards' strip. Until they load, the drawn crowd and plain boards. */
+const STANDS_URL = "/free-kick-3d/stands.webp";
+const LED_URL = "/free-kick-3d/led.webp";
+const STAND_H = 24;
+const BOARD_H = 0.9;
+
 function Stadium() {
   const pitch = useMemo(() => pitchTexture(), []);
-  const crowd = useMemo(() => crowdTexture(), []);
-  useEffect(() => () => { pitch.dispose(); crowd.dispose(); }, [pitch, crowd]);
-  const boards: [number, number, number, number][] = [
-    [0, -PITCH_W / 2 - 4, PITCH_L + 10, 0], [0, PITCH_W / 2 + 4, PITCH_L + 10, 0],
-    [-PITCH_L / 2 - 7, 0, PITCH_W + 8, Math.PI / 2], [PITCH_L / 2 + 7, 0, PITCH_W + 8, Math.PI / 2],
-  ];
-  // Stands: long sides and both ends, tilted towards the pitch.
-  const stands: { pos: [number, number, number]; rotY: number; w: number }[] = [
-    { pos: [0, 9, -PITCH_W / 2 - 17], rotY: 0, w: PITCH_L + 40 },
-    { pos: [0, 9, PITCH_W / 2 + 17], rotY: Math.PI, w: PITCH_L + 40 },
-    { pos: [-PITCH_L / 2 - 18, 9, 0], rotY: Math.PI / 2, w: PITCH_W + 40 },
-    { pos: [PITCH_L / 2 + 18, 9, 0], rotY: -Math.PI / 2, w: PITCH_W + 40 },
-  ];
+  useEffect(() => () => pitch.dispose(), [pitch]);
   return (
     <group>
       <mesh rotation-x={-Math.PI / 2} position-y={-0.02}>
         <planeGeometry args={[PITCH_L + 22, PITCH_W + 18]} />
-        <meshLambertMaterial color="#2b7337" />
+        <meshLambertMaterial color="#2f7f3a" />
       </mesh>
       <mesh rotation-x={-Math.PI / 2}>
         <planeGeometry args={[PITCH_L, PITCH_W]} />
         <meshLambertMaterial map={pitch} />
       </mesh>
-      {boards.map(([x, z, w, r], i) => (
-        <mesh key={i} position={[x, 0.45, z]} rotation-y={r}>
-          <boxGeometry args={[w, 0.9, 0.15]} />
+      <Suspense fallback={<Surrounds />}>
+        <ArtSurrounds />
+      </Suspense>
+    </group>
+  );
+}
+
+/** Boards round the pitch (x, z, length, rotation) and the stands behind
+ * them, tilted towards it. */
+const BOARDS: [number, number, number, number][] = [
+  [0, -PITCH_W / 2 - 4, PITCH_L + 10, 0], [0, PITCH_W / 2 + 4, PITCH_L + 10, Math.PI],
+  [-PITCH_L / 2 - 7, 0, PITCH_W + 8, Math.PI / 2], [PITCH_L / 2 + 7, 0, PITCH_W + 8, -Math.PI / 2],
+];
+const STANDS: { pos: [number, number, number]; rotY: number; w: number }[] = [
+  { pos: [0, 9, -PITCH_W / 2 - 17], rotY: 0, w: PITCH_L + 40 },
+  { pos: [0, 9, PITCH_W / 2 + 17], rotY: Math.PI, w: PITCH_L + 40 },
+  { pos: [-PITCH_L / 2 - 18, 9, 0], rotY: Math.PI / 2, w: PITCH_W + 40 },
+  { pos: [PITCH_L / 2 + 18, 9, 0], rotY: -Math.PI / 2, w: PITCH_W + 40 },
+];
+
+function ArtSurrounds() {
+  const [stands, led] = useTexture([STANDS_URL, LED_URL]);
+  // One copy per stand: the textures are shared, the repeat differs.
+  const maps = useMemo(() => {
+    const aspect = (t: THREE.Texture) => {
+      const im = t.image as { width: number; height: number };
+      return im.width / im.height;
+    };
+    const tiled = (t: THREE.Texture, w: number, h: number) => {
+      const c = t.clone();
+      c.colorSpace = THREE.SRGBColorSpace;
+      c.wrapS = THREE.RepeatWrapping;
+      c.repeat.set(Math.max(1, Math.round(w / (h * aspect(t)))), 1);
+      c.anisotropy = 4;
+      c.needsUpdate = true;
+      return c;
+    };
+    return {
+      stands: STANDS.map((st) => tiled(stands, st.w, STAND_H)),
+      boards: BOARDS.map(([, , w]) => tiled(led, w, BOARD_H)),
+    };
+  }, [stands, led]);
+  useEffect(() => () => [...maps.stands, ...maps.boards].forEach((t) => t.dispose()), [maps]);
+  return (
+    <>
+      {BOARDS.map(([x, z, w, r], i) => (
+        <mesh key={i} position={[x, BOARD_H / 2, z]} rotation-y={r}>
+          <boxGeometry args={[w, BOARD_H, 0.15]} />
+          <meshBasicMaterial map={maps.boards[i]} />
+        </mesh>
+      ))}
+      {STANDS.map((st, i) => (
+        <group key={i} position={st.pos} rotation={[0, st.rotY, 0]}>
+          <mesh rotation-x={-0.6}>
+            <planeGeometry args={[st.w, STAND_H]} />
+            <meshBasicMaterial map={maps.stands[i]} />
+          </mesh>
+        </group>
+      ))}
+    </>
+  );
+}
+
+function Surrounds() {
+  const crowd = useMemo(() => crowdTexture(), []);
+  useEffect(() => () => crowd.dispose(), [crowd]);
+  return (
+    <>
+      {BOARDS.map(([x, z, w, r], i) => (
+        <mesh key={i} position={[x, BOARD_H / 2, z]} rotation-y={r}>
+          <boxGeometry args={[w, BOARD_H, 0.15]} />
           <meshBasicMaterial color={i % 2 ? "#123a5c" : "#0f2f4a"} />
         </mesh>
       ))}
-      {stands.map((s, i) => (
-        <group key={i} position={s.pos} rotation={[0, s.rotY, 0]}>
+      {STANDS.map((st, i) => (
+        <group key={i} position={st.pos} rotation={[0, st.rotY, 0]}>
           <mesh rotation-x={-0.6}>
-            <planeGeometry args={[s.w, 24]} />
+            <planeGeometry args={[st.w, STAND_H]} />
             <meshBasicMaterial map={crowd} color="#c9d3e6" />
           </mesh>
         </group>
       ))}
-    </group>
+    </>
   );
 }
 

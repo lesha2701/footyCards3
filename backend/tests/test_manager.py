@@ -395,17 +395,21 @@ async def test_full_division_relegates_twice_as_many_as_each_league_promotes(cli
 
 async def test_style_shop_merch_and_pro(client, db_session, bot_token):
     config = await get_config(db_session)
-    lion = next(i for i in manager_shop.catalog(config) if i["code"] == "symbol_lion")
+    lion = next(i for i in manager_shop.catalog(config) if i["code"] == "symbol_img_tower")
     scarf = next(i for i in manager_shop.merch_items(config) if i["code"] == "scarf")
     found_cost, pro_stars = config.manager_found_cost, config.manager_pro_stars
     a_id, a_headers = await _player(client, db_session, bot_token, 894201)
     fan_id, fan_headers = await _player(client, db_session, bot_token, 894202)
     view = await _club(client, a_headers)
     club_id, budget = view["club"]["id"], view["club"]["budget"]
-    assert (await client.patch(f"{API}/manager/look", headers=a_headers, json={"symbol": "🦁"})).status_code == 409  # not bought
-    assert (await client.post(f"{API}/manager/shop/symbol_lion", headers=a_headers)).status_code == 200
-    view = (await client.patch(f"{API}/manager/look", headers=a_headers, json={"symbol": "🦁", "color": "#c62828"})).json()
-    assert view["club"]["look"]["symbol"] == "🦁" and view["club"]["look"]["color"] == "#c62828"
+    assert view["club"]["look"]["symbol"] == "none"
+    shop = view["shop"]["cosmetics"]
+    assert "symbol_lion" not in {c["code"] for c in shop}  # the old emoji symbols are retired
+    assert (await client.post(f"{API}/manager/shop/symbol_lion", headers=a_headers)).status_code == 404
+    assert (await client.patch(f"{API}/manager/look", headers=a_headers, json={"symbol": "img_tower"})).status_code == 409  # not bought
+    assert (await client.post(f"{API}/manager/shop/symbol_img_tower", headers=a_headers)).status_code == 200
+    view = (await client.patch(f"{API}/manager/look", headers=a_headers, json={"symbol": "img_tower", "color": "#c62828"})).json()
+    assert view["club"]["look"]["symbol"] == "img_tower" and view["club"]["look"]["color"] == "#c62828"
     assert (await client.patch(f"{API}/manager/look", headers=a_headers, json={"color": "#123456"})).status_code == 409
     db_session.expire_all()
     assert (await db_session.get(User, a_id)).balance == START - found_cost - lion["coins"]
@@ -661,3 +665,58 @@ async def test_window_waits_for_last_weeks_leagues(client, db_session, bot_token
     await db_session.commit()
     resp = await client.post(f"{API}/manager/npc", headers=headers, json={"player_id": keeper.id, "kind": "loan"})
     assert resp.status_code == 200, resp.text
+
+
+async def test_event_limited_symbol_sells_only_while_its_event_runs(client, db_session, bot_token, monkeypatch):
+    from app.services import event_symbols
+
+    monkeypatch.setitem(event_symbols.EVENT_SYMBOLS, "img_tower", "fan_battle")
+    monkeypatch.setitem(event_symbols.EVENT_SYMBOLS, "img_compass", "fan_battle")
+    config = await get_config(db_session)
+    now = datetime.now(timezone.utc)
+    config.fan_battle_enabled = True
+    config.fan_battle_starts_at, config.fan_battle_ends_at = now - timedelta(days=1), now + timedelta(days=3)
+    await db_session.commit()
+    _id, headers = await _player(client, db_session, bot_token, 894301)
+    view = await _club(client, headers)
+    shop = {c["code"]: c for c in view["shop"]["cosmetics"]}
+    assert shop["symbol_img_tower"]["limited_until"] and shop["symbol_img_crown"]["limited_until"] is None
+    assert (await client.post(f"{API}/manager/shop/symbol_img_tower", headers=headers)).status_code == 200
+
+    # The event is over: the bought one stays, the other leaves the shop and can't be bought.
+    config = await get_config(db_session)
+    config.fan_battle_ends_at = now - timedelta(hours=1)
+    await db_session.commit()
+    shop = {c["code"]: c for c in (await client.get(f"{API}/manager", headers=headers)).json()["shop"]["cosmetics"]}
+    assert shop["symbol_img_tower"]["owned"] and shop["symbol_img_tower"]["limited_until"] is None
+    assert "symbol_img_compass" not in shop
+    assert (await client.post(f"{API}/manager/shop/symbol_img_compass", headers=headers)).status_code == 409
+
+
+async def test_paint_goes_on_every_colour_once_bought(client, db_session, bot_token):
+    _id, headers = await _player(client, db_session, bot_token, 894302)
+    view = await _club(client, headers)
+    assert {c["code"]: c for c in view["shop"]["cosmetics"]}["paint_brand"]["stars"] == 99
+    assert (await client.patch(f"{API}/manager/look", json={"color": "brand"}, headers=headers)).status_code == 409
+
+    db_session.add(ManagerCosmetic(club_id=view["club"]["id"], code="paint_brand"))
+    await db_session.commit()
+    r = await client.patch(f"{API}/manager/look", json={"color": "brand"}, headers=headers)
+    assert r.status_code == 200 and r.json()["club"]["look"]["color"] == "brand"
+    # One purchase goes on every colour: the symbol and the kit too; a paint not bought doesn't.
+    r = await client.patch(f"{API}/manager/look", json={"color2": "brand", "kit_color": "brand"}, headers=headers)
+    assert r.status_code == 200 and r.json()["club"]["look"]["kit_color"] == "brand"
+    assert (await client.patch(f"{API}/manager/look", json={"kit_color2": "lemon"}, headers=headers)).status_code == 409
+
+
+async def test_metal_finish_for_stars_then_on_the_symbol(client, db_session, bot_token):
+    _id, headers = await _player(client, db_session, bot_token, 894303)
+    view = await _club(client, headers)
+    shop = {c["code"]: c for c in view["shop"]["cosmetics"]}
+    assert shop["finish_metal"]["stars"] == 99 and shop["finish_none"]["usable"]
+    assert view["club"]["look"]["finish"] == "none"
+    assert (await client.patch(f"{API}/manager/look", json={"finish": "metal"}, headers=headers)).status_code == 409
+    db_session.add(ManagerCosmetic(club_id=view["club"]["id"], code="finish_metal"))
+    await db_session.commit()
+    r = await client.patch(f"{API}/manager/look", json={"finish": "metal"}, headers=headers)
+    assert r.status_code == 200 and r.json()["club"]["look"]["finish"] == "metal"

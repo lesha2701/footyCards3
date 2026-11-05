@@ -324,7 +324,7 @@ export default function AdminTasksPage() {
               {form.condition_type === "metric_counter" ? (
                 <div className="grid grid-cols-2 gap-2">
                   <Field
-                    label="Метрика (packs_opened, unique_players, referrals_count, trades_completed, arena_clean_sheet_wins, memory_levels_completed, saboteur_levels_cleared, ...)"
+                    label="Метрика (packs_opened, unique_players, referrals_count (лучше недельные: друг засчитывается на 3-й день игры), friends_active_today (засчитанные друзья, игравшие сегодня), trades_completed, arena_clean_sheet_wins, memory_levels_completed, saboteur_levels_cleared, played:<режим> — сыгранные партии: played:game:fergie_time, played:game:otvetka, played:game:one_on_one, played:blackjack, played:mordoboi, played:kontra, ...)"
                     value={form.metric}
                     onChange={(v) => setForm({ ...form, metric: v })}
                   />

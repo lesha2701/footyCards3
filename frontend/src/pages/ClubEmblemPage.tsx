@@ -11,6 +11,7 @@ import {
 } from "@/api/clubFeatures";
 import { ClubLogo } from "@/components/clubs/ClubLogo";
 import { CLUB_LOGO_COLORS, CLUB_LOGO_SHAPES } from "@/components/clubs/clubLogoOptions";
+import LimitedBadge from "@/components/common/LimitedBadge";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconCheck, IconChevronLeft, IconCoin, IconLock, IconStar } from "@/components/icons";
 import { formatGameError } from "@/lib/errors";
@@ -160,6 +161,7 @@ export default function ClubEmblemPage() {
                 {!item.unlocked && <IconLock size={10} className="absolute right-0 top-0 text-ink-mist-dim" />}
                 <span className="text-center text-micro leading-tight text-ink-mist">{item.name}</span>
               </button>
+              {!item.unlocked && <LimitedBadge until={item.limited_until} />}
               {priceButton(item)}
             </div>
           ))}

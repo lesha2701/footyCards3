@@ -723,7 +723,7 @@ def _change(stock: ManagerStock) -> Optional[float]:
 
 
 async def view(db: AsyncSession, user: User, now: Optional[datetime] = None) -> dict:
-    from app.services import manager_service as ms
+    from app.services import manager_service as ms, manager_shop
 
     now = now or datetime.now(timezone.utc)
     config = await get_config(db)
@@ -755,7 +755,7 @@ async def view(db: AsyncSession, user: User, now: Optional[datetime] = None) -> 
         low, high = band(s.price, config)
         market.append({
             "club_id": c.id, "name": c.name, "division": c.division, "division_name": ms.division_name(c.division),
-            "look": c.look or {}, "price": s.price, "change_pct": _change(s), "cap": s.price * s.shares_total,
+            "look": manager_shop.resolve_look(c), "price": s.price, "change_pct": _change(s), "cap": s.price * s.shares_total,
             "available": sum(n for _p, n, _k, _h in offers), "floated": s.floated,
             "offers": [{"price": p, "shares": n, "kind": k} for p, n, k, _h in offers],
             "bid": bid(s.price, config), "band": [low, high],

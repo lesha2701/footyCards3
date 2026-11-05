@@ -28,7 +28,7 @@ export function CoinPackagesPanel({
     setBusyId(pkg.id);
     try {
       const invoice = await createCoinInvoice(pkg.id);
-      const paymentStatus = await openTelegramInvoice(invoice.invoice_link);
+      const paymentStatus = await openTelegramInvoice(invoice.invoice_link, invoice.payload_token);
       if (paymentStatus === "cancelled") {
         setBusyId(null);
         return;

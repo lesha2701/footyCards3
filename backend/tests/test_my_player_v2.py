@@ -380,15 +380,15 @@ async def test_trophy_showcase_in_view_and_public(client, db_session, bot_token)
     _, other = await _login(client, db_session, bot_token, 890014)
     await _create(client, headers)
     champion = TrophyDefinition(code="player_career_champion", name="Чемпион лиги", icon="🏆", is_active=True)
-    unrelated = TrophyDefinition(code="something_else", name="Другое", is_active=True)
-    db_session.add_all([champion, unrelated])
+    granted = TrophyDefinition(code="something_else", name="Другое", is_active=True)
+    db_session.add_all([champion, granted])
     await db_session.flush()
     db_session.add_all([
         UserTrophy(user_id=user_id, trophy_definition_id=champion.id, message="Сезон за «Юность»"),
-        UserTrophy(user_id=user_id, trophy_definition_id=unrelated.id),
+        UserTrophy(user_id=user_id, trophy_definition_id=granted.id),
     ])
     await db_session.commit()
     view = (await client.get(f"{API}/my-player", headers=headers)).json()
-    assert [t["name"] for t in view["trophies"]] == ["Чемпион лиги"]
+    assert {t["name"] for t in view["trophies"]} == {"Чемпион лиги", "Другое"}
     public = (await client.get(f"{API}/my-player/users/{user_id}", headers=other)).json()
-    assert public["trophies"][0]["message"] == "Сезон за «Юность»"
+    assert "Сезон за «Юность»" in [t["message"] for t in public["trophies"]]

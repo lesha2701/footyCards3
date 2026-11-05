@@ -328,6 +328,7 @@ class MyPlayerCosmeticsOut(BaseModel):
     gloves: Optional[str] = None
     walkout: Optional[str] = None
     showcase: Optional[str] = None
+    feint: Optional[str] = None
     catalog: list[MyPlayerCosmeticItemOut]
 
 

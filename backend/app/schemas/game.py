@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.player import PlayerOut
 
@@ -369,9 +369,182 @@ class GameLimitsOut(BaseModel):
     magnate: int
     mordoboi: int
     kontra: int = 0
+    one_on_one: int = 0
+    otvetka: int = 0
+    fergie_time: int = 0
     # When a game's hourly cap is used up: the moment it frees up again
     # (key = the field name above). Games with plays left are absent.
     resets_at: dict[str, datetime] = {}
+
+
+# --- «Атака 1 на 1» ---
+
+# The run's tick cap (one_on_one_engine.MAX_RUN_TICKS): no input can be later.
+_ONE_ON_ONE_MAX_TICK = 600
+
+
+class OneOnOneAttackOut(BaseModel):
+    """One attack of the series: the client builds the episode from `seed`
+    + the series' card rating, exactly as the server will replay it."""
+    attack_index: int
+    seed: int
+
+
+class OneOnOneStartOut(BaseModel):
+    session_id: int
+    rating: int
+    total_attacks: int
+    attack: OneOnOneAttackOut
+    # «Мой игрок» gear worn in the 3D scene (cosmetic codes; None = default).
+    celebration: Optional[str] = None
+    ball: Optional[str] = None
+    boots: Optional[str] = None
+    gloves: Optional[str] = None
+    # How his feint looks (None = the plain sidestep).
+    feint: Optional[str] = None
+
+
+class OneOnOneFeintIn(BaseModel):
+    tick: int = Field(ge=0, le=_ONE_ON_ONE_MAX_TICK)
+    dir: int = Field(ge=-1, le=1)
+
+    @field_validator("dir")
+    @classmethod
+    def _side(cls, v: int) -> int:
+        if v == 0:
+            raise ValueError("dir must be -1 or 1")
+        return v
+
+
+class OneOnOneShotIn(BaseModel):
+    """The release swipe as the client quantized it (as the free kick's)."""
+    tick: int = Field(ge=0, le=_ONE_ON_ONE_MAX_TICK)
+    dx: int = Field(ge=-1500, le=1500)
+    dy: int = Field(ge=-1500, le=-1)
+    curve: int = Field(ge=-500, le=500)
+    duration_ms: int = Field(ge=40, le=2000)
+
+
+class OneOnOneAttackRequest(BaseModel):
+    """The input timeline only — never an outcome: control changes
+    [tick, hold 0/1/2/3 (stop, run, sprint, back), steer −1000..1000] in strictly ascending ticks, the
+    feint and the shot with the tick they were made on."""
+    controls: list[list[int]] = Field(max_length=_ONE_ON_ONE_MAX_TICK + 1)
+    feint: Optional[OneOnOneFeintIn] = None
+    shot: Optional[OneOnOneShotIn] = None
+
+    @field_validator("controls")
+    @classmethod
+    def _controls(cls, v: list[list[int]]) -> list[list[int]]:
+        last = -1
+        for c in v:
+            if len(c) != 3:
+                raise ValueError("a control is [tick, hold, steer]")
+            tick, hold, steer = c
+            if not (last < tick <= _ONE_ON_ONE_MAX_TICK) or hold not in (0, 1, 2, 3) or not -1000 <= steer <= 1000:
+                raise ValueError("bad control")
+            last = tick
+        return v
+
+
+class OneOnOneResultOut(BaseModel):
+    outcome: str  # goal | save | tackle | miss | lost
+    bonuses: list[str]  # feint | chip
+    feint: Optional[str] = None  # bit | read
+    coins_this_attack: int
+    total_coins: int
+    is_finished: bool
+    next_attack: Optional[OneOnOneAttackOut] = None
+
+
+class OneOnOneClaimOut(BaseModel):
+    reward_coins: int
+    new_balance: int
+
+
+# --- «Ответка» ---
+
+class OtvetkaEpisodeOut(BaseModel):
+    """One episode of the match: the client builds it from `kind`, `seed` and
+    the card's rating, exactly as the server will replay it. No `minute` —
+    a penalty of the shoot-out."""
+    episode_index: int
+    kind: str  # penalty | free_kick | one_on_one | two_v_one | three_v_two | through_ball | cross
+    minute: Optional[int] = None
+    seed: int
+
+
+class OtvetkaStartOut(BaseModel):
+    session_id: int
+    rating: int
+    total_episodes: int
+    opponent: str
+    goal_coins: int
+    win_coins: int
+    loss_coins: int
+    episode: OtvetkaEpisodeOut
+    celebration: Optional[str] = None
+    ball: Optional[str] = None
+    boots: Optional[str] = None
+    gloves: Optional[str] = None
+    feint: Optional[str] = None
+
+
+class OtvetkaPassIn(BaseModel):
+    """A pass asked for: to which teammate, how (team_attack_engine.PASS_*),
+    the cross's bar."""
+    tick: int = Field(ge=0, le=_ONE_ON_ONE_MAX_TICK)
+    target: int = Field(ge=0, le=2)
+    mode: int = Field(ge=0, le=3)
+    power: int = Field(ge=0, le=100)
+
+
+class OtvetkaEpisodeRequest(OneOnOneAttackRequest):
+    """What was done, never what came of it: the timeline of an attack with
+    its passes, or the swipe of a set piece."""
+    controls: list[list[int]] = Field(default_factory=list, max_length=_ONE_ON_ONE_MAX_TICK + 1)
+    passes: list[OtvetkaPassIn] = Field(default_factory=list, max_length=_ONE_ON_ONE_MAX_TICK + 1)
+    swipe: Optional[FreeKick3DShotRequest] = None
+
+    @field_validator("passes")
+    @classmethod
+    def _passes(cls, v: list[OtvetkaPassIn]) -> list[OtvetkaPassIn]:
+        ticks = [p.tick for p in v]
+        if ticks != sorted(set(ticks)):
+            raise ValueError("passes go in strictly ascending ticks")
+        return v
+
+
+class OtvetkaResultOut(BaseModel):
+    outcome: str
+    opponent_goal: bool  # its answer to this episode
+    my_score: int
+    opponent_score: int
+    shootout_my: int
+    shootout_opponent: int
+    coins_this_episode: int
+    total_coins: int
+    is_finished: bool
+    result: Optional[str] = None  # win | loss
+    reward_coins: Optional[int] = None
+    next_episode: Optional[OtvetkaEpisodeOut] = None
+
+
+class OtvetkaClaimOut(BaseModel):
+    reward_coins: int
+    new_balance: int
+
+
+# --- «Ферги Тайм» ---
+
+class FergieStartOut(BaseModel):
+    session_id: int
+
+
+class FergieFinishOut(BaseModel):
+    reward_coins: int
+    new_balance: int
+    daily_cap_reached: bool
 
 
 # --- Найди пару (card pairs memory match) ---

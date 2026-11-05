@@ -12,6 +12,8 @@ import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js
 
 import { DEFAULT_TIMING, type ClipName, type ClipTiming } from "@/lib/footballerMotion";
 
+import { printNumber } from "./shirtNumber";
+
 export const FOOTBALLER_URL = "/career-3d/footballer.glb";
 export const MOVES_URL = "/career-3d/footballer-moves.glb";
 
@@ -39,11 +41,11 @@ function kickToe(gltf: GLTF, kick: THREE.AnimationClip, contact: number): { x: n
   return { x: p.x, z: p.z };
 }
 
-const HIPS = /Hips\.position$/;
+export const HIPS = /Hips\.position$/;
 
 /** Index (0-2) of the up axis in the hips position track: hips height is
  * by far the largest component of a standing pose. */
-function upAxis(track: THREE.KeyframeTrack): number {
+export function upAxis(track: THREE.KeyframeTrack): number {
   const sums = [0, 0, 0];
   for (let i = 0; i < track.values.length; i += 3) for (let k = 0; k < 3; k++) sums[k] += Math.abs(track.values[i + k]);
   return sums.indexOf(Math.max(...sums));
@@ -51,7 +53,7 @@ function upAxis(track: THREE.KeyframeTrack): number {
 
 /** The clip with its hips kept over the origin (sideways and forwards),
  * height left as animated — the key frames move the player, not the clip. */
-function inPlace(clip: THREE.AnimationClip, up: number): THREE.AnimationClip {
+export function inPlace(clip: THREE.AnimationClip, up: number): THREE.AnimationClip {
   const out = clip.clone();
   for (const track of out.tracks) {
     if (!HIPS.test(track.name)) continue;
@@ -61,7 +63,7 @@ function inPlace(clip: THREE.AnimationClip, up: number): THREE.AnimationClip {
 }
 
 /** The dive keeps its sideways travel (that is the dive), from the origin. */
-function fromOrigin(clip: THREE.AnimationClip, up: number): THREE.AnimationClip {
+export function fromOrigin(clip: THREE.AnimationClip, up: number): THREE.AnimationClip {
   const out = clip.clone();
   for (const track of out.tracks) {
     if (!HIPS.test(track.name)) continue;
@@ -149,7 +151,7 @@ function timingOf(clips: Record<string, THREE.AnimationClip>, up: number, metres
 
 /** Bones of the Mixamo rig by their name without the "mixamorigN:" prefix
  * (the GLTF loader drops the colon: "mixamorig5Hips"). */
-function bonesOf(root: THREE.Object3D): Record<string, THREE.Bone> {
+export function bonesOf(root: THREE.Object3D): Record<string, THREE.Bone> {
   const out: Record<string, THREE.Bone> = {};
   root.traverse((o) => {
     if ((o as THREE.Bone).isBone) out[o.name.replace(/^mixamorig\d*:?/, "")] = o as THREE.Bone;
@@ -227,16 +229,43 @@ export interface SkinnedPlayer {
   current: ClipName | null;
 }
 
-/** Materials cached by part and colour: one per kit colour, not per player
- * (Lambert: cheaper than the model's standard material on a phone). */
+/** What a part of the model is, for its material. */
+export type PartKind = "kit" | "skin" | "hair" | "other";
+
+/** The model's skin is already painted skin-coloured on its texture:
+ * multiplied by a skin tone in full it came out muddy and dark, so only
+ * this much of the tone goes on (the rest stays the texture's). */
+const SKIN_TINT = 0.6;
+/** The kit's texture is a light grey with its folds: lifted this much so a
+ * colour on it reads as that colour, not a shade darker. */
+const KIT_LIFT = 1.18;
+
+/** Materials cached by part and colour: one per kit colour, not per player.
+ * "lambert" (the default, the 22 of a goal replay): cheap on a phone.
+ * "standard" (a mini-game's few players up close): the model's PBR
+ * material — the cloth's sheen, a soft highlight on the skin. */
 export class MaterialCache {
   private cache = new Map<string, THREE.Material>();
-  get(base: THREE.Material, colour: string): THREE.Material {
-    const key = `${base.uuid}:${colour}`;
+  constructor(private readonly quality: "lambert" | "standard" = "lambert") {}
+  get(base: THREE.Material, colour: string, part: PartKind = "other", number?: number): THREE.Material {
+    const key = `${base.uuid}:${colour}:${part}:${number ?? ""}`;
     let mat = this.cache.get(key);
     if (!mat) {
       const src = base as THREE.MeshStandardMaterial;
-      mat = new THREE.MeshLambertMaterial({ map: src.map ?? null, color: colour });
+      const tint = new THREE.Color(colour);
+      if (part === "skin") tint.lerp(new THREE.Color("#ffffff"), 1 - SKIN_TINT);
+      if (part === "kit") tint.multiplyScalar(KIT_LIFT);
+      mat =
+        this.quality === "standard"
+          ? new THREE.MeshStandardMaterial({
+              map: src.map ?? null,
+              color: tint,
+              roughness: part === "skin" ? 0.55 : part === "hair" ? 0.65 : 0.78,
+              metalness: 0,
+              envMapIntensity: part === "skin" ? 0.6 : 0.45,
+            })
+          : new THREE.MeshLambertMaterial({ map: src.map ?? null, color: tint });
+      if (number !== undefined) printNumber(mat, number, colour);
       this.cache.set(key, mat);
     }
     return mat;
@@ -247,12 +276,14 @@ export class MaterialCache {
   }
 }
 
-export function makePlayer(asset: FootballerAsset, look: PlayerLook, materials: MaterialCache): SkinnedPlayer {
+/** `number`: what he has on his back, 0 for nothing; without it, the model's own. */
+export function makePlayer(asset: FootballerAsset, look: PlayerLook, materials: MaterialCache, number?: number): SkinnedPlayer {
   const model = cloneSkinned(asset.gltf.scene);
   model.traverse((o) => {
     const mesh = o as THREE.SkinnedMesh;
     if (!mesh.isMesh) return;
     mesh.frustumCulled = false;
+    const kit = /Shirt|Shorts|Socks/i.test(mesh.name);
     const colour = /Shirt/i.test(mesh.name) ? look.shirt
       : /Shorts/i.test(mesh.name) ? look.shorts
         : /Socks/i.test(mesh.name) ? look.socks
@@ -263,7 +294,8 @@ export function makePlayer(asset: FootballerAsset, look: PlayerLook, materials: 
       mesh.visible = false;
       return;
     }
-    mesh.material = materials.get(mesh.material as THREE.Material, colour);
+    const part: PartKind = kit ? "kit" : /Body/i.test(mesh.name) ? "skin" : /Hair/i.test(mesh.name) ? "hair" : "other";
+    mesh.material = materials.get(mesh.material as THREE.Material, colour, part, /Shirt/i.test(mesh.name) ? number : undefined);
   });
   const root = new THREE.Group();
   root.add(model);

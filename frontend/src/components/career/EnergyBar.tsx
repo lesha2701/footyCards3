@@ -10,6 +10,26 @@ const LEVEL = {
   spent: { fill: "bg-red-400", text: "text-red-400", label: "сильно устал" },
 } as const;
 
+/** The pitch battery: the percentage sits inside it, the fill behind the digits. */
+export function EnergyBattery({ fatigue }: { fatigue: number }) {
+  const energy = energyOf(fatigue);
+  const level = LEVEL[energyLevel(energy)];
+  return (
+    <span
+      role="img"
+      className="relative block h-[13px] w-[calc(100%-3px)] rounded-[3px] border border-white/50 bg-black/60"
+      title={`Энергия ${energy}%`}
+      aria-label={`Энергия ${energy}% — ${level.label}`}
+    >
+      <span className={`absolute inset-y-0 left-0 rounded-[2px] opacity-80 ${level.fill}`} style={{ width: `${Math.max(6, energy)}%` }} />
+      <span className="absolute inset-0 flex items-center justify-center font-mono text-[9px] font-bold leading-none text-white [text-shadow:0_0_2px_#000,0_0_2px_#000]">
+        {energy}%
+      </span>
+      <span className="absolute -right-[3px] top-1/2 h-[5px] w-[2px] -translate-y-1/2 rounded-r-sm bg-white/50" />
+    </span>
+  );
+}
+
 /** `thin`: a 3 px strip; `card`: a tiny battery with its % under a card
  * tile; otherwise a small battery with the percentage next to it. */
 export function EnergyBar({ fatigue, thin = false, card = false }: { fatigue: number; thin?: boolean; card?: boolean }) {

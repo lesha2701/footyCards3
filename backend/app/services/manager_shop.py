@@ -30,18 +30,18 @@ from app.core.timeutil import ensure_aware
 from app.models.enums import NotificationType, TransactionType
 from app.models.manager_club import ManagerClub, ManagerCosmetic, ManagerMerch
 from app.models.user import User
-from app.services import manager_perks, wallet_service
+from app.services import event_symbols, manager_perks, wallet_service
 from app.services.game_config_service import get_config
 from app.services.notification_service import notify
 
-KINDS = ("shape", "symbol", "rim", "fx", "kit", "frame", "theme", "stadium_name", "stands", "poster")
+KINDS = ("shape", "symbol", "rim", "fx", "kit", "frame", "theme", "stadium_name", "stands", "poster", "paint", "finish")
 PALETTE = (
     "#1f8a4c", "#0f5132", "#c62828", "#8e0000", "#1565c0", "#0d2b6b", "#6a1b9a", "#f9a825",
     "#ef6c00", "#212121", "#f5f5f5", "#00838f", "#ad1457", "#4e342e", "#9e9e9e", "#c6e63a",
 )
 DEFAULT_LOOK = {
-    "shape": "shield", "symbol": "⚽", "color": "#1f8a4c", "color2": "#f5f5f5",
-    "kit": "plain", "kit_color": "#1f8a4c", "kit_color2": "#f5f5f5", "frame": "classic", "theme": "night", "rim": "none", "fx": "none",
+    "shape": "shield", "symbol": "none", "color": "#1f8a4c", "color2": "#f5f5f5",
+    "kit": "plain", "kit_color": "#1f8a4c", "kit_color2": "#f5f5f5", "frame": "classic", "theme": "night", "rim": "none", "fx": "none", "finish": "none",
     "stands": "classic", "poster": "classic",
 }
 PRO_FRAME = "frame_gold"
@@ -58,6 +58,10 @@ def catalog(config) -> list[dict]:
             "value": str(raw.get("value") or "")[:32],
             "coins": max(0, int(raw.get("coins") or 0)), "stars": max(0, int(raw.get("stars") or 0)),
         })
+    for item in out:
+        until = event_symbols.limited_until(item["value"], config) if item["kind"] == "symbol" else None
+        item["on_sale"] = item["kind"] != "symbol" or event_symbols.on_sale(item["value"], config)
+        item["limited_until"] = until.isoformat() if until else None
     return out
 
 
@@ -76,6 +80,13 @@ def _item(config, code: str) -> dict:
     item = next((i for i in catalog(config) if i["code"] == code), None)
     if item is None:
         raise NotFoundError("Такого предмета нет")
+    return item
+
+
+def _for_sale(config, code: str) -> dict:
+    item = _item(config, code)
+    if not item["on_sale"]:
+        raise ConflictError("Это лимитка события — оно уже закончилось")
     return item
 
 
@@ -132,7 +143,8 @@ async def shop_out(db: AsyncSession, user: User, club: Optional[ManagerClub], co
     )).all()
     items = {i["code"]: i for i in merch_items(config)}
     return {
-        "cosmetics": [{**i, "owned": i["code"] in have, "usable": _usable(i, have, pro)} for i in catalog(config)],
+        "cosmetics": [{**i, "owned": i["code"] in have, "usable": _usable(i, have, pro)} for i in catalog(config)
+                      if i["on_sale"] or i["code"] in have],
         "palette": list(PALETTE),
         "merch_items": list(items.values()),
         "my_merch": [{"club_name": name, "code": m.code, "emoji": items.get(m.code, {}).get("emoji", "🧣"),
@@ -148,7 +160,7 @@ async def buy_cosmetic(db: AsyncSession, user: User, code: str) -> dict:
     from app.services.manager_service import get_view
 
     config = await get_config(db)
-    item = _item(config, code)
+    item = _for_sale(config, code)
     if item["coins"] <= 0:
         raise ConflictError("Этот предмет продаётся только за звёзды" if item["stars"] else "Он и так бесплатный")
     club = await _owned_club(db, user.id, lock=True)
@@ -174,7 +186,7 @@ async def set_look(db: AsyncSession, user: User, look: dict) -> dict:
     current = resolve_look(club)
     by_kind_value = {(i["kind"], i["value"]): i for i in catalog(config)}
     for field, kind in (("shape", "shape"), ("symbol", "symbol"), ("rim", "rim"), ("fx", "fx"), ("kit", "kit"), ("frame", "frame"), ("theme", "theme"),
-                        ("stands", "stands"), ("poster", "poster")):
+                        ("stands", "stands"), ("poster", "poster"), ("finish", "finish")):
         if field not in look:
             continue
         item = by_kind_value.get((kind, str(look[field])))
@@ -183,7 +195,13 @@ async def set_look(db: AsyncSession, user: User, look: dict) -> dict:
         current[field] = item["value"]
     for field in ("color", "color2", "kit_color", "kit_color2"):
         if field in look:
-            if look[field] not in PALETTE:
+            # Any colour may also be a bought «Особый цвет» (kind "paint"): one purchase
+            # goes on the emblem, its symbol and the kit.
+            paint = by_kind_value.get(("paint", str(look[field])))
+            if paint is not None:
+                if not _usable(paint, have, pro):
+                    raise ConflictError("Этот цвет ещё не куплен")
+            elif look[field] not in PALETTE:
                 raise ConflictError("Такого цвета нет в палитре")
             current[field] = look[field]
     club.look = current
@@ -318,7 +336,7 @@ async def stars_order(db: AsyncSession, user_id: int, code: str, config) -> tupl
         if config.manager_pro_stars <= 0:
             raise ConflictError("«Менеджер Pro» сейчас не продаётся")
         return "manager:pro", "Менеджер Pro", f"Скаут, золотая рамка и значок PRO на {config.manager_pro_days} дней", config.manager_pro_stars
-    item = _item(config, code)
+    item = _for_sale(config, code)
     if item["stars"] <= 0:
         raise ConflictError("Этот предмет за звёзды не продаётся")
     if code in await owned(db, club.id):
@@ -345,7 +363,7 @@ async def validate_stars(db: AsyncSession, invoice, config) -> tuple[bool, str]:
     if code == "pro":
         return (config.manager_pro_stars == invoice.stars_amount, "Цена изменилась — открой покупку заново")
     item = next((i for i in catalog(config) if i["code"] == code), None)
-    if item is None or item["stars"] != invoice.stars_amount:
+    if item is None or not item["on_sale"] or item["stars"] != invoice.stars_amount:
         return False, "Этот предмет больше не продаётся"
     if code in await owned(db, club.id):
         return False, "Уже куплено"

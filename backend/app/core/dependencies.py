@@ -141,6 +141,17 @@ async def _get_or_create_user(
         db.add(user)
         await db.commit()
         await db.refresh(user)
+    if previous_day != today and user.referred_by_id is not None and user.referral_reward_granted:
+        # A counted friend's new day feeds the referrer's «Друг в игре» task.
+        from app.services import task_service
+
+        referrer = await db.get(User, user.referred_by_id)
+        if referrer is not None:
+            await task_service.evaluate_metric_progress(
+                db, referrer, task_service.FRIENDS_ACTIVE_TODAY, await task_service.friends_active_today(db, referrer.id),
+            )
+            await db.commit()
+            await db.refresh(user)
     return user
 
 

@@ -13,8 +13,10 @@ import {
 } from "@/api/manager";
 import analyticsArt from "@/assets/manager/analytics.webp";
 import standsArt from "@/assets/manager/stands.webp";
+import LimitedBadge from "@/components/common/LimitedBadge";
 import ShareButton from "@/components/common/ShareButton";
 import { IconCoin } from "@/components/icons";
+import { paintCss } from "@/lib/emblemPaint";
 import { FRAME_COLORS, themeClass } from "@/lib/managerLook";
 import { payMyPlayerWithStars } from "@/lib/myPlayerStars";
 import { hapticNotify } from "@/lib/telegram";
@@ -27,7 +29,9 @@ const POSTER_COLORS: Record<string, [string, string]> = { classic: ["#3ed17e", "
 
 const SECTIONS: { kind: ManagerCosmetic["kind"]; field: keyof ManagerLook; title: string }[] = [
   { kind: "shape", field: "shape", title: "Форма эмблемы" },
+  { kind: "paint", field: "color", title: "Особый цвет — на эмблему, символ и форму" },
   { kind: "symbol", field: "symbol", title: "Символ" },
+  { kind: "finish", field: "finish", title: "Покрытие символа" },
   { kind: "rim", field: "rim", title: "Обводка эмблемы" },
   { kind: "fx", field: "fx", title: "Эффект эмблемы" },
   { kind: "kit", field: "kit", title: "Рисунок формы" },
@@ -36,6 +40,17 @@ const SECTIONS: { kind: ManagerCosmetic["kind"]; field: keyof ManagerLook; title
   { kind: "stands", field: "stands", title: "Трибуны стадиона" },
   { kind: "poster", field: "poster", title: "🏆 Постер чемпиона" },
 ];
+
+/** Symbols in price order (free, then coins, then Stars — new ones join their price, not
+ * the end); the other kinds keep the catalog's order. */
+function byPrice(kind: ManagerCosmetic["kind"], items: ManagerCosmetic[]): ManagerCosmetic[] {
+  if (kind !== "symbol") return items;
+  const rank = (c: ManagerCosmetic) => (c.coins === 0 && c.stars === 0 ? [0, 0] : c.coins > 0 ? [1, c.coins] : [2, c.stars]);
+  return [...items].sort((x, y) => {
+    const [a, b] = [rank(x), rank(y)];
+    return a[0] - b[0] || a[1] - b[1];
+  });
+}
 
 /** A poster style chip: the frame and the trophy colour. */
 function PosterChip({ value }: { value: string }) {
@@ -76,12 +91,16 @@ export default function StyleTab({ view, club, onView, onError }: {
   const shop = view.shop;
   const owns = (code: string) => club.owned_cosmetics.includes(code);
   const stadiumItem = shop.cosmetics.find((c) => c.kind === "stadium_name");
+  // A bought «Особый цвет» goes on any colour: the emblem, its symbol and the kit.
+  const paints = shop.cosmetics.filter((c) => c.kind === "paint" && c.usable).map((c) => c.value);
+  const colours = [...shop.palette, ...paints];
 
   return (
     <div className="flex flex-col gap-4" data-testid="manager-style">
       <section className={`flex items-center gap-4 rounded-2xl bg-gradient-to-br ${themeClass(club.look.theme)} p-4`}>
         <Emblem look={club.look} size={72} />
         <KitShirt look={club.look} size={56} sponsor={club.kit_sponsor} />
+        <KitShirt look={club.look} size={56} back={{ name: club.name, number: 10 }} />
         <span className="min-w-0 flex-1">
           <span className="block truncate font-display text-lg font-bold text-ink-chalk">
             {club.name}
@@ -97,7 +116,7 @@ export default function StyleTab({ view, club, onView, onError }: {
             : <h2 className="font-display text-sm font-bold text-ink-chalk">{title}</h2>}
           {kind === "poster" && <ChampionShare titles={club.titles} />}
           <div className={`grid gap-2 ${kind === "stands" ? "grid-cols-2" : "grid-cols-3"}`}>
-            {shop.cosmetics.filter((c) => c.kind === kind).map((c) => {
+            {byPrice(kind, shop.cosmetics.filter((c) => c.kind === kind)).map((c) => {
               const on = club.look[field] === c.value;
               return (
                 <div key={c.code} className={`flex flex-col items-center gap-1 rounded-xl p-2 ${on ? "bg-accent-lime/15 ring-2 ring-accent-lime" : "bg-bg-raised"}`}>
@@ -106,7 +125,9 @@ export default function StyleTab({ view, club, onView, onError }: {
                     {kind === "stands" && <Stadium look={{ ...club.look, stands: c.value }} height={64} label={c.name} />}
                     {kind === "poster" && <PosterChip value={c.value} />}
                     {kind === "shape" && <Emblem look={{ ...club.look, shape: c.value }} size={40} />}
-                    {kind === "symbol" && <span className="text-3xl">{c.value}</span>}
+                    {kind === "paint" && <Emblem look={{ ...club.look, color: c.value }} size={40} />}
+                    {kind === "symbol" && <Emblem look={{ ...club.look, symbol: c.value }} size={40} />}
+                    {kind === "finish" && <Emblem look={{ ...club.look, finish: c.value }} size={40} />}
                     {kind === "rim" && <Emblem look={{ ...club.look, rim: c.value }} size={40} />}
                     {kind === "fx" && <Emblem look={{ ...club.look, fx: c.value }} size={40} />}
                     {kind === "kit" && <KitShirt look={{ ...club.look, kit: c.value }} size={40} />}
@@ -114,6 +135,7 @@ export default function StyleTab({ view, club, onView, onError }: {
                     {kind === "theme" && <span className={`h-10 w-full rounded-lg bg-gradient-to-br ${themeClass(c.value)} ring-1 ring-white/10`} />}
                   </button>
                   <span className="text-center text-micro text-ink-chalk">{c.name}</span>
+                  {!c.owned && <LimitedBadge until={c.limited_until} />}
                   {!c.usable && (
                     <span className="flex w-full flex-col gap-1">
                       {c.coins > 0 && (
@@ -136,11 +158,11 @@ export default function StyleTab({ view, club, onView, onError }: {
             })}
           </div>
           {kind === "shape" && (
-            <Palette label="Цвета эмблемы" palette={shop.palette} a={club.look.color} b={club.look.color2}
+            <Palette label="Цвета эмблемы" palette={colours} a={club.look.color} b={club.look.color2}
               onA={(color) => look.mutate({ color })} onB={(color2) => look.mutate({ color2 })} />
           )}
           {kind === "kit" && (
-            <Palette label="Цвета формы" palette={shop.palette} a={club.look.kit_color} b={club.look.kit_color2}
+            <Palette label="Цвета формы" palette={colours} a={club.look.kit_color} b={club.look.kit_color2}
               onA={(kit_color) => look.mutate({ kit_color })} onB={(kit_color2) => look.mutate({ kit_color2 })} />
           )}
         </section>
@@ -229,7 +251,7 @@ function Palette({ label, palette, a, b, onA, onB }: {
           {palette.map((color) => (
             <button key={color} onClick={() => pick(color)} aria-label={color}
               className={`h-6 w-6 rounded-full ${current === color ? "ring-2 ring-white ring-offset-2 ring-offset-bg-surface" : ""}`}
-              style={{ background: color }} />
+              style={{ background: paintCss(color) }} />
           ))}
         </div>
       ))}

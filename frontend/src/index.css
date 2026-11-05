@@ -204,6 +204,33 @@ body {
   .emblem-orbit { transform-box: fill-box; transform-origin: center; animation: emblem-spin 5s linear infinite; }
   .emblem-electric { animation: emblem-electric 0.8s linear infinite; }
   .emblem-bolt { animation: emblem-bolt 1.4s steps(1, end) infinite; }
+  .emblem-fall { animation: emblem-fall 3s linear infinite; }
+  .emblem-rise { animation: emblem-rise 2.6s ease-out infinite; }
+  .emblem-pulse { transform-box: fill-box; transform-origin: center; animation: emblem-pulse 2.4s ease-out infinite; }
+  .emblem-halo { animation: emblem-bob 2.2s ease-in-out infinite; }
+  .emblem-twinkle { transform-box: fill-box; transform-origin: center; animation: emblem-twinkle 2.2s ease-in-out infinite; }
+}
+@keyframes emblem-fall {
+  0% { transform: translateY(0); opacity: 0; }
+  15%, 75% { opacity: 1; }
+  100% { transform: translateY(104px); opacity: 0; }
+}
+@keyframes emblem-rise {
+  0% { transform: translateY(0); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translateY(-70px); opacity: 0; }
+}
+@keyframes emblem-pulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  100% { transform: scale(1.28); opacity: 0; }
+}
+@keyframes emblem-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+@keyframes emblem-twinkle {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(0.8); opacity: 0.7; }
 }
 @keyframes emblem-shine {
   0%, 50% { transform: translateX(-120px); }

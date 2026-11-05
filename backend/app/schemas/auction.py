@@ -13,6 +13,8 @@ class AgentLicenseOut(BaseModel):
     active: bool
     expires_at: Optional[datetime] = None
     revoked: bool = False
+    # An admin's: never runs out, no expiry date.
+    permanent: bool = False
     stars: int
     days: int
     min_account_age_days: int

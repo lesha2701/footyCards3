@@ -185,6 +185,21 @@ async def test_listing_needs_active_agent_license_but_bidding_does_not(db_sessio
     assert not (await auction_service.get_lot(db_session, buyer, lot.id)).seller_is_agent
 
 
+async def test_admin_is_verified_and_an_agent_forever(db_session, config):
+    from app.services import agent_license_service
+
+    config.trade_verified_min_stars = 49
+    await db_session.commit()
+    admin, buyer = await _user(db_session, created_at=datetime.now(timezone.utc) - timedelta(days=1)), await _user(db_session)
+    admin.is_admin = True
+    await db_session.commit()
+    status = await agent_license_service.status(db_session, admin)
+    assert status.active and status.permanent and status.expires_at is None
+    legend = await _card(db_session, admin, rarity=Rarity.legendary)
+    lot = await _list(db_session, admin, legend, start=10_000, license=False)
+    assert (await auction_service.get_lot(db_session, buyer, lot.id)).seller_is_agent
+
+
 async def test_license_purchase_rules_and_delivery_extends(db_session, config):
     from app.models.pack import StarsInvoice
     from app.services import agent_license_service, shop_product_service

@@ -7,7 +7,7 @@ import { openTelegramInvoice } from "@/lib/telegram";
  * Resolves to "paid", "cancelled" or throws with a user-facing message. */
 export async function payMyPlayerWithStars(order: MyPlayerStarsPurchase): Promise<"paid" | "cancelled"> {
   const invoice = await createMyPlayerStarsInvoice(order);
-  const status = await openTelegramInvoice(invoice.invoice_link);
+  const status = await openTelegramInvoice(invoice.invoice_link, invoice.payload_token);
   if (status === "cancelled") return "cancelled";
   if (status === "failed") throw new Error("Платёж не прошёл");
   for (let attempt = 0; attempt < 20; attempt++) {

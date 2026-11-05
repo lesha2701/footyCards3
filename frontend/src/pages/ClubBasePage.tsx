@@ -264,7 +264,7 @@ export default function ClubBasePage() {
   const buyStars = useMutation({
     mutationFn: async (code: string) => {
       const invoice = await createStadiumCosmeticInvoice(code);
-      const status = await openTelegramInvoice(invoice.invoice_link);
+      const status = await openTelegramInvoice(invoice.invoice_link, invoice.payload_token);
       if (status === "cancelled") return null;
       if (status === "failed") throw new Error("Платёж не прошёл");
       for (let i = 0; i < 20; i++) {
@@ -279,7 +279,7 @@ export default function ClubBasePage() {
   const speedup = useMutation({
     mutationFn: async () => {
       const invoice = await createClubBaseSpeedupInvoice();
-      const status = await openTelegramInvoice(invoice.invoice_link);
+      const status = await openTelegramInvoice(invoice.invoice_link, invoice.payload_token);
       if (status === "cancelled") return null;
       if (status === "failed") throw new Error("Платёж не прошёл");
       for (let i = 0; i < 20; i++) {

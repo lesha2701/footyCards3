@@ -144,7 +144,7 @@ export default function AcademyPage() {
   const speedup = useMutation({
     mutationFn: async () => {
       const invoice = await createAcademySpeedupInvoice();
-      const status = await openTelegramInvoice(invoice.invoice_link);
+      const status = await openTelegramInvoice(invoice.invoice_link, invoice.payload_token);
       if (status === "cancelled") return null;
       if (status === "failed") throw new Error("Платёж не прошёл");
       for (let i = 0; i < 20; i++) {

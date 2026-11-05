@@ -43,6 +43,7 @@ export const COSMETIC_GROUPS: { kind: MyPlayerCosmeticKind; title: string }[] = 
   { kind: "ball", title: "Мяч (штрафной и пенальти)" },
   { kind: "boots", title: "Бутсы (штрафной и пенальти)" },
   { kind: "gloves", title: "Перчатки вратаря (пенальти)" },
+  { kind: "feint", title: "Финт (атака 1 на 1)" },
   { kind: "walkout", title: "Выход на поле" },
   { kind: "showcase", title: "Шкаф трофеев" },
 ];
@@ -62,6 +63,9 @@ export const SHOWCASE_STYLE: Record<string, { shelf: string; ring: string; label
   sc_marble: { shelf: "from-slate-200/25 via-slate-400/15 to-bg-surface", ring: "ring-slate-300/60", label: "Мраморная витрина" },
   sc_gold: { shelf: "from-yellow-400/35 via-amber-500/20 to-bg-surface", ring: "ring-yellow-300/80", label: "Золотая витрина" },
   sc_crystal: { shelf: "from-cyan-300/30 via-fuchsia-300/20 to-bg-surface", ring: "ring-cyan-200/80", label: "Хрустальная витрина" },
+  sc_stadium: { shelf: "from-sky-900/70 via-emerald-900/40 to-bg-surface", ring: "ring-sky-300/60", label: "Витрина «Ночной стадион»" },
+  sc_velvet: { shelf: "from-rose-950/80 via-red-900/40 to-bg-surface", ring: "ring-amber-400/70", label: "Витрина «Королевский бархат»" },
+  sc_neon: { shelf: "from-fuchsia-900/60 via-zinc-900/60 to-bg-surface", ring: "ring-lime-400/80", label: "Неоновая витрина" },
 };
 
 export const TIER_NAMES: Record<MyPlayerTier, string> = { bronze: "Бронза", silver: "Серебро", gold: "Золото", legend: "Легенда" };

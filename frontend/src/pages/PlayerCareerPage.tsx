@@ -25,6 +25,7 @@ import PlayerAvatar from "@/components/myPlayer/PlayerAvatar";
 import { BonusTab, CareerStatus, HallOfFame, NewsFeed, RankingsTab, StoryEvent } from "@/components/playerCareer/CareerLife";
 import FriendsLeagueTab from "@/components/playerCareer/FriendsLeagueTab";
 import KeyMoments from "@/components/playerCareer/KeyMoments";
+import { TrophyImage } from "@/components/myPlayer/TrophyShowcase";
 import GameHero from "@/components/common/GameHero";
 import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
@@ -674,14 +675,58 @@ function CupCard({ cup }: { cup: PlayerCareerCup }) {
 const LINE_LABELS: Record<string, string> = { GK: "Вратарь", DEF: "Защитник", MID: "Полузащитник", FWD: "Нападающий" };
 const LINE_SHORT: Record<string, string> = { GK: "ВРТ", DEF: "ЗАЩ", MID: "ПЗ", FWD: "НАП" };
 
+const AWARD_UNIT: Record<string, string> = { goals: "голов", assists: "передач", clean_sheets: "на ноль", score: "индекс" };
+
+function awardValue(stat: string, value: number): string {
+  return stat === "score" ? `индекс ${value}` : `${value} ${AWARD_UNIT[stat] ?? ""}`;
+}
+
+/** «Призы месяца»: the goals, assists, keepers' and defenders' races. */
+function MonthAwards({ ball }: { ball: PlayerCareerGoldenBall }) {
+  return (
+    <section className="rounded-2xl bg-bg-surface p-4" data-testid="month-awards">
+      <h2 className="font-display text-base font-bold text-ink-chalk">Призы месяца</h2>
+      <p className="mt-1 text-caption text-ink-mist">
+        Каждый: {ball.award_coins ?? 0} монет, +{ball.award_prestige ?? 0} престижа и трофей в шкаф. Те же {ball.min_matches} матчей минимум.
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        {ball.awards!.map((a) => (
+          <div key={a.code} className="flex flex-col items-center rounded-xl bg-gradient-to-b from-amber-400/15 to-bg-raised p-2 text-center" data-testid={`award-${a.code}`}>
+            <TrophyImage code={a.trophy} icon="🏆" className="h-16 w-16" />
+            <p className="mt-1 font-display text-sm font-bold text-ink-chalk">{a.title}</p>
+            {a.line && <p className="text-micro text-ink-mist">{a.line === "GK" ? "только вратари" : "только защитники"}</p>}
+            <p className={`mt-1 text-caption ${a.leader?.is_me ? "font-bold text-accent-lime" : "text-ink-chalk"}`}>
+              {a.leader ? `👑 ${a.leader.user_name} · ${awardValue(a.stat, a.leader.value)}` : "Пока никого"}
+            </p>
+            {a.my_value != null && (
+              <p className="text-micro text-ink-mist">
+                Ты: {awardValue(a.stat, a.my_value)}{a.my_place ? ` · ${a.my_place} место` : ""}
+              </p>
+            )}
+            {a.last && (
+              <p className={`mt-1 text-micro ${a.last.is_me ? "font-bold text-amber-300" : "text-ink-mist-dim"}`}>
+                {a.last.month_label}: {a.last.user_name}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function GoldenBallTab({ ball }: { ball: PlayerCareerGoldenBall }) {
   return (
     <div className="flex flex-col gap-4" data-testid="golden-ball">
       <section className="rounded-2xl bg-gradient-to-br from-amber-400/25 to-bg-surface p-4">
-        <p className="font-display text-lg font-bold text-ink-chalk">⚽ Золотой мяч · {ball.month_label}</p>
+        <div className="flex items-center gap-3">
+          <TrophyImage code="player_career_golden_ball" icon="⚽" className="h-16 w-16 shrink-0" />
+          <p className="font-display text-lg font-bold text-ink-chalk">Золотой мяч · {ball.month_label}</p>
+        </div>
         <p className="mt-1 text-caption text-ink-mist">
-          Лучший игрок месяца по всем матчам «Карьеры игрока» — для любой позиции: очки = средняя оценка × 10 + голы, передачи и
-          сухие матчи по ценам своей линии. Нужно сыграть минимум {ball.min_matches} матчей. Приз: {ball.prize_coins} монет,
+          Лучший игрок месяца по всем матчам «Карьеры игрока». Индекс формы считается внутри своей линии: средний игрок
+          любой позиции — около 100, поэтому вратарь, который лучше всех вратарей, обгоняет нападающего, который просто
+          хорош среди нападающих. Нужно сыграть минимум {ball.min_matches} матчей. Приз: {ball.prize_coins} монет,
           +{ball.prize_prestige} престижа и трофей.
         </p>
         <div className="mt-2 grid grid-cols-2 gap-1.5 text-caption" data-testid="golden-ball-weights">
@@ -689,17 +734,19 @@ function GoldenBallTab({ ball }: { ball: PlayerCareerGoldenBall }) {
             <span key={l} className="rounded-lg bg-black/20 px-2 py-1 text-ink-mist">
               <b className="text-ink-chalk">{LINE_LABELS[l]}</b>: гол {ball.weights[l].goals} · пас {ball.weights[l].assists}
               {ball.weights[l].clean_sheets > 0 && ` · на ноль ${ball.weights[l].clean_sheets}`}
+              {ball.baselines?.[l] && ` · средняя оценка линии ${ball.baselines[l].rating.toFixed(2)}`}
             </span>
           ))}
         </div>
         {ball.me && (
           <p className="mt-2 text-sm text-ink-chalk">
-            Ты: {ball.me.place ? <b>{ball.me.place} место</b> : `матчей ${ball.me.matches}/${ball.min_matches}`} · {ball.me.score} очков
+            Ты: {ball.me.place ? <b>{ball.me.place} место</b> : `матчей ${ball.me.matches}/${ball.min_matches}`} · индекс {ball.me.score}
           </p>
         )}
       </section>
+      {ball.awards && ball.awards.length > 0 && <MonthAwards ball={ball} />}
       <section className="rounded-2xl bg-bg-surface p-4">
-        <h2 className="font-display text-base font-bold text-ink-chalk">Гонка месяца</h2>
+        <h2 className="font-display text-base font-bold text-ink-chalk">Гонка за «Золотой мяч»</h2>
         {ball.table.length === 0 ? (
           <p className="mt-2 text-sm text-ink-mist">Пока никто не сыграл {ball.min_matches} матчей в этом месяце.</p>
         ) : (

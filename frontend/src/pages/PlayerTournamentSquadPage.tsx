@@ -301,7 +301,7 @@ export default function PlayerTournamentSquadPage() {
           <BenchUpgradeHints hints={benchUpgrades} onApply={applyBenchUpgrade} busy={setCardsMutation.isPending} />
         </div>
         <ChemistryFrozenNote chemistry={chemistry} />
-        <ChemistrySummary chemistry={chemistry} />
+        <ChemistrySummary chemistry={chemistry} thinLines />
         <ChemistryHints hints={chemistryHints} onApply={applyChemistryHint} busy={setCardsMutation.isPending} />
 
         {tactics && (
@@ -323,7 +323,7 @@ export default function PlayerTournamentSquadPage() {
 
         <div ref={pitchRef} style={PITCH_STYLE} className="relative flex flex-col gap-3 overflow-hidden rounded-[22px] p-3 ring-1 ring-white/10">
           <PitchBackground />
-          <ChemistryLinksOverlay containerRef={pitchRef} chemistry={chemistry} />
+          <ChemistryLinksOverlay containerRef={pitchRef} chemistry={chemistry} thin over />
           {pitchRows(squad?.formation, (squad?.slots ?? []).map((s) => s.slot_code)).map((row) => { const category = row.category; return (
             <div key={row.key} className="relative flex justify-evenly gap-2">
               {category === "GK" && (

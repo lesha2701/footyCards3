@@ -110,17 +110,17 @@ export const KEEPER_STAND_HAND_Y = 1.25;
 export const KEEPER_MAX_HAND_Y = 2.45;
 export const KEEPER_MAX_REACH = 3.4;
 
-const GRAVITY = 9.81;
+export const GRAVITY = 9.81;
 /** 0.5 · ρ · Cd · A / m for a size-5 ball. */
 const DRAG_K = 0.0135;
 /** Magnus coefficient: a = K · (ω × v). */
 const MAGNUS_K = 0.006;
-const SPIN_DECAY_PER_S = 0.08;
-const GROUND_RESTITUTION = 0.5;
-const GROUND_FRICTION = 0.9;
+export const SPIN_DECAY_PER_S = 0.08;
+export const GROUND_RESTITUTION = 0.5;
+export const GROUND_FRICTION = 0.9;
 /** A rolling ball loses this share of its speed per second. */
-const ROLL_DECAY_PER_S = 0.08;
-const POST_RESTITUTION = 0.65;
+export const ROLL_DECAY_PER_S = 0.08;
+export const POST_RESTITUTION = 0.65;
 
 export const SIM_DT = 1 / 240;
 const MAX_TIME = 4;
@@ -137,7 +137,7 @@ const MAX_DIP = 40;
  * the keeper's slowdown share. Small on purpose — skill decides. */
 const EDGE_SPEED = 2;
 const EDGE_CURL = 0.1;
-const EDGE_KEEPER = 0.08;
+export const EDGE_KEEPER = 0.08;
 
 /** Card rating → edge in [−1, 1]. */
 export function ratingEdge(rating: number): number {
@@ -168,12 +168,15 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 /** Ball spot, wall and keeper for a seed. The wall stands 9.15 m from the
  * ball on the line to the goal centre and covers the near-post side; the
  * keeper leans to the far post. */
-export function createSetup(seed: number, rating = 75): ShotSetup {
+export function createSetup(seed: number, rating = 75, at?: { distance: number; offset: number }): ShotSetup {
   const rnd = mulberry32(seed);
   const edge = ratingEdge(rating);
-  const distance = lerp(18, 26, rnd());
+  const seededDistance = lerp(18, 26, rnd());
   const side = rnd() < 0.5 ? -1 : 1;
-  const offset = side * lerp(0, 8, rnd());
+  const seededOffset = side * lerp(0, 8, rnd());
+  // `at`: the foul's real spot, «Матч 3D». Every draw still happens, in order.
+  const distance = at ? at.distance : seededDistance;
+  const offset = at ? at.offset : seededOffset;
   const ball: Vec3 = { x: offset, y: BALL_RADIUS, z: distance };
 
   // Unit vector ball → goal centre (in xz) and its perpendicular.
@@ -400,7 +403,7 @@ export function magnusAccel(spin: Vec3, v: Vec3): Vec3 {
   };
 }
 
-function accel(v: Vec3, spin: Vec3): Vec3 {
+export function accel(v: Vec3, spin: Vec3): Vec3 {
   const speed = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
   const m = magnusAccel(spin, v);
   return {
@@ -473,7 +476,7 @@ function keeperStep(state: KeeperState, speed: number, dt: number) {
 
 /** Ball vs a vertical capsule (axis along y from y0 to y1). Returns the
  * outward normal on contact, else null. */
-function hitVerticalCapsule(p: Vec3, cx: number, cz: number, y0: number, y1: number, r: number): Vec3 | null {
+export function hitVerticalCapsule(p: Vec3, cx: number, cz: number, y0: number, y1: number, r: number): Vec3 | null {
   const cy = clamp(p.y, y0, y1);
   const nx = p.x - cx;
   const ny = p.y - cy;
@@ -485,7 +488,7 @@ function hitVerticalCapsule(p: Vec3, cx: number, cz: number, y0: number, y1: num
   return { x: nx / d, y: ny / d, z: nz / d };
 }
 
-function hitSphere(p: Vec3, cx: number, cy: number, cz: number, r: number): Vec3 | null {
+export function hitSphere(p: Vec3, cx: number, cy: number, cz: number, r: number): Vec3 | null {
   const nx = p.x - cx;
   const ny = p.y - cy;
   const nz = p.z - cz;
@@ -497,7 +500,7 @@ function hitSphere(p: Vec3, cx: number, cy: number, cz: number, r: number): Vec3
 }
 
 /** Posts (vertical, at x = ±half width) and the crossbar (along x). */
-function hitFrame(p: Vec3): { normal: Vec3; push: number } | null {
+export function hitFrame(p: Vec3): { normal: Vec3; push: number } | null {
   const rr = POST_RADIUS + BALL_RADIUS;
   for (const sx of [-GOAL_HALF_WIDTH, GOAL_HALF_WIDTH]) {
     if (p.y > GOAL_HEIGHT + rr) continue;
@@ -521,7 +524,7 @@ function hitFrame(p: Vec3): { normal: Vec3; push: number } | null {
   return null;
 }
 
-function reflect(v: Vec3, n: Vec3, restitution: number): Vec3 {
+export function reflect(v: Vec3, n: Vec3, restitution: number): Vec3 {
   const vn = v.x * n.x + v.y * n.y + v.z * n.z;
   if (vn >= 0) return v;
   const k = (1 + restitution) * vn;

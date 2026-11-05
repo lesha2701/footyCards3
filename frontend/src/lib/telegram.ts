@@ -1,3 +1,6 @@
+import { useAdminPayStore } from "@/store/adminPayStore";
+import { useAuthStore } from "@/store/authStore";
+
 interface TelegramWebApp {
   initData: string;
   initDataUnsafe: Record<string, unknown>;
@@ -106,7 +109,15 @@ export function hapticNotify(type: "error" | "success" | "warning"): void {
  * the pack has been granted yet (that happens async once our bot relays the
  * `successful_payment` update to the backend), so callers should poll for
  * the actual result rather than trusting this status alone. */
-export function openTelegramInvoice(url: string): Promise<"paid" | "cancelled" | "failed" | "pending"> {
+export async function openTelegramInvoice(
+  url: string, payloadToken?: string,
+): Promise<"paid" | "cancelled" | "failed" | "pending"> {
+  // An admin first gets AdminPaySheet: take it free / gift it free, or pay as usual.
+  if (payloadToken && useAuthStore.getState().user?.is_admin) {
+    const choice = await useAdminPayStore.getState().ask(payloadToken);
+    if (choice === "paid") return "paid";
+    if (choice !== "pay") return "cancelled";
+  }
   return new Promise((resolve) => {
     const webApp = getTelegramWebApp();
     if (!webApp?.openInvoice) {

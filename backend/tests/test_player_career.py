@@ -11,7 +11,7 @@ import app.core.rate_limit as rate_limit_module
 from app.models.career import CareerClub
 from app.models.enums import Position, TransactionType
 from app.models.my_player import MyPlayer
-from app.models.player_career import PlayerCareerCup, PlayerCareerGoldenBall, PlayerCareerMonthStat, PlayerCareerSeason
+from app.models.player_career import PlayerCareerCup, PlayerCareerGoldenBall, PlayerCareerMonthAward, PlayerCareerMonthStat, PlayerCareerSeason
 from app.models.transaction import CoinTransaction
 from app.models.trophy import TrophyDefinition, UserTrophy
 from app.models.user import User
@@ -270,7 +270,8 @@ async def test_golden_ball_awarded_once_for_last_month(client, db_session, bot_t
     assert await player_career_cups.award_golden_ball(db_session, now) is None
     db_session.expire_all()
     config = await get_config(db_session)
-    assert (await db_session.get(User, a_id)).balance == balance + config.player_career_golden_ball_coins
+    # A also leads the goals and assists races («Золотая бутса», «Король передач»).
+    assert (await db_session.get(User, a_id)).balance == balance + config.player_career_golden_ball_coins + 2 * config.player_career_award_coins
     row = await db_session.get(PlayerCareerGoldenBall, "2026-10")
     assert row.user_id == a_id and row.goals == 9
     trophies = (await db_session.execute(select(UserTrophy).where(UserTrophy.user_id == a_id))).scalars().all()
@@ -278,7 +279,7 @@ async def test_golden_ball_awarded_once_for_last_month(client, db_session, bot_t
     tx = (await db_session.execute(select(CoinTransaction).where(
         CoinTransaction.user_id == a_id, CoinTransaction.type == TransactionType.player_career_reward,
     ))).scalars().all()
-    assert tx and "Золотой мяч" in tx[-1].description
+    assert any("Золотой мяч" in t.description for t in tx)
 
 
 async def test_view_without_player(client, db_session, bot_token):
@@ -301,21 +302,69 @@ async def test_club_gone_from_the_list_gives_a_free_pick(client, db_session, bot
 
 
 def test_every_line_can_win_the_golden_ball():
-    """A typical month for each line lands close; a keeper's clean sheets count."""
-    def row(line, goals, assists, clean, avg):
+    """The form index is measured against the player's own line: a keeper who
+    stands out among keepers beats a forward who is merely good among
+    forwards, though the forward scored far more."""
+    def row(uid, line, goals, assists, clean, avg):
         return PlayerCareerMonthStat(
-            user_id=1, month="2026-10", matches=14, goals=goals, assists=assists, clean_sheets=clean,
+            user_id=uid, month="2026-10", matches=14, goals=goals, assists=assists, clean_sheets=clean,
             rating_sum=avg * 14, line=line,
         )
-    scores = {
-        "FWD": player_career_cups.score_of(row("FWD", 8, 3, 0, 7.0)),
-        "MID": player_career_cups.score_of(row("MID", 4, 4, 3, 6.9)),
-        "DEF": player_career_cups.score_of(row("DEF", 1, 2, 4, 6.9)),
-        "GK": player_career_cups.score_of(row("GK", 0, 0, 4, 6.8)),
-    }
-    assert max(scores.values()) - min(scores.values()) <= 6
-    # The same month without clean sheets would leave a keeper far behind.
-    assert player_career_cups.score_of(row("GK", 0, 0, 0, 6.8)) < scores["FWD"] - 20
+    forwards = [row(i, "FWD", 10, 4, 0, 7.4) for i in range(1, 9)] + [row(9, "FWD", 12, 4, 0, 7.6)]
+    keepers = [row(20, "GK", 0, 0, 3, 6.8), row(21, "GK", 0, 0, 2, 6.7), row(22, "GK", 0, 0, 9, 7.6)]
+    defenders = [row(30, "DEF", 1, 1, 3, 6.8), row(31, "DEF", 3, 3, 8, 7.5)]
+    base = player_career_cups.line_baselines(forwards + keepers + defenders)
+    score = {r.user_id: player_career_cups.score_of(r, base) for r in forwards + keepers + defenders}
+    assert score[22] > score[9] > score[1]
+    assert score[31] > score[9]
+    # The month awards: each decided inside its own race.
+    eligible = [(r, None) for r in forwards + keepers + defenders]
+    assert player_career_cups.award_race("golden_boot", eligible, base)[0][0].user_id == 9
+    assert player_career_cups.award_race("golden_glove", eligible, base)[0][0].user_id == 22
+    assert player_career_cups.award_race("best_defender", eligible, base)[0][0].user_id == 31
+    assert {x[0].line for x in player_career_cups.award_race("golden_glove", eligible, base)} == {"GK"}
+
+
+async def test_month_awards_go_to_each_race_once(client, db_session, bot_token):
+    codes = [
+        ("player_career_golden_ball", "Золотой мяч"), ("player_career_golden_boot", "Золотая бутса"),
+        ("player_career_top_assist", "Король передач"), ("player_career_golden_glove", "Золотая перчатка"),
+        ("player_career_best_defender", "Лучший защитник"),
+    ]
+    db_session.add_all([TrophyDefinition(code=c, name=n, is_active=True) for c, n in codes])
+    await db_session.commit()
+    fwd, fwd_headers = await _player(client, db_session, bot_token, 880031)
+    gk, _ = await _player(client, db_session, bot_token, 880032)
+    df, _ = await _player(client, db_session, bot_token, 880033)
+    db_session.add_all([
+        PlayerCareerMonthStat(user_id=fwd, month="2026-10", matches=10, goals=9, assists=6, rating_sum=76.0, line="FWD"),
+        PlayerCareerMonthStat(user_id=gk, month="2026-10", matches=10, goals=0, assists=0, clean_sheets=7, rating_sum=74.0, line="GK"),
+        PlayerCareerMonthStat(user_id=df, month="2026-10", matches=10, goals=1, assists=1, clean_sheets=4, rating_sum=70.0, line="DEF"),
+    ])
+    await db_session.commit()
+    config = await get_config(db_session)
+    ball_coins, award_coins = config.player_career_golden_ball_coins, config.player_career_award_coins
+    balance = {uid: (await db_session.get(User, uid)).balance for uid in (fwd, gk, df)}
+    now = datetime(2026, 11, 2, 12, tzinfo=timezone.utc)
+    await player_career_cups.award_golden_ball(db_session, now)
+    await player_career_cups.award_golden_ball(db_session, now)
+    db_session.expire_all()
+    awards = {a.code: a.user_id for a in (await db_session.execute(select(PlayerCareerMonthAward))).scalars().all()}
+    assert awards == {"golden_boot": fwd, "top_assist": fwd, "golden_glove": gk, "best_defender": df}
+    ball = (await db_session.get(PlayerCareerGoldenBall, "2026-10")).user_id
+    prize = {uid: 0 for uid in (fwd, gk, df)}
+    prize[ball] += ball_coins
+    for uid in awards.values():
+        prize[uid] += award_coins
+    for uid in (fwd, gk, df):
+        assert (await db_session.get(User, uid)).balance == balance[uid] + prize[uid]
+    trophies = (await db_session.execute(select(UserTrophy).where(UserTrophy.user_id == gk))).scalars().all()
+    assert len(trophies) == 1 + (ball == gk)
+    # The career view shows each race and last month's winners.
+    view = (await client.get(f"{API}/player-career", headers=fwd_headers)).json()
+    shown = {a["code"]: a for a in view["golden_ball"]["awards"]}
+    assert set(shown) == set(player_career_cups.MONTH_AWARDS)
+    assert shown["golden_glove"]["line"] == "GK" and shown["golden_glove"]["my_value"] is None
 
 
 def test_match_rating_rewards_clean_sheets_by_line():
