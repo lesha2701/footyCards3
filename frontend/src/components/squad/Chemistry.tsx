@@ -58,12 +58,16 @@ export function ChemistryLinksOverlay({
   containerRef,
   chemistry,
   thin = false,
+  over = false,
 }: {
   containerRef: RefObject<HTMLElement>;
   chemistry: ChemistryOut | undefined;
   /** Fine lines in the project's floodlight colours, drawn card centre to
    * card centre UNDER the cards; «no link» is a barely visible dotted thread. */
   thin?: boolean;
+  /** With `thin`, for pitches with almost no gaps between the cards: the
+   * lines run edge to edge ABOVE the cards, or they would all be hidden. */
+  over?: boolean;
 }) {
   const [segments, setSegments] = useState<Segment[]>([]);
   // Stable empty array: a fresh [] each render would re-run the effect forever.
@@ -122,7 +126,7 @@ export function ChemistryLinksOverlay({
   }, [containerRef, links]);
 
   if (segments.length === 0) return null;
-  if (thin) return <ThinLinks segments={segments} />;
+  if (thin) return <ThinLinks segments={segments} over={over} />;
   return (
     <svg className="pointer-events-none absolute inset-0 z-10 h-full w-full" aria-hidden>
       {segments.map((s) => (
@@ -144,10 +148,10 @@ export function ChemistryLinksOverlay({
   );
 }
 
-function ThinLinks({ segments }: { segments: Segment[] }) {
+function ThinLinks({ segments, over }: { segments: Segment[]; over: boolean }) {
   const id = useId();
   return (
-    <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden>
+    <svg className={`pointer-events-none absolute inset-0 h-full w-full ${over ? "z-10" : ""}`} aria-hidden>
       <defs>
         {segments.filter((s) => s.level === "strong").map((s) => (
           <linearGradient key={s.key} id={`${id}-${s.key}`} gradientUnits="userSpaceOnUse" x1={s.ax} y1={s.ay} x2={s.bx} y2={s.by}>
@@ -158,9 +162,9 @@ function ThinLinks({ segments }: { segments: Segment[] }) {
         ))}
       </defs>
       {segments.map((s) => {
-        const at = { x1: s.ax, y1: s.ay, x2: s.bx, y2: s.by };
+        const at = over ? { x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2 } : { x1: s.ax, y1: s.ay, x2: s.bx, y2: s.by };
         if (s.level === "none") {
-          return <line key={s.key} {...at} stroke="#ffffff" strokeOpacity={0.22} strokeWidth={1} strokeDasharray="1 5" strokeLinecap="round" />;
+          return <line key={s.key} {...at} stroke="#ffffff" strokeOpacity={over ? 0.4 : 0.22} strokeWidth={1} strokeDasharray="1 5" strokeLinecap="round" />;
         }
         const stroke = s.level === "strong" ? `url(#${id}-${s.key})` : "#e8d44d";
         return (
@@ -223,9 +227,11 @@ const ONE_DECIMAL = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1, m
 /** «Химия N/M» counter with the strength bonus and a short rules hint.
  * `meter` adds a progress bar, what chemistry gives a player in a match on
  * average and the XI's average rating. */
-export function ChemistrySummary({ chemistry, meter }: {
+export function ChemistrySummary({ chemistry, meter, thinLines = false }: {
   chemistry: ChemistryOut | undefined;
   meter?: { slots: number; averageRating: number | null };
+  /** The pitch draws thin lines: «no link» is dots there, not red. */
+  thinLines?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   if (!chemistry?.enabled) return null;
@@ -266,7 +272,7 @@ export function ChemistrySummary({ chemistry, meter }: {
       </button>
       {open && rules && (
         <div className="mt-1.5 rounded-xl bg-white/5 px-3 py-2 text-caption leading-relaxed text-ink-mist">
-          <p>· Линия между соседями: <span className="text-accent-green">зелёная</span> — один клуб и одна страна, <span className="text-yellow-400">жёлтая</span> — клуб или страна, <span className="text-red-400">красная</span> — ничего общего</p>
+          <p>· Линия между соседями: <span className="text-accent-green">зелёная</span> — один клуб и одна страна, <span className="text-yellow-400">жёлтая</span> — клуб или страна, {thinLines ? <span className="text-ink-chalk">точки</span> : <span className="text-red-400">красная</span>} — ничего общего</p>
           <p>· Химия игрока 0–{rules.player_max} растёт от связей с соседями; не на своей позиции — 0</p>
           <p>· Каждое очко химии: +{rules.rating_per_point} к рейтингу игрока в матче{rules.off_position_penalty > 0 ? `, не на своей позиции −${rules.off_position_penalty}` : ""}</p>
           {chemistry.coach_country && (rules.coach_country_points ?? 0) > 0 && (

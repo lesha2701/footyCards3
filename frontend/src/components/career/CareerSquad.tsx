@@ -348,7 +348,7 @@ export default function CareerSquad({ season, catalog = null, onView, onError }:
       {squadEditable && (
         <p className="-mt-1 text-micro text-ink-mist-dim">Заявку можно менять до первого тура, состав — перед каждым туром.</p>
       )}
-      {chemistry?.enabled && <ChemistrySummary chemistry={chemistry} meter={{ slots: season.slots.length, averageRating }} />}
+      {chemistry?.enabled && <ChemistrySummary chemistry={chemistry} meter={{ slots: season.slots.length, averageRating }} thinLines />}
 
       <div
         ref={pitchRef}
