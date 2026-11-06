@@ -34,6 +34,15 @@ export function DuelStyleBadge({ style, className = "" }: { style?: string | nul
   );
 }
 
+/** The duel style with its name: the legend and the player's sheet. */
+export function DuelStyleChip({ style }: { style: string }) {
+  const meta = DUEL_STYLES[style];
+  if (!meta) return null;
+  return <span className="rounded-full bg-white/10 px-2 py-0.5 text-micro font-semibold text-ink-chalk">{meta.icon} {meta.label}</span>;
+}
+
+export const DUEL_STYLE_KEYS = Object.keys(DUEL_STYLES);
+
 /** «Кто кого обыгрывает»: the rock-paper-scissors of duel_service.MATRIX. */
 const GUIDE: { attacker: string; easy: string; hard: string }[] = [
   { attacker: "⚡ Скоростной", easy: "силового — тот не успевает", hard: "быстрого — догоняет" },
