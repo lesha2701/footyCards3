@@ -1,8 +1,8 @@
 """Card Arena live layer: decisions tuning, timers, weekend cup, defense log
 and per-card Arena stats.
 
-Revision ID: 0261
-Revises: 0260
+Revision ID: 0263
+Revises: 0262
 Create Date: 2026-11-06
 """
 from typing import Sequence, Union
@@ -11,8 +11,8 @@ import sqlalchemy as sa
 from alembic import op
 
 
-revision: str = "0261"
-down_revision: Union[str, None] = "0260"
+revision: str = "0263"
+down_revision: Union[str, None] = "0262"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
