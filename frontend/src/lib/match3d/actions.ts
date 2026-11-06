@@ -2,7 +2,7 @@
  * released at the contact), tackles and feints. The brain and the human call
  * the same functions, so both play by the same physics and the same odds. */
 import {
-  Act, BALL_R, BOX_D, GOAL_H, GOAL_HALF, HALF_L, HALF_W, Kick, ROLL_DECEL, TICK,
+  Act, BALL_R, BOX_D, GOAL_H, GOAL_HALF, HALF_L, HALF_W, Kick, ROLL_DECEL, TICK, Trait,
   clamp, dirOf, dist, launch, predict, rnd, rndN,
   type Feint, type KickPlan, type MatchState, type Player,
 } from "./core";
@@ -35,6 +35,11 @@ const pressureOn = (s: MatchState, p: Player) => clamp(1 - nearestOpp(s, p).d / 
 
 /** Starts the kick: the windup runs in `stepKick`. */
 export function startKick(s: MatchState, p: Player, plan: KickPlan) {
+  plan.err *= 2 - s.skill[p.team] * (p.trait === Trait.Playmaker ? 1.15 : 1);
+  // The other side takes note of what hurts.
+  const seen = s.scout[p.team === 0 ? 1 : 0];
+  if (plan.kind === Kick.Through) seen.through += 1;
+  if (plan.kind === Kick.Shot) seen.threat[p.slot] += 1.5;
   p.plan = plan;
   p.act = Act.Kick;
   p.actT = 0;
@@ -245,25 +250,43 @@ export function startTackle(s: MatchState, p: Player) {
   p.side = footFor(s, p);
 }
 
-export const SLIDE_LEN = 52;
-/** How far ahead (s) a slide meets a ball it can see. */
-const SLIDE_LOOK = 0.32;
-const SLIDE_PACE = 8.8;
+/** Ticks on the ground, and getting up from it (quicker with the ball to go to). */
+export const SLIDE_LEN = 38;
+export const SLIDE_GETUP = 24;
+export const SLIDE_GETUP_KEEP = 16;
+/** Ticks he drives at full pace before the grass starts to stop him, and the
+ * ones he can still lean the slide on to the ball. */
+export const SLIDE_DRIVE = 12;
+export const SLIDE_STEER = 8;
+const SLIDE_PACE = 8.6;
+/** He goes for where the ball will be, this near. */
+const SLIDE_SEES = 8;
 
-/** Down and along the grass: at where the ball will be if it's near enough to
- * judge, otherwise the way he is running. */
+/** Where he has to go to meet the ball (a unit vector), or null if it's too far. */
+export function slideAim(s: MatchState, p: Player, pace: number): { x: number; z: number } | null {
+  const b = s.ball;
+  const c = b.owner >= 0 ? s.players[b.owner] : null;
+  const vx = c ? c.vx : b.vx, vz = c ? c.vz : b.vz;
+  let t = dist(p.x, p.z, b.x, b.z) / pace;
+  let tx = 0, tz = 0, d = 0;
+  // Twice: where it will be by the time he has got to where it will be.
+  for (let i = 0; i < 2; i++) {
+    tx = b.x + vx * t - p.x; tz = b.z + vz * t - p.z;
+    d = Math.sqrt(tx * tx + tz * tz);
+    t = Math.min(d / pace, 0.7);
+  }
+  return d > 0.3 && d < SLIDE_SEES ? { x: tx / d, z: tz / d } : null;
+}
+
 export function startSlide(s: MatchState, p: Player) {
   p.act = Act.Slide; p.actT = 0; p.actLen = SLIDE_LEN; p.sub = 0;
-  const b = s.ball;
   const v = Math.sqrt(p.vx * p.vx + p.vz * p.vz);
-  const tx = b.x + b.vx * SLIDE_LOOK - p.x, tz = b.z + b.vz * SLIDE_LOOK - p.z;
-  const d = Math.sqrt(tx * tx + tz * tz);
-  let ux = v > 1 ? p.vx / v : p.hx, uz = v > 1 ? p.vz / v : p.hz;
-  if (d > 0.5 && d < 7) { ux = tx / d; uz = tz / d; }
+  // He throws himself in: faster than he ran, but a run-up is worth more than none.
+  const pace = clamp(v + 3, 6.5, Math.max(SLIDE_PACE, v));
+  const aim = slideAim(s, p, pace);
+  const ux = aim ? aim.x : v > 1 ? p.vx / v : p.hx, uz = aim ? aim.z : v > 1 ? p.vz / v : p.hz;
+  p.vx = ux * pace; p.vz = uz * pace; p.hx = ux; p.hz = uz;
   p.side = footFor(s, p);
-  const pace = Math.max(SLIDE_PACE, v);
-  p.vx = ux * pace; p.vz = uz * pace;
-  p.hx = ux; p.hz = uz;
 }
 
 /** Knocks him down: he loses the ball. */
@@ -282,6 +305,7 @@ export function startFeint(s: MatchState, p: Player, kind: Feint, side: number) 
   p.act = Act.Feint; p.actT = 0; p.actLen = FEINT_LEN;
   p.sub = kind; p.side = side;
   p.cool = 0;
+  s.scout[p.team === 0 ? 1 : 0].feints[kind] += 1;
   p.runUp = Math.sqrt(p.vx * p.vx + p.vz * p.vz);
 }
 
@@ -294,8 +318,11 @@ export function feintBites(s: MatchState, p: Player) {
     if (q.team === p.team || q.role === "GK" || q.beat > 0) continue;
     const d = dist(p.x, p.z, q.x, q.z);
     if (d > 3.6) continue;
-    const chance = 0.42 + p.dribble * 0.5 - q.defend * 0.32 - (d - 1.5) * 0.08 - Math.max(0, p.runUp - 5.6) * 0.14;
+    // The first one sells. The same again, they've seen it: they stay on their feet.
+    const seen = Math.min(0.5, Math.max(0, s.scout[q.team].feints[p.sub] - 1) * 0.11);
+    const chance = 0.42 + p.dribble * 0.5 - q.defend * 0.32 - (d - 1.5) * 0.08 - Math.max(0, p.runUp - 5.6) * 0.14 - seen - (s.skill[q.team] - 1) * 0.4;
     if (rnd(s) < chance) {
+      s.scout[q.team].threat[p.slot] += 1;
       q.beat = 34;
       q.beatX = right.x; q.beatZ = right.z;
       s.ev.push({ t: "feint", p: p.i, beat: q.i });

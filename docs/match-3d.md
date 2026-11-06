@@ -152,9 +152,18 @@ ball is about to be (`LUNGE`), and a miss carries him past. Pressed from too far
 waits up to `TACKLE_WAIT` and goes in as soon as he is in range (`s.tackleT`). The AI
 goes in when the ball is off the carrier's foot (`thinkTackle`) and can be beaten by a
 feint: a carrier with a man in front of him takes him on (`thinkCarrier`). A slide
-plays the middle of the `slide_*` clip over `SLIDE_LEN` (`SLIDE_IN`..`SLIDE_UP`), and
-`Getup` with `FROM_SLIDE` plays its end, so he never stands up out of nothing; the
-clip's run-up is cut because the man is already running. A ball hit as somebody closes
+(`slide_tackle_*`, a real one, feet first on his hip: the older `slide_*` of the
+one-on-one is a dive on to his front) plays `SLIDE_IN`..`SLIDE_UP` over `SLIDE_LEN`
+and `Getup` with `FROM_SLIDE` plays on to `SLIDE_OUT`, so he never stands up out of
+nothing and is still moving as he does. It goes for where the ball will be
+(`slideAim`), leans on to it for `SLIDE_STEER` ticks, drives for `SLIDE_DRIVE`, then
+the grass stops him. What it touches is his leading leg, not his middle (`offLeg`).
+The ball first wins it: the man who had it runs on past it (`beat`) or goes over,
+and it goes to a free team-mate in front or square (`slideOutlet`) or rolls on in
+front of the slider, who gets up on to it quicker. The man first, from the back, is
+a free kick every other time. The AI goes to ground on the run from the front or the
+side, from behind only away from its box (`thinkTackle`). `bench/slide.mjs` gives the
+result for each side and distance, and the numbers in whole matches. A ball hit as somebody closes
 it down (`b.since < 8`) comes off his shin or gets past him: it doesn't arrive at
 his feet, and the AI doesn't pass through the man coming at it.
 
@@ -226,6 +235,39 @@ place when the ball goes runs back flat out (`recover`). With the ball the
 forwards start runs in behind from the line (`Player.dash`): a pass that comes
 late finds them offside. After a goal `lineUp` puts everybody on his spot.
 
+### The plan, the memory and the level
+
+`gameplan.ts`. The AI side picks a plan at the kick-off (`pickStyle`): a press (line
+5 m up, `pressing` up to 44 m, hunting from 6 m), a block (5 m down, hunting only near
+its own goal) or counter-attacks (deep, and for 200 ticks after winning the ball the
+first pass goes forward and the runners go at once, `countering`). The HUD announces
+it. The human's side stays balanced. `reviewPlans` reads the score and the clock twice
+a second: `siege` grows from 40% of the match for a side behind and to about half for
+a level one in the last minutes, `protect` for a side ahead. They move the line
+(`lineOf`), the hunt (`huntFrom`), the shape, `urge` and the risk of a ball forward.
+
+`Scout` is what a side has noticed about the other, fading by a fifth every 10 s or
+so: feints by kind (from the second one each sells 11% less, `feintBites`), balls in
+behind (the line drops), the flank the attacks come down (the block leans), and who
+has hurt them (`dangerMan`). That man gets a shadow from midfield (`Player.tag`), goal-
+side and touching distance, once he is in reach of their half.
+
+Traits (`traitOf`): a playmaker in midfield (passes go to him, his passes are cleaner),
+the wingers take men on, the target man is who long balls and crosses look for and he
+lays off, the second striker in a 4-4-2 shoots sooner and runs more. Near the
+touchline (`TRAP_WIDTH`) a second man goes to the ball and a third stands inside it.
+
+Set pieces: a corner has a `routine`, fixed once as they take their places: near post,
+far post, short, the edge of the box. A close free kick is sometimes squared. The wall
+is 2 to 5 men by distance and angle, everybody else stays 10 m off. On a defended
+corner one stays up.
+
+`Setup.level` 0..2 sets the AI side's `skill`, which scales its tackle rates, passing
+and shooting error, how often it thinks, the keeper's reaction and how well its men
+read a feint, and moves its ratings by -0.1, 0, +0.08. It changes nothing for the
+human's side, and the flat fee doesn't depend on it. `LEVEL=0 node bench/human.mjs 60
+real` measures one level.
+
 ## Testing on a phone
 
 `bench/serve.mjs` serves `bench/out` with the app's public assets, and
@@ -252,3 +294,16 @@ win and a defeat (`GameConfig.fergie_match_coins`, up to `fergie_daily_limit` a 
 then it still counts). The tasks (`played:game:fergie_time`) and the «Путь дебютанта»
 count it too. The score isn't sent: the server can't check it, so no reward may
 depend on a win. Paying for the result needs the server replay in V8.
+
+## The stands
+
+The bowl is two tiers with their texture laid by the metre round the ring (`ringWalk`:
+a step of `t` on a rounded rectangle covers far more ground on the straights than in a
+corner). A phone doesn't draw the people as objects. At load (`crowd.ts`) the cut-outs
+of `free-kick-3d/fans.webp` are drawn once on to a 2048 by 1024 sheet of four bays of
+seats, and again with their arms up, a little taller than life because the slope
+foreshortens them. The tiers show that sheet: a few hundred triangles in all. Each
+person's patch slides up and down in the fragment shader (`textureGrad`, or the jumps
+would break the mips), the green of the sheet takes the side's colour, and `cheer(team)`
+reads the arms-up sheet and raises the hop, falling back over 8 s. The away block is
+`x < -38`. The replay camera stands in front of the first row (`startReplay`).

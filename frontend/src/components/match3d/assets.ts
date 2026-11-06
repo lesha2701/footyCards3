@@ -22,8 +22,7 @@ export type MatchAssets = {
   map: THREE.Texture | null;
   hairMap: THREE.Texture | null;
   grass: THREE.Texture;
-  stands: THREE.Texture;
-  fans: THREE.Texture | null;
+  fans: THREE.Texture;
   led: THREE.Texture;
 };
 
@@ -40,13 +39,13 @@ async function load(onProgress: (share: number) => void): Promise<MatchAssets> {
   const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
   let done = 0;
   const tick = <T,>(p: Promise<T>) => p.then((v) => { done += 1; onProgress((done / 8) * 0.8); return v; });
-  const [gltf, base, oneOnOne, own, grass, stands, led] = await Promise.all([
+  const [gltf, base, oneOnOne, own, grass, fans, led] = await Promise.all([
     tick(loader.loadAsync(FOOTBALLER_URL)),
     tick(loader.loadAsync(MOVES_URL)),
     tick(loader.loadAsync(ONE_ON_ONE_MOVES_URL)),
     tick(loader.loadAsync(MATCH_MOVES_URL).catch((): GLTF | null => null)),
     tick(texture("/free-kick-3d/grass.webp")),
-    tick(texture("/free-kick-3d/stands.webp")),
+    tick(texture("/free-kick-3d/fans.webp")),
     tick(texture("/free-kick-3d/led.webp")),
   ]);
   await breathe();
@@ -79,7 +78,7 @@ async function load(onProgress: (share: number) => void): Promise<MatchAssets> {
   });
   onProgress(1);
   return {
-    near: merged, far, baked, moves, map, hairMap, grass, stands, fans: null, led,
+    near: merged, far, baked, moves, map, hairMap, grass, fans, led,
     paces: {
       run: asset.timing.runSpeed, sprint: asset.timing.sprintSpeed, back: asset.timing.backSpeed,
       dribble: 1.13,

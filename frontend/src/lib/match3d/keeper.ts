@@ -222,7 +222,7 @@ export function thinkKeeper(s: MatchState, p: Player) {
       if (c.ticks <= READ_FROM) {
         // Close in he is set and on his toes: it's a reflex, not a read.
         const close = dist(b.fromX, b.fromZ, gx, 0) < 19;
-        if (p.react < 0) p.react = Math.floor((close ? 3 : 7) + (1 - p.save) * (close ? 7 : 14) + rnd(s) * (close ? 3 : 5));
+        if (p.react < 0) p.react = Math.max(1, Math.floor((close ? 3 : 7) + (1 - p.save) * (close ? 7 : 14) + rnd(s) * (close ? 3 : 5) + (1 - s.skill[p.team]) * 18));
         if (p.react > 0) p.react -= 1;
         if (p.react === 0) {
           p.react = -1;

@@ -1,6 +1,6 @@
 # 11-a-side 3D match: extra moves
 
-`frontend/public/match-3d/moves.glb` (454 KB, 28 clips, 36.3 s): skeleton and
+`frontend/public/match-3d/moves.glb` (492 KB, 30 clips, 39.9 s): skeleton and
 clips only, played by bone name on `public/career-3d/footballer.glb`, like
 `public/one-on-one-3d/moves.glb`. Neither source pack is in the repo.
 
@@ -14,7 +14,7 @@ clips only, played by bone name on `public/career-3d/footballer.glb`, like
 - `package.json`: the toolchain. Keep the `overrides`. Without them `cli@4.1.1`
   pulls `functions`/`extensions` 4.5.x and a second `core`: optimize then either
   stops with `document.hasExtension is not a function` or, worse, silently skips
-  pruning and quantisation (1.29 MB instead of 454 KB).
+  pruning and quantisation (1.44 MB instead of 492 KB).
 
 ## Rebuild
 
@@ -86,6 +86,7 @@ Times in seconds. Positions in metres, relative to the hips.
 | gk_directing | 2.60 | one-off | right arm up about 0.4, both arms up about 1.6-2.4; he walks in the source |
 | gk_save_high | 2.00 | one-off | leap to his left, hands top about 0.65, apex about 0.75 |
 | gk_save_low | 2.90 | one-off | scoop, hands low about 1.2, stands up by the end |
+| slide_tackle_r, slide_tackle_l | 1.77 | one-off | the real slide, feet first on his hip: planted 0.2, on the grass 0.43, leading foot 0.93 ahead of the hips, up from 1.03, running by 1.6 |
 | fall_side | 1.00 | one-off | taken off his feet, lands on his side about 0.9 |
 | getup_front | 1.30 | one-off | from fall_side's end: over his back, all fours, up |
 | dejected | 1.77 | one-off | hands on head 0.37-1.30, back to standing |
