@@ -71,6 +71,7 @@ export default {
         shimmer: "shimmer 2.2s linear infinite",
         "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
         "goal-flash": "goalFlash 1.1s ease-out forwards",
+        "goal-overlay": "goalOverlay 2.1s ease-out forwards",
         "legendary-pulse": "legendaryPulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
         "diamond-shimmer": "diamondShimmer 2.2s ease-in-out infinite",
         // A ready reward button gently glows so it gets noticed.
@@ -90,6 +91,12 @@ export default {
         shimmer: {
           "0%": { backgroundPosition: "-500px 0" },
           "100%": { backgroundPosition: "500px 0" },
+        },
+        goalOverlay: {
+          "0%": { opacity: 0, transform: "scale(.92)" },
+          "10%": { opacity: 1, transform: "scale(1)" },
+          "85%": { opacity: 1 },
+          "100%": { opacity: 0 },
         },
         goalFlash: {
           "0%": { boxShadow: "0 0 0 0 rgba(62, 209, 126, 0.9)", opacity: "1" },

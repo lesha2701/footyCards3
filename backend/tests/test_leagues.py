@@ -319,7 +319,10 @@ async def test_arena_match_triggers_league_reward_via_api(client, db_session, bo
     assert resp.status_code == 200
     match = resp.json()
     guard = 0
-    action_by_kind = {"attack": "shoot", "defense": "tackle", "breakaway": "strike"}
+    action_by_kind = {
+        "attack": "shoot", "defense": "tackle", "breakaway": "strike",
+        "halftime": "keep_style", "late_call": "hold", "penalty": "auto",
+    }
     while match["status"] == "in_progress":
         guard += 1
         assert guard < 30

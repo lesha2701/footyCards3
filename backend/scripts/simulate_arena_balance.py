@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.models.enums import Position  # noqa: E402
 from app.models.game_config import GameConfig  # noqa: E402
-from app.services import arena_tactics, match_service  # noqa: E402
+from app.services import arena_moments, arena_tactics, match_service  # noqa: E402
 
 TABLE_PATH = Path(__file__).resolve().parents[1] / "app" / "services" / "arena_balance_table.json"
 RATIOS = [0.5, 0.6, 0.7, 0.77, 0.83, 0.87, 0.91, 0.95, 1.0, 1.05, 1.1, 1.15, 1.2, 1.3, 1.43, 1.67, 2.0]
@@ -84,13 +84,19 @@ def play(user_strength: int, opponent_strength: int, config, *, legacy: bool = F
     else:
         balance = arena_tactics.compute_balance(user_strength, user_style, opponent_strength, opponent_style, config)
         state["balance"] = balance
-        state["moments"] = match_service._generate_moment_queue(0, 0, config, lineup, "B", balance=balance)
+        state["kick"] = {"user_strength": user_strength, "opponent_strength": opponent_strength}
+        match_service.start_live(state, config, lineup, "B", stub_lineup(orr))
 
     match_service._advance(state, config, "B")
+    no_input = SimpleNamespace(style=None, swipe=None, dive=None)
     while state["next_index"] < len(state["moments"]):
         moment = state["moments"][state["next_index"]]
-        action = random.choice(moment["actions"]) if moment["actions"] else "strike"
-        _event, scored_by = match_service._resolve_action(moment, action, state, config, "B")
+        # The table's chances are for what «Пропустить» plays: sensible, not perfect.
+        if legacy:
+            action = random.choice(moment["actions"]) if moment["actions"] else "strike"
+        else:
+            action = arena_moments.auto_action(moment, state, config)
+        _event, scored_by = match_service._resolve_action(moment, action, state, config, "B", no_input)
         if scored_by:
             state[f"{scored_by}_score"] += 1
         state["next_index"] += 1

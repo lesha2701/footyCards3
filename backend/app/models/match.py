@@ -48,6 +48,21 @@ class Match(Base):
         if i >= len(moments):
             return None
         moment = moments[i]
+        live = self.server_state.get("live") or {}
+        if moment.get("kind") in ("halftime", "late_call", "penalty"):
+            return {
+                "seq": i,
+                "team": moment["team"],
+                "kind": moment["kind"],
+                "shot_type": moment.get("shot_type", moment["kind"]),
+                "description": moment.get("description", ""),
+                "actions": moment.get("actions", []),
+                "actors": {},
+                "seconds": None if moment["kind"] == "penalty" else live.get("seconds"),
+                "seed": moment.get("seed"),
+                "rating": moment.get("rating"),
+                "taker": moment.get("taker"),
+            }
         if moment.get("kind") != "shot":
             return None
         if moment["team"] == "opponent" and moment["shot_type"] == "empty_net":
@@ -62,6 +77,8 @@ class Match(Base):
             "description": moment.get("description", ""),
             "actions": moment.get("actions", []),
             "actors": moment.get("actors", {}),
+            "options": moment.get("options", []),
+            "seconds": live.get("seconds"),
         }
 
 
@@ -87,6 +104,8 @@ class Match(Base):
             "matchup_bonus_pct": balance.get("matchup_bonus_pct", 0),
             "chances": state.get("chances"),
             "opponent_points": state.get("opponent_points"),
+            "goal": state.get("goal"),
+            "cup": state.get("cup"),
         }
 
     @property

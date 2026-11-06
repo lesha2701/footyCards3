@@ -18,6 +18,8 @@ export interface CollectionFilters {
   country?: string;
   club?: string;
   position?: string;
+  /** A squad line: GK, DEF, MID or FWD. */
+  position_category?: string;
   min_rating?: number;
   max_rating?: number;
   collection_id?: number;

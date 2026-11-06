@@ -58,7 +58,10 @@ async def _get_config(db_session) -> GameConfig:
 # One deterministic action per pending-moment kind, so a full match can be
 # played out end-to-end without needing to control which kind of moment the
 # random queue generates at any given step.
-_ACTION_BY_KIND = {"attack": "shoot", "defense": "tackle", "breakaway": "strike"}
+_ACTION_BY_KIND = {
+    "attack": "shoot", "defense": "tackle", "breakaway": "strike",
+    "halftime": "keep_style", "late_call": "hold", "penalty": "auto",
+}
 
 
 async def _play_to_completion(client, headers) -> dict:
@@ -68,7 +71,7 @@ async def _play_to_completion(client, headers) -> dict:
     guard = 0
     while match["status"] == "in_progress":
         guard += 1
-        assert guard < 30  # sanity bound — the moment queue is at most 22 long
+        assert guard < 40  # sanity bound on the moment queue
         pending = match["pending_moment"]
         assert pending is not None
         action = _ACTION_BY_KIND[pending["kind"]]
@@ -255,7 +258,7 @@ async def test_act_breakaway_only_accepts_strike(client, db_session, bot_token):
     # A breakaway for the user's own team is still interactive (a single
     # confirm); the opponent's breakaways auto-resolve and never appear as
     # a pending moment.
-    if match["status"] == "in_progress":
+    if match["status"] == "in_progress" and match["pending_moment"]["kind"] != "halftime":
         assert match["pending_moment"]["shot_type"] == "empty_net"
         assert match["pending_moment"]["kind"] == "breakaway"
         resp = await client.post(f"/api/v1/matches/{match['id']}/act", headers=headers, json={"action": "strike"})
@@ -417,16 +420,15 @@ async def test_match_history_excludes_in_progress_matches(client, db_session, bo
     await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
 
     resp = await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})
-    abandoned_match = resp.json()  # left in_progress on purpose
-
-    finished_match = await _play_to_completion(client, headers)
+    running = resp.json()  # left in_progress on purpose
 
     resp = await client.get("/api/v1/matches/history", headers=headers)
     assert resp.status_code == 200
-    history_ids = [m["id"] for m in resp.json()]
-    assert finished_match["id"] in history_ids
-    if abandoned_match["status"] == "in_progress":
-        assert abandoned_match["id"] not in history_ids
+    assert running["id"] not in [m["id"] for m in resp.json()]
+
+    finished_match = await _play_to_completion(client, headers)
+    resp = await client.get("/api/v1/matches/history", headers=headers)
+    assert finished_match["id"] in [m["id"] for m in resp.json()]
 
 
 async def test_arena_stats_includes_rank(client, db_session, bot_token):
@@ -452,8 +454,7 @@ async def test_match_hourly_limit_blocks_after_three_plays(client, db_session, b
     await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
 
     for _ in range(3):
-        resp = await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})
-        assert resp.status_code == 200
+        await _play_to_completion(client, headers)
 
     resp = await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})
     assert resp.status_code == 409

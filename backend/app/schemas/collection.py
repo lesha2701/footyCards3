@@ -16,6 +16,9 @@ class UserCardListItem(BaseModel):
     serial_number: int
     player: PlayerOut
     acquired_at: datetime
+    arena_goals: int = 0
+    arena_assists: int = 0
+    arena_mvps: int = 0
     source: CardSource
     is_locked_by_admin: bool
     is_locked_in_trade: bool
@@ -127,8 +130,10 @@ class CollectionFilterParams:
         sort_by: SortBy = "acquired_at",
         sort_dir: SortDir = "desc",
         has_skill: Optional[bool] = None,
+        position_category: Optional[str] = None,
     ):
         self.rarity = rarity
+        self.position_category = position_category
         self.country = country
         self.club = club
         self.position = position

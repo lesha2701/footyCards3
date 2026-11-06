@@ -18,6 +18,13 @@ Main features:
   career effects frozen per season (`club_base_service.py`, see
   docs/club-base.md);
 - game currency, daily rewards and a free periodic pack;
+- Card Arena (`match_service.py`, `arena_moments.py`, `arena_cup_service.py`): divisions, a live
+  match with a server clock on each decision (`state["live"]`; a skip or a timeout is
+  `arena_moments.auto_action`), half-time style change, a late all-in, penalties in the
+  3D scene replayed by `free_kick_3d_engine.py`, resume / abandon (`GET /matches/active`,
+  `arena_abandon_minutes`), a defense log with revenge and the weekend cup. Chances in
+  the preview come from `scripts/simulate_arena_balance.py --write`: rerun it after
+  changing `arena_moments.DEFAULT_TUNING`;
 - mini-games: Memory Sequence, Card Arena, Саботёр (Saboteur), Пенальти,
   Штрафной удар (Free Kick — 3D, swipe-driven; the shot is a pure function,
   `frontend/src/lib/freeKick3d/trajectory.ts`, and the server replays every

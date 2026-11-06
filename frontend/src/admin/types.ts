@@ -301,6 +301,15 @@ export interface GameConfig {
   arena_edge_rating_per_10pct: number;
   arena_edge_rating_max: number;
   arena_formation_effect_pct: number;
+  arena_moment_seconds: number;
+  arena_auto_best_pct: number;
+  arena_abandon_minutes: number;
+  arena_hint_accuracy_pct: number;
+  arena_goal_bonus_coins: number;
+  arena_cup_enabled: boolean;
+  arena_cup_weekdays: number[];
+  arena_cup_round_rewards: number[];
+  arena_cup_round_strength_pct: number[];
   arena_points_k: number;
   arena_points_scale: number;
   arena_shield_matches: number;

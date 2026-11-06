@@ -312,6 +312,15 @@ class GameConfigOut(BaseModel):
     arena_edge_rating_per_10pct: float = 2.0
     arena_edge_rating_max: int = 12
     arena_formation_effect_pct: int = 100
+    arena_moment_seconds: int = 8
+    arena_auto_best_pct: int = 60
+    arena_abandon_minutes: int = 20
+    arena_hint_accuracy_pct: int = 70
+    arena_goal_bonus_coins: int = 15
+    arena_cup_enabled: bool = True
+    arena_cup_weekdays: list[int] = [5, 6]
+    arena_cup_round_rewards: list[int] = [100, 200, 400, 800]
+    arena_cup_round_strength_pct: list[int] = [95, 100, 106, 112]
     arena_points_k: int = 40
     arena_points_scale: int = 400
     arena_shield_matches: int = 3
@@ -1099,6 +1108,15 @@ class GameConfigUpdate(BaseModel):
     arena_edge_rating_per_10pct: Optional[float] = Field(default=None, ge=0, le=10)
     arena_edge_rating_max: Optional[int] = Field(default=None, ge=0, le=40)
     arena_formation_effect_pct: Optional[int] = Field(default=None, ge=0, le=300)
+    arena_moment_seconds: Optional[int] = Field(default=None, ge=3, le=60)
+    arena_auto_best_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    arena_abandon_minutes: Optional[int] = Field(default=None, ge=2, le=1440)
+    arena_hint_accuracy_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    arena_goal_bonus_coins: Optional[int] = Field(default=None, ge=0, le=100000)
+    arena_cup_enabled: Optional[bool] = None
+    arena_cup_weekdays: Optional[list[int]] = None
+    arena_cup_round_rewards: Optional[list[int]] = None
+    arena_cup_round_strength_pct: Optional[list[int]] = None
     arena_points_k: Optional[int] = Field(default=None, ge=1, le=200)
     arena_points_scale: Optional[int] = Field(default=None, ge=50, le=2000)
     arena_shield_matches: Optional[int] = Field(default=None, ge=0, le=20)

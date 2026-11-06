@@ -104,6 +104,9 @@ export default function AdminGamesPage() {
   const listField = (
     key:
       | "career_place_rewards"
+      | "arena_cup_weekdays"
+      | "arena_cup_round_rewards"
+      | "arena_cup_round_strength_pct"
       | "career_difficulty_reward_pct"
       | "career_difficulty_rating_offset"
       | "career_bot_counter_chance_pct"
@@ -201,6 +204,7 @@ export default function AdminGamesPage() {
       | "matchmaking_enabled"
       | "wheel_enabled"
       | "trades_enabled"
+      | "arena_cup_enabled"
       | "trade_coins_enabled"
       | "trade_cards_both_sides"
       | "club_war_enabled"
@@ -1273,6 +1277,15 @@ export default function AdminGamesPage() {
           {field("arena_edge_rating_per_10pct", "Очков рейтинга в каждом розыгрыше за +10% силы")}
           {field("arena_edge_rating_max", "Максимум этих очков")}
           {field("arena_formation_effect_pct", "Влияние схемы на атаку/защиту, % (100 — 3-4-3 даёт +4%/−4%, 0 — выкл.)")}
+          {field("arena_moment_seconds", "Секунд на решение в эпизоде")}
+          {field("arena_auto_best_pct", "Как часто авто-выбор (пропуск, таймер) разумный, %")}
+          {field("arena_abandon_minutes", "Через сколько минут брошенный матч закрывается поражением")}
+          {field("arena_hint_accuracy_pct", "Как часто подсказка о стиле соперника верна, %")}
+          {field("arena_goal_bonus_coins", "Бонус за цель матча, монет")}
+          {toggle("arena_cup_enabled", "Кубок выходных включён")}
+          {listField("arena_cup_weekdays", "Кубок: дни недели (0 — понедельник, 5 — суббота)")}
+          {listField("arena_cup_round_rewards", "Кубок: монеты за раунды")}
+          {listField("arena_cup_round_strength_pct", "Кубок: сила соперника по раундам, % от твоей")}
         </div>
       </section>
 

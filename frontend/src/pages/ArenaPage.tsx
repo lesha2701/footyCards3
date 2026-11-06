@@ -3,11 +3,11 @@ import { useEffect, useRef, useState } from "react";
 
 import CardPickerModal from "@/components/cards/CardPickerModal";
 import StickyActionBar from "@/components/common/StickyActionBar";
-import PitchCardTile from "@/components/cards/PitchCardTile";
+import CardSkillBadge from "@/components/cards/CardSkillBadge";
+import { PitchTile } from "@/components/career/PlayerTile";
 import MatchSkillNotes from "@/components/cards/MatchSkillNotes";
 import MatchPathSummary from "@/components/path/MatchPathSummary";
 import MatchSkillSummary from "@/components/cards/MatchSkillSummary";
-import GameHero from "@/components/common/GameHero";
 import { skillByCode, skillInactiveReason, useSkillCatalog } from "@/lib/cardSkills";
 import UserCoachCardPickerModal from "@/components/cards/UserCoachCardPickerModal";
 import UserStadiumCardPickerModal from "@/components/cards/UserStadiumCardPickerModal";
@@ -16,23 +16,20 @@ import ShareButton from "@/components/common/ShareButton";
 import MatchPitchView from "@/components/match/MatchPitchView";
 import MatchSheet from "@/components/match/MatchSheet";
 import MatchStatsTable from "@/components/match/MatchStatsTable";
-import { ArenaDivisionCard, ArenaMatchReport, ArenaMatchupLine, ArenaOpponentCard, OpponentMalusNote } from "@/components/arena/ArenaPanels";
-import BenchUpgradeHints from "@/components/squad/BenchUpgradeHints";
-import { ChemistryDiamonds, ChemistryHints, ChemistryLinksOverlay, ChemistrySummary } from "@/components/squad/Chemistry";
-import { chemistryGain, chemistrySwapHints, equipmentChemistryOf, type ChemistrySwapHint } from "@/lib/chemistry";
+import { ArenaCupPanel, ArenaDefenseList } from "@/components/arena/ArenaExtras";
 import {
-  IconBall,
-  IconBoot,
-  IconCoin,
-  IconGloves,
-  IconGoal,
-  IconPlus,
-  IconSwap,
-  IconUsers,
-  IconWarning,
-  type IconProps,
-} from "@/components/icons";
-import { ListSkeleton } from "@/components/common/Skeleton";
+  ArenaGoalOverlay, ArenaHalftimePrompt, ArenaLateCallPrompt, ArenaMomentPrompt, ArenaPenaltyScene, type ArenaAct,
+} from "@/components/arena/ArenaLive";
+import {
+  ArenaDivisionCard, ArenaKeyDuel, ArenaLimitPanel, ArenaLinesRow, ArenaMatchReport, ArenaMatchupLine, ArenaOpponentCard, ArenaSheet, ArenaStatusStrip, ArenaTile,
+  ArenaTileSide, OpponentMalusNote,
+} from "@/components/arena/ArenaPanels";
+import BenchUpgradeHints from "@/components/squad/BenchUpgradeHints";
+import { ChemistryFlask, ChemistryHints, ChemistryLinksOverlay, ChemistrySummary } from "@/components/squad/Chemistry";
+import PitchBackground from "@/components/squad/PitchBackground";
+import { chemistryGain, chemistrySwapHints, equipmentChemistryOf, type ChemistrySwapHint } from "@/lib/chemistry";
+import { IconBall, IconCoin, IconHistory, IconShirt, IconSwords, IconTrophy, IconWarning } from "@/components/icons";
+import { ListSkeleton, Skeleton } from "@/components/common/Skeleton";
 import { fetchCollection } from "@/api/collection";
 import {
   activateLineupTemplate,
@@ -42,29 +39,32 @@ import {
   setLineupTemplateTactic,
   type BenchUpgrade,
 } from "@/api/lineups";
-import { actMatch, fetchArenaOpponent, fetchArenaStats, fetchMatchHistory, forfeitMatch, playMatch } from "@/api/matches";
+import {
+  actMatch, fetchActiveMatch, fetchArenaOpponent, fetchArenaStats, fetchDefenseLog, fetchMatch, fetchRecentMatches,
+  forfeitMatch, markDefenseSeen, playMatch, takeRevenge, type MatchActExtra,
+} from "@/api/matches";
 import { staticUrl } from "@/lib/api";
 import { boostText } from "@/lib/coaches";
-import { CATEGORY_LABELS, CATEGORY_POSITIONS, TACTIC_LABELS, TACTICS, type FormationSlot } from "@/lib/formation";
+import { CATEGORY_LABELS, CATEGORY_POSITIONS, onIdealPosition, TACTIC_LABELS, TACTICS, type FormationSlot } from "@/lib/formation";
 import { formatGameError } from "@/lib/errors";
 import { FORMATION_LABELS, formationLabel, inRow, pitchRows } from "@/lib/formationLayout";
+import { pathFrameClass } from "@/lib/pathCards";
+import { playSound } from "@/lib/sound";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import { useMatchGuardStore } from "@/store/matchGuardStore";
 import ArenaNewbieGuide from "@/components/newbie/ArenaNewbieGuide";
-import type { LineupTactic, Match, MatchActionKind, MatchPendingMoment, MatchResult, UserCard } from "@/types";
+import type { ArenaActionKind, ArenaDivision, LineupTactic, Match, MatchEvent, UserCard } from "@/types";
 import { personKey } from "@/lib/person";
 
-const EVENT_STEP_MS = 950;
-
-const ACTION_LABELS: Record<MatchActionKind, { label: string; Icon: (props: IconProps) => JSX.Element }> = {
-  shoot: { label: "Ударить", Icon: IconBoot },
-  pass: { label: "Отдать пас", Icon: IconSwap },
-  tackle: { label: "Сделать подкат", Icon: IconUsers },
-  block: { label: "Заблокировать удар", Icon: IconGoal },
-  keeper: { label: "Довериться вратарю", Icon: IconGloves },
-  strike: { label: "Ударить!", Icon: IconBoot },
-};
+/** The match breathes: a held breath before a shot's outcome, a quick filler. */
+/** The hourly limit stays out of sight until it is about to matter. */
+const LOW_MATCHES_LEFT = 3;
+const QUICK_STEP_MS = 550;
+const SHOT_STEP_MS = 1500;
+const GOAL_HOLD_MS = 2100;
+const BREAKAWAY_HOLD_MS = 2500;
+const SHOT_OUTCOMES = new Set(["goal", "save", "shot", "blocked"]);
 
 export default function ArenaPage() {
   const queryClient = useQueryClient();
@@ -81,14 +81,24 @@ export default function ArenaPage() {
   const lineupSkills = (lineup?.slots ?? []).filter((s) => s.card?.skill_code);
   const activeLineupSkills = lineupSkills.filter((s) => !skillInactive(s.card?.skill_code, s.card?.player.position));
   const [pickerSearch, setPickerSearch] = useState("");
-  const { data: collectionPage } = useQuery({
-    queryKey: ["collection-for-lineup", pickerSearch],
-    queryFn: () => fetchCollection({ page_size: 100, sort_by: "rating", sort_dir: "desc", search: pickerSearch || undefined }),
-  });
-  const { data: stats } = useQuery({ queryKey: ["arena-stats"], queryFn: fetchArenaStats });
-  const { data: history } = useQuery({ queryKey: ["match-history"], queryFn: fetchMatchHistory });
-
   const [pickerSlot, setPickerSlot] = useState<FormationSlot | null>(null);
+  // The picker asks the server for its line, so a bench deeper than the top
+  // hundred is still there.
+  const { data: pickerPage } = useQuery({
+    queryKey: ["collection-for-lineup", pickerSlot?.category, pickerSearch],
+    queryFn: () => fetchCollection({
+      page_size: 100, sort_by: "rating", sort_dir: "desc", search: pickerSearch || undefined, position_category: pickerSlot?.category,
+    }),
+    enabled: !!pickerSlot,
+  });
+  const { data: stats } = useQuery({
+    queryKey: ["arena-stats"],
+    queryFn: fetchArenaStats,
+    refetchInterval: (query) => (query.state.data?.hourly_left === 0 ? 30_000 : false),
+  });
+  const { data: history } = useQuery({ queryKey: ["arena-recent"], queryFn: fetchRecentMatches });
+  const { data: defenseItems } = useQuery({ queryKey: ["arena-defense"], queryFn: fetchDefenseLog });
+  const { data: activeOnOpen } = useQuery({ queryKey: ["arena-active"], queryFn: fetchActiveMatch, staleTime: Infinity, gcTime: 0 });
   const [match, setMatch] = useState<Match | null>(null);
   const [matchError, setMatchError] = useState<string | null>(null);
   const [lineupError, setLineupError] = useState<string | null>(null);
@@ -99,14 +109,21 @@ export default function ArenaPage() {
   const [matchSheetOpen, setMatchSheetOpen] = useState(false);
   const [matchReopened, setMatchReopened] = useState(false);
   const [strengthHintOpen, setStrengthHintOpen] = useState(false);
+  const [sheet, setSheet] = useState<"division" | "cup" | "defense" | "history" | "templates" | "formations" | "skills" | null>(null);
+  // The main screen is the next match: the squad folds away once it's ready
+  // (a newcomer or an unfinished squad sees it open, the guide points at it).
+  const [squadToggled, setSquadToggled] = useState<boolean | null>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
   const pitchRef = useRef<HTMLDivElement>(null);
   const tacticsRef = useRef<HTMLElement>(null);
   const playRef = useRef<HTMLButtonElement>(null);
   const [finishedMatch, setFinishedMatch] = useState<Match | null>(null);
   const [coachPickerOpen, setCoachPickerOpen] = useState(false);
-  const { data: coachCards } = useQuery({ queryKey: ["lineup", "coach-cards"], queryFn: fetchUserCoachCards });
+  const matchesPlayed = stats ? stats.matches_won + stats.matches_drawn + stats.matches_lost : 0;
+  const squadOpen = squadToggled ?? (!!stats && !!lineup && (matchesPlayed === 0 || !lineup.is_complete));
+  const { data: coachCards } = useQuery({ queryKey: ["lineup", "coach-cards"], queryFn: fetchUserCoachCards, enabled: coachPickerOpen });
   const [stadiumPickerOpen, setStadiumPickerOpen] = useState(false);
-  const { data: stadiumCards } = useQuery({ queryKey: ["lineup", "stadium-cards"], queryFn: fetchUserStadiumCards });
+  const { data: stadiumCards } = useQuery({ queryKey: ["lineup", "stadium-cards"], queryFn: fetchUserStadiumCards, enabled: stadiumPickerOpen });
 
   const setLineupMutation = useMutation({
     mutationFn: (slots: { slot_code: string; user_card_id: number }[]) => setLineupTemplate(viewedIndex, slots),
@@ -130,7 +147,7 @@ export default function ArenaPage() {
   // matchup and chances refresh as soon as the player changes them.
   const activeLineup = templates?.find((t) => t.is_active);
   const { data: preview, isFetching: previewFetching } = useQuery({
-    queryKey: ["arena-opponent", activeLineup?.tactic, activeLineup?.team_strength],
+    queryKey: ["arena-opponent", activeLineup?.template_index, activeLineup?.tactic, activeLineup?.formation, activeLineup?.team_strength],
     queryFn: fetchArenaOpponent,
     enabled: !!activeLineup?.is_complete && !simulating,
     placeholderData: (prev) => prev,
@@ -172,15 +189,25 @@ export default function ArenaPage() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["lineup-templates"] }); setRenamingTemplate(false); },
   });
 
+  const goLive = (data: Match) => {
+    setMatch(data);
+    setMatchError(null);
+    setSimulating(true);
+    setMatchReopened(false);
+    setMatchSheetOpen(true);
+  };
+
+  // A match cut short by a crash or a closed app comes back as it stands.
+  useEffect(() => {
+    if (activeOnOpen && !match) goLive(activeOnOpen);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeOnOpen]);
+
   const playMutation = useMutation({
-    mutationFn: () => playMatch("medium"),
+    mutationFn: (mode: "ladder" | "cup" = "ladder") => playMatch("medium", mode),
     onSuccess: (data) => {
-      setMatch(data);
-      setMatchError(null);
-      setSimulating(true);
+      goLive(data);
       queryClient.removeQueries({ queryKey: ["arena-opponent"] });
-      setMatchReopened(false);
-      setMatchSheetOpen(true);
       // Balance, stats and history only update once the simulation finishes
       // playing out (MatchSimulation's onFinished) so the result isn't spoiled.
     },
@@ -188,8 +215,31 @@ export default function ArenaPage() {
   });
 
   const actMutation = useMutation({
-    mutationFn: (action: MatchActionKind) => actMatch(match!.id, action),
+    mutationFn: ({ action, extra }: { action: ArenaActionKind; extra?: MatchActExtra }) => actMatch(match!.id, action, extra),
     onSuccess: (data) => setMatch(data),
+    // A stale answer (a retry, two taps): show what the server has now.
+    onError: () => { fetchMatch(match!.id).then(setMatch).catch(() => {}); },
+  });
+  const onAct: ArenaAct = (action, extra) => actMutation.mutate({ action, extra });
+
+  const openPlayed = useMutation({
+    mutationFn: fetchMatch,
+    onSuccess: (data) => { setMatch(data); setMatchReopened(true); setMatchSheetOpen(true); },
+  });
+
+  const defenseSeen = useMutation({
+    mutationFn: markDefenseSeen,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["arena-stats"] }),
+  });
+  const revengeMutation = useMutation({
+    mutationFn: takeRevenge,
+    onSuccess: (data) => {
+      haptic("medium");
+      queryClient.setQueriesData({ queryKey: ["arena-opponent"] }, data);
+      queryClient.invalidateQueries({ queryKey: ["arena-defense"] });
+      previewRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    },
+    onError: (err) => setMatchError(formatGameError(err, "Реванш недоступен")),
   });
 
   const forfeitMutation = useMutation({
@@ -198,23 +248,21 @@ export default function ArenaPage() {
       setMatch(data);
       setSimulating(false);
       queryClient.invalidateQueries({ queryKey: ["arena-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["match-history"] });
+      queryClient.invalidateQueries({ queryKey: ["arena-recent"] });
       hapticNotify("error");
       useMatchGuardStore.getState().deactivate();
     },
   });
 
-  // Guards in-app navigation while a match is live, same as Тактико —
-  // leaving mid-match costs the same -1 rating as playing it out and
-  // losing, so quitting to dodge a loss isn't a viable strategy. The
-  // confirm dialog (rendered globally) calls this same forfeit endpoint if
-  // the player chooses to leave anyway.
+  // Guards in-app navigation while a match is live, same as Тактико: leaving
+  // through the confirm dialog is a forfeit. A closed app or a crash is not
+  // (no forfeit path for pagehide): the match waits, GET /matches/active
+  // brings it back and an abandoned one closes as a loss on the server.
   useEffect(() => {
     if (simulating && match?.status === "in_progress") {
       useMatchGuardStore.getState().activate(
         "Матч ещё не завершён. Если выйдешь сейчас, он будет засчитан как поражение.",
         () => { forfeitMatch(match.id).catch(() => {}); },
-        `/matches/${match.id}/forfeit`,
       );
     } else {
       useMatchGuardStore.getState().deactivate();
@@ -225,7 +273,13 @@ export default function ArenaPage() {
   const { data: benchUpgrades } = useQuery({
     queryKey: ["lineup-templates", "bench", viewedIndex],
     queryFn: () => fetchLineupBenchUpgrades(viewedIndex),
-    enabled: !!lineup,
+    enabled: !!lineup && squadOpen,
+  });
+  // Swap hints look through the whole bench, so only an open squad asks for it.
+  const { data: hintPool } = useQuery({
+    queryKey: ["collection-for-lineup", "hints"],
+    queryFn: () => fetchCollection({ page_size: 100, sort_by: "rating", sort_dir: "desc" }),
+    enabled: squadOpen && !!lineup?.chemistry?.enabled,
   });
   const applyBenchUpgrade = (hint: BenchUpgrade) => {
     const slots = (lineup?.slots ?? [])
@@ -260,7 +314,7 @@ export default function ArenaPage() {
 
   const cardsForSlot = (slot: FormationSlot): UserCard[] => {
     const positions = CATEGORY_POSITIONS[slot.category];
-    return (collectionPage?.items ?? []).filter((c) => positions.includes(c.player.position));
+    return (pickerPage?.items ?? []).filter((c) => positions.includes(c.player.position));
   };
 
   const assignSlot = async (slot: FormationSlot, card: UserCard) => {
@@ -295,7 +349,7 @@ export default function ArenaPage() {
   const chemistryHints = chemistryOn
     ? chemistrySwapHints(chemistry, chemSlots, (slot) => {
         const positions = CATEGORY_POSITIONS[(lineup?.slots.find((s) => s.slot_code === slot.slot_code)?.category ?? "GK") as FormationSlot["category"]];
-        return (collectionPage?.items ?? [])
+        return (hintPool?.items ?? [])
           .filter((c) => positions.includes(c.player.position))
           .filter((c) => !isPlainDiamond(c.player) || diamondsOutside(slot.slot_code) < maxDiamond)
           .filter((c) => !c.player.path_talent_code || pathOutside(slot.slot_code) < maxPath)
@@ -321,76 +375,87 @@ export default function ArenaPage() {
   };
 
   const lastFive = (history ?? []).slice(0, 5).reverse();
+  const chosenTactic = TACTICS.find((t) => t.value === lineup?.tactic);
+  const limitReached = stats?.hourly_left === 0;
 
   return (
-    <div className="flex flex-col gap-5">
-      <GameHero game="arena" title="Card Arena" />
+    <div className={`flex flex-col gap-3 ${squadOpen ? "" : "min-h-[calc(100dvh-10.6rem-env(safe-area-inset-bottom,0px))]"}`}>
+      {!squadOpen && <>
+        {stats?.division && (
+          <ArenaStatusStrip division={stats.division} form={lastFive.map((m) => m.result)} onOpen={() => setSheet("division")} />
+        )}
 
-      {stats?.division && <ArenaDivisionCard division={stats.division} rank={stats.arena_rank} />}
+        {matchError && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{matchError}</p>}
 
-      {stats && (
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <MiniStat label="Рейтинг лиги" value={stats.arena_rating} />
-          <MiniStat label="В · Н · П" value={`${stats.matches_won}·${stats.matches_drawn}·${stats.matches_lost}`} />
-          <div className="rounded-xl bg-bg-surface py-2">
-            <div className="flex items-center justify-center gap-1">
-              {lastFive.length ? (
-                lastFive.map((m) => <FormBadge key={m.id} result={m.result} />)
-              ) : (
-                <span className="font-mono text-xs text-ink-mist-dim">—</span>
-              )}
-            </div>
-            <p className="mt-1 text-micro text-ink-mist-dim">Форма</p>
+        {preview && activeLineup?.is_complete && !simulating ? (
+          <div ref={previewRef} className={previewFetching ? "opacity-70 transition-opacity" : "transition-opacity"}>
+            <ArenaOpponentCard
+              preview={preview}
+              onStyle={(style) => activeStyleMutation.mutate(style)}
+              stylePending={activeStyleMutation.isPending}
+            />
           </div>
+        ) : activeLineup?.is_complete ? (
+          <Skeleton className="h-72 rounded-3xl" />
+        ) : null}
+
+        {preview && activeLineup?.is_complete && !simulating && (
+          <>
+            <ArenaLinesRow lines={preview.lines} />
+            {preview.key_duel && <ArenaKeyDuel duel={preview.key_duel} />}
+          </>
+        )}
+
+        <div className={`grid gap-2 ${stats?.cup?.enabled ? "grid-cols-4" : "grid-cols-3"}`}>
+          <ArenaTile
+            icon={<IconShirt size={17} className="text-accent-lime" />}
+            value={activeLineup?.is_complete ? activeLineup.team_strength : undefined}
+            label="Состав"
+            onClick={() => setSquadToggled(true)}
+          />
+          {stats?.cup?.enabled && (
+            <ArenaTile
+              icon={<IconTrophy size={17} className="text-amber-300" />}
+              value={`${stats.cup.rounds_won}/${stats.cup.total_rounds}`}
+              label="Кубок"
+              tone={stats.cup.open && stats.cup.status !== "lost" && stats.cup.status !== "champion" ? "amber" : undefined}
+              onClick={() => setSheet("cup")}
+            />
+          )}
+          <ArenaTile
+            icon={<IconSwords size={17} className="text-red-300" />}
+            value={defenseItems?.length ?? 0}
+            label="Атаки"
+            badge={stats?.defense_unread}
+            onClick={() => { setSheet("defense"); if (stats?.defense_unread) defenseSeen.mutate(); }}
+          />
+          <ArenaTile icon={<IconHistory size={17} className="text-accent-cyan" />} label="История" onClick={() => setSheet("history")} />
         </div>
-      )}
+      </>}
+
+      {squadOpen && <>
+      <div className="flex items-center gap-1.5">
+        <button onClick={() => setSquadToggled(false)} aria-label="К матчу" className="px-1 font-display text-lg font-bold leading-none text-ink-chalk active:scale-95">
+          ←
+        </button>
+        <button onClick={() => setSheet("templates")} className="min-w-0 truncate rounded-full bg-white/5 px-3 py-1.5 text-caption font-bold text-ink-chalk">
+          {lineup?.name} ▾
+        </button>
+        <button onClick={() => setSheet("formations")} className="min-w-0 truncate rounded-full bg-white/5 px-3 py-1.5 text-caption font-bold text-ink-chalk">
+          {formationLabel(lineup?.formation ?? "4-3-3")} ▾
+        </button>
+        {lineup?.is_complete && (
+          <button
+            onClick={() => setStrengthHintOpen(true)}
+            className="-my-2 ml-auto flex shrink-0 items-center gap-1 py-2 pl-2 font-mono text-sm font-bold text-accent-cyan"
+          >
+            {lineup.team_strength}
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/10 text-micro font-bold text-ink-mist-dim">?</span>
+          </button>
+        )}
+      </div>
 
       {lineupError && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{lineupError}</p>}
-
-      <section className="flex gap-1.5 overflow-x-auto pb-1">
-        {(templates ?? []).map((t) => (
-          <button
-            key={t.template_index}
-            onClick={() => { setSelectedIndex(t.template_index); setRenamingTemplate(false); }}
-            className={`flex shrink-0 flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 ${
-              t.template_index === viewedIndex ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"
-            }`}
-          >
-            <span className="whitespace-nowrap text-caption font-bold">{t.name}</span>
-            {t.is_active && (
-              <span className={`text-micro ${t.template_index === viewedIndex ? "text-bg-base/70" : "text-accent-lime"}`}>
-                Активный
-              </span>
-            )}
-          </button>
-        ))}
-      </section>
-
-      {renamingTemplate ? (
-        <div className="flex gap-2">
-          <input
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            maxLength={64}
-            className="flex-1 rounded-xl bg-bg-surface px-3 py-2 text-sm text-ink-chalk outline-none"
-            autoFocus
-          />
-          <button
-            onClick={() => renameMutation.mutate(renameValue)}
-            disabled={!renameValue.trim() || renameMutation.isPending}
-            className="rounded-xl bg-floodlight px-4 py-2 text-xs font-bold text-bg-base disabled:opacity-40"
-          >
-            Сохранить
-          </button>
-        </div>
-      ) : (
-        <button
-          onClick={() => { setRenameValue(lineup?.name ?? ""); setRenamingTemplate(true); }}
-          className="self-start text-caption font-semibold text-ink-mist-dim underline underline-offset-2"
-        >
-          Переименовать «{lineup?.name}»
-        </button>
-      )}
 
       {viewedIndex !== activeIndex && (
         <button
@@ -398,272 +463,167 @@ export default function ArenaPage() {
           disabled={activateMutation.isPending}
           className="rounded-xl bg-accent-lime/10 px-3 py-2 text-center text-xs font-semibold text-accent-lime disabled:opacity-40"
         >
-          {activateMutation.isPending ? "Переключаем..." : `Сделать «${lineup?.name}» активным для матчей`}
+          {activateMutation.isPending ? "Переключаем..." : `Играть составом «${lineup?.name}»`}
         </button>
       )}
 
-      <section className="rounded-2xl bg-bg-surface p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <div>
-            <p className="font-display text-base font-bold text-ink-chalk">Состав {formationLabel(lineup?.formation ?? "4-3-3")}</p>
-            {lineupSkills.length > 0 && (
-              <p className="text-caption text-ink-mist">
-                Навыки: действуют {activeLineupSkills.length} из {lineupSkills.length}
-                {activeLineupSkills.length < lineupSkills.length && " (зачёркнутые здесь не работают)"}
-              </p>
-            )}
-            <button
-              onClick={() => autoFillMutation.mutate()}
-              disabled={autoFillMutation.isPending}
-              className="mt-1 rounded-full bg-accent-lime/15 px-2.5 py-1 text-caption font-semibold text-accent-lime disabled:opacity-50"
-            >
-              {autoFillMutation.isPending ? "Собираем..." : "Собрать лучший состав"}
-            </button>
-          </div>
-          {lineup?.is_complete && (
-            <button
-              onClick={() => setStrengthHintOpen((v) => !v)}
-              className="flex items-center gap-1 font-mono text-sm font-bold text-accent-cyan"
-            >
-              Сила: {lineup.team_strength}
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/10 text-micro font-bold text-ink-mist-dim">?</span>
-            </button>
-          )}
-        </div>
-        {strengthHintOpen && (
-          <div className="mb-3 rounded-xl bg-white/5 px-3 py-2 text-caption leading-relaxed text-ink-mist">
-            <p className="mb-1 font-semibold text-ink-chalk">Что влияет на силу состава:</p>
-            <p>· Позиция игрока: 100% рейтинга на своей позиции, 90% на смежной, 75% не по профилю</p>
-            <p>· Схема: определяет позиции и соседей для химии; атакующие схемы (3-4-3, 4-4-2) чуть усиливают атаку и ослабляют защиту, оборонительные (5-3-2, 4-3-3 с опорником) — наоборот</p>
-            {chemistryOn ? (
-              <p>· Химия: связи с соседями по схеме — каждое очко химии игрока добавляет рейтинг в матче</p>
-            ) : (
-              <p>· Химия: бонус за игроков одного клуба и одной страны в составе</p>
-            )}
-            <p>· Редкость карточки: чем выше редкость, тем больше вклад рейтинга в силу</p>
-            <p>· Тренер: даёт бонус к силе по своей редкости</p>
-            <p>· Стиль игры: каждый усиливает свою линию (Атака — нападение, Владение — полузащиту, Оборона — защиту и вратаря, Контратака — понемногу оба края), а против стиля соперника может дать ещё бонус</p>
-            <p className="mt-1 text-ink-mist-dim">Поэтому простая замена на игрока с более высоким рейтингом не всегда увеличивает силу — важна ещё позиция, химия и тактика.</p>
-          </div>
-        )}
-        <div className="mb-3">
-          <BenchUpgradeHints hints={benchUpgrades} onApply={applyBenchUpgrade} busy={setLineupMutation.isPending} />
-        </div>
-        <ChemistrySummary chemistry={chemistry} />
-        <ChemistryHints hints={chemistryHints} onApply={applyChemistryHint} busy={setLineupMutation.isPending} />
-        <p className="mb-3 text-caption font-semibold">
-          <span className={`rounded-full px-2.5 py-1 ${diamondCount >= maxDiamond ? "bg-rarity-diamond/20 text-rarity-diamond" : "bg-white/5 text-ink-mist"}`}>
-            Диамантовых: {diamondCount}/{maxDiamond}
-          </span>
-          {pathCount > 0 && (
-            <span className={`ml-1.5 rounded-full px-2.5 py-1 ${pathCount >= maxPath ? "bg-emerald-400/20 text-path" : "bg-white/5 text-ink-mist"}`}>
-              🌱 Академия: {pathCount}/{maxPath}
-            </span>
-          )}
-        </p>
-        <div className="-mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1 pb-1">
-          {Object.keys(FORMATION_LABELS).map((code) => {
-            const active = (lineup?.formation ?? "4-3-3") === code;
-            return (
-              <button
-                key={code}
-                onClick={() => !active && setFormationMutation.mutate(code)}
-                disabled={setFormationMutation.isPending}
-                className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-[11px] font-bold disabled:opacity-60 ${
-                  active ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"
-                }`}
-              >
-                {FORMATION_LABELS[code]}
-              </button>
-            );
-          })}
-        </div>
-        <div ref={pitchRef} className="relative flex flex-col gap-3 overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-950/60 to-emerald-900/30 p-3">
-          <ChemistryLinksOverlay containerRef={pitchRef} chemistry={chemistry} />
-          <div className="pointer-events-none absolute inset-x-3 top-1/2 h-px -translate-y-1/2 bg-white/10" />
-          <div className="pointer-events-none absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10" />
-          {pitchRows(lineup?.formation, (lineup?.slots ?? []).map((s) => s.slot_code)).map((row) => (
-            <div key={row.key} className="relative flex justify-evenly gap-2">
-              {inRow(row, lineup?.slots ?? [])
-                .map((slot) => {
-                  const formationSlot = { code: slot.slot_code, category: slot.category as FormationSlot["category"], idealPosition: slot.ideal_position };
-                  return (
-                    <button
-                      key={slot.slot_code}
+      <div
+        ref={pitchRef}
+        style={{ height: "clamp(270px, calc(100dvh - 21rem), 400px)" }}
+        className="relative flex shrink-0 flex-col justify-between overflow-hidden rounded-[22px] bg-gradient-to-b from-[#17633a] via-[#12512f] to-[#0e4026] px-1 py-2.5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
+      >
+        <PitchBackground />
+        <ChemistryLinksOverlay containerRef={pitchRef} chemistry={chemistry} thin />
+        {pitchRows(lineup?.formation, (lineup?.slots ?? []).map((s) => s.slot_code)).map((row) => (
+          <div key={row.key} className="relative flex justify-evenly gap-0.5">
+            {inRow(row, lineup?.slots ?? []).map((slot) => {
+              const formationSlot = { code: slot.slot_code, category: slot.category as FormationSlot["category"], idealPosition: slot.ideal_position };
+              const card = slot.card;
+              return (
+                <button
+                  key={slot.slot_code}
+                  onClick={() => setPickerSlot(formationSlot)}
+                  disabled={setLineupMutation.isPending}
+                  aria-label={card ? `${slot.slot_code}: ${card.player.display_name}` : `${slot.slot_code}: пусто`}
+                  className="relative flex min-w-0 flex-col items-center rounded-[10px] transition active:scale-95 disabled:opacity-60"
+                >
+                  {card ? (
+                    <PitchTile
+                      info={{
+                        person: personKey(card.player), name: card.player.display_name, short: card.player.display_name,
+                        position: card.player.position, rating: card.player.rating, club: "", country: "",
+                        image: staticUrl(card.player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp"),
+                        rarity: card.player.rarity, mine: false,
+                      }}
+                      anchor={slot.slot_code}
+                      offPosition={!onIdealPosition(card.player.position, slot.ideal_position)}
+                      frame={card.player.path_talent_code ? pathFrameClass(card.path_stage, card.prestige) : undefined}
+                      chemistry={chemistryOn && chemBySlot.has(slot.slot_code) ? (
+                        <ChemistryFlask
+                          points={chemBySlot.get(slot.slot_code)!.points}
+                          max={chemistry!.rules?.player_max ?? 3}
+                          onPosition={chemBySlot.get(slot.slot_code)!.on_position}
+                        />
+                      ) : undefined}
+                      side={
+                        <ArenaTileSide
+                          stars={card.stars}
+                          pathStage={card.path_stage}
+                          talentCode={card.player.path_talent_code ? card.talent_override || card.player.path_talent_code : null}
+                          skillCode={card.skill_code}
+                          skillLevel={card.skill_level}
+                          skillOff={skillInactive(card.skill_code, card.player.position)}
+                        />
+                      }
+                    />
+                  ) : (
+                    <div
                       data-chem-slot={slot.slot_code}
-                      onClick={() => setPickerSlot(formationSlot)}
-                      disabled={setLineupMutation.isPending}
-                      className="flex min-w-0 max-w-[84px] flex-1 flex-col items-center gap-1 rounded-xl bg-black/30 p-1.5 backdrop-blur-sm active:scale-95 disabled:opacity-60"
+                      className="flex aspect-square w-[40px] flex-col items-center justify-center rounded-[9px] border border-dashed border-white/25 bg-black/30 min-[400px]:w-[44px]"
                     >
-                      {slot.card ? (
-                        <PitchCardTile
-                          player={slot.card.player}
-                          stars={slot.card.stars}
-                          pathStage={slot.card.path_stage}
-                          prestige={slot.card.prestige}
-                          talentOverride={slot.card.talent_override}
-                          skillCode={slot.card.skill_code}
-                          skillLevel={slot.card.skill_level}
-                          skillInactiveReason={skillInactive(slot.card.skill_code, slot.card.player.position)}
-                        >
-                          {chemistryOn && chemBySlot.has(slot.slot_code) && (
-                            <ChemistryDiamonds
-                              points={chemBySlot.get(slot.slot_code)!.points}
-                              max={chemistry!.rules?.player_max ?? 3}
-                              onPosition={chemBySlot.get(slot.slot_code)!.on_position}
-                            />
-                          )}
-                        </PitchCardTile>
-                      ) : (
-                        <>
-                          <IconPlus size={18} className="text-ink-mist-dim" />
-                          <span className="text-micro text-ink-mist-dim">{CATEGORY_LABELS[slot.category as FormationSlot["category"]]}</span>
-                        </>
-                      )}
-                    </button>
-                  );
-                })}
-              {row.category === "GK" && (
-                <button
+                      <span className="text-base leading-none text-ink-mist-dim">+</span>
+                      <span className="font-mono text-[9px] leading-none text-ink-mist-dim">{slot.ideal_position}</span>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+            {row.category === "GK" && (
+              <>
+                <ArenaExtraSlot
+                  side="left"
+                  image={lineup?.coach ? lineup.coach.image_path : undefined}
+                  filled={!!lineup?.coach}
+                  label="Тренер"
                   onClick={() => setCoachPickerOpen(true)}
-                  disabled={setCoachMutation.isPending}
-                  className={`absolute left-0 top-0 flex min-w-0 max-w-[72px] flex-1 flex-col items-center gap-1 rounded-xl bg-black/30 p-1.5 backdrop-blur-sm active:scale-95 ${setCoachMutation.isPending ? "opacity-60" : ""}`}
-                >
-                  {lineup?.coach ? (
-                    <>
-                      <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
-                        <img decoding="async"
-                          src={staticUrl(lineup.coach.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-                          alt="" className="h-full w-full object-cover" loading="lazy"
-                        />
-                      </div>
-                      <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-accent-cyan">Тренер</span>
-                    </>
-                  ) : (
-                    <>
-                      <IconPlus size={16} className="text-ink-mist-dim" />
-                      <span className="text-micro text-ink-mist-dim">Тренер</span>
-                    </>
-                  )}
-                </button>
-              )}
-              {row.category === "GK" && (
-                <button
+                  busy={setCoachMutation.isPending}
+                />
+                <ArenaExtraSlot
+                  side="right"
+                  image={lineup?.stadium ? lineup.stadium.image_path : undefined}
+                  filled={!!lineup?.stadium}
+                  label={lineup?.stadium?.boost_pct ? `+${Math.round(lineup.stadium.boost_pct * 100)}%` : "Стадион"}
                   onClick={() => setStadiumPickerOpen(true)}
-                  disabled={setStadiumMutation.isPending}
-                  className={`absolute right-0 top-0 flex min-w-0 max-w-[72px] flex-1 flex-col items-center gap-1 rounded-xl bg-black/30 p-1.5 backdrop-blur-sm active:scale-95 ${setStadiumMutation.isPending ? "opacity-60" : ""}`}
-                >
-                  {lineup?.stadium ? (
-                    <>
-                      <div className="aspect-square w-full overflow-hidden rounded-lg bg-black/40">
-                        <img decoding="async"
-                          src={staticUrl(lineup.stadium.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-                          alt="" className="h-full w-full object-cover" loading="lazy"
-                        />
-                      </div>
-                      {lineup.stadium.boost_pct > 0 && (
-                        <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-accent-cyan">
-                          +{Math.round(lineup.stadium.boost_pct * 100)}%
-                        </span>
-                      )}
-                      {!!lineup.stadium.opp_malus && (
-                        <span className="rounded-full bg-red-600/80 px-1.5 py-0.5 font-mono text-micro font-bold leading-none text-white">
-                          ☠ −{lineup.stadium.opp_malus}
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <IconPlus size={16} className="text-ink-mist-dim" />
-                      <span className="text-micro text-ink-mist-dim">Стадион</span>
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-        {lineup?.coach && (
-          <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
-            <p className="text-xs font-semibold text-ink-chalk">{lineup.coach.display_name}</p>
-            <p className="mt-0.5 text-caption text-ink-mist">
-              {lineup.coach.boosts.map((b) => boostText(b)).join(" · ")}
-            </p>
+                  busy={setStadiumMutation.isPending}
+                />
+              </>
+            )}
           </div>
-        )}
-        {lineup?.stadium && (
-          <div className="mt-3 rounded-xl bg-white/5 px-3 py-2">
-            <p className="text-xs font-semibold text-ink-chalk">{lineup.stadium.display_name}</p>
-            <p className="mt-0.5 text-caption text-ink-mist">
-              {[
-                lineup.stadium.boost_pct > 0 ? `+${Math.round(lineup.stadium.boost_pct * 100)}% к силе` : null,
-                lineup.stadium.opp_malus ? `−${lineup.stadium.opp_malus} к рейтингу соперника` : null,
-              ].filter(Boolean).join(" · ") || "без бонусов"}
-            </p>
-          </div>
-        )}
-        <OpponentMalusNote malus={lineup?.opponent_malus} />
-      </section>
+        ))}
+      </div>
 
-      <section ref={tacticsRef} className="rounded-2xl bg-bg-surface p-4">
-        <p className="font-display text-sm font-bold text-ink-chalk">Стиль игры</p>
-        <p className="mb-3 mt-0.5 text-caption leading-snug text-ink-mist">
-          Атака бьёт Оборону, Оборона — Владение, Владение — Контратаку, Контратака — Атаку. Стиль соперника виден перед матчем.
-        </p>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-caption font-semibold">
+          <button
+            onClick={() => autoFillMutation.mutate()}
+            disabled={autoFillMutation.isPending}
+            className="rounded-full bg-accent-lime/15 px-2.5 py-1 text-accent-lime disabled:opacity-50"
+          >
+            {autoFillMutation.isPending ? "Собираем..." : "Лучший состав"}
+          </button>
+          <span title="Диамантовые карты" className={`rounded-full px-2.5 py-1 ${diamondCount >= maxDiamond ? "bg-rarity-diamond/20 text-rarity-diamond" : "bg-white/5 text-ink-mist"}`}>
+            💎 {diamondCount}/{maxDiamond}
+          </span>
+          <span title="Карты Академии" className={`rounded-full px-2.5 py-1 ${pathCount >= maxPath ? "bg-emerald-400/20 text-path" : "bg-white/5 text-ink-mist"}`}>
+            🌱 {pathCount}/{maxPath}
+          </span>
+          {lineupSkills.length > 0 && (
+            <button onClick={() => setSheet("skills")} className="rounded-full bg-white/5 px-2.5 py-1 text-ink-mist">
+              Навыки {activeLineupSkills.length}/{lineupSkills.length} ?
+            </button>
+          )}
+        </div>
+
+      <section ref={tacticsRef}>
+        <div className="grid grid-cols-4 gap-1">
           {TACTICS.map((t) => (
             <button
               key={t.value}
               onClick={() => setTacticMutation.mutate(t.value)}
               disabled={setTacticMutation.isPending}
-              className={`rounded-xl px-1 py-2 text-center disabled:opacity-60 ${
+              className={`rounded-xl py-2 text-center text-micro font-bold leading-tight disabled:opacity-60 ${
                 lineup?.tactic === t.value ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"
               }`}
             >
-              <p className="whitespace-nowrap text-xs font-bold leading-tight">{t.label}</p>
-              <p className={`mt-0.5 text-micro leading-tight ${lineup?.tactic === t.value ? "text-bg-base/70" : "text-ink-mist-dim"}`}>
-                {t.description} · бьёт «{TACTIC_LABELS[t.beats]}»
-              </p>
+              {t.label}
             </button>
           ))}
         </div>
+        {chosenTactic && (
+          <p className="mt-1.5 text-center text-micro text-ink-mist-dim">
+            {chosenTactic.description} · бьёт «{TACTIC_LABELS[chosenTactic.beats]}»
+          </p>
+        )}
       </section>
 
-      {preview && activeLineup?.is_complete && !simulating && (
-        <div className={previewFetching ? "opacity-70 transition-opacity" : "transition-opacity"}>
-          {viewedIndex !== activeIndex && (
-            <p className="mb-1.5 text-caption text-ink-mist-dim">Играет активный состав «{activeLineup.name}»</p>
+      <BenchUpgradeHints hints={benchUpgrades} onApply={applyBenchUpgrade} busy={setLineupMutation.isPending} />
+      <ChemistrySummary chemistry={chemistry} />
+      <ChemistryHints hints={chemistryHints} onApply={applyChemistryHint} busy={setLineupMutation.isPending} />
+      </>}
+
+      {(!squadOpen || matchesPlayed === 0) && (
+        <StickyActionBar className="mt-auto">
+          {stats && limitReached ? (
+            <ArenaLimitPanel
+              seconds={stats.retry_after_seconds}
+              limit={stats.hourly_limit}
+              onDone={() => queryClient.invalidateQueries({ queryKey: ["arena-stats"] })}
+            />
+          ) : (
+            <>
+              {stats && !!stats.hourly_limit && stats.hourly_left <= LOW_MATCHES_LEFT && (
+                <p className="mb-1 text-center text-micro text-ink-mist-dim">Осталось на этот час: {stats.hourly_left}</p>
+              )}
+              <button
+                ref={playRef}
+                onClick={() => playMutation.mutate("ladder")}
+                disabled={!activeLineup?.is_complete || playMutation.isPending || simulating}
+                className="w-full rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:bg-none disabled:bg-bg-raised disabled:text-ink-mist"
+              >
+                {playMutation.isPending || simulating ? "Идёт матч..." : !activeLineup?.is_complete ? "Собери состав, чтобы играть" : "Играть матч"}
+              </button>
+            </>
           )}
-          <ArenaOpponentCard
-            preview={preview}
-            onStyle={(style) => activeStyleMutation.mutate(style)}
-            stylePending={activeStyleMutation.isPending}
-          />
-        </div>
-      )}
-
-      {matchError && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{matchError}</p>}
-
-      <StickyActionBar>
-        <button
-          ref={playRef}
-          onClick={() => playMutation.mutate()}
-          disabled={!lineup?.is_complete || playMutation.isPending || simulating}
-          className="w-full rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:bg-none disabled:bg-bg-raised disabled:text-ink-mist"
-        >
-          {playMutation.isPending || simulating ? "Идёт матч..." : lineup?.is_complete ? "Играть матч" : "Собери состав, чтобы играть"}
-        </button>
-      </StickyActionBar>
-
-      {/* After the sheet is closed, the last result stays one tap away. */}
-      {match && !matchSheetOpen && match.status === "finished" && (
-        <button
-          onClick={() => { setMatchReopened(true); setMatchSheetOpen(true); }}
-          className="flex items-center justify-between rounded-xl bg-bg-surface px-3 py-2.5 text-sm active:scale-[0.98]"
-        >
-          <span className="text-ink-mist">Последний матч · vs {match.opponent_name}</span>
-          <span className="font-semibold text-accent-green">Открыть</span>
-        </button>
+        </StickyActionBar>
       )}
 
       <MatchSheet
@@ -684,17 +644,16 @@ export default function ArenaPage() {
               {matchError && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{matchError}</p>}
               <div className="grid grid-cols-2 gap-2">
                 <button
-                  onClick={() => setMatchSheetOpen(false)}
+                  onClick={() => { setMatchSheetOpen(false); setSquadToggled(true); }}
                   className="rounded-2xl bg-white/10 py-3 font-display text-sm font-bold text-ink-chalk active:scale-95"
                 >
                   К составу
                 </button>
                 <button
-                  onClick={() => playMutation.mutate()}
-                  disabled={!lineup?.is_complete || playMutation.isPending}
-                  className="rounded-2xl bg-floodlight py-3 font-display text-sm font-bold text-bg-base active:scale-95 disabled:opacity-40"
+                  onClick={() => { setMatchSheetOpen(false); setSquadToggled(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                  className="rounded-2xl bg-floodlight py-3 font-display text-sm font-bold text-bg-base active:scale-95"
                 >
-                  {playMutation.isPending ? "Начинаем..." : "Ещё матч"}
+                  {limitReached ? "На главную" : "Следующий соперник"}
                 </button>
               </div>
             </div>
@@ -705,16 +664,17 @@ export default function ArenaPage() {
           <MatchSimulation
             key={match.id}
             match={match}
-            startRevealed={matchReopened}
+            startRevealed={matchReopened || !!match.resumed}
             actPending={actMutation.isPending}
-            onAct={(action) => actMutation.mutate(action)}
+            onAct={onAct}
+            division={stats?.division}
             onFinished={() => {
               setSimulating(false);
               if (match.reward_coins > 0) {
                 updateBalance((useAuthStore.getState().user?.balance ?? 0) + match.reward_coins);
               }
               queryClient.invalidateQueries({ queryKey: ["arena-stats"] });
-              queryClient.invalidateQueries({ queryKey: ["match-history"] });
+              queryClient.invalidateQueries({ queryKey: ["arena-recent"] });
               queryClient.invalidateQueries({ queryKey: ["arena-opponent"] });
               if (match.ladder?.rewards.length) {
                 const coins = match.ladder.rewards.reduce((sum, r) => sum + r.coins, 0);
@@ -727,22 +687,58 @@ export default function ArenaPage() {
         )}
       </MatchSheet>
 
-      <ArenaNewbieGuide
-        targets={{ pitch: pitchRef, tactics: tacticsRef, play: playRef }}
-        activeIndex={activeIndex}
-        simulating={simulating || playMutation.isPending}
-        finished={finishedMatch}
-      />
+      {stats && templates && (
+        <ArenaNewbieGuide
+          targets={{ pitch: pitchRef, tactics: tacticsRef, play: playRef }}
+          activeIndex={activeIndex}
+          simulating={simulating || playMutation.isPending}
+          finished={finishedMatch}
+        />
+      )}
 
-      <section>
-        <p className="mb-2 font-display text-base font-bold text-ink-chalk">История матчей</p>
+      <ArenaSheet open={sheet === "division"} title="Дивизион" onClose={() => setSheet(null)}>
+        {stats?.division && (
+          <div className="flex flex-col gap-3">
+            <ArenaDivisionCard division={stats.division} rank={stats.arena_rank} />
+            <p className="text-center font-mono text-sm text-ink-mist">
+              <span className="text-accent-green">{stats.matches_won}</span> · {stats.matches_drawn} · <span className="text-red-400">{stats.matches_lost}</span>
+            </p>
+          </div>
+        )}
+      </ArenaSheet>
+
+      <ArenaSheet open={sheet === "cup"} title="Кубок выходных" onClose={() => setSheet(null)}>
+        {stats?.cup && (
+          <ArenaCupPanel
+            cup={stats.cup}
+            onPlay={() => { setSheet(null); playMutation.mutate("cup"); }}
+            pending={playMutation.isPending || simulating || !activeLineup?.is_complete}
+            limitReached={limitReached}
+          />
+        )}
+      </ArenaSheet>
+
+      <ArenaSheet open={sheet === "defense"} title="Тебя атаковали" onClose={() => setSheet(null)}>
+        <ArenaDefenseList
+          items={defenseItems ?? []}
+          onRevenge={(id) => { setSheet(null); revengeMutation.mutate(id); }}
+          revengePending={revengeMutation.isPending}
+        />
+      </ArenaSheet>
+
+      <ArenaSheet open={sheet === "history"} title="История матчей" onClose={() => setSheet(null)}>
         {!history?.length ? (
           <EmptyState icon={IconBall} title="Матчей ещё не было" />
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1.5">
             {history.slice(0, 5).map((m) => (
-              <div key={m.id} className="flex items-center justify-between rounded-xl bg-bg-surface px-3 py-2 text-sm">
-                <span className="min-w-0 truncate text-ink-mist">vs {m.opponent_name}</span>
+              <button
+                key={m.id}
+                onClick={() => { setSheet(null); openPlayed.mutate(m.id); }}
+                disabled={openPlayed.isPending || simulating}
+                className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2 text-left text-sm active:scale-[0.98]"
+              >
+                <span className="min-w-0 truncate text-ink-mist">{m.opponent_name}</span>
                 <span className="flex shrink-0 items-center gap-2">
                   {m.ladder && (
                     <span className={`font-mono text-caption ${m.ladder.delta > 0 ? "text-accent-green" : m.ladder.delta < 0 ? "text-red-400" : "text-ink-mist-dim"}`}>
@@ -753,11 +749,116 @@ export default function ArenaPage() {
                     {m.user_score}:{m.opponent_score}
                   </span>
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         )}
-      </section>
+      </ArenaSheet>
+
+      <ArenaSheet open={sheet === "templates"} title="Составы" onClose={() => setSheet(null)}>
+        <div className="flex flex-col gap-1.5">
+          {(templates ?? []).map((t) => (
+            <button
+              key={t.template_index}
+              onClick={() => { setSelectedIndex(t.template_index); setRenamingTemplate(false); setSheet(null); }}
+              className={`flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-semibold ${
+                t.template_index === viewedIndex ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"
+              }`}
+            >
+              <span className="truncate">{t.name}</span>
+              {t.is_active && <span className="text-micro font-bold">играет</span>}
+            </button>
+          ))}
+          {renamingTemplate ? (
+            <div className="flex gap-2">
+              <input
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                maxLength={64}
+                className="min-w-0 flex-1 rounded-xl bg-bg-surface px-3 py-2 text-sm text-ink-chalk outline-none"
+                autoFocus
+              />
+              <button
+                onClick={() => renameMutation.mutate(renameValue)}
+                disabled={!renameValue.trim() || renameMutation.isPending}
+                className="rounded-xl bg-floodlight px-4 py-2 text-xs font-bold text-bg-base disabled:opacity-40"
+              >
+                Сохранить
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => { setRenameValue(lineup?.name ?? ""); setRenamingTemplate(true); }}
+              className="py-1 text-caption font-semibold text-ink-mist-dim"
+            >
+              ✎ Переименовать «{lineup?.name}»
+            </button>
+          )}
+        </div>
+      </ArenaSheet>
+
+      <ArenaSheet open={sheet === "formations"} title="Схема" onClose={() => setSheet(null)}>
+        <div className="grid grid-cols-2 gap-1.5">
+          {Object.keys(FORMATION_LABELS).map((code) => {
+            const active = (lineup?.formation ?? "4-3-3") === code;
+            return (
+              <button
+                key={code}
+                onClick={() => { setSheet(null); if (!active) setFormationMutation.mutate(code); }}
+                disabled={setFormationMutation.isPending}
+                className={`rounded-xl py-2.5 text-sm font-bold disabled:opacity-60 ${active ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"}`}
+              >
+                {FORMATION_LABELS[code]}
+              </button>
+            );
+          })}
+        </div>
+      </ArenaSheet>
+
+      <ArenaSheet open={sheet === "skills"} title="Навыки карточек" onClose={() => setSheet(null)}>
+        <div className="flex flex-col gap-2">
+          <p className="text-caption leading-relaxed text-ink-mist">
+            Навык усиливает одно событие в матче, рейтинг он не меняет. Работает не на всех позициях и не во всех режимах.
+          </p>
+          {lineupSkills.map((s) => {
+            const skill = skillByCode(skillCatalog?.skills, s.card?.skill_code);
+            const off = skillInactive(s.card?.skill_code, s.card?.player.position);
+            return (
+              <div key={s.slot_code} className="rounded-xl bg-white/5 px-3 py-2">
+                <p className="flex items-center justify-between gap-2 text-sm font-semibold text-ink-chalk">
+                  <span className="truncate">{s.card?.player.display_name}</span>
+                  <CardSkillBadge code={s.card?.skill_code} level={s.card?.skill_level} inactiveReason={off} />
+                </p>
+                <p className="mt-0.5 text-caption text-ink-mist">{skill?.name}: {off ?? skill?.effect}</p>
+              </div>
+            );
+          })}
+        </div>
+      </ArenaSheet>
+
+      <ArenaSheet open={strengthHintOpen} title="Что влияет на силу" onClose={() => setStrengthHintOpen(false)}>
+        <div className="flex flex-col gap-1 text-caption leading-relaxed text-ink-mist">
+          {lineup?.coach && (
+            <p className="text-ink-chalk">{lineup.coach.display_name}: {lineup.coach.boosts.map((b) => boostText(b)).join(" · ")}</p>
+          )}
+          {lineup?.stadium && (
+            <p className="text-ink-chalk">
+              {lineup.stadium.display_name}:{" "}
+              {[
+                lineup.stadium.boost_pct > 0 ? `+${Math.round(lineup.stadium.boost_pct * 100)}% к силе` : null,
+                lineup.stadium.opp_malus ? `−${lineup.stadium.opp_malus} к рейтингу соперника` : null,
+              ].filter(Boolean).join(" · ") || "без бонусов"}
+            </p>
+          )}
+          <OpponentMalusNote malus={lineup?.opponent_malus} />
+          <p>· Позиция: 100% рейтинга на своей, 90% на смежной, 75% не по профилю</p>
+          <p>· Схема: задаёт позиции и соседей для химии, атакующие усиливают атаку, оборонительные — защиту</p>
+          <p>{chemistryOn ? "· Химия: каждое очко химии игрока добавляет рейтинг в матче" : "· Химия: бонус за игроков одного клуба и страны"}</p>
+          <p>· Редкость: чем выше, тем больше вклад рейтинга</p>
+          <p>· Тренер: бонус к силе по редкости</p>
+          <p>· Стиль: усиливает свою линию, а против стиля соперника может дать ещё бонус</p>
+        </div>
+      </ArenaSheet>
 
       {pickerSlot && (
         <CardPickerModal
@@ -793,29 +894,34 @@ export default function ArenaPage() {
   );
 }
 
-function MiniStat({ label, value }: { label: string; value: string | number }) {
+/** Coach / stadium: a corner of the goalkeeper's row. */
+function ArenaExtraSlot({ side, image, filled, label, onClick, busy }: {
+  side: "left" | "right";
+  image?: string | null;
+  filled: boolean;
+  label: string;
+  onClick: () => void;
+  busy: boolean;
+}) {
   return (
-    <div className="rounded-xl bg-bg-surface py-2">
-      <p className="font-mono text-sm font-bold text-ink-chalk">{value}</p>
-      <p className="text-micro text-ink-mist-dim">{label}</p>
-    </div>
+    <button
+      onClick={onClick}
+      disabled={busy}
+      className={`absolute top-0 ${side === "left" ? "left-1.5" : "right-1.5"} flex aspect-square w-[40px] flex-col items-center justify-center overflow-hidden rounded-[9px] active:scale-95 disabled:opacity-60 min-[400px]:w-[44px] ${
+        filled ? "ring-1 ring-white/25" : "border border-dashed border-white/25 bg-black/30"
+      }`}
+    >
+      {filled && (
+        <img decoding="async" alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover"
+          src={staticUrl(image ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")} />
+      )}
+      {!filled && <span className="text-base leading-none text-ink-mist-dim">+</span>}
+      <span className={`${filled ? "absolute inset-x-0 bottom-0 bg-black/80 text-accent-cyan" : "text-ink-mist-dim"} text-center font-mono text-[8px] font-bold leading-[11px]`}>{label}</span>
+    </button>
   );
 }
 
-function FormBadge({ result }: { result: MatchResult | null }) {
-  const letter = result === "win" ? "W" : result === "loss" ? "L" : "D";
-  const className =
-    result === "win"
-      ? "bg-accent-green/20 text-accent-green"
-      : result === "loss"
-        ? "bg-red-500/20 text-red-400"
-        : "bg-white/10 text-ink-mist";
-  return (
-    <span className={`flex h-5 w-5 items-center justify-center rounded-full font-mono text-micro font-bold ${className}`}>
-      {letter}
-    </span>
-  );
-}
+const isShotMoment = (m: { kind: string }) => !["halftime", "late_call", "penalty"].includes(m.kind);
 
 function MatchSimulation({
   match,
@@ -823,22 +929,25 @@ function MatchSimulation({
   onAct,
   onFinished,
   startRevealed = false,
+  division,
 }: {
   match: Match;
   actPending: boolean;
-  onAct: (action: MatchActionKind) => void;
+  onAct: ArenaAct;
   onFinished: () => void;
+  division?: ArenaDivision | null;
   /** Reopening an already-finished match: show it as played, don't replay it. */
   startRevealed?: boolean;
 }) {
   const [revealedCount, setRevealedCount] = useState(startRevealed ? match.events.length : 0);
   const [autoSkip, setAutoSkip] = useState(false);
   const [flashKey, setFlashKey] = useState(0);
+  const [goalEvent, setGoalEvent] = useState<MatchEvent | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
   // A reopened, already-played match must not re-credit the reward or
   // re-flash its goals.
-  const finishedFiredRef = useRef(startRevealed);
+  const finishedFiredRef = useRef(startRevealed && match.status === "finished");
   const prevRevealedRef = useRef(startRevealed ? match.events.length : 0);
   const ackedBreakawayRef = useRef(-1);
 
@@ -869,15 +978,26 @@ function MatchSimulation({
       return;
     }
     if (isBreakawayNext) return; // wait for the player to acknowledge it
+    const upcoming = match.events[revealedCount];
+    const last = revealedCount > 0 ? match.events[revealedCount - 1] : null;
+    const beat = SHOT_OUTCOMES.has(upcoming?.event_type) ? SHOT_STEP_MS : QUICK_STEP_MS;
     timerRef.current = setTimeout(() => {
-      if (["goal", "save", "blocked"].includes(match.events[revealedCount]?.event_type)) haptic("medium");
+      if (["goal", "save", "blocked"].includes(upcoming?.event_type)) haptic("medium");
       setRevealedCount((c) => c + 1);
-    }, EVENT_STEP_MS);
+    }, beat + (last?.event_type === "goal" ? GOAL_HOLD_MS : 0));
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revealedCount, caughtUp, isFinished, autoSkip, isBreakawayNext, total]);
+
+  // It only announces the chance: the moment after it is on the clock.
+  useEffect(() => {
+    if (!isBreakawayNext || autoSkip) return undefined;
+    const timer = setTimeout(() => ackBreakaway(), BREAKAWAY_HOLD_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBreakawayNext, autoSkip, revealedCount]);
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
@@ -889,8 +1009,8 @@ function MatchSimulation({
     if (!autoSkip || !caughtUp || isFinished || actPending) return;
     const pending = match.pending_moment;
     if (!pending) return;
-    const action = pending.actions[Math.floor(Math.random() * pending.actions.length)];
-    onAct(action);
+    // The server plays it sensibly: skipping is no worse than an average choice.
+    onAct("auto", { expected_seq: pending.seq });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoSkip, caughtUp, isFinished, actPending, match]);
 
@@ -898,9 +1018,26 @@ function MatchSimulation({
     if (revealedCount > prevRevealedRef.current) {
       const newly = match.events.slice(prevRevealedRef.current, revealedCount);
       if (newly.some((e) => e.event_type === "goal" && e.team === "user")) setFlashKey((k) => k + 1);
+      const goal = newly.filter((e) => e.event_type === "goal").pop();
+      if (goal && !autoSkip) {
+        playSound(goal.team === "user" ? "goal" : "concede");
+        setGoalEvent(goal);
+      }
     }
     prevRevealedRef.current = revealedCount;
-  }, [revealedCount, match.events]);
+  }, [revealedCount, match.events, autoSkip]);
+
+  useEffect(() => {
+    if (!goalEvent) return undefined;
+    const timer = setTimeout(() => setGoalEvent(null), GOAL_HOLD_MS);
+    return () => clearTimeout(timer);
+  }, [goalEvent]);
+
+  const atHalftime = caughtUp && !isFinished && match.pending_moment?.kind === "halftime";
+  useEffect(() => {
+    if (!startRevealed && !autoSkip && (atHalftime || (caughtUp && isFinished))) playSound("whistle");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [atHalftime, caughtUp, isFinished]);
 
   const skip = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -914,18 +1051,22 @@ function MatchSimulation({
 
   const revealed = match.events.slice(0, revealedCount);
   const currentMinute = revealed.length ? revealed[revealed.length - 1].minute : 0;
-  const pendingMoment = caughtUp && !isFinished && !autoSkip ? match.pending_moment : null;
-  const showFinal = caughtUp && isFinished;
+  const pendingMoment = caughtUp && !isFinished && !autoSkip && !goalEvent ? match.pending_moment : null;
+  const showFinal = caughtUp && isFinished && !goalEvent;
+  const holdingBreath = !caughtUp && !autoSkip && !isBreakawayNext && SHOT_OUTCOMES.has(nextEvent?.event_type ?? "");
 
   // Keep the pitch on the chance the player just answered until its outcome
   // is revealed, instead of snapping back while the action request is in
   // flight and the next event waits for its reveal tick.
   const [heldMoment, setHeldMoment] = useState<{ team: string; shot_type: string; at: number } | null>(null);
   useEffect(() => {
-    if (pendingMoment) setHeldMoment({ team: pendingMoment.team, shot_type: pendingMoment.shot_type, at: revealedCount });
+    if (pendingMoment && isShotMoment(pendingMoment)) {
+      setHeldMoment({ team: pendingMoment.team, shot_type: pendingMoment.shot_type, at: revealedCount });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingMoment?.seq]);
-  const pitchMoment = pendingMoment ?? (heldMoment && heldMoment.at === revealedCount ? heldMoment : null);
+  const pitchMoment = (pendingMoment && isShotMoment(pendingMoment) ? pendingMoment : null)
+    ?? (heldMoment && heldMoment.at === revealedCount ? heldMoment : null);
 
   // The live score only counts goals among the *revealed* events, so it
   // climbs to the final score in step with the commentary instead of
@@ -942,9 +1083,11 @@ function MatchSimulation({
         />
       )}
 
+      {goalEvent && <ArenaGoalOverlay key={revealedCount} event={goalEvent} opponentName={match.opponent_name} />}
+
       <div className="flex shrink-0 items-center justify-between">
         <span className="font-mono text-xs text-ink-mist-dim">
-          {showFinal ? "Матч завершён" : autoSkip ? "Пропускаем матч..." : `${currentMinute}' · идёт матч...`}
+          {showFinal ? "Матч завершён" : autoSkip ? "Пропускаем матч..." : holdingBreath ? `${currentMinute}' · удар...` : `${currentMinute}' · идёт матч...`}
         </span>
         {/* Visible any time there's still something to skip through — including
             while waiting on the player's own action choice (caughtUp && !isFinished),
@@ -987,13 +1130,15 @@ function MatchSimulation({
       <div className={showFinal ? "shrink-0" : "mt-3 shrink-0"}>
         {showFinal ? (
           <div className="flex flex-col gap-2">
-            <ArenaMatchReport match={match} />
+            <ArenaMatchReport match={match} division={division} />
             <MatchStatsTable events={match.events} opponentName={match.opponent_name} />
             <MatchSkillSummary events={match.events} />
             <MatchPathSummary match={match} />
           </div>
         ) : (
-          <MatchPitchView events={revealed} opponentName={match.opponent_name} pending={pitchMoment} />
+          <div className="mx-auto w-full" style={{ maxWidth: "46dvh" }}>
+            <MatchPitchView events={revealed} opponentName={match.opponent_name} pending={pitchMoment} />
+          </div>
         )}
       </div>
 
@@ -1029,51 +1174,15 @@ function MatchSimulation({
         </div>
       )}
 
-      {pendingMoment && <ActionPrompt pending={pendingMoment} disabled={actPending} onAct={onAct} />}
+      {pendingMoment?.kind === "halftime" ? (
+        <ArenaHalftimePrompt match={match} pending={pendingMoment} disabled={actPending} onAct={onAct} />
+      ) : pendingMoment?.kind === "late_call" ? (
+        <ArenaLateCallPrompt pending={pendingMoment} disabled={actPending} onAct={onAct} />
+      ) : pendingMoment?.kind === "penalty" ? (
+        <ArenaPenaltyScene key={pendingMoment.seq} pending={pendingMoment} onAct={onAct} />
+      ) : pendingMoment ? (
+        <ArenaMomentPrompt pending={pendingMoment} disabled={actPending} onAct={onAct} />
+      ) : null}
     </section>
-  );
-}
-
-function ActionPrompt({
-  pending,
-  disabled,
-  onAct,
-}: {
-  pending: MatchPendingMoment;
-  disabled: boolean;
-  onAct: (action: MatchActionKind) => void;
-}) {
-  // Subtitle under a button shows the actor it concerns, if any — the
-  // shooter for "shoot", the teammate for "pass". Defense actions all
-  // concern the same named defender, already mentioned in the situation
-  // text above, so no per-button subtitle is needed there.
-  const subtitleFor = (action: MatchActionKind): string | null => {
-    if (action === "shoot") return pending.actors.shooter?.name ?? null;
-    if (action === "pass") return pending.actors.pass_target?.name ?? null;
-    return null;
-  };
-
-  return (
-    <div className="mt-3 flex shrink-0 flex-col items-center gap-3 rounded-2xl bg-black/20 p-4 text-center">
-      <p className="text-sm font-semibold text-ink-chalk">{pending.description}</p>
-      <div className={`grid gap-2 ${pending.actions.length === 1 ? "grid-cols-1" : pending.actions.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
-        {pending.actions.map((action) => {
-          const { label, Icon } = ACTION_LABELS[action];
-          const subtitle = subtitleFor(action);
-          return (
-            <button
-              key={action}
-              onClick={() => onAct(action)}
-              disabled={disabled}
-              className="flex flex-col items-center gap-1.5 rounded-2xl bg-bg-surface px-4 py-3 text-sm font-semibold text-ink-chalk active:scale-90 disabled:opacity-40"
-            >
-              <Icon size={16} />
-              {label}
-              {subtitle && <span className="text-micro font-normal text-ink-mist-dim">{subtitle}</span>}
-            </button>
-          );
-        })}
-      </div>
-    </div>
   );
 }

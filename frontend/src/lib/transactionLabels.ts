@@ -6,6 +6,8 @@ export const TX_TYPE_LABELS: Record<string, string> = {
   path_prestige: "Академия: престиж",
   path_prestige_reward: "Академия: награда за престиж",
   arena_division_reward: "Card Arena: новый дивизион",
+  arena_cup_reward: "Кубок выходных",
+  arena_goal_bonus: "Card Arena: цель матча",
   daily_reward: "Календарь наград",
   calendar_catchup: "Календарь: догнать день",
   cosmetic_purchase: "Покупка стиля",

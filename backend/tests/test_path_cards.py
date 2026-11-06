@@ -290,7 +290,10 @@ async def _arena_lineup(client, db_session, headers, user, path_card=None, slot_
 
 
 async def _play(client, headers):
-    actions = {"attack": "shoot", "defense": "tackle", "breakaway": "strike"}
+    actions = {
+        "attack": "shoot", "defense": "tackle", "breakaway": "strike",
+        "halftime": "keep_style", "late_call": "hold", "penalty": "auto",
+    }
     match = (await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})).json()
     while match["status"] == "in_progress":
         action = actions[match["pending_moment"]["kind"]]

@@ -111,8 +111,10 @@ async def update_template_formation(
     template_index: int, payload: LineupFormationRequest,
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
-    """Another formation; cards stay in their lines where there's room."""
-    return await set_formation(db, user, payload.formation, template_index)
+    """Another formation: cards stay in their lines where there's room, the
+    slots left empty get the best fitting cards of the collection."""
+    await set_formation(db, user, payload.formation, template_index)
+    return await auto_squad_service.fill_arena_gaps(db, user, template_index)
 
 
 @router.put("/templates/{template_index}/coach", response_model=LineupOut)

@@ -1,4 +1,5 @@
 from app.models.admin_action import AdminAction
+from app.models.arena_cup import ArenaCupRun
 from app.models.auction import AgentLicense, AuctionBid, AuctionLot
 from app.models.badge import Badge, UserBadge
 from app.models.blackjack import BlackjackMatch
@@ -135,6 +136,7 @@ from app.models.user_stadium_card import UserStadiumCard
 from app.models.club_stadium_card import ClubStadiumCard
 
 __all__ = [
+    "ArenaCupRun",
     "FanBattleLedger",
     "FanBattleMember",
     "HalloweenLedger",

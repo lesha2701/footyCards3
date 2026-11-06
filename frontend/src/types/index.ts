@@ -125,6 +125,10 @@ export interface Stadium {
 export interface UserCard {
   id: number;
   serial_number: number;
+  /** What this copy did in Card Arena. */
+  arena_goals?: number;
+  arena_assists?: number;
+  arena_mvps?: number;
   player: Player;
   acquired_at: string;
   source: string;
@@ -726,6 +730,81 @@ export interface MatchActor {
   name: string;
   rating: number;
   position: string;
+  image_path?: string | null;
+  rarity?: string | null;
+}
+
+/** A side of a Card Arena duel (the opponent's players have no card id). */
+export interface MatchDuelActor {
+  name: string;
+  rating: number;
+  position: string;
+  image_path?: string | null;
+  rarity?: string | null;
+}
+
+export type ArenaActionKind =
+  | MatchActionKind | "dribble" | "keep_style" | "change_style" | "all_in" | "hold" | "kick" | "dive" | "auto";
+
+export interface MatchOption {
+  action: ArenaActionKind;
+  me: MatchDuelActor;
+  vs: MatchDuelActor;
+  risk: "low" | "mid" | "high";
+  note: string;
+}
+
+/** Card Arena's moment: FUT Draft keeps the plain MatchPendingMoment. */
+export interface ArenaPendingMoment extends Omit<MatchPendingMoment, "kind" | "actions" | "shot_type"> {
+  kind: MatchPendingMoment["kind"] | "halftime" | "late_call" | "penalty";
+  shot_type: ShotType | "halftime" | "late_call" | "penalty";
+  actions: ArenaActionKind[];
+  options?: MatchOption[];
+  /** The moment's clock, null when it has none. */
+  seconds?: number | null;
+  seed?: number | null;
+  rating?: number | null;
+  taker?: MatchDuelActor | null;
+}
+
+export interface ArenaGoal {
+  code: string;
+  text: string;
+  bonus: number;
+  done: boolean;
+}
+
+export interface ArenaCupStatus {
+  open: boolean;
+  enabled: boolean;
+  total_rounds: number;
+  rounds_won: number;
+  status: "none" | "active" | "lost" | "champion";
+  rewards: number[];
+  next_strength_pct: number | null;
+  champions: number;
+}
+
+export interface ArenaDefenseItem {
+  match_id: number;
+  attacker_name: string;
+  attacker_avatar_url: string | null;
+  result: MatchResult;
+  my_score: number;
+  their_score: number;
+  created_at: string;
+  can_revenge: boolean;
+}
+
+export interface MatchHistoryItem {
+  id: number;
+  opponent_name: string;
+  user_score: number;
+  opponent_score: number;
+  result: MatchResult | null;
+  reward_coins: number;
+  created_at: string;
+  ladder?: ArenaLadderResult | null;
 }
 
 export interface MatchPendingMoment {
@@ -752,7 +831,9 @@ export interface Match {
   rating_delta: number;
   created_at: string;
   events: MatchEvent[];
-  pending_moment: MatchPendingMoment | null;
+  pending_moment: ArenaPendingMoment | null;
+  /** This match was already running: show it as it stands. */
+  resumed?: boolean;
   /** «Академия»: static talents applied at kickoff / experience earned. */
   talent_notes?: MatchTalentNote[] | null;
   path_progress?: PathMatchProgress[] | null;
@@ -779,6 +860,8 @@ export interface MatchArenaInfo {
   matchup_bonus_pct: number;
   chances: ArenaChances | null;
   opponent_points: number | null;
+  goal?: ArenaGoal | null;
+  cup?: { run_id: number; round: number } | null;
 }
 
 export interface ArenaLadderResult {
@@ -802,6 +885,9 @@ export interface ArenaLineCompare {
 }
 
 export interface ArenaMatchReport {
+  mvp?: MatchDuelActor | null;
+  goal?: ArenaGoal | null;
+  cup?: { coins: number; status: string; round: number; rounds_won?: number } | null;
   verdict: string;
   reasons: string[];
   chances: ArenaChances;
@@ -836,15 +922,19 @@ export interface ArenaPreview {
   opponent_points: number;
   opponent_division: number;
   opponent_strength: number;
-  opponent_style: LineupTactic;
+  /** A tendency, not a fact: the real style opens at kickoff. */
+  opponent_style_hint: LineupTactic;
   opponent_formation: string;
   user_strength: number;
   user_style: LineupTactic;
   user_formation: string;
-  matchup: ArenaMatchup;
-  matchup_bonus_pct: number;
-  matchup_text: string;
+  head_to_head?: { win: number; draw: number; loss: number } | null;
+  goal_text?: string | null;
+  goal_bonus_coins: number;
+  revenge: boolean;
   lines: ArenaLineCompare[];
+  /** Your best outfield card and who faces him; a bot's side is a line, no photo. */
+  key_duel?: { me: MatchDuelActor; vs: MatchDuelActor } | null;
   chances: ArenaChances;
   points_at_stake: Record<MatchResult, number>;
   division: ArenaDivision;
@@ -861,6 +951,11 @@ export interface ArenaStats {
   /** Place by arena points (null before the first division match). */
   arena_rank: number | null;
   division?: ArenaDivision | null;
+  hourly_limit: number;
+  hourly_left: number;
+  retry_after_seconds: number;
+  defense_unread: number;
+  cup?: ArenaCupStatus | null;
 }
 
 export interface MaintenanceStatus {

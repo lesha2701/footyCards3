@@ -57,6 +57,9 @@ class User(TimestampMixin, Base):
     # The opponent found for the next match (shown before kickoff, kept until
     # that match is played so a player can't re-roll for an easier one).
     arena_pending_opponent: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # The defense log: read up to here; the last «тебя атаковали» notice.
+    arena_defense_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    arena_defense_notified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     # Lifetime counters feeding `metric_counter` tasks (see task_service.py).
     arena_clean_sheet_wins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     memory_levels_completed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

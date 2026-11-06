@@ -225,6 +225,22 @@ class GameConfig(TimestampMixin, Base):
     # Scale of arena_tactics.FORMATION_SHIFT (100 = as tabled, 0 = formations
     # only matter through positions and chemistry).
     arena_formation_effect_pct: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    # The live layer (arena_moments): seconds a moment waits for the player,
+    # how often an auto-pick (skip/timeout) is the sensible one, minutes until
+    # an abandoned match is closed as a loss, how often the pre-match style
+    # hint is true, the match-goal bonus and the rolls of the decisions.
+    arena_moment_seconds: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
+    arena_auto_best_pct: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    arena_abandon_minutes: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    arena_hint_accuracy_pct: Mapped[int] = mapped_column(Integer, default=70, nullable=False)
+    arena_goal_bonus_coins: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    arena_decision_tuning: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # «Кубок выходных» (arena_cup_service): weekdays (0 = Monday), coins and
+    # opponent strength (% of yours) per round.
+    arena_cup_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    arena_cup_weekdays: Mapped[list] = mapped_column(JSON, default=lambda: [5, 6], nullable=False)
+    arena_cup_round_rewards: Mapped[list] = mapped_column(JSON, default=lambda: [100, 200, 400, 800], nullable=False)
+    arena_cup_round_strength_pct: Mapped[list] = mapped_column(JSON, default=lambda: [95, 100, 106, 112], nullable=False)
     # Card Arena divisions (arena_ladder_service): Elo-like points, division
     # N = index N-1 of these parallel lists (first threshold is always 0).
     arena_points_k: Mapped[int] = mapped_column(Integer, default=40, nullable=False)

@@ -219,6 +219,13 @@ export default function CardDetailModal({
                     </p>
                   )}
 
+                  {!!((card.arena_goals ?? 0) + (card.arena_assists ?? 0) + (card.arena_mvps ?? 0)) && (
+                    <p className="rounded-xl bg-white/5 px-3 py-2 text-caption text-ink-mist">
+                      Card Arena: голы <span className="font-mono font-bold text-ink-chalk">{card.arena_goals ?? 0}</span>
+                      {" · "}передачи <span className="font-mono font-bold text-ink-chalk">{card.arena_assists ?? 0}</span>
+                      {" · "}игрок матча <span className="font-mono font-bold text-ink-chalk">{card.arena_mvps ?? 0}</span>
+                    </p>
+                  )}
                   <section className="flex flex-col gap-2 rounded-2xl bg-black/20 p-2.5" aria-label="Прокачка">
                     <p className="px-0.5 text-micro font-semibold uppercase tracking-wider text-ink-mist-dim">Прокачка</p>
                     {!inArena && !frozen && (
