@@ -235,6 +235,39 @@ place when the ball goes runs back flat out (`recover`). With the ball the
 forwards start runs in behind from the line (`Player.dash`): a pass that comes
 late finds them offside. After a goal `lineUp` puts everybody on his spot.
 
+### The plan, the memory and the level
+
+`gameplan.ts`. The AI side picks a plan at the kick-off (`pickStyle`): a press (line
+5 m up, `pressing` up to 44 m, hunting from 6 m), a block (5 m down, hunting only near
+its own goal) or counter-attacks (deep, and for 200 ticks after winning the ball the
+first pass goes forward and the runners go at once, `countering`). The HUD announces
+it. The human's side stays balanced. `reviewPlans` reads the score and the clock twice
+a second: `siege` grows from 40% of the match for a side behind and to about half for
+a level one in the last minutes, `protect` for a side ahead. They move the line
+(`lineOf`), the hunt (`huntFrom`), the shape, `urge` and the risk of a ball forward.
+
+`Scout` is what a side has noticed about the other, fading by a fifth every 10 s or
+so: feints by kind (from the second one each sells 11% less, `feintBites`), balls in
+behind (the line drops), the flank the attacks come down (the block leans), and who
+has hurt them (`dangerMan`). That man gets a shadow from midfield (`Player.tag`), goal-
+side and touching distance, once he is in reach of their half.
+
+Traits (`traitOf`): a playmaker in midfield (passes go to him, his passes are cleaner),
+the wingers take men on, the target man is who long balls and crosses look for and he
+lays off, the second striker in a 4-4-2 shoots sooner and runs more. Near the
+touchline (`TRAP_WIDTH`) a second man goes to the ball and a third stands inside it.
+
+Set pieces: a corner has a `routine`, fixed once as they take their places: near post,
+far post, short, the edge of the box. A close free kick is sometimes squared. The wall
+is 2 to 5 men by distance and angle, everybody else stays 10 m off. On a defended
+corner one stays up.
+
+`Setup.level` 0..2 sets the AI side's `skill`, which scales its tackle rates, passing
+and shooting error, how often it thinks, the keeper's reaction and how well its men
+read a feint, and moves its ratings by -0.1, 0, +0.08. It changes nothing for the
+human's side, and the flat fee doesn't depend on it. `LEVEL=0 node bench/human.mjs 60
+real` measures one level.
+
 ## Testing on a phone
 
 `bench/serve.mjs` serves `bench/out` with the app's public assets, and

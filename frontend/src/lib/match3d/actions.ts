@@ -2,7 +2,7 @@
  * released at the contact), tackles and feints. The brain and the human call
  * the same functions, so both play by the same physics and the same odds. */
 import {
-  Act, BALL_R, BOX_D, GOAL_H, GOAL_HALF, HALF_L, HALF_W, Kick, ROLL_DECEL, TICK,
+  Act, BALL_R, BOX_D, GOAL_H, GOAL_HALF, HALF_L, HALF_W, Kick, ROLL_DECEL, TICK, Trait,
   clamp, dirOf, dist, launch, predict, rnd, rndN,
   type Feint, type KickPlan, type MatchState, type Player,
 } from "./core";
@@ -35,6 +35,11 @@ const pressureOn = (s: MatchState, p: Player) => clamp(1 - nearestOpp(s, p).d / 
 
 /** Starts the kick: the windup runs in `stepKick`. */
 export function startKick(s: MatchState, p: Player, plan: KickPlan) {
+  plan.err *= 2 - s.skill[p.team] * (p.trait === Trait.Playmaker ? 1.15 : 1);
+  // The other side takes note of what hurts.
+  const seen = s.scout[p.team === 0 ? 1 : 0];
+  if (plan.kind === Kick.Through) seen.through += 1;
+  if (plan.kind === Kick.Shot) seen.threat[p.slot] += 1.5;
   p.plan = plan;
   p.act = Act.Kick;
   p.actT = 0;
@@ -300,6 +305,7 @@ export function startFeint(s: MatchState, p: Player, kind: Feint, side: number) 
   p.act = Act.Feint; p.actT = 0; p.actLen = FEINT_LEN;
   p.sub = kind; p.side = side;
   p.cool = 0;
+  s.scout[p.team === 0 ? 1 : 0].feints[kind] += 1;
   p.runUp = Math.sqrt(p.vx * p.vx + p.vz * p.vz);
 }
 
@@ -312,8 +318,11 @@ export function feintBites(s: MatchState, p: Player) {
     if (q.team === p.team || q.role === "GK" || q.beat > 0) continue;
     const d = dist(p.x, p.z, q.x, q.z);
     if (d > 3.6) continue;
-    const chance = 0.42 + p.dribble * 0.5 - q.defend * 0.32 - (d - 1.5) * 0.08 - Math.max(0, p.runUp - 5.6) * 0.14;
+    // The first one sells. The same again, they've seen it: they stay on their feet.
+    const seen = Math.min(0.5, Math.max(0, s.scout[q.team].feints[p.sub] - 1) * 0.11);
+    const chance = 0.42 + p.dribble * 0.5 - q.defend * 0.32 - (d - 1.5) * 0.08 - Math.max(0, p.runUp - 5.6) * 0.14 - seen - (s.skill[q.team] - 1) * 0.4;
     if (rnd(s) < chance) {
+      s.scout[q.team].threat[p.slot] += 1;
       q.beat = 34;
       q.beatX = right.x; q.beatZ = right.z;
       s.ev.push({ t: "feint", p: p.i, beat: q.i });

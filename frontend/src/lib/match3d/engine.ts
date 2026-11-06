@@ -5,12 +5,13 @@
 import {
   Act, BALL_R, CLOCK_RATE, END_MIN, GOAL_H, GOAL_HALF, HALF_L, HALF_W, HZ, Kick, PEN_SPOT, Phase, START_MIN, SIX_D, TICK, WALK_DRIBBLE,
   ballAt, clamp, dirOf, dist, dist2, freshState, predAt, predict, rnd, rndN, speedOf, stepBall, touchFoot,
-  FROM_SLIDE, type Feint, type MatchState, type Player, type SceneKick, type SceneOutcome, type SetKind, type SetPiece, type Setup,
+  FROM_SLIDE, Trait, type Feint, type MatchState, type Player, type SceneKick, type SceneOutcome, type SetKind, type SetPiece, type Setup,
 } from "./core";
 import {
   SLIDE_DRIVE, SLIDE_GETUP, SLIDE_GETUP_KEEP, SLIDE_STEER, feintBites, fell, inBox, laneMargin, offsideLine, planCross, planLob, planPass, planShot, planThrough, releaseKick, rollPace, sprintOf, slideAim, startFeint, startKick, startSlide, startTackle, windupOf,
 } from "./actions";
 import { FORMATIONS, STILL_REACH, setPieceSpot, standing, takeSetPiece, thinkCarrier, thinkPlayer, thinkTackle, thinkTeam } from "./brain";
+import { makePlan, pickStyle, reviewPlans } from "./gameplan";
 import { holdBall, keeperSpot, releaseHands, stepKeeper } from "./keeper";
 
 /** What the human does this tick. Stick in world axes (−1..1). */
@@ -73,13 +74,26 @@ const LATE_MAX = 240;
 const STAMINA_DRAIN = 1 / 600;
 const STAMINA_BACK = 1 / 720;
 
-const SLOTS = [FORMATIONS["433"], FORMATIONS["442"]] as const;
+export const SLOTS = [FORMATIONS["433"], FORMATIONS["442"]] as const;
+
+/** What he is in the side, by his place in the formation. */
+function traitOf(role: Player["role"], shape: "433" | "442", slot: number): Trait {
+  if (role === "CM") return slot === 6 ? Trait.Playmaker : Trait.None;
+  if (role === "W") return Trait.Dribbler;
+  if (role === "ST") return shape === "442" && slot === 10 ? Trait.Poacher : Trait.Target;
+  return Trait.None;
+}
+
+/** How sharp the AI side is at each level, and what that does to its ratings. */
+const LEVEL_SKILL = [0.6, 1, 1.35];
+const LEVEL_RATING = [-0.1, 0, 0.08];
 
 export function createMatch(setup: Setup, userTeam: 0 | 1 | null = 0): MatchState {
   const players: Player[] = [];
   const mk = (team: 0 | 1, slot: number): Player => {
     const f = SLOTS[team][slot];
-    const rating = team === 0 ? setup.homeRating : setup.awayRating;
+    const level = userTeam !== null && team !== userTeam ? LEVEL_RATING[setup.level ?? 1] : 0;
+    const rating = (team === 0 ? setup.homeRating : setup.awayRating) + level;
     const seed = Math.imul(setup.seed ^ (team * 97 + slot * 13 + 5), 2654435761) >>> 0;
     const vary = (k: number) => clamp(rating + ((((seed >>> k) & 255) / 255) * 2 - 1) * 0.1, 0.4, 0.99);
     const fwd = f.role === "ST" || f.role === "W";
@@ -92,6 +106,7 @@ export function createMatch(setup: Setup, userTeam: 0 | 1 | null = 0): MatchStat
       dribble: vary(24) + (f.role === "W" ? 0.1 : backs ? -0.12 : 0),
       defend: vary(4) + (backs ? 0.1 : fwd ? -0.2 : 0),
       save: f.role === "GK" ? vary(12) : 0,
+      trait: traitOf(f.role, team === 0 ? "433" : "442", slot), tag: false,
       x: f.ax * dirOf(team), z: f.z, vx: 0, vz: 0, hx: dirOf(team), hz: 0,
       tx: 0, tz: 0, want: 0, faceBall: false,
       act: Act.None, actT: 0, actLen: 0, side: 1, sub: 0, air: 0, plan: null, cool: 0,
@@ -102,6 +117,12 @@ export function createMatch(setup: Setup, userTeam: 0 | 1 | null = 0): MatchStat
   for (const team of [0, 1] as const) for (let n = 0; n < 11; n++) players.push(mk(team, n));
   const s = freshState(setup, players);
   s.user = userTeam === null ? -1 : players.find((p) => p.team === userTeam && p.role === "ST")!.i;
+  // The human's side plays as he plays it; the other one has come with a plan.
+  for (const team of [0, 1] as const) {
+    if (team === userTeam) continue;
+    s.plans[team] = makePlan(pickStyle(s));
+    s.skill[team] = LEVEL_SKILL[setup.level ?? 1];
+  }
   restart(s, "kickoff", rnd(s) < 0.5 ? 0 : 1, 0, 0);
   lineUp(s);
   return s;
@@ -165,7 +186,7 @@ function restart(s: MatchState, kind: SetKind, team: 0 | 1, x: number, z: number
   s.phase = kind === "kickoff" ? Phase.Kickoff : Phase.Dead;
   s.phaseT = 0;
   const taker = pickTaker(s, kind, team, x, z);
-  s.set = { kind, team, x, z, taker: taker.i, t: 0, ready: false, scene: -1 };
+  s.set = { kind, team, x, z, taker: taker.i, t: 0, ready: false, scene: -1, routine: -1 };
   b.owner = -1; b.to = -1; b.kick = Kick.None; b.inNet = false;
   s.chaser = [-1, -1];
   for (const p of s.players) {
@@ -1426,12 +1447,16 @@ export function stepMatch(s: MatchState, inp: Input) {
   }
 
   // Brains.
+  reviewPlans(s);
   if (s.tick % 6 === 0) { thinkTeam(s, 0, SLOTS[0]); thinkTeam(s, 1, SLOTS[1]); }
   for (const p of s.players) {
     const slot = SLOTS[p.team][p.slot];
     if (p.role === "GK") { thinkPlayer(s, p, slot); continue; }
     // The man on the ball re-reads it every few ticks, the rest a few times a second.
-    if (((s.tick + p.i * 3) % 12 === 0 || (p.duty === 1 && s.tick % 3 === 0)) && p.act === Act.None) thinkPlayer(s, p, slot);
+    // A sharper side sees things sooner.
+    const sharp = s.skill[p.team];
+    const every = sharp < 1 ? 17 : sharp > 1 ? 9 : 12;
+    if (((s.tick + p.i * 3) % every === 0 || (p.duty === 1 && s.tick % 3 === 0)) && p.act === Act.None) thinkPlayer(s, p, slot);
   }
 
   if (s.phase === Phase.Dead || s.phase === Phase.Kickoff) {

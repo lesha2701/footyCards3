@@ -84,6 +84,9 @@ export type Player = {
   num: number;
   /** Abilities, 0-1. */
   pace: number; shot: number; pass: number; dribble: number; defend: number; save: number;
+  trait: Trait;
+  /** Told to stay with their best man wherever he goes. */
+  tag: boolean;
   x: number; z: number; vx: number; vz: number;
   /** Facing, unit. */
   hx: number; hz: number;
@@ -153,6 +156,8 @@ export type SetPiece = {
   ready: boolean;
   /** This kick is played in the swipe scene: its seed (see `SceneKick`). */
   scene: number;
+  /** The routine they have agreed on, 0..3 (-1: not yet). */
+  routine: number;
 };
 
 /** A penalty or a close free kick with the human in it is played out in the
@@ -179,11 +184,44 @@ export type MatchEvent =
   | { t: "whistle"; n: number } | { t: "out"; set: SetKind; team: 0 | 1 }
   | { t: "tackle"; p: number; won: boolean } | { t: "foul"; p: number; on: number }
   | { t: "offside"; p: number } | { t: "feint"; p: number; beat: number }
+  | { t: "plan"; team: 0 | 1; kind: "style" | "siege" | "protect"; style?: Style }
   | { t: "switch"; p: number } | { t: "halfchance" } | { t: "added"; seconds: number }
   /** Everybody was moved at once: the picture cuts. */
   | { t: "cut" };
 
-export type Setup = { seed: number; home: string; away: string; homeRating: number; awayRating: number; minutes?: number };
+export type Setup = {
+  seed: number; home: string; away: string; homeRating: number; awayRating: number; minutes?: number;
+  /** How good the AI side is: 0 easy, 1 normal, 2 hard. */
+  level?: 0 | 1 | 2;
+};
+
+/** How a side means to play tonight. */
+export const enum Style { Balanced, Press, Block, Counter }
+/** What he is in the side, beyond his position. */
+export const enum Trait { None, Playmaker, Dribbler, Target, Poacher }
+
+export type Gameplan = {
+  style: Style;
+  /** The back line's shift up the pitch (m), how far up one man goes to the ball,
+   * and from where they hunt it in numbers. */
+  line: number; press: number; hunt: number;
+  /** 0..1, what the score and the clock ask for: everything forward, or shut up shop. */
+  siege: number; protect: number;
+  /** Bits: what has been announced. */
+  said: number;
+};
+
+/** What a side has noticed about the other one's habits. Fades with time. */
+export type Scout = {
+  /** The feints of each kind seen: the next of a kind sells less. */
+  feints: number[];
+  /** Balls in behind tried. */
+  through: number;
+  /** Which way the attacks come (z). */
+  flank: number;
+  /** What each of their men, by slot, has done to them. */
+  threat: number[];
+};
 
 export type MatchState = {
   tick: number;
@@ -200,6 +238,11 @@ export type MatchState = {
   set: SetPiece | null;
   /** Who plays for the human (-1: nobody, all AI). */
   user: number;
+  plans: [Gameplan, Gameplan];
+  /** What each side has learnt of the other. */
+  scout: [Scout, Scout];
+  /** How sharp each side is: 1 is the normal game. */
+  skill: [number, number];
   /** The team in possession (the last one to control the ball). */
   poss: 0 | 1;
   /** Who's on the ball's trail, per team. */
@@ -474,6 +517,8 @@ export function launch(s: MatchState, plan: KickPlan) {
 }
 
 export function freshState(setup: Setup, players: Player[]): MatchState {
+  const plan = (): Gameplan => ({ style: Style.Balanced, line: 0, press: 20, hunt: 16, siege: 0, protect: 0, said: 0 });
+  const scout = (): Scout => ({ feints: [0, 0, 0, 0], through: 0, flank: 0, threat: new Array(11).fill(0) });
   const team = (name: string, rating: number): Team => ({ name, rating, goals: 0, shots: 0, onTarget: 0, passes: 0, passesOk: 0, corners: 0, fouls: 0, possTicks: 0, tackles: 0 });
   return {
     tick: 0, rng: setup.seed | 0, phase: Phase.Kickoff, phaseT: 0, clock: 0, added: 0,
@@ -481,6 +526,7 @@ export function freshState(setup: Setup, players: Player[]): MatchState {
     ball: { x: 0, y: BALL_R, z: 0, vx: 0, vy: 0, vz: 0, sx: 0, sy: 0, sz: 0, owner: -1, last: -1, kick: Kick.None, kicker: -1, to: -1, since: 0, inNet: false, fromX: 0, fromZ: 0, roll: 0 },
     teams: [team(setup.home, setup.homeRating), team(setup.away, setup.awayRating)],
     set: null, user: -1, poss: 0, chaser: [-1, -1],
+    plans: [plan(), plan()], scout: [scout(), scout()], skill: [1, 1],
     pred: new Float64Array(PRED_MAX * 3), predN: 0, predFrom: 0,
     lastGoal: null, prevTouch: -1, wantShot: 0, tackleT: 0, want: null, wantX: 0, wantZ: 0, wantT: 0, idle: 0, contain: false, switchT: 0, locked: false, lockX: 0, lockZ: 0, stickX: 0, stickZ: 0, lostAt: [-9999, -9999], ev: [],
   };

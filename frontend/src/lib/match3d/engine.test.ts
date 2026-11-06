@@ -164,17 +164,20 @@ describe("match3d engine", () => {
   });
 
   it("without the ball the back four keep a line", () => {
-    const s = createMatch(SETUP, null);
     let n = 0, deep = 0;
-    while (s.phase !== Phase.FullTime) {
-      stepMatch(s, NO_INPUT);
-      const c = s.ball.owner >= 0 ? s.players[s.ball.owner] : null;
-      if (s.phase !== Phase.Play || !c || c.team !== 1 || s.tick % 30) continue;
-      const xs = s.players.filter((p) => p.team === 0 && (p.role === "CB" || p.role === "FB") && !p.duty).map((p) => p.x);
-      n += 1; deep += Math.max(...xs) - Math.min(...xs);
+    // Several matches: the plans differ, and one night's line says little.
+    for (let seed = 1; seed <= 8; seed++) {
+      const s = createMatch({ ...SETUP, seed: seed * 37 }, null);
+      while (s.phase !== Phase.FullTime) {
+        stepMatch(s, NO_INPUT);
+        const c = s.ball.owner >= 0 ? s.players[s.ball.owner] : null;
+        if (s.phase !== Phase.Play || !c || c.team !== 1 || s.tick % 30) continue;
+        const xs = s.players.filter((p) => p.team === 0 && (p.role === "CB" || p.role === "FB") && !p.duty).map((p) => p.x);
+        n += 1; deep += Math.max(...xs) - Math.min(...xs);
+      }
     }
-    expect(n).toBeGreaterThan(20);
-    expect(deep / n).toBeLessThan(7);
+    expect(n).toBeGreaterThan(100);
+    expect(deep / n).toBeLessThan(8);
   });
 
   it("at a kick-off only the taker is in the circle, everybody in his own half", () => {
@@ -323,7 +326,7 @@ describe("match3d engine", () => {
     const taker = s.players.find((p) => p.team === team && p.role === "ST")!;
     s.phase = Phase.Dead;
     s.ball.owner = -1;
-    s.set = { kind, team, x, z, taker: taker.i, t: 0, ready: false, scene: -1 };
+    s.set = { kind, team, x, z, taker: taker.i, t: 0, ready: false, scene: -1, routine: -1 };
     if (team === 0) s.user = taker.i;
     for (let i = 0; i < 900 && !s.set?.ready; i++) stepMatch(s, NO_INPUT);
     return s;
@@ -399,9 +402,10 @@ describe("match3d engine", () => {
     const m = outfield(s, from)[0];
     m.x = 12; m.z = -6; m.vx = 0; m.vz = 0;
     clear(s, 12, -6, [from, m.i, ...outfield(s, from).slice(1, 3).map((p) => p.i)]);
-    stepMatch(s, { ...NO_INPUT, press: { k: "pass", power: 0.5 } });
+    stepMatch(s, { ...NO_INPUT, mx: 22 / 25, mz: -11 / 25, press: { k: "pass", power: 0.5 } });
     for (let i = 0; i < 40 && s.ball.owner === from; i++) stepMatch(s, NO_INPUT);
     expect(s.ball.owner).toBe(-1);
+    for (let i = 0; i < 20; i++) stepMatch(s, NO_INPUT);
     stepMatch(s, { ...NO_INPUT, mx: 1, press: { k: "pass", power: 0.5 } });
     expect(s.want?.k).toBe("pass");
     let passes = 0;
