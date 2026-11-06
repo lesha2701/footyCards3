@@ -1,159 +1,173 @@
-/** The people in the stands: one instanced draw of cut-out supporters on the
- * seats of the bowl, in their side's colours. Nothing runs per person on the CPU:
- * they bob in the vertex shader and jump when `cheer` is up. */
+/** The people in the stands, for a phone: no objects at all. At load the cut-out
+ * supporters are drawn once on to a sheet of four bays of seats, twice (sitting, and
+ * with their arms up), and the sheet is laid on the slope of each tier. They move in
+ * the fragment shader: each person's patch of the sheet slides up and down, and in a
+ * cheer that patch is read from the arms-up sheet. The cost is the tier's few
+ * triangles and two texture reads. */
 import * as THREE from "three";
 
-import { HALF_L, HALF_W } from "@/lib/match3d/core";
-
-/** The sheet is 4 by 4. These have their arms up, the rest clap or shout. */
+/** The supporters' sheet is 4 by 4. These have their arms up. */
 const ARMS_UP = [0, 1, 5, 7, 9, 12, 15];
 const ARMS_DOWN = [2, 3, 4, 6, 8, 10, 11, 13, 14];
-/** A person takes this much room (m): along a row and between rows. */
-const SEAT = 0.95;
-const ROW = 1.05;
-const SIZE = 1.35;
-/** How full the ground is, and how full the stand behind the broadcast camera,
- * which only a replay ever looks at. */
-const FULL = 0.93;
-const BEHIND_CAMERA = 0.4;
-
-export type Ring = { a: number; b: number; y: number };
-/** A point of a stand: `t` round the bowl, `u` the share of the way round. */
-export type Bowl = {
-  point: (t: number, a: number, b: number) => readonly [number, number];
-  /** Evenly spaced `t` round a ring (m apart), with their `u`. */
-  walk: (a: number, b: number, step: number) => { t: number; u: number }[];
-};
+const SHEET_W = 2048, SHEET_H = 1024;
+/** What one sheet holds. The sheet is the tier's whole depth. */
+export const BAYS = 4;
+export const ROWS = 28;
+const SEATS = 15;
+/** The share of a bay the aisle takes. */
+const AISLE = 0.07;
+/** The slope foreshortens them seen from the broadcast camera: drawn this much taller. */
+const TALL = 1.6;
+const FULL = 0.94;
 
 const rng = (seed: number) => () => (seed = (seed * 16807) % 2147483647) / 2147483647;
 
-/** The seats of one tier: everyone sits on the slope from `lo` to `hi`. */
-function seat(bowl: Bowl, lo: Ring, hi: Ring, tiles: number, aisle: number, shadeLo: number, shadeHi: number, r: () => number) {
-  const out: number[] = [];
-  const depth = Math.sqrt((hi.a - lo.a) ** 2 + (hi.y - lo.y) ** 2);
-  const rows = Math.floor(depth / ROW);
-  for (let row = 0; row < rows; row++) {
-    const f = (row + 0.5) / rows;
-    const a = lo.a + (hi.a - lo.a) * f, b = lo.b + (hi.b - lo.b) * f, y = lo.y + (hi.y - lo.y) * f;
-    for (const { t, u } of bowl.walk(a, b, SEAT)) {
-      const across = (u * tiles) % 1;
-      if (across < aisle) continue;
-      const [x, z] = bowl.point(t, a, b);
-      if (r() > (z > HALF_W ? BEHIND_CAMERA : FULL)) continue;
-      // Away fans are one block in the corner by their own end.
-      const away = x < -38 && z < -8 && z > -46;
-      const neutral = r() < 0.14;
-      const up = ARMS_UP[Math.floor(r() * ARMS_UP.length)];
-      const cell = r() < 0.3 ? up : ARMS_DOWN[Math.floor(r() * ARMS_DOWN.length)];
-      const side = neutral ? 2 : away ? 1 : 0;
-      out.push(x + (r() - 0.5) * 0.25, y, z, cell, up, side, r(), shadeLo + (shadeHi - shadeLo) * f);
+/** The same people in grey and navy: not everyone came in the shirt. */
+function plainClothes(cut: CanvasImageSource, w: number, h: number) {
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const x = c.getContext("2d", { willReadFrequently: true })!;
+  x.drawImage(cut, 0, 0, w, h);
+  const im = x.getImageData(0, 0, w, h), d = im.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], g = d[i + 1], b = d[i + 2];
+    if (g > r * 1.15 && g > b * 1.15) { d[i] = g * 0.28; d[i + 1] = g * 0.32; d[i + 2] = g * 0.42; }
+  }
+  x.putImageData(im, 0, 0);
+  return c;
+}
+
+function bake(sheet: CanvasImageSource, plain: CanvasImageSource, cellW: number, cellH: number) {
+  const r = rng(40711);
+  type Fan = { x: number; y: number; cell: number; up: number; plain: boolean; size: number };
+  const fans: Fan[] = [];
+  const bay = SHEET_W / BAYS, rowH = SHEET_H / ROWS;
+  const seat = (bay * (1 - AISLE)) / SEATS;
+  // Back rows first: the row in front covers their legs.
+  for (let row = ROWS - 1; row >= 0; row--) {
+    for (let b = 0; b < BAYS; b++) {
+      for (let i = 0; i < SEATS; i++) {
+        if (r() > FULL) continue;
+        const up = ARMS_UP[Math.floor(r() * ARMS_UP.length)];
+        fans.push({
+          x: b * bay + bay * AISLE + (i + 0.5 + (r() - 0.5) * 0.3) * seat,
+          y: SHEET_H - row * rowH,
+          cell: r() < 0.3 ? up : ARMS_DOWN[Math.floor(r() * ARMS_DOWN.length)],
+          up, plain: r() < 0.14, size: seat * (1.32 + r() * 0.24),
+        });
+      }
     }
   }
-  return out;
+  const page = (arms: boolean) => {
+    const c = document.createElement("canvas");
+    c.width = SHEET_W; c.height = SHEET_H;
+    const x = c.getContext("2d")!;
+    for (let row = 0; row < ROWS; row++) {
+      x.fillStyle = "#26364d"; x.fillRect(0, row * rowH, SHEET_W, rowH * 0.7);
+      x.fillStyle = "#161f2d"; x.fillRect(0, row * rowH + rowH * 0.7, SHEET_W, rowH * 0.3);
+    }
+    for (let b = 0; b < BAYS; b++) {
+      x.fillStyle = "#4b5461"; x.fillRect(b * bay, 0, bay * AISLE, SHEET_H);
+      x.fillStyle = "#3a424e";
+      for (let row = 0; row < ROWS; row++) x.fillRect(b * bay, row * rowH + rowH * 0.7, bay * AISLE, rowH * 0.3);
+    }
+    for (const f of fans) {
+      const cell = arms ? f.up : f.cell;
+      const w = f.size, h = f.size * TALL;
+      x.drawImage(f.plain ? plain : sheet, (cell % 4) * cellW, Math.floor(cell / 4) * cellH, cellW, cellH, f.x - w / 2, f.y - h, w, h);
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.wrapS = THREE.RepeatWrapping;
+    t.anisotropy = 4;
+    return t;
+  };
+  return [page(false), page(true)] as const;
 }
 
 const VERTEX = /* glsl */ `
-attribute vec3 aPos;
-attribute vec4 aFan;
-attribute float aShade;
-uniform float uTime;
-uniform vec2 uCheer;
-uniform vec2 uHalf;
 varying vec2 vUv;
-varying vec3 vTint;
-varying float vShade;
-uniform vec3 uColor[3];
-
+varying vec2 vAt;
 void main() {
-  float side = aFan.z, ph = aFan.w;
-  float cheer = side < 1.5 ? (side < .5 ? uCheer.x : uCheer.y) : max(uCheer.x, uCheer.y) * .5;
-  // They face the pitch, not the camera: nobody turns round to watch a replay.
-  vec2 out0 = aPos.xz - clamp(aPos.xz, -uHalf, uHalf);
-  vec2 n = normalize(out0 + vec2(.001, 0.));
-  vec3 right = vec3(-n.y, 0., n.x);
-  float big = .9 + fract(ph * 17.) * .22;
-  float beat = uTime * (1.5 + fract(ph * 7.) * 1.1) + ph * 40.;
-  float hop = abs(sin(uTime * (6.5 + fract(ph * 3.) * 2.5) + ph * 30.)) * cheer * .62;
-  vec3 at = aPos + right * (position.x * ${SIZE.toFixed(2)} * big);
-  at.y += position.y * ${SIZE.toFixed(2)} * big + sin(beat) * .03 + hop;
-  at += right * sin(beat * .6) * .05 * position.y;
-  float cell = cheer > .3 ? aFan.y : aFan.x;
-  // A hair inside the cell: the low mips would bleed the next person in.
-  vUv = (uv * .97 + .015 + vec2(mod(cell, 4.), 3. - floor(cell / 4.))) / 4.;
-  vTint = uColor[int(side)] * (.8 + fract(ph * 11.) * .35);
-  vShade = aShade;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(at, 1.);
+  vUv = uv;
+  vAt = position.xz;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.);
 }
 `;
 
 const FRAGMENT = /* glsl */ `
-uniform sampler2D uMap;
+uniform sampler2D uSit;
+uniform sampler2D uUp;
+uniform float uTime;
+uniform vec2 uCheer;
+uniform vec3 uHome;
+uniform vec3 uAway;
+uniform vec2 uShade;
 varying vec2 vUv;
-varying vec3 vTint;
-varying float vShade;
+varying vec2 vAt;
 
 void main() {
-  // A sharper mip than the distance asks for: at the proper one a person is mostly
-  // see-through, and the alpha test eats him.
-  vec4 c = texture2D(uMap, vUv, -1.2);
-  if (c.a < .32) discard;
-  // The sheet's clothes are green: that part takes his side's colour.
-  // Measured against the pixel's own brightness: a far mip is green mixed with skin.
+  float away = step(vAt.x, -38.) * step(vAt.y, -8.) * step(-46., vAt.y);
+  float cheer = away > .5 ? uCheer.y : uCheer.x;
+  // Whose patch of the sheet is this.
+  vec2 id = floor(vec2(vUv.x * ${(SEATS * BAYS).toFixed(1)} / ${BAYS.toFixed(1)}, vUv.y * ${ROWS.toFixed(1)}));
+  float me = fract(sin(dot(id, vec2(12.9898, 78.233))) * 43758.5453);
+  float idle = sin(uTime * (1.5 + me) + me * 40.) * .012;
+  float hop = abs(sin(uTime * (6. + me * 3.) + me * 30.)) * cheer * .05;
+  vec2 uv = vec2(vUv.x, vUv.y - idle - hop);
+  // The patches jump apart: the mip comes from the unbroken coordinates, a little
+  // sharper than the distance asks for.
+  vec2 dx = dFdx(vUv) * .7, dy = dFdy(vUv) * .7;
+  vec3 c = textureGrad(uSit, uv, dx, dy).rgb;
+  if (cheer > .01 && me < cheer * 1.3) c = textureGrad(uUp, uv, dx, dy).rgb;
+  // The sheet's clothes are green: that part takes the side's colour. Measured against
+  // the pixel's own brightness, because a far mip is green mixed with skin.
   float green = clamp((c.g - max(c.r, c.b)) / max(c.g, .04) * 4.5, 0., 1.);
-  vec3 rgb = mix(c.rgb, vTint * (.5 + c.g * 1.1), green);
-  gl_FragColor = vec4(rgb * vShade, 1.);
+  vec3 tint = away > .5 ? uAway : uHome;
+  c = mix(c, tint * (.5 + c.g * 1.1), green);
+  gl_FragColor = vec4(c * mix(uShade.x, uShade.y, vUv.y), 1.);
   #include <colorspace_fragment>
 }
 `;
 
-export type Crowd = { mesh: THREE.Mesh; cheer: (team: 0 | 1) => void; update: (dt: number, time: number) => void; dispose: () => void };
+export type Crowd = {
+  /** The material of a tier: `lo` and `hi`, how much light its front and back get. */
+  tier: (lo: number, hi: number) => THREE.ShaderMaterial;
+  cheer: (team: 0 | 1) => void;
+  update: (dt: number) => void;
+  dispose: () => void;
+};
 
-export function makeCrowd(map: THREE.Texture, bowl: Bowl, tiers: { lo: Ring; hi: Ring; tiles: number; aisle: number; shade: readonly [number, number] }[], colours: readonly [string, string]): Crowd {
-  const r = rng(40711);
-  const data = tiers.flatMap((t) => seat(bowl, t.lo, t.hi, t.tiles, t.aisle, t.shade[0], t.shade[1], r));
-  const n = data.length / 8;
-  const pos = new Float32Array(n * 3), fan = new Float32Array(n * 4), shade = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const k = i * 8;
-    pos.set(data.slice(k, k + 3), i * 3);
-    fan.set(data.slice(k + 3, k + 7), i * 4);
-    shade[i] = data[k + 7];
-  }
-  const geo = new THREE.InstancedBufferGeometry();
-  const quad = new THREE.PlaneGeometry(1, 1);
-  quad.translate(0, 0.5, 0);
-  geo.index = quad.index;
-  geo.setAttribute("position", quad.getAttribute("position"));
-  geo.setAttribute("uv", quad.getAttribute("uv"));
-  geo.setAttribute("aPos", new THREE.InstancedBufferAttribute(pos, 3));
-  geo.setAttribute("aFan", new THREE.InstancedBufferAttribute(fan, 4));
-  geo.setAttribute("aShade", new THREE.InstancedBufferAttribute(shade, 1));
-  geo.instanceCount = n;
-  const cheer = new THREE.Vector2(0, 0);
+export function makeCrowd(map: THREE.Texture, colours: readonly [string, string]): Crowd {
+  const image = map.image as HTMLImageElement | ImageBitmap;
+  const plain = plainClothes(image, image.width, image.height);
+  const [sit, up] = bake(image, plain, image.width / 4, image.height / 4);
   const time = { value: 0 };
-  const mat = new THREE.ShaderMaterial({
-    vertexShader: VERTEX,
-    fragmentShader: FRAGMENT,
-    side: THREE.DoubleSide,
-    uniforms: {
-      uMap: { value: map },
-      uTime: time,
-      uCheer: { value: cheer },
-      uHalf: { value: new THREE.Vector2(HALF_L, HALF_W) },
-      uColor: { value: [new THREE.Color(colours[0]), new THREE.Color(colours[1]), new THREE.Color("#3a4152")] },
-    },
-  });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.frustumCulled = false;
+  const cheerUp = new THREE.Vector2(0, 0);
+  const home = { value: new THREE.Color(colours[0]) }, away = { value: new THREE.Color(colours[1]) };
+  const mats: THREE.ShaderMaterial[] = [];
+  let clock = 0;
   return {
-    mesh,
-    cheer: (team) => { cheer.setComponent(team, 1); },
-    update: (dt, t) => {
-      time.value = t;
+    tier: (lo, hi) => {
+      const m = new THREE.ShaderMaterial({
+        vertexShader: VERTEX,
+        fragmentShader: FRAGMENT,
+        uniforms: {
+          uSit: { value: sit }, uUp: { value: up }, uTime: time, uCheer: { value: cheerUp },
+          uHome: home, uAway: away, uShade: { value: new THREE.Vector2(lo, hi) },
+        },
+      });
+      mats.push(m);
+      return m;
+    },
+    cheer: (team) => { cheerUp.setComponent(team, 1); },
+    update: (dt) => {
+      clock = (clock + dt) % 628.3;
+      time.value = clock;
       // A ground stays up for its goal for several seconds, then sits down again.
       const fall = dt / 8;
-      cheer.set(Math.max(0, cheer.x - fall), Math.max(0, cheer.y - fall));
+      cheerUp.set(Math.max(0, cheerUp.x - fall), Math.max(0, cheerUp.y - fall));
     },
-    dispose: () => { geo.dispose(); quad.dispose(); mat.dispose(); },
+    dispose: () => { sit.dispose(); up.dispose(); mats.forEach((m) => m.dispose()); },
   };
 }

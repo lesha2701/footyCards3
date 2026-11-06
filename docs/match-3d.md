@@ -264,12 +264,13 @@ depend on a win. Paying for the result needs the server replay in V8.
 
 ## The stands
 
-The bowl is two tiers of seats (`seatsTexture`, one bay between two aisles, laid by the
-metre round the ring: `ringWalk`, because a step of `t` on a rounded rectangle covers
-far more ground on the straights than in a corner). The people are one instanced draw
-(`crowd.ts`), cut out of `free-kick-3d/fans.webp` as in the free kick, about 23 000 of
-them, facing the pitch, the sheet's green turned into their side's colour in the
-fragment shader; the away block is in the corner by `x < -38`. Nothing about them runs
-on the CPU: `cheer(team)` is one uniform that makes that side jump with its arms up
-and falls back over 8 s. The stand behind the broadcast camera is 40% full, only
-replays see it. The replay camera stands in front of the first row (`startReplay`).
+The bowl is two tiers with their texture laid by the metre round the ring (`ringWalk`:
+a step of `t` on a rounded rectangle covers far more ground on the straights than in a
+corner). A phone doesn't draw the people as objects. At load (`crowd.ts`) the cut-outs
+of `free-kick-3d/fans.webp` are drawn once on to a 2048 by 1024 sheet of four bays of
+seats, and again with their arms up, a little taller than life because the slope
+foreshortens them. The tiers show that sheet: a few hundred triangles in all. Each
+person's patch slides up and down in the fragment shader (`textureGrad`, or the jumps
+would break the mips), the green of the sheet takes the side's colour, and `cheer(team)`
+reads the arms-up sheet and raises the hop, falling back over 8 s. The away block is
+`x < -38`. The replay camera stands in front of the first row (`startReplay`).

@@ -4,7 +4,7 @@
 import * as THREE from "three";
 
 import { NET_TILE, daySkyTexture, ledTexture, netTexture } from "@/components/freeKick3d/textures";
-import { type Bowl, makeCrowd } from "./crowd";
+import { BAYS, ROWS, makeCrowd } from "./crowd";
 import { BOX_D, BOX_HALF, GOAL_H, GOAL_HALF, HALF_L, HALF_W, NET_DEPTH, PEN_SPOT, SIX_D, SIX_HALF } from "@/lib/match3d/core";
 
 /** Where the sun is (a direction): the shadows on the grass fall from it. */
@@ -144,11 +144,9 @@ function ringWalk(a: number, b: number, step: number) {
   return out;
 }
 
-const BOWL: Bowl = { point: ringPoint, walk: ringWalk };
-
 /** A tier of the bowl: rounded-rectangle rings from the low edge to the high one,
  * its texture laid by the metre round the ring. */
-function tier(a0: number, b0: number, y0: number, a1: number, b1: number, y1: number, repeatU: number): THREE.BufferGeometry {
+function tier(a0: number, b0: number, y0: number, a1: number, b1: number, y1: number, repeatU: number, top = 1): THREE.BufferGeometry {
   const seg = 180;
   const ways = ringWalk(a0, b0, 1);
   const pos: number[] = [], uv: number[] = [], index: number[] = [];
@@ -158,7 +156,7 @@ function tier(a0: number, b0: number, y0: number, a1: number, b1: number, y1: nu
     const [x0, z0] = ringPoint(t, a0, b0);
     const [x1, z1] = ringPoint(t, a1, b1);
     pos.push(x0, y0, z0, x1, y1, z1);
-    uv.push(u * repeatU, 0, u * repeatU, 1);
+    uv.push(u * repeatU, 0, u * repeatU, top);
     if (i < seg) {
       const k = i * 2;
       index.push(k, k + 2, k + 1, k + 1, k + 2, k + 3);
@@ -240,27 +238,6 @@ ${LINES_GLSL}
   return mat;
 }
 
-/** One bay of seats between two aisles: the rows, and the steps of the aisle at
- * its edge. What shows between the people. */
-const AISLE = 0.07;
-function seatsTexture(rows: number) {
-  const c = document.createElement("canvas");
-  c.width = 128; c.height = rows * 6;
-  const x = c.getContext("2d")!;
-  for (let i = 0; i < rows; i++) {
-    x.fillStyle = "#26364d"; x.fillRect(0, i * 6, c.width, 4);
-    x.fillStyle = "#161f2d"; x.fillRect(0, i * 6 + 4, c.width, 2);
-  }
-  x.fillStyle = "#4b5461"; x.fillRect(0, 0, c.width * AISLE, c.height);
-  x.fillStyle = "#3a424e";
-  for (let i = 0; i < rows; i++) x.fillRect(0, i * 6 + 4, c.width * AISLE, 2);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.wrapS = THREE.RepeatWrapping;
-  t.anisotropy = 4;
-  return t;
-}
-
 export type Stadium = {
   group: THREE.Group;
   /** The team's fans are up: it has scored. */
@@ -271,7 +248,7 @@ export type Stadium = {
   dispose: () => void;
 };
 
-const SIGN_L = "FOOTY CARDS";
+const SIGN_L = "VICTOR FC";
 const SIGN_R = "ФЕРГИ ТАЙМ";
 
 export function makeStadium(textures: { grass: THREE.Texture; fans: THREE.Texture; led: THREE.Texture }, colours: readonly [string, string]): Stadium {
@@ -297,22 +274,11 @@ export function makeStadium(textures: { grass: THREE.Texture; fans: THREE.Textur
   const nets: Record<string, Net> = { "1": goal(1, group, netTex), "-1": goal(-1, group, netTex) };
 
   // The stands: two tiers of seats, a ribbon of LED between them, and a roof.
-  const low = { lo: { a: 61, b: 43, y: 1.2 }, hi: { a: 84, b: 66, y: 15 } };
-  const high = { lo: { a: 86, b: 68, y: 19 }, hi: { a: 112, b: 94, y: 42 } };
-  const seats = (t: typeof low, rows: number, bays: number) => {
-    const map = own(seatsTexture(rows));
-    add(new THREE.Mesh(own(tier(t.lo.a, t.lo.b, t.lo.y, t.hi.a, t.hi.b, t.hi.y, bays)), own(new THREE.MeshBasicMaterial({ map }))));
-  };
+  const crowd = makeCrowd(textures.fans, colours);
+  disposable.push({ dispose: crowd.dispose } as unknown as THREE.Material);
   // A bay of seats about 14 m wide round the low edge of each tier.
-  seats(low, 22, 24);
-  seats(high, 28, 28);
-  const fans = textures.fans;
-  fans.anisotropy = 4;
-  const crowd = makeCrowd(fans, BOWL, [
-    { ...low, tiles: 24, aisle: AISLE, shade: [1, 0.74] },
-    { ...high, tiles: 28, aisle: AISLE, shade: [0.72, 0.5] },
-  ], colours);
-  add(crowd.mesh);
+  add(new THREE.Mesh(own(tier(61, 43, 1.2, 84, 66, 15, 24 / BAYS, 22 / ROWS)), crowd.tier(1, 0.74)));
+  add(new THREE.Mesh(own(tier(86, 68, 19, 112, 94, 42, 28 / BAYS)), crowd.tier(0.72, 0.5)));
   const ribbon = own(ledTexture(`${SIGN_L}   ${SIGN_R}`, "#7cd1ff"));
   ribbon.wrapS = THREE.RepeatWrapping;
   add(new THREE.Mesh(own(tier(84, 66, 15, 84.5, 66.5, 16.7, 13)), own(new THREE.MeshBasicMaterial({ map: ribbon, toneMapped: false }))));
@@ -366,9 +332,6 @@ export function makeStadium(textures: { grass: THREE.Texture; fans: THREE.Textur
     }
   }
 
-  disposable.push({ dispose: crowd.dispose } as unknown as THREE.Material);
-  let clock = 0;
-
   return {
     group,
     cheer: crowd.cheer,
@@ -386,8 +349,7 @@ export function makeStadium(textures: { grass: THREE.Texture; fans: THREE.Textur
       }
       boards.forEach((t, i) => { t.offset.x += dt * (i % 2 ? 0.05 : -0.05); });
       ribbon.offset.x -= dt * 0.03;
-      clock += dt;
-      crowd.update(dt, clock);
+      crowd.update(dt);
     },
     dispose: () => disposable.forEach((d) => d.dispose()),
   };
