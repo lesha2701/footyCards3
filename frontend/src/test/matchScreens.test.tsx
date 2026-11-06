@@ -3,7 +3,9 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CareerSeason, CareerSquadCard } from "@/api/career";
-import { PostMatchCard, PreMatchCard } from "@/components/career/MatchScreens";
+import { AwaySummaryCard, PostMatchCard, PreMatchCard } from "@/components/career/MatchScreens";
+import { FansCard, HotSeatBanner, LegendsCard, NewsFeed } from "@/components/career/CareerClub";
+import { FoldCard } from "@/components/career/FoldCard";
 import { PrepTabs } from "@/components/career/PrepTabs";
 
 const entry = (card_id: number, name: string, fatigue: number, out = 0): CareerSquadCard => ({
@@ -39,8 +41,8 @@ const wrap = (node: React.ReactNode) => render(<MemoryRouter>{node}</MemoryRoute
 describe("before the match", () => {
   it("the opponent, his form, my tired and missing starters, and a jump to the squad", () => {
     const onSquad = vi.fn();
-    wrap(<PreMatchCard season={season} when="завтра в 19:00" onSquad={onSquad} />);
-    const card = screen.getByRole("region", { name: "До матча" });
+    wrap(<PreMatchCard league="Лига" season={season} when="завтра в 19:00" onSquad={onSquad} />);
+    const card = screen.getByRole("region", { name: "Следующий матч" });
     expect(card).toHaveTextContent("В гостях: Сокол");
     expect(card).toHaveTextContent("завтра в 19:00");
     expect(card).toHaveTextContent("42%");
@@ -54,7 +56,7 @@ describe("before the match", () => {
   });
 
   it("all fresh: the squad is ready", () => {
-    wrap(<PreMatchCard season={{ ...season, squad: [entry(1, "Иванов", 0)], lineup: { MID1: 1 } }} when="" onSquad={vi.fn()} />);
+    wrap(<PreMatchCard league="Лига" season={{ ...season, squad: [entry(1, "Иванов", 0)], lineup: { MID1: 1 } }} when="" onSquad={vi.fn()} />);
     expect(screen.getByText("Состав готов: все свежие и здоровы")).toBeInTheDocument();
   });
 });
@@ -91,6 +93,51 @@ describe("after the match", () => {
   it("nothing before the first round", () => {
     wrap(<PostMatchCard season={{ ...season, rounds_played: 0 }} />);
     expect(screen.queryByRole("region", { name: "Итог тура" })).toBeNull();
+  });
+});
+
+describe("while the coach was away", () => {
+  it("sums up the rounds, the coins and the place", () => {
+    wrap(<AwaySummaryCard season={season} from={0} onClose={vi.fn()} />);
+    const card = screen.getByRole("region", { name: "Пока тебя не было" });
+    expect(card).toHaveTextContent("2 тура: В1 Н1 П0");
+    expect(card).toHaveTextContent("+65");
+    expect(card).toHaveTextContent("Петров — травма");
+  });
+});
+
+describe("the club", () => {
+  const club = {
+    ...season,
+    news: [{ round: 4, icon: "👑", text: "Мы возглавили таблицу!", tone: "good" }],
+    fans: { mood: 70, label: "Болельщики довольны", attendance: 5000, capacity: 6000, income_pct: 108 },
+    legends: { players: [{ name: "Смит", apps: 20, goals: 9, assists: 3, seasons: 2 }], biggest_win: { score: "5:0", opponent: "Сокол" }, best_streak: 4 },
+    hot_seat: { level: 2, text: "Руководство недовольно." },
+  } as unknown as CareerSeason;
+
+  it("shows the feed, the stands, the legends and the hot seat", () => {
+    render(<><NewsFeed season={club} /><FansCard season={club} /><LegendsCard season={club} /><HotSeatBanner season={club} /></>);
+    expect(screen.getByText("Мы возглавили таблицу!")).toHaveClass("text-accent-lime");
+    expect(screen.getByRole("meter", { name: "Настроение трибун" })).toHaveAttribute("aria-valuenow", "70");
+    expect(screen.getByRole("region", { name: "Легенды клуба" })).toHaveTextContent("5:0");
+    expect(screen.getByRole("region", { name: "Горячее кресло" })).toHaveTextContent("уровень 2");
+  });
+
+  it("hides what has no data yet", () => {
+    const { container } = render(<><FansCard season={season} /><LegendsCard season={season} /><HotSeatBanner season={season} /></>);
+    expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe("folded settings", () => {
+  it("open on tap and keep their card mounted", () => {
+    render(<FoldCard title="Опека" status="Не назначена"><p>внутри</p></FoldCard>);
+    expect(screen.queryByText("внутри")).toBeNull();
+    const toggle = screen.getByRole("button", { name: /Опека/ });
+    fireEvent.click(toggle);
+    expect(screen.getByText("внутри")).toBeVisible();
+    fireEvent.click(toggle);
+    expect(screen.getByText("внутри")).not.toBeVisible();
   });
 });
 

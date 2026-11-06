@@ -57,6 +57,13 @@ export default function CareerMatchPage() {
           : isCup ? <CareerMatchViewer seasonId={Number(seasonId)} kind="cup" round={Number(cupRound)} match={Number(tie)} fallback={text} />
             : <CareerMatchViewer seasonId={Number(seasonId)} round={Number(round)} match={Number(match)} fallback={text} />;
       })()}
+      {!onAir && !!data.story?.length && (
+        <section className="rounded-3xl bg-bg-surface p-4">
+          {data.story.map((line, i) => (
+            <p key={i} className={i ? "mt-1 text-caption text-ink-mist" : "font-display text-sm font-bold text-ink-chalk"}>{line}</p>
+          ))}
+        </section>
+      )}
       {data.pens && (
         <section className="rounded-3xl bg-bg-surface p-4">
           <p className="font-display text-base font-bold text-ink-chalk">Серия пенальти {data.pens[0]}:{data.pens[1]}</p>

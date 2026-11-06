@@ -974,7 +974,25 @@ async def test_inactive_coach_is_not_renewed_and_drops(client, db_session, bot_t
     seasons = (await db_session.execute(select(CareerParticipant).where(CareerParticipant.user_id == user_id))).scalars().all()
     assert len(seasons) == 1  # not renewed
     config = await get_config(db_session)
-    assert profile.division == min(config.career_division_count, part.next_division + 1)
+    # Only a coach who stayed put drops: the season's own verdict stands.
+    stayed = part.next_division == part.division
+    assert profile.division == (min(config.career_division_count, part.next_division + 1) if stayed else part.next_division)
+
+
+@pytest.mark.parametrize("next_division, expected", [(1, 1), (3, 3), (2, 3)])
+async def test_absence_keeps_an_earned_promotion(client, db_session, bot_token, next_division, expected):
+    user_id, _headers, season = await _season(client, db_session, bot_token, 870060 + next_division * 10 + expected)
+    row = await _season_row(db_session, season["id"])
+    config = await get_config(db_session)
+    config.career_offseason_auto = True
+    config.career_division_count = max(int(config.career_division_count), 3)
+    part = next(p for p in row.participants if p.user_id == user_id)
+    part.division, part.next_division = 2, next_division
+    profile = (await db_session.execute(select(CareerProfile).where(CareerProfile.user_id == user_id))).scalar_one()
+    profile.division = next_division
+    profile.last_active_at = datetime.now(timezone.utc) - timedelta(days=10)
+    await career_service._create_next_season(db_session, [part], row, config, datetime.now(timezone.utc))
+    assert profile.division == expected
 
 
 async def test_living_league_catalog_history_and_tenure(client, db_session, bot_token):
@@ -990,7 +1008,7 @@ async def test_living_league_catalog_history_and_tenure(client, db_session, bot_
     await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=11))
     db_session.expire_all()
     profile = (await db_session.execute(select(CareerProfile).where(CareerProfile.user_id == user_id))).scalar_one()
-    assert sum(sum(r.values()) for r in profile.league["history"].values()) == 1
+    assert sum(r["w"] + r["d"] + r["l"] for r in profile.league["history"].values()) == 1
     assert sum(profile.tenure.values()) >= 11 * 80  # the XI's minutes
     view = (await client.get(f"{API}/career", headers=headers)).json()["season"]
     assert view["scouting"]["head_to_head"] is not None
@@ -1020,7 +1038,7 @@ def test_tenure_bonus_and_memory():
     assert league.remembered_tactic(profile, 3) is None
     league.record_meeting(profile, 3, 1, 0, "HIGH_PRESS")
     assert league.remembered_tactic(profile, 3) == "HIGH_PRESS"
-    assert league.head_to_head(profile, 3) == {"w": 2, "d": 0, "l": 0, "meetings": 2}
+    assert league.head_to_head(profile, 3) == {"w": 2, "d": 0, "l": 0, "meetings": 2, "scores": ["2:0", "1:0"]}
 
 
 async def test_admin_division_clubs(client, db_session, bot_token):

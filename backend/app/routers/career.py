@@ -14,6 +14,7 @@ from app.schemas.career import (
     CareerPlanIn,
     CareerRolesIn,
     CareerMarkingIn,
+    CareerMomentIn,
     CareerSpeechIn,
     CareerHalftimeIn,
     CareerTacticPreviewIn,
@@ -92,6 +93,13 @@ async def set_marking(payload: CareerMarkingIn, db: AsyncSession = Depends(get_d
     """Man-mark the next opponent's star (next round only)."""
     await career_service.set_marking(db, user, payload.marker_card_id, payload.round_index)
     return await _view(db, user)
+
+
+@router.put("/moment", response_model=CareerViewOut)
+async def answer_moment(payload: CareerMomentIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """The coach's word after a round: a press question or a player's request."""
+    await career_service.answer_moment(db, user, payload.answer, payload.round_index)
+    return await career_service.get_view(db, user)
 
 
 @router.put("/speech", response_model=CareerViewOut)

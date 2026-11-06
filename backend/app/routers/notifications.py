@@ -1,5 +1,7 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
@@ -14,7 +16,10 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 @router.get("", response_model=list[NotificationOut])
 async def list_notifications(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     result = await db.execute(
-        select(Notification).where(Notification.user_id == user.id).order_by(Notification.created_at.desc()).limit(50)
+        select(Notification)
+        .where(Notification.user_id == user.id,
+               or_(Notification.deliver_after.is_(None), Notification.deliver_after <= datetime.now(timezone.utc)))
+        .order_by(Notification.created_at.desc()).limit(50)
     )
     return result.scalars().all()
 

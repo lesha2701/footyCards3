@@ -19,6 +19,7 @@ from app.models.enums import CardSource, NotificationType, Position, Transaction
 from app.models.game_config import DEFAULT_CLUB_BASE_BUILDINGS, GameConfig
 from app.models.notification import Notification
 from app.models.transaction import CoinTransaction
+from app.services.game_config_service import get_config
 from app.services import career_service, career_tactics_service, club_base_service
 from app.services.club_formation_service import get_formation_slots
 from tests.factories import create_player, get_user_by_telegram_id
@@ -404,6 +405,9 @@ async def _matchday_total(db_session, user_id) -> tuple[int, int]:
 
 async def test_stadium_pays_every_home_match_with_effects_frozen_at_the_start(client, db_session, bot_token):
     await _config(db_session)
+    # The stands move the income on their own (test_career_story): held at 100% here.
+    (await get_config(db_session)).career_tactics_tuning = {"story": {"income_min_pct": 100, "income_max_pct": 100}}
+    await db_session.commit()
     user_id, headers = await _career_player(client, db_session, bot_token, 970201)
     await _set_levels(db_session, user_id, {"hq": 25, "stadium": 25, "hotel": 25, "marketing": 25})
     resp = await client.post(f"{API}/career/seasons", headers=headers, json={"difficulty": "amateur"})

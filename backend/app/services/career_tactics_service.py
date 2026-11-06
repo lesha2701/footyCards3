@@ -40,6 +40,7 @@ from app.services.player_identity import card_person
 
 TACTICS_VERSION = 1
 
+MENTALITY_LADDER = ("PARK_THE_BUS", "DEFENSIVE", "BALANCED", "ATTACKING")
 MENTALITY_LABELS = {
     "PARK_THE_BUS": "Автобус у ворот", "DEFENSIVE": "Оборонительный", "BALANCED": "Сбалансированный",
     "ATTACKING": "Атакующий",
@@ -173,6 +174,9 @@ DEFAULT_TUNING: dict[str, Any] = {
     # Training before a round (career_service.TRAININGS).
     "training": {"recovery_fatigue": -12, "load_fatigue": 5, "tactical_familiarity_tenths": 15,
                  "opponent_boost": 1.25, "set_piece_boost": 1.35},
+    # Bots at the break, by difficulty: substitutions when the score calls
+    # for it (and a change of mentality); no entry = they don't react.
+    "bot_halftime": {"pro": 1, "legend": 2},
     # Scouting: how much a counter-attack interaction weighs vs a build-up
     # one, and the score above which a matchup is called an advantage.
     "counter_weight": 0.35,
@@ -540,7 +544,7 @@ def engine_fingerprint() -> str:
     payload = {
         "interactions": INTERACTIONS, "presets": PRESETS, "roles": ROLE_GROUPS,
         # Training and the scouting-hint knobs don't change simulated matches.
-        "tuning": {k: v for k, v in DEFAULT_TUNING.items() if k not in ("training", "counter_weight", "hint_threshold")},
+        "tuning": {k: v for k, v in DEFAULT_TUNING.items() if k not in ("training", "counter_weight", "hint_threshold", "bot_halftime")},
         "initiative": matchup.INITIATIVE_MULT, "sample": matchup.SAMPLE_FRACTION,
         "amplify": matchup.RATIO_AMPLIFICATION, "stage1": matchup.STAGE1_BANDS, "stage2": matchup.STAGE2_BANDS,
         "mentality_shift": matchup.MENTALITY_DEFENSE_SHIFT, "pool": matchup.DEFENSIVE_POOL_STRATEGY,
@@ -857,6 +861,10 @@ class CareerSideRunner:
     # when its first-half flank duels went badly (duel_service.halftime_flank).
     adaptive_flank: bool = False
     _flank_checked: bool = False
+    # Bots against a human: at the break they answer the score (bot_halftime
+    # substitutions at most; None = no reaction).
+    react_subs: Optional[int] = None
+    _reacted: bool = False
     # Team morale (career_morale_service): the mood and pre-match speech
     # shifts of every player's rating (the mood through his character trait,
     # traits_by_card), the morale value, the half-time talk whose
@@ -1071,6 +1079,33 @@ class CareerSideRunner:
                  "description": f"🔄 {self.name}: атаки переведены на {where} — дуэли первого тайма не пошли",
                  "payload": {"flank": flank}}]
 
+    def _react_at_half(self, minute: int, own: int, opp: int) -> list[dict]:
+        """A bot coach reads the score at the break: behind, it goes forward
+        and brings on fresh attackers; two up, it shuts the game down and
+        rests the most tired. No random draws: both passes of a live round
+        see the same reaction."""
+        if self.react_subs is None or self._reacted or minute <= HALF_TIME:
+            return []
+        self._reacted = True
+        behind, comfortable = own < opp, own >= opp + 2
+        if not behind and not comfortable:
+            return []
+        i = MENTALITY_LADDER.index(self.mentality) if self.mentality in MENTALITY_LADDER else 2
+        mentality = MENTALITY_LADDER[min(len(MENTALITY_LADDER) - 1, i + 1) if behind else max(0, i - 1)]
+        if mentality != self.mentality:
+            self.halftime = {"mentality": mentality}
+        order = {"FWD": 0, "MID": 1, "DEF": 2} if behind else {"DEF": 0, "MID": 1, "FWD": 2}
+        tired = sorted((p for p in self.on_pitch if p.slot.category != "GK"),
+                       key=lambda p: (order.get(p.slot.category, 3), -self.live_fatigue(p, minute), p.card.id))
+        events = []
+        for out in tired:
+            if len(events) >= self.react_subs:
+                break
+            incoming = self._pick_bench(out.slot, None, minute)
+            if incoming is not None:
+                events.append(self._substitute(out, incoming, minute, None))
+        return events
+
     def _apply_halftime(self, minute: int) -> list[dict]:
         """Half-time orders: direct substitutions (within the match limit)
         and, if given, one instruction that replaces the plan's rules for
@@ -1098,7 +1133,8 @@ class CareerSideRunner:
             self._advance_fatigue(HALF_TIME)
             self._take_snapshot(own, opp)
         self._advance_fatigue(minute)
-        events = (self._adapt_flank(minute) + self._apply_talk(minute, own, opp) + self._apply_halftime(minute)
+        events = (self._adapt_flank(minute) + self._apply_talk(minute, own, opp) + self._react_at_half(minute, own, opp)
+                  + self._apply_halftime(minute)
                   + self._apply_subs(minute) + self._apply_rules(minute, own - opp))
         mentality = self._effective[0]
         tactic = self.effective_tactic

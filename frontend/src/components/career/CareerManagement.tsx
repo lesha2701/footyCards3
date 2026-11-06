@@ -83,7 +83,7 @@ export function ObjectiveCard({ season, onView, onError }: { season: CareerSeaso
         {options.map((o) => {
           const on = o.code === season.ambition;
           return (
-            <button key={o.code} role="radio" aria-checked={on} disabled={choose.isPending} onClick={() => choose.mutate(o.code)}
+            <button key={o.code} role="radio" aria-checked={on} disabled={choose.isPending || !!season.hot_seat} onClick={() => choose.mutate(o.code)}
               className={`flex flex-col gap-1 rounded-2xl p-2 text-left ${on ? "bg-floodlight text-bg-base" : "bg-bg-raised text-ink-chalk"}`}
             >
               <span className="text-caption font-bold leading-tight">{o.label}</span>

@@ -26,7 +26,9 @@ import CupCard from "@/components/career/CupCard";
 import { FlankDuelsCard } from "@/components/career/FlankDuels";
 import { CoachSpecCard, MoraleCard } from "@/components/career/Morale";
 import { LiveMatchCenter } from "@/components/career/CareerLive";
-import { PostMatchCard, PreMatchCard } from "@/components/career/MatchScreens";
+import { FansCard, HotSeatBanner, LegendsCard, MomentCard, NewsFeed } from "@/components/career/CareerClub";
+import { FoldCard } from "@/components/career/FoldCard";
+import { AwaySummaryCard, PostMatchCard, PreMatchCard, useAwaySummary } from "@/components/career/MatchScreens";
 import { PrepTabs, type PrepTab } from "@/components/career/PrepTabs";
 import { CoachExtras } from "@/components/career/CoachExtras";
 import { MarkingCard, PlanHints, RolesCard } from "@/components/career/RolesMarking";
@@ -35,7 +37,7 @@ import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import {
-  IconCalendar, IconChart, IconChevronRight, IconClock, IconCoin, IconProfile, IconTactics, IconTrophy, IconUsers, IconWhistle,
+  IconCalendar, IconChart, IconChevronRight, IconClock, IconCoin, IconProfile, IconTactics, IconTarget, IconTrophy, IconUsers, IconWhistle,
 } from "@/components/icons";
 import GameHero from "@/components/common/GameHero";
 import { EnergyBar } from "@/components/career/EnergyBar";
@@ -44,8 +46,8 @@ import { formatGameError } from "@/lib/errors";
 import { CATEGORY_POSITIONS } from "@/lib/formation";
 import { haptic } from "@/lib/telegram";
 
-type Tab = "prep" | "calendar" | "profile";
-type CalendarTab = "table" | "rounds" | "cup";
+type Tab = "prep" | "calendar" | "club" | "profile";
+type CalendarTab = "table" | "rounds" | "scorers" | "cup";
 
 /** Round times in the viewer's own time zone (the server schedules them in
  * its own one, e.g. 12:00/19:00 Moscow). */
@@ -72,7 +74,7 @@ export default function CareerPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["career"], queryFn: fetchCareer,
     // Faster while a live match is at half-time: the second half follows the break.
-    refetchInterval: (query) => (query.state.data?.season?.live ? 15_000 : 60_000),
+    refetchInterval: (query) => (query.state.data?.season?.live || query.state.data?.season?.second_half ? 15_000 : 60_000),
   });
   const [error, setError] = useState<string | null>(null);
   const onView = (view: CareerView) => {
@@ -327,10 +329,14 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["career"] }),
     onError,
   });
+  const away = useAwaySummary(season);
   const nextRound = season.rounds[season.rounds_played];
   const myMatch = nextRound?.matches.find((m) => m.home === season.my_team_index || m.away === season.my_team_index);
   const opponent = myMatch ? season.teams[myMatch.home === season.my_team_index ? myMatch.away : myMatch.home] : null;
   const myRow = season.table.findIndex((r) => r.team_index === season.my_team_index);
+  const league = `${season.division?.name ?? season.difficulty_label} · тур ${Math.min(season.rounds_played + 1, season.total_rounds)} из ${season.total_rounds}${myRow >= 0 ? ` · ${myRow + 1} место` : ""}`;
+  const rolesSet = Object.keys(season.roles ?? {}).length;
+  const planRules = (season.match_plan?.rules ?? []).length;
 
   return (
     <>
@@ -353,38 +359,41 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
           <span className="text-lg text-ink-mist">›</span>
         </button>
       )}
-      <section className="rounded-3xl bg-bg-surface p-4">
-        <div className="flex items-center justify-between text-xs text-ink-mist">
-          <span>{season.division?.name ?? season.difficulty_label} · тур {Math.min(season.rounds_played + 1, season.total_rounds)} из {season.total_rounds}</span>
-          <span>{myRow >= 0 ? `${myRow + 1} место` : ""}</span>
-        </div>
-        {opponent && myMatch && (
-          <div className="mt-3 flex items-center gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-micro uppercase tracking-wider text-ink-mist">Следующий матч · {formatWhen(nextRound.at)}</p>
-              <p className="truncate font-display text-base font-bold text-ink-chalk">
+      {season.scouting && !season.live ? (
+        <PreMatchCard season={season} when={formatWhen(nextRound?.at ?? null)} league={league} onSquad={() => openPrep("squad")} />
+      ) : (
+        <section className="rounded-3xl bg-bg-surface p-4">
+          <p className="text-xs text-ink-mist">{league}</p>
+          {opponent && myMatch && (
+            <>
+              <p className="mt-3 text-micro uppercase tracking-wider text-ink-mist">Следующий матч · {formatWhen(nextRound.at)}</p>
+              <p className="break-words font-display text-base font-bold text-ink-chalk">
                 {myMatch.home === season.my_team_index ? "Дома" : "В гостях"}: {opponent.name}
               </p>
               <p className="text-xs text-ink-mist">
                 {opponent.is_bot ? `Сила соперника ~${opponent.strength ?? "?"}` : "Матч с другом"}
               </p>
-            </div>
-          </div>
-        )}
-      </section>
+            </>
+          )}
+        </section>
+      )}
 
-      {!season.live && <PostMatchCard key={`${season.id}:${season.rounds_played}`} season={season} />}
+      {!season.live && !season.second_half && (away.count > 0
+        ? <AwaySummaryCard season={season} from={away.from} onClose={away.close} />
+        : <PostMatchCard key={`${season.id}:${season.rounds_played}`} season={season} />)}
 
-      <div className="grid grid-cols-3 gap-1 rounded-2xl bg-bg-surface p-1" role="tablist" aria-label="Разделы карьеры">
+      {!season.live && <MomentCard season={season} onView={onView} onError={onError} />}
+
+      <div className="grid grid-cols-4 gap-1 rounded-2xl bg-bg-surface p-1" role="tablist" aria-label="Разделы карьеры">
         {([
-          ["prep", "Подготовка", IconTactics], ["calendar", "Календарь", IconCalendar], ["profile", "Профиль", IconProfile],
+          ["prep", "Подготовка", IconTactics], ["calendar", "Календарь", IconCalendar], ["club", "Клуб", IconUsers], ["profile", "Профиль", IconProfile],
         ] as const).map(([id, label, Icon]) => (
           <button
             key={id}
             role="tab"
             aria-selected={tab === id}
             onClick={() => setTab(id)}
-            className={`flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold ${tab === id ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}
+            className={`flex flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-micro font-semibold ${tab === id ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}
           >
             <Icon size={15} aria-hidden="true" />{label}
           </button>
@@ -394,9 +403,6 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
       {tab === "prep" && (
         <>
           {season.scouting && !season.live && <OffseasonPanel season={season} catalog={catalog} onView={onView} onError={onError} />}
-          {season.scouting && !season.live && (
-            <PreMatchCard season={season} when={formatWhen(nextRound?.at ?? null)} onSquad={() => openPrep("squad")} />
-          )}
           <div ref={prepTabs} className="scroll-mt-20">
             <PrepTabs season={season} value={prep} onChange={openPrep} />
           </div>
@@ -418,13 +424,25 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
               <SquadWarnings warnings={season.squad_warnings} />
               <MoraleCard season={season} onView={onView} onError={onError} />
               <ScoutingCard scouting={season.scouting} catalog={catalog} difficultyLabel={season.difficulty_label} />
-              <FlankDuelsCard season={season} onView={onView} onError={onError} onSquad={() => openPrep("squad")} />
               <TacticsBoard season={season} catalog={catalog} onView={onView} onError={onError} />
-              <RolesCard season={season} catalog={catalog} onView={onView} onError={onError} />
-              <MarkingCard season={season} onView={onView} onError={onError} />
-              <PlanHints season={season} />
-              <PlanEditor season={season} catalog={catalog} onView={onView} onError={onError} />
-              <SetPiecesCard season={season} catalog={catalog} onView={onView} onError={onError} />
+              {season.squad.some((e) => e.duel_style) && (
+                <FoldCard title="Дуэли на флангах" status="Кто кого обыгрывает">
+                  <FlankDuelsCard season={season} onView={onView} onError={onError} onSquad={() => openPrep("squad")} />
+                </FoldCard>
+              )}
+              <FoldCard title="План на матч" status={planRules ? `Правил: ${planRules}` : season.plan_hints?.length ? "Есть подсказки" : "Не задан"}>
+                <PlanHints season={season} />
+                <PlanEditor season={season} catalog={catalog} onView={onView} onError={onError} />
+              </FoldCard>
+              <FoldCard title="Опека" status={season.scouting.marking?.target_name ?? "Не назначена"}>
+                <MarkingCard season={season} onView={onView} onError={onError} />
+              </FoldCard>
+              <FoldCard title="Роли игроков" status={rolesSet ? `Назначено: ${rolesSet}` : "По умолчанию"}>
+                <RolesCard season={season} catalog={catalog} onView={onView} onError={onError} />
+              </FoldCard>
+              <FoldCard title="Стандарты" status="Угловые и штрафные">
+                <SetPiecesCard season={season} catalog={catalog} onView={onView} onError={onError} />
+              </FoldCard>
             </>
           )}
           {prep === "training" && season.scouting && !season.live && hasTactics && catalog && (
@@ -442,9 +460,9 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
 
       {tab === "calendar" && (
         <>
-          <div className={`grid ${season.cup ? "grid-cols-3" : "grid-cols-2"} gap-1 rounded-2xl bg-bg-base/40 p-1`} role="tablist" aria-label="Календарь">
+          <div className={`grid ${season.cup ? "grid-cols-4" : "grid-cols-3"} gap-1 rounded-2xl bg-bg-base/40 p-1`} role="tablist" aria-label="Календарь">
             {([
-              ["table", "Таблица", IconChart], ["rounds", "Расписание", IconCalendar],
+              ["table", "Таблица", IconChart], ["rounds", "Расписание", IconCalendar], ["scorers", "Бомбардиры", IconTarget],
               ...(season.cup ? [["cup", "Кубок", IconTrophy] as const] : []),
             ] as const).map(([id, label, Icon]) => (
               <button
@@ -452,7 +470,7 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
                 role="tab"
                 aria-selected={cal === id}
                 onClick={() => setCal(id)}
-                className={`flex items-center justify-center gap-1 rounded-xl py-1.5 text-caption font-semibold ${cal === id ? "bg-bg-raised text-ink-chalk" : "text-ink-mist"}`}
+                className={`flex flex-col items-center justify-center gap-0.5 rounded-xl py-1.5 text-micro font-semibold ${cal === id ? "bg-bg-raised text-ink-chalk" : "text-ink-mist"}`}
               >
                 <Icon size={14} aria-hidden="true" />{label}
               </button>
@@ -460,13 +478,23 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
           </div>
           {cal === "table" && <section className="rounded-3xl bg-bg-surface p-4"><StandingsTable season={season} /></section>}
           {cal === "rounds" && <Calendar season={season} />}
+          {cal === "scorers" && <TopScorers season={season} />}
           {cal === "cup" && season.cup && <CupCard season={season} onView={onView} onError={onError} />}
+        </>
+      )}
+
+      {tab === "club" && (
+        <>
+          <NewsFeed season={season} />
+          <FansCard season={season} />
+          <LegendsCard season={season} />
         </>
       )}
 
       {tab === "profile" && (
         <>
           {coach}
+          <HotSeatBanner season={season} />
           {hasTactics && <ObjectiveCard season={season} onView={onView} onError={onError} />}
         </>
       )}
@@ -559,12 +587,34 @@ function Calendar({ season }: { season: CareerSeason }) {
   );
 }
 
+function TopScorers({ season }: { season: CareerSeason }) {
+  const rows = season.top_scorers ?? [];
+  if (!rows.length) {
+    return <EmptyState compact icon={IconTarget} title="Голов пока нет" description="Список появится после первых сыгранных туров." />;
+  }
+  return (
+    <ol className="flex flex-col gap-1 rounded-3xl bg-bg-surface p-4">
+      {rows.map((r, i) => (
+        <li key={`${r.team_index}:${r.name}`} className={`flex items-center gap-3 rounded-xl px-2 py-1.5 ${r.team_index === season.my_team_index ? "bg-accent-lime/10" : ""}`}>
+          <span className="w-4 text-right font-mono text-caption text-ink-mist">{i + 1}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-semibold text-ink-chalk">{r.name}</span>
+            <span className="block truncate text-micro text-ink-mist">{r.team}</span>
+          </span>
+          <span className="font-mono text-base font-bold text-ink-chalk">{r.goals}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function RoundReport({ report }: { report: CareerRoundReport }) {
   const parts: { text: string; tone: string }[] = [];
   if (report.red.length) parts.push({ text: `красная: ${report.red.join(", ")}`, tone: "text-red-400" });
   if (report.suspended.length) parts.push({ text: `дисквал.: ${report.suspended.join(", ")}`, tone: "text-red-400" });
   if (report.yellow.length) parts.push({ text: `жёлтые: ${report.yellow.join(", ")}`, tone: "text-yellow-300" });
   if (report.injured.length) parts.push({ text: `травма: ${report.injured.join(", ")}`, tone: "text-red-400" });
+  if (report.auto_subs?.length) parts.push({ text: `автозамена: ${report.auto_subs.join(", ")}`, tone: "text-ink-mist" });
   if (report.form_up.length) parts.push({ text: `в форме: ${report.form_up.join(", ")}`, tone: "text-accent-lime" });
   if (!parts.length) return null;
   return (

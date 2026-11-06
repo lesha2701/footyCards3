@@ -185,6 +185,87 @@ async def test_live_round_first_half_break_and_second_half(client, db_session, b
     assert career_service._second_half_out(row, me, config) is None  # long over
 
 
+async def test_score_stays_hidden_while_the_second_half_is_on_air(client, db_session, bot_token):
+    user_id, headers, season = await _season(client, db_session, bot_token, 880091)
+    first = datetime.fromisoformat(season["schedule"][0])
+    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=1))
+    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=11))
+    notes = (await db_session.execute(select(Notification).where(
+        Notification.user_id == user_id, Notification.type == NotificationType.career_round_result))).scalars().all()
+    result = next(n for n in notes if "перерыв" not in n.title)
+    assert career_service.ensure_aware(result.deliver_after) == first + timedelta(minutes=10) + career_service.SECOND_HALF_ON_AIR
+    assert next(n for n in notes if "перерыв" in n.title).deliver_after is None
+    listed = (await client.get(f"{API}/notifications", headers=headers)).json()
+    assert not any(n["id"] == result.id for n in listed)
+
+    # The view keeps round 1 unplayed for everyone who watches it.
+    row = await _season_row(db_session, season["id"])
+    state = dict(row.state)
+    state["schedule"] = [(datetime.now(timezone.utc) - timedelta(minutes=11)).isoformat(), *state["schedule"][1:]]
+    row.state = state
+    await db_session.commit()
+    view = (await client.get(f"{API}/career", headers=headers)).json()["season"]
+    assert view["second_half"]["round"] == 0
+    assert all(m["hs"] is None and not m["has_events"] for m in view["rounds"][0]["matches"])
+    assert view["rounds"][0]["report"] is None and all(r["played"] == 0 for r in view["table"])
+    # After the broadcast the round is back.
+    state = dict(row.state)
+    state["schedule"] = [(datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat(), *state["schedule"][1:]]
+    row.state = state
+    await db_session.commit()
+    view = (await client.get(f"{API}/career", headers=headers)).json()["season"]
+    assert view["second_half"] is None and view["rounds"][0]["matches"][0]["hs"] is not None
+
+
+async def test_late_second_half_notifies_at_once(client, db_session, bot_token):
+    user_id, _headers, season = await _season(client, db_session, bot_token, 880092)
+    first = datetime.fromisoformat(season["schedule"][0])
+    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=40))
+    notes = (await db_session.execute(select(Notification).where(
+        Notification.user_id == user_id, Notification.type == NotificationType.career_round_result))).scalars().all()
+    assert notes and all(n.deliver_after is None for n in notes)
+
+
+async def test_one_broken_season_does_not_stop_the_others(client, db_session, bot_token, monkeypatch):
+    _a, _ha, broken = await _season(client, db_session, bot_token, 880093)
+    _b, _hb, fine = await _season(client, db_session, bot_token, 880094)
+    real = career_service.resolve_due
+
+    async def flaky(db, season_id, now=None):
+        if season_id == broken["id"]:
+            raise RuntimeError("boom")
+        return await real(db, season_id, now)
+
+    monkeypatch.setattr(career_service, "resolve_due", flaky)
+    later = datetime.fromisoformat(fine["schedule"][0]) + timedelta(minutes=30)
+    assert await career_service.resolve_all_due(db_session, later) >= 1
+    assert (await _season_row(db_session, fine["id"])).rounds_played >= 1
+
+
+async def test_auto_substitution_is_reported_and_reminder_names_it(client, db_session, bot_token):
+    user_id, _headers, season = await _season(client, db_session, bot_token, 880095)
+    row = await _season_row(db_session, season["id"])
+    part = next(p for p in row.participants if p.user_id == user_id)
+    cards = await career_service._career_cards(db_session, user_id)
+    by_id = {c.id: c for c in cards}
+    xi = career_service.resolve_lineup(part, by_id, 0, cards, fill_any_position=True)
+    part.lineup = {slot.code: card.id for card, slot in xi}
+    gone = xi[3][0]
+    gone_name = gone.player.display_name
+    part.condition = {**(part.condition or {}), str(gone.id): {**career_service._FRESH, "injured_until": 1}}
+    await db_session.flush()
+    notes = await career_service._reminder_notes(db_session, row, part, 0)
+    assert any(gone_name in n and "выйдет замена" in n for n in notes)
+    first = datetime.fromisoformat(season["schedule"][0])
+    await career_service.resolve_due(db_session, season["id"], now=first + timedelta(minutes=40))
+    row = await _season_row(db_session, season["id"])
+    subs = row.state["reports"]["0"][str(part.team_index)]["auto_subs"]
+    assert len(subs) == 1 and subs[0].startswith(gone_name)
+    note = (await db_session.execute(select(Notification).where(
+        Notification.user_id == user_id, Notification.type == NotificationType.career_round_result))).scalars().all()[-1]
+    assert "Автозамена" in note.body
+
+
 async def test_live_can_be_switched_off(client, db_session, bot_token):
     user_id, headers, season = await _season(client, db_session, bot_token, 880002)
     config = await get_config(db_session)
