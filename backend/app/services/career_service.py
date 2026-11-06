@@ -38,6 +38,7 @@ from app.services import career_replay_service as career_replay
 from app.services import career_commentary_service as commentary
 from app.services import career_story_service as story
 from app.services import career_tactics_service as tactics
+from app.services import career_training_service as training_plan
 from app.services import career_morale_service as morale
 from app.services import chemistry_service, duel_service
 from app.services import club_base_service, my_player_service, path_match_service, tournament_match_engine, wallet_service
@@ -192,6 +193,9 @@ TRAININGS = {
     "tactical": ("Тактика", "Отработка схемы: сыгранность в этом матче выше. Нагрузка — немного усталости."),
     "opponent": ("Разбор соперника", "Взаимодействия в вашу пользу в этом матче сильнее. Нагрузка — немного усталости."),
     "set_pieces": ("Стандарты", "Угловые и штрафные в этом матче опаснее. Нагрузка — немного усталости."),
+    "fitness": ("Физподготовка", "Работа над выносливостью: в матче игроки устают меньше, концовки становятся сильнее."),
+    "attack": ("Атака", "Завершение и выходы к воротам: нападающие сильнее в этом матче."),
+    "defence": ("Оборона", "Позиционная игра и отбор: защитники сильнее в этом матче."),
     # Team morale seasons only (career_morale_service).
     "team_building": ("Сплочение", "Командный выезд: мораль команды выше к матчу. Без нагрузки, но и без других плюсов."),
 }
@@ -218,17 +222,66 @@ async def set_ambition(db: AsyncSession, user: User, ambition: str) -> None:
     await db.commit()
 
 
-async def set_training(db: AsyncSession, user: User, training: Optional[str], round_index: Optional[int] = None) -> None:
+async def set_training(db: AsyncSession, user: User, training: Optional[str], round_index: Optional[int] = None,
+                       plan: Optional[dict] = None) -> None:
+    """The training plan. `plan` holds only what the client sent: extra
+    (the second session) and intensity; what's left out stays as it was."""
+    plan = plan or {}
     if training is not None and training not in TRAININGS:
         raise ConflictError("Неизвестная тренировка")
+    if plan.get("extra") is not None and plan["extra"] not in TRAININGS:
+        raise ConflictError("Неизвестная тренировка")
+    if plan.get("intensity") is not None and plan["intensity"] not in training_plan.INTENSITY_LABELS:
+        raise ConflictError("Неизвестная интенсивность")
     part = await _editable_participation(db, user, round_index)
     season = await db.get(CareerSeason, part.season_id)
     if _tactics_version(season.state) < tactics.TACTICS_VERSION:
         raise ConflictError("Тренировки — с нового сезона")
-    if training == "team_building" and not morale.is_on(season.state):
+    extra = plan["extra"] if "extra" in plan else part.training_extra
+    if "team_building" in (training, extra) and not morale.is_on(season.state):
         raise ConflictError("«Сплочение» — в сезонах с моралью команды")
-    part.training = training
+    if training is None:
+        extra = None
+    if extra is not None and extra == training:
+        raise ConflictError("Дополнительное занятие должно отличаться от основного")
+    part.training, part.training_extra = training, extra
+    if plan.get("intensity"):
+        part.training_intensity = plan["intensity"]
     await db.commit()
+
+
+async def set_program(db: AsyncSession, user: User, card_id: Optional[int], round_index: Optional[int] = None) -> None:
+    """Puts a squad player on the individual programme (None = cancel it; the
+    matches played for it are lost)."""
+    part = await _editable_participation(db, user, round_index)
+    season = await db.get(CareerSeason, part.season_id)
+    if _tactics_version(season.state) < tactics.TACTICS_VERSION:
+        raise ConflictError("Тренировки — с нового сезона")
+    if card_id is None:
+        part.training_program = training_plan.program_cancel(part.training_program)
+    else:
+        config = await get_config(db)
+        cards = {c.id: c for c in await _career_cards(db, user.id, config)}
+        card = cards.get(card_id)
+        if card is None or card_id not in _squad_ids(part, cards) or getattr(card, "is_my_player", False):
+            raise ConflictError("Программа — только для игрока из заявки")
+        try:
+            part.training_program = training_plan.program_start(
+                part.training_program, card_id, card.player.display_name, tactics.tuning_of(config)["training"],
+            )
+        except ValueError as exc:
+            raise ConflictError(str(exc)) from exc
+    flag_modified(part, "training_program")
+    await db.commit()
+
+
+def _training_fx(part: CareerParticipant, config, fx: Optional[dict]) -> dict:
+    """What the coach's plan does to the next match."""
+    tuning = getattr(config, "career_tactics_tuning", None)
+    return training_plan.plan_effects(
+        part.training if part.training in TRAININGS else None, part.training_extra if part.training_extra in TRAININGS else None,
+        part.training_intensity, tactics.tuning_of(config)["training"], fx, morale.tuning_of(tuning)["team_building"],
+    )
 
 
 def _division_info(division: int, config) -> dict:
@@ -916,7 +969,8 @@ async def _create_next_season(
                 user_id=part.user_id, team_index=team_index, status="accepted", squad_card_ids=squad, division=division,
                 ambition="survive" if story.hot_seat_out(next_profile) else DEFAULT_AMBITION, formation=part.formation, mentality=part.mentality, playstyle=part.playstyle,
                 tactic=part.tactic, set_pieces=part.set_pieces, match_plan=part.match_plan, lineup=lineup,
-                training=part.training, roles=part.roles,
+                training=part.training, training_extra=part.training_extra, training_intensity=part.training_intensity,
+                roles=part.roles,
             )
             season.participants.append(new_part)
             new_parts.append((part, new_part))
@@ -1794,7 +1848,7 @@ def _auto_subs(part: CareerParticipant, pairs: list, by_id: dict, round_index: i
 
 def _human_runner(
     part: CareerParticipant, cards: list, config, chem_rules, label: str, team_name: str, *,
-    avail_round: int, rotate: bool = False, training: Optional[str] = None, profile=None,
+    avail_round: int, rotate: bool = False, training: Optional[str] = None, plan: Optional[dict] = None, profile=None,
     marking: Optional[dict] = None,
     base_fx: Optional[dict] = None,
 ):
@@ -1812,12 +1866,13 @@ def _human_runner(
     bench = [by_id[cid] for cid in _squad_ids(part, by_id) if cid in by_id]
     bench = [c for c in bench if _usable(c) and not _is_out(part, c.id, avail_round)
              and c.id not in xi_ids and card_person(c) not in xi_players]
-    tr = tactics.tuning_of(config)["training"]
+    plan = plan or {}
 
     def live(card, slot=None):
         engine_card = _engine_card(card, config)
         cond = _condition(part, card.id)
-        base = min(99, engine_card.player.rating + league_service.tenure_bonus(profile, card.id, config))
+        base = min(99, engine_card.player.rating + league_service.tenure_bonus(profile, card.id, config)
+                   + training_plan.program_bonus(part.training_program, card.id))
         return tactics.LivePlayer(card=engine_card, base_rating=base, pre_fatigue=cond["fatigue"], form=cond["form"],
                                   slot=slot)
 
@@ -1825,18 +1880,19 @@ def _human_runner(
         part.familiarity, part.familiar_formation, part.familiar_tactic, part.formation, _my_tactic(part), config,
     )
     familiarity = base_familiarity
-    if training == "tactical":  # this match only; growth counts from the base
-        familiarity = min(int(config.career_familiarity_max_tenths) + tr["tactical_familiarity_tenths"],
-                          familiarity + tr["tactical_familiarity_tenths"])
+    if plan.get("familiarity_tenths"):  # this match only; growth counts from the base
+        familiarity = min(int(config.career_familiarity_max_tenths) + plan["familiarity_tenths"],
+                          familiarity + plan["familiarity_tenths"])
     runner = tactics.CareerSideRunner(
         label, team_name, part.formation, part.mentality, _my_tactic(part),
         [live(c, slot) for c, slot in pairs], [live(c) for c in bench], config,
         familiarity=familiarity, plan=copy.deepcopy(part.match_plan), chem_rules=chem_rules,
         set_pieces=part.set_pieces, training=training, roles=part.roles, marking=marking,
         # «Клубная база» analytics centre makes these two trainings stronger.
-        boost=club_base_service.prep_boost(tr["opponent_boost"], base_fx or {}) if training == "opponent" else 1.0,
-        set_piece_boost=club_base_service.prep_boost(tr["set_piece_boost"], base_fx or {})
-        if training == "set_pieces" else 1.0,
+        boost=club_base_service.prep_boost(plan["opponent_boost"], base_fx or {}) if plan.get("opponent_boost", 1) > 1 else 1.0,
+        set_piece_boost=club_base_service.prep_boost(plan["set_piece_boost"], base_fx or {})
+        if plan.get("set_piece_boost", 1) > 1 else 1.0,
+        fitness_mult=plan.get("fitness_mult", 1.0), unit_bonus=plan.get("units") or {},
     )
     return runner, pairs, base_familiarity
 
@@ -1890,6 +1946,7 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
                 profiles[ti] = await get_profile(db, p.user_id, config)
     used_familiarity: dict[int, int] = {}
     auto_subs: dict[int, list[str]] = {}
+    training_plans: dict[int, dict] = {}
     # «Клубная база»: effects frozen on the participant for the season.
     base_fx: dict[int, dict] = {}
     for ti, p in humans.items():
@@ -1948,17 +2005,23 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
         cards = await human_cards(part)
         by_id = {c.id: c for c in cards}
         training = part.training if part.training in TRAININGS and not cup else None
-        tr = tactics.tuning_of(config)["training"]
+        plan = _training_fx(part, config, base_fx.get(team_index)) if training else None
         if training:
             # Training load / recovery before kick-off, kept in the condition.
-            delta = tr["recovery_fatigue"] if training == "recovery" else tr["load_fatigue"]
-            if training == "recovery":  # «Клубная база» medical centre
-                delta -= int(base_fx.get(team_index, {}).get("recovery", 0))
+            training_plans[team_index] = plan
             condition = dict(part.condition or {})
             for cid in _squad_ids(part, by_id):
                 entry = {**_FRESH, **condition.get(str(cid), {})}
-                entry["fatigue"] = max(0, min(100, entry["fatigue"] + delta))
+                entry["fatigue"] = max(0, min(100, entry["fatigue"] + plan["fatigue"]))
                 condition[str(cid)] = entry
+            part.condition = condition
+            flag_modified(part, "condition")
+        program_cid = training_plan.program_card(part.training_program) if not cup else None
+        if program_cid is not None:  # the programme costs him extra work
+            condition = dict(part.condition or {})
+            entry = {**_FRESH, **condition.get(str(program_cid), {})}
+            entry["fatigue"] = min(100, entry["fatigue"] + int(tactics.tuning_of(config)["training"]["program_fatigue"]))
+            condition[str(program_cid)] = entry
             part.condition = condition
             flag_modified(part, "condition")
         # A cup tie follows the league match the same evening: players hurt
@@ -1967,7 +2030,7 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
             part, cards, config, chem_rules, label, team["name"],
             avail_round=round_index + 1 if cup else round_index,
             rotate=cup and bool(((state.get("cup") or {}).get("rotation") or {}).get(str(team_index))),
-            training=training, profile=profiles.get(team_index),
+            training=training, plan=plan, profile=profiles.get(team_index),
             marking=part.marking if not cup and (part.marking or {}).get("round") == round_index else None,
             base_fx=base_fx.get(team_index),
         )
@@ -1993,9 +2056,9 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
         for ti in range(len(teams)):
             value = morale.value_of(state, ti, morale_tuning)
             part = humans.get(ti)
-            if part is not None and part.status == "accepted" and part.training == "team_building":
+            if part is not None and part.status == "accepted" and "team_building" in (part.training, part.training_extra):
                 orator = morale.orator_perk(coach_skills.get(ti, {}).get("orator", 0), "team_building")
-                value = morale.clamp(value + morale_tuning["team_building"] + 2 * orator)
+                value = morale.clamp(value + _training_fx(part, config, base_fx.get(ti))["morale"] + 2 * orator)
             morale_pre[ti] = value
 
     results = []
@@ -2177,8 +2240,20 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
             part, played.get(team_index, set()), own, opp, round_index, config, rng, names, _squad_ids(part, own_cards),
             gains=gains, base_fx=base_fx.get(team_index),
             card_mult=tactics.tuning_of(config)["foul"][_my_tactic(part).get("tackling", "normal")] if v1 else 1.0,
+            injury_mult=training_plans[team_index]["injury_mult"] if team_index in training_plans else 1.0,
         )
         report["auto_subs"] = auto_subs.get(team_index, [])
+        if team_index in training_plans:
+            report["training"] = training_plan.match_results(
+                part.training, part.training_extra, training_plans[team_index], match.get("events"),
+                "a" if is_home else "b", own, opp,
+            )
+        part.training_program, program_line = training_plan.program_after_match(
+            part.training_program, played.get(team_index, set()), tactics.tuning_of(config)["training"],
+        )
+        if program_line:
+            flag_modified(part, "training_program")
+            report.setdefault("training", []).append(program_line)
         reports[str(team_index)] = report
         flag_modified(part, "condition")
         if team_index in used_familiarity and team_index in minutes_by_team:
@@ -2357,6 +2432,7 @@ def _after_match(
     part: CareerParticipant, played_ids: set[int], own: int, opp: int, round_index: int, config,
     rng: random.Random, names: dict[int, str], squad_ids: Optional[list[int]] = None,
     gains: Optional[dict[int, int]] = None, card_mult: float = 1.0, base_fx: Optional[dict] = None,
+    injury_mult: float = 1.0,
 ) -> dict:
     """Fatigue, injuries, yellow/red cards and form for one human squad after
     a round. Returns the round report (player names per event) shown in the
@@ -2375,7 +2451,7 @@ def _after_match(
                 gain = gains.get(card_id, gain)
             entry["fatigue"] = min(100, entry["fatigue"] + gain)
             injury_pct = club_base_service.injury_chance(config.career_injury_chance_pct, base_fx or {})
-            if rng.random() * 100 < injury_pct * (2 if tired else 1):
+            if rng.random() * 100 < injury_pct * (2 if tired else 1) * injury_mult:
                 entry["injured_until"] = round_index + 1 + rng.randint(1, 2)
                 report["injured"].append(name)
             # Discipline: a straight red, or the Nth yellow, = one round out.
@@ -2469,6 +2545,8 @@ def _report_line(report: dict) -> str:
     line = ("\n" + "; ".join(parts).capitalize()) if parts else ""
     if report.get("auto_subs"):
         line += "\nАвтозамена в старте: " + ", ".join(report["auto_subs"])
+    if report.get("training"):
+        line += "\n" + "; ".join(report["training"])
     return line
 
 
@@ -2979,6 +3057,7 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
         "tactics_version": _tactics_version(state),
         "scouting": None, "familiarity": None, "match_plan": me.match_plan, "plan_limits": {},
         "ambition": me.ambition, "ambitions": [], "training": me.training, "trainings": training_options(morale.is_on(state)),
+        "training_plan": None, "training_program": None,
         "cup": None, "offseason": None, "summary": None,
         "set_pieces": {**tactics.DEFAULT_SET_PIECES, **(me.set_pieces or {})}, "squad_warnings": [],
         "roles": me.roles or {}, "live": None, "plan_hints": [],
@@ -2992,6 +3071,11 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
         out["cup"] = _cup_out(state, me, config)
         out["offseason"] = await _offseason_out(db, season, me, config)
         if me.status == "accepted" and out["tactics_version"] >= tactics.TACTICS_VERSION:
+            out["training_plan"] = training_plan.plan_out(
+                me.training, me.training_extra, me.training_intensity, tactics.tuning_of(config)["training"], me.base_effects,
+                morale.tuning_of(getattr(config, "career_tactics_tuning", None))["team_building"],
+            )
+            out["training_program"] = training_plan.program_out(me.training_program, tactics.tuning_of(config)["training"])
             profile = await get_profile(db, me.user_id, config)
             story_tuning = story.tuning_of(getattr(config, "career_tactics_tuning", None))
             out.update(

@@ -37,6 +37,8 @@ export interface CareerRoundReport {
   form_down: string[];
   /** «Иванов → Петров»: saved starters who couldn't play and their stand-ins. */
   auto_subs?: string[];
+  /** What the training plan gave in this match. */
+  training?: string[];
   /** Spectators at a home match. */
   attendance?: number;
   /** Coins for the match (result + home matchday) and my place after the
@@ -435,6 +437,21 @@ export interface CareerSeason {
   ambitions?: CareerAmbition[];
   training?: string | null;
   trainings?: { code: string; label: string; hint: string }[];
+  training_plan?: {
+    extra: string | null;
+    intensity: string;
+    second_pct: number;
+    intensities: { code: string; label: string }[];
+    lines: string[];
+  } | null;
+  training_program?: {
+    active: { card_id: number; name: string; played: number } | null;
+    done: { card_id: number; name: string; bonus: number }[];
+    rounds: number;
+    bonus: number;
+    fatigue: number;
+    limit: number;
+  } | null;
   cup?: CareerCup | null;
   offseason?: CareerOffseason | null;
   summary?: CareerSeasonSummary | null;
@@ -582,8 +599,15 @@ export async function setCareerAmbition(ambition: string): Promise<CareerView> {
   return data;
 }
 
-export async function setCareerTraining(training: string | null, roundIndex?: number): Promise<CareerView> {
-  const { data } = await api.put<CareerView>("/career/training", { training, round_index: roundIndex ?? null });
+export async function setCareerProgram(cardId: number | null, roundIndex?: number): Promise<CareerView> {
+  const { data } = await api.put<CareerView>("/career/program", { card_id: cardId, round_index: roundIndex ?? null });
+  return data;
+}
+
+export async function setCareerTraining(
+  training: string | null, roundIndex?: number, plan: { extra?: string | null; intensity?: string } = {},
+): Promise<CareerView> {
+  const { data } = await api.put<CareerView>("/career/training", { training, ...plan, round_index: roundIndex ?? null });
   return data;
 }
 

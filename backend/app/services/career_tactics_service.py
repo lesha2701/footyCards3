@@ -173,7 +173,16 @@ DEFAULT_TUNING: dict[str, Any] = {
     "routine_miss": 0.8,
     # Training before a round (career_service.TRAININGS).
     "training": {"recovery_fatigue": -12, "load_fatigue": 5, "tactical_familiarity_tenths": 15,
-                 "opponent_boost": 1.25, "set_piece_boost": 1.35},
+                 "opponent_boost": 1.25, "set_piece_boost": 1.35,
+                 # The plan (career_training_service): the extra session's
+                 # share of a main one, new sessions and the intensities.
+                 "second_pct": 70, "fitness_fatigue_mult": 0.85, "unit_rating": 1,
+                 # Individual programme: matches to play, the career rating it
+                 # gives until the season's end, per season, extra fatigue.
+                 "program_rounds": 3, "program_bonus": 1, "program_limit": 3, "program_fatigue": 3,
+                 "intensity": {"light": {"effect_pct": 70, "load_pct": 50, "injury_pct": 100},
+                               "normal": {"effect_pct": 100, "load_pct": 100, "injury_pct": 100},
+                               "hard": {"effect_pct": 140, "load_pct": 160, "injury_pct": 130}}},
     # Bots at the break, by difficulty: substitutions when the score calls
     # for it (and a change of mentality); no entry = they don't react.
     "bot_halftime": {"pro": 1, "legend": 2},
@@ -834,6 +843,9 @@ class CareerSideRunner:
     boost: float = 1.0
     set_piece_boost: float = 1.0
     training: Optional[str] = None
+    # The training plan: in-match fatigue and a rating bonus per line.
+    fitness_mult: float = 1.0
+    unit_bonus: dict = field(default_factory=dict)
     # Player roles ({group: value}) and man-marking ({"marker", "target"}).
     roles: Optional[dict] = None
     marking: Optional[dict] = None
@@ -934,7 +946,7 @@ class CareerSideRunner:
         only change with a plan instruction, not every phase."""
         if self._tactic_memo_key != self._effective:
             tactic = self.effective_tactic
-            self._tactic_memo = (TacticAxes(tactic, self.tuning).fatigue_mult(), self._familiarity_pct(tactic))
+            self._tactic_memo = (TacticAxes(tactic, self.tuning).fatigue_mult() * self.fitness_mult, self._familiarity_pct(tactic))
             self._tactic_memo_key = self._effective
         return self._tactic_memo
 
@@ -948,6 +960,8 @@ class CareerSideRunner:
             rating += self.tuning["sub_fresh"]
         # «Академия» static talents: after familiarity / fatigue / form.
         rating += p.talent_static
+        if self.unit_bonus and p.slot is not None:
+            rating += self.unit_bonus.get(p.slot.category, 0)
         # Team morale, the pre-match speech and the half-time talk.
         if self.morale_mood or self.morale_extra or self._talk_bonus:
             mood = morale.player_mood(self.morale_mood, self.traits_by_card.get(p.card.id))

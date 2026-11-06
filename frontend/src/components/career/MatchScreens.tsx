@@ -200,6 +200,7 @@ export function PostMatchCard({ season }: { season: CareerSeason }) {
     ...report.suspended.map((n) => ({ icon: "⛔", text: `${n} пропустит тур (жёлтые)`, tone: "text-red-300" })),
     ...report.injured.map((n) => ({ icon: "✚", text: `${n} — травма`, tone: "text-red-300" })),
     ...(report.auto_subs ?? []).map((n) => ({ icon: "⇄", text: `Автозамена: ${n}`, tone: "text-ink-chalk" })),
+    ...(report.training ?? []).map((n) => ({ icon: "🏋", text: n, tone: "text-accent-lime" })),
     ...report.yellow.map((n) => ({ icon: "🟨", text: `${n} — жёлтая`, tone: "text-amber-300" })),
     ...report.form_up.map((n) => ({ icon: "▲", text: `${n} в форме`, tone: "text-accent-lime" })),
     ...report.form_down.map((n) => ({ icon: "▼", text: `${n} теряет форму`, tone: "text-ink-mist" })),

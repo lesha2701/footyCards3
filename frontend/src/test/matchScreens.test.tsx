@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -6,6 +7,7 @@ import type { CareerSeason, CareerSquadCard } from "@/api/career";
 import { AwaySummaryCard, PostMatchCard, PreMatchCard } from "@/components/career/MatchScreens";
 import { FansCard, HotSeatBanner, LegendsCard, NewsFeed } from "@/components/career/CareerClub";
 import { FoldCard } from "@/components/career/FoldCard";
+import { ProgramCard, TrainingCard } from "@/components/career/CareerManagement";
 import { PrepTabs } from "@/components/career/PrepTabs";
 
 const entry = (card_id: number, name: string, fatigue: number, out = 0): CareerSquadCard => ({
@@ -138,6 +140,59 @@ describe("folded settings", () => {
     expect(screen.getByText("внутри")).toBeVisible();
     fireEvent.click(toggle);
     expect(screen.getByText("внутри")).not.toBeVisible();
+  });
+});
+
+describe("individual programme", () => {
+  const program = { active: null, done: [{ card_id: 1, name: "Иванов", bonus: 1 }], rounds: 3, bonus: 1, fatigue: 3, limit: 3 };
+  const wrapQuery = (node: React.ReactNode) => render(<QueryClientProvider client={new QueryClient()}>{node}</QueryClientProvider>);
+
+  it("offers the squad without those who finished it", () => {
+    wrapQuery(<ProgramCard season={{ ...season, training_program: program } as CareerSeason} onView={vi.fn()} onError={vi.fn()} />);
+    const card = screen.getByRole("region", { name: "Индивидуальная программа" });
+    expect(card).toHaveTextContent("Осталось программ: 2");
+    expect(screen.queryByRole("button", { name: /Имя Петров/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать игрока" }));
+    expect(screen.getByRole("button", { name: /Имя Петров/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Имя Иванов/ })).toBeNull();
+  });
+
+  it("shows the progress of the player on it", () => {
+    const active = { ...program, active: { card_id: 2, name: "Петров", played: 2 } };
+    wrapQuery(<ProgramCard season={{ ...season, training_program: active } as CareerSeason} onView={vi.fn()} onError={vi.fn()} />);
+    expect(screen.getByRole("progressbar", { name: "Прогресс программы" })).toHaveAttribute("aria-valuenow", "2");
+    expect(screen.queryByRole("button", { name: /Имя Кузнецов/ })).toBeNull();
+  });
+});
+
+describe("training plan", () => {
+  const trainings = [
+    { code: "attack", label: "Атака", hint: "Нападающие сильнее. Нагрузка" },
+    { code: "recovery", label: "Восстановление", hint: "Усталость ниже." },
+  ];
+  const plan = { extra: null, intensity: "normal", second_pct: 70, intensities: [{ code: "normal", label: "Обычная" }], lines: ["Нападающие +1 к рейтингу"] };
+  const open = (training: string | null) => render(
+    <QueryClientProvider client={new QueryClient()}>
+      <TrainingCard season={{ ...season, training, trainings, training_plan: plan } as unknown as CareerSeason} onView={vi.fn()} onError={vi.fn()} />
+    </QueryClientProvider>,
+  );
+
+  it("starts from one list of sessions, each saying what it is for", () => {
+    open(null);
+    expect(screen.getAllByRole("radiogroup")).toHaveLength(1);
+    expect(screen.getByRole("radio", { name: /Атака/ })).toHaveTextContent("Нападающие сильнее");
+    expect(screen.getByRole("button", { name: /Дополнительное/ })).toBeDisabled();
+    expect(screen.queryByText("Нагрузка")).toBeNull();
+  });
+
+  it("folds into the plan once it is set and opens the list for a place", () => {
+    open("attack");
+    expect(screen.queryByRole("radio", { name: /Восстановление/ })).toBeNull();
+    expect(screen.getByText("Что получишь к матчу")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Дополнительное/ }));
+    expect(screen.getByRole("radiogroup", { name: "Дополнительное занятие" })).toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: /Атака/ })).toBeNull();
+    expect(screen.getByRole("radio", { name: /Восстановление/ })).toBeInTheDocument();
   });
 });
 

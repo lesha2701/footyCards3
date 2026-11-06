@@ -54,6 +54,9 @@ class CareerCupIn(BaseModel):
 
 class CareerTrainingIn(BaseModel):
     training: Optional[str] = None
+    # The plan around it; what is left out stays as it was.
+    extra: Optional[str] = None
+    intensity: Optional[str] = None
     round_index: Optional[int] = None
 
 
@@ -320,6 +323,8 @@ class CareerSeasonOut(BaseModel):
     ambitions: list[dict] = []
     training: Optional[str] = None
     trainings: list[dict] = []
+    training_plan: Optional[dict] = None
+    training_program: Optional[dict] = None
     # Cup bracket, my status, rotation and prizes (tactics seasons).
     cup: Optional[dict] = None
     # Off-season panel until round 1 of a season that follows another;
@@ -354,6 +359,11 @@ class CareerViewOut(BaseModel):
     profile: Optional[dict] = None
     season: Optional[CareerSeasonOut] = None
     invite: Optional[CareerInviteOut] = None
+
+
+class CareerProgramIn(BaseModel):
+    card_id: Optional[int] = None
+    round_index: Optional[int] = None
 
 
 class CareerMomentIn(BaseModel):
