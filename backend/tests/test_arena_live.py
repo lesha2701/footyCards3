@@ -285,8 +285,11 @@ async def test_preview_names_the_key_duel(client, db_session, bot_token):
     headers, _user = await _ready(client, db_session, bot_token, 760060)
     preview = (await client.post("/api/v1/matches/opponent", headers=headers)).json()
     duel = preview["key_duel"]
-    # Your star is a real card, never the keeper; a bot answers with a line.
+    # Your star is a real card, never the keeper; a bot answers with a catalog
+    # face of the facing line, at that line's rating.
     assert duel["me"]["position"] != "GK" and duel["me"]["name"]
+    assert duel["vs"]["rarity"] and not duel["vs"]["name"].startswith("Их ")
+    assert duel["vs"]["rating"] in {line["opponent"] for line in preview["lines"]}
     assert duel["vs"]["rating"] > 0 and duel["vs"]["name"]
     again = (await client.post("/api/v1/matches/opponent", headers=headers)).json()
     assert again["key_duel"] == duel

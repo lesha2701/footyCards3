@@ -38,8 +38,10 @@ export function ArenaStatusStrip({ division, form, onOpen }: {
   const span = division.next_min_points != null ? division.next_min_points - division.min_points : null;
   const done = division.points - division.min_points;
   const progress = span ? Math.min(100, Math.max(0, (done / span) * 100)) : 100;
+  const logo = artOf("arena");
   return (
-    <button onClick={onOpen} className="flex items-center gap-3 rounded-2xl bg-bg-surface px-3 py-2 text-left active:scale-[0.99]">
+    <button onClick={onOpen} className="flex items-center gap-2.5 rounded-2xl bg-bg-surface py-1.5 pl-1.5 pr-3 text-left active:scale-[0.99]">
+      {logo && <img src={logo} alt="Card Arena" decoding="async" className="h-8 w-8 shrink-0 rounded-xl object-cover ring-1 ring-white/10" />}
       <span className="shrink-0 font-display text-sm font-bold text-ink-chalk">
         Дивизион {division.division}{division.shield_matches > 0 ? " 🛡" : ""}
       </span>
@@ -97,7 +99,7 @@ export function ArenaLimitPanel({ seconds, limit, onDone }: { seconds: number; l
 /** Where you are stronger: one difference per line, always in view. */
 export function ArenaLinesRow({ lines }: { lines: ArenaLineCompare[] }) {
   return (
-    <div className="grid grid-cols-4 divide-x divide-white/5 rounded-2xl bg-bg-surface py-1.5" aria-label="Расклад по линиям">
+    <div className="grid grid-cols-4 divide-x divide-white/5 rounded-2xl bg-black/35 py-1.5" aria-label="Расклад по линиям">
       {lines.map((line) => {
         const diff = line.user - line.opponent;
         return (
@@ -118,36 +120,44 @@ function DuelCard({ actor, align }: { actor: MatchDuelActor; align: "left" | "ri
   const surname = actor.name.trim().split(/\s+/).pop();
   return (
     <div className={`flex min-w-0 flex-1 items-center gap-2 ${align === "right" ? "flex-row-reverse text-right" : "text-left"}`}>
-      <span className={`relative h-16 w-16 shrink-0 rounded-xl bg-gradient-to-b p-[2px] [@media(min-height:800px)]:h-20 [@media(min-height:800px)]:w-20 ${rarity ? RARITY_GRADIENTS[rarity] : "from-white/30 to-white/10"}`}>
+      <span className={`h-[68px] w-14 shrink-0 rounded-xl bg-gradient-to-b p-[2px] ${rarity ? RARITY_GRADIENTS[rarity] : "from-white/30 to-white/10"}`}>
         <span className="block h-full w-full overflow-hidden rounded-[10px] bg-black/40">
           <img
             src={staticUrl(actor.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-            alt="" className="h-full w-full object-cover object-top" loading="lazy" decoding="async"
+            alt="" className="h-full w-full origin-top scale-[1.5] object-cover object-[50%_4%]" loading="lazy" decoding="async"
           />
         </span>
       </span>
-      <span className="min-w-0">
-        <span className="block truncate text-xs font-semibold leading-tight text-ink-chalk">{surname}</span>
-        <span className="block font-mono text-xl font-bold leading-tight text-accent-cyan">{actor.rating}</span>
-        <span className="block font-mono text-micro leading-none text-ink-mist-dim">{actor.position}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-bold leading-tight text-ink-chalk">{surname}</span>
+        <span className="block font-mono text-xl font-bold leading-tight text-ink-chalk">{actor.rating}</span>
+        <span className="block font-mono text-micro leading-tight text-ink-mist-dim">{actor.position}</span>
       </span>
     </div>
   );
 }
 
-/** Your star against the man in his way. Hidden on low screens, so the Play
- *  button never drops below the fold for the sake of a picture. */
+/** Your star against the man in his way: what the match turns on, in a glance.
+ *  Hidden on low screens, so the Play button never drops below the fold. */
 export function ArenaKeyDuel({ duel }: { duel: { me: MatchDuelActor; vs: MatchDuelActor } }) {
+  const lead = duel.me.rating - duel.vs.rating;
   return (
     <section
-      aria-label="Ключевая дуэль"
-      className="relative hidden items-center gap-1 overflow-hidden rounded-2xl bg-bg-surface p-2 [@media(min-height:760px)]:flex"
+      aria-label="Главная дуэль"
+      className="relative hidden flex-col gap-1.5 overflow-hidden rounded-2xl bg-bg-surface px-2.5 py-2 [@media(min-height:805px)]:flex"
     >
       <span className="pointer-events-none absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-accent-green/10 to-transparent" />
       <span className="pointer-events-none absolute inset-y-0 right-0 w-1/2 bg-gradient-to-l from-red-500/10 to-transparent" />
-      <div className="relative flex min-w-0 flex-1 items-center gap-1">
+      <p className="relative flex items-baseline justify-between gap-2">
+        <span className="text-micro font-bold uppercase tracking-[0.12em] text-accent-lime">Главная дуэль</span>
+        <span className="truncate text-micro text-ink-mist-dim">твой лучший против его лучшего</span>
+      </p>
+      <div className="relative flex items-center gap-1">
         <DuelCard actor={duel.me} align="left" />
-        <IconBolt size={20} className="shrink-0 text-accent-lime" />
+        <span className="flex w-8 shrink-0 flex-col items-center">
+          <IconBolt size={18} className="text-accent-lime" />
+          <span className={`font-mono text-xs font-bold ${matchupClass(lead > 0 ? "win" : lead < 0 ? "loss" : "neutral")}`}>{signed(lead)}</span>
+        </span>
         <DuelCard actor={duel.vs} align="right" />
       </div>
     </section>
@@ -186,12 +196,13 @@ export function ArenaTile({ icon, value, label, badge, tone, onClick }: {
   label: string;
   badge?: number;
   tone?: "amber";
+  /** Part of a rectangle's bottom edge, not a tile of its own. */
   onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`relative flex flex-col items-center gap-0.5 rounded-2xl py-2 active:scale-95 ${tone === "amber" ? "bg-amber-400/15" : "bg-bg-surface"}`}
+      className={`relative flex flex-col items-center gap-0.5 py-2 active:bg-white/5 ${tone === "amber" ? "bg-amber-400/15" : "bg-black/45"}`}
     >
       {!!badge && (
         <span className="absolute right-1.5 top-1.5 rounded-full bg-red-500 px-1.5 font-mono text-micro font-bold leading-4 text-white">{badge}</span>
@@ -344,22 +355,42 @@ export function ArenaChancesBar({ chances }: { chances: ArenaChances }) {
   );
 }
 
-/** The next opponent, the one thing the screen is about: you vs him, one
- *  block for chances and points, the style. The rest opens on a tap. */
+/** The squad tab: the same rectangle as the match tab, its tabs flush with
+ *  the top corners and the panel tiles flush with the bottom. */
+export function ArenaSquadShell({ tabs, bottomTabs, children }: { tabs: ReactNode; bottomTabs: ReactNode; children: ReactNode }) {
+  return (
+    <section className="overflow-hidden rounded-3xl bg-bg-surface ring-1 ring-white/10">
+      {tabs}
+      <div className="flex flex-col gap-2.5 p-2.5">{children}</div>
+      {bottomTabs}
+    </section>
+  );
+}
+
+/** The next opponent, the one thing the screen is about: you vs him over the
+ *  stadium, one block for chances and points, the style, the lines. Details
+ *  open on a tap; the tabs are the card's own top and bottom edges. */
 export function ArenaOpponentCard({
   preview,
   onStyle,
   stylePending,
+  tabs,
+  bottomTabs,
+  lines,
+  background,
 }: {
   preview: ArenaPreview;
   onStyle: (style: LineupTactic) => void;
   stylePending: boolean;
+  tabs: ReactNode;
+  bottomTabs: ReactNode;
+  lines?: ReactNode;
+  background?: string;
 }) {
   const [details, setDetails] = useState(false);
   const h2h = preview.head_to_head;
-  const hasDetails = !preview.opponent_is_bot || !!h2h
+  const hasDetails = preview.lines.length > 0 || !preview.opponent_is_bot || !!h2h
     || Object.keys(preview.opponent_malus ?? {}).length > 0 || Object.keys(preview.user_malus ?? {}).length > 0;
-  const art = artOf("arena");
   const { user_strength: mine, opponent_strength: his } = preview;
   const outcomes = [
     { key: "win", label: "Победа", value: preview.chances.win, tone: "text-accent-green", align: "text-left" },
@@ -367,8 +398,15 @@ export function ArenaOpponentCard({
     { key: "loss", label: "Поражение", value: preview.chances.loss, tone: "text-red-400", align: "text-right" },
   ] as const;
   return (
-    <section className="relative overflow-hidden rounded-3xl bg-bg-surface p-4 ring-1 ring-white/10">
-      {art && <img src={art} alt="" aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-44 w-44 rounded-full object-cover opacity-25 blur-2xl" />}
+    <section className="relative overflow-hidden rounded-3xl bg-bg-surface ring-1 ring-white/10">
+      {background && (
+        <>
+          <img src={background} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full object-cover object-top" />
+          <span className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/35 via-black/45 to-black/70" />
+        </>
+      )}
+      <div className="relative">{tabs}</div>
+      <div className="relative p-3 [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">
 
       <button onClick={() => hasDetails && setDetails((v) => !v)} className="relative block w-full text-left" aria-expanded={details}>
         {preview.revenge && <p className="mb-1 text-center text-caption font-bold text-red-400">⚔️ Реванш</p>}
@@ -389,7 +427,8 @@ export function ArenaOpponentCard({
       </button>
 
       {details && (
-        <div className="relative mt-2 flex flex-col gap-2 rounded-2xl bg-black/20 p-2.5">
+        <div className={`relative mt-2 flex flex-col gap-2 rounded-2xl p-2.5 ${background ? "bg-black/50" : "bg-black/20"}`}>
+          {preview.lines.length > 0 && <ArenaLinesCompare lines={preview.lines} opponentName={preview.opponent_name} />}
           <p className="text-caption text-ink-mist">
             {preview.opponent_is_bot ? "Бот твоего уровня" : `Дивизион ${preview.opponent_division} · ${preview.opponent_points} очков`}
             {h2h && <> · встречи <span className="font-mono font-semibold text-ink-chalk">{h2h.win}·{h2h.draw}·{h2h.loss}</span></>}
@@ -429,7 +468,7 @@ export function ArenaOpponentCard({
                 onClick={() => !active && onStyle(t.value)}
                 disabled={stylePending}
                 className={`rounded-xl py-2 text-center text-micro font-bold leading-tight disabled:opacity-60 ${
-                  active ? "bg-floodlight text-bg-base" : beatsHim ? "bg-accent-green/15 text-accent-green" : "bg-white/5 text-ink-mist"
+                  active ? "bg-floodlight text-bg-base" : beatsHim ? "bg-accent-green/15 text-accent-green" : background ? "bg-black/40 text-ink-chalk" : "bg-white/5 text-ink-mist"
                 }`}
               >
                 {t.label}
@@ -447,6 +486,9 @@ export function ArenaOpponentCard({
           🎯 {preview.goal_text} +{preview.goal_bonus_coins} <IconCoin size={11} />
         </p>
       )}
+      {lines && <div className="relative mt-2 [@media(max-height:719px)]:hidden">{lines}</div>}
+      </div>
+      <div className="relative">{bottomTabs}</div>
     </section>
   );
 }

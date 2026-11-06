@@ -1,6 +1,7 @@
 import json
 import math
 import random
+import zlib
 from types import SimpleNamespace
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -1549,7 +1550,29 @@ def _duel_actor(slot) -> MatchDuelActorOut:
     )
 
 
-def _key_duel(lineup: LineupOut, opponent: _ArenaOpponent) -> Optional[ArenaKeyDuelOut]:
+async def _bot_duel_face(db: AsyncSession, opponent: _ArenaOpponent, category: str, label: str) -> MatchDuelActorOut:
+    """A bot has a line, not a card: it gets the face of a catalog player of
+    that line, the same one for this opponent; the rating stays the line's."""
+    from app.models.player import Player
+    from app.services.lineup_service import CATEGORY_POSITIONS
+
+    rating = opponent.lines[category]
+    faces = (await db.execute(
+        select(Player)
+        .where(Player.is_active.is_(True), Player.position.in_(CATEGORY_POSITIONS[category]), Player.path_talent_code.is_(None))
+        .order_by(func.abs(Player.rating - rating), Player.id)
+        .limit(6)
+    )).scalars().all()
+    if not faces:
+        return MatchDuelActorOut(name=label, rating=rating, position=category)
+    face = faces[zlib.crc32(opponent.name.encode()) % len(faces)]
+    return MatchDuelActorOut(
+        name=face.display_name, rating=rating, position=getattr(face.position, "value", face.position),
+        image_path=face.image_path, rarity=getattr(face.rarity, "value", face.rarity),
+    )
+
+
+async def _key_duel(db: AsyncSession, lineup: LineupOut, opponent: _ArenaOpponent) -> Optional[ArenaKeyDuelOut]:
     """The duel the preview shows: nothing rolled, your strongest outfield
     card against the strongest of the line facing him."""
     star = _best_on_line(lineup, tuple(_DUEL_OPPOSITE))
@@ -1559,7 +1582,7 @@ def _key_duel(lineup: LineupOut, opponent: _ArenaOpponent) -> Optional[ArenaKeyD
     rival = _best_on_line(opponent.lineup, (category,)) if opponent.lineup is not None else None
     return ArenaKeyDuelOut(
         me=_duel_actor(star),
-        vs=_duel_actor(rival) if rival is not None else MatchDuelActorOut(name=label, rating=opponent.lines[category], position=category),
+        vs=_duel_actor(rival) if rival is not None else await _bot_duel_face(db, opponent, category, label),
     )
 
 
@@ -1696,7 +1719,7 @@ async def preview_opponent(db: AsyncSession, user: User) -> ArenaPreviewOut:
             ArenaLineCompareOut(key=key, label=label, user=user_lines[key], opponent=opponent.lines[key])
             for key, label in _LINES
         ],
-        key_duel=_key_duel(lineup, opponent),
+        key_duel=await _key_duel(db, lineup, opponent),
         chances=win_chances(neutral["strength_ratio"]),
         points_at_stake=arena_ladder_service.points_preview(locked_user.arena_points, opponent.points, config),
         division=ArenaDivisionOut(**division),

@@ -21,7 +21,7 @@ import {
   ArenaGoalOverlay, ArenaHalftimePrompt, ArenaLateCallPrompt, ArenaMomentPrompt, ArenaPenaltyScene, type ArenaAct,
 } from "@/components/arena/ArenaLive";
 import {
-  ArenaDivisionCard, ArenaKeyDuel, ArenaLimitPanel, ArenaLinesRow, ArenaMatchReport, ArenaMatchupLine, ArenaOpponentCard, ArenaSheet, ArenaStatusStrip, ArenaTile,
+  ArenaDivisionCard, ArenaKeyDuel, ArenaLimitPanel, ArenaLinesRow, ArenaMatchReport, ArenaMatchupLine, ArenaSquadShell, ArenaOpponentCard, ArenaSheet, ArenaStatusStrip, ArenaTile,
   ArenaTileSide, OpponentMalusNote,
 } from "@/components/arena/ArenaPanels";
 import BenchUpgradeHints from "@/components/squad/BenchUpgradeHints";
@@ -44,6 +44,7 @@ import {
   forfeitMatch, markDefenseSeen, playMatch, takeRevenge, type MatchActExtra,
 } from "@/api/matches";
 import { staticUrl } from "@/lib/api";
+import { artOf } from "@/lib/gameArt";
 import { boostText } from "@/lib/coaches";
 import { CATEGORY_LABELS, CATEGORY_POSITIONS, onIdealPosition, TACTIC_LABELS, TACTICS, type FormationSlot } from "@/lib/formation";
 import { formatGameError } from "@/lib/errors";
@@ -109,10 +110,11 @@ export default function ArenaPage() {
   const [matchSheetOpen, setMatchSheetOpen] = useState(false);
   const [matchReopened, setMatchReopened] = useState(false);
   const [strengthHintOpen, setStrengthHintOpen] = useState(false);
-  const [sheet, setSheet] = useState<"division" | "cup" | "defense" | "history" | "templates" | "formations" | "skills" | null>(null);
+  const [sheet, setSheet] = useState<"division" | "cup" | "defense" | "history" | "templates" | "formations" | "skills" | "tips" | null>(null);
   // The main screen is the next match: the squad folds away once it's ready
   // (a newcomer or an unfinished squad sees it open, the guide points at it).
   const [squadToggled, setSquadToggled] = useState<boolean | null>(null);
+  const swipeFrom = useRef<{ x: number; y: number } | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const pitchRef = useRef<HTMLDivElement>(null);
   const tacticsRef = useRef<HTMLElement>(null);
@@ -378,13 +380,99 @@ export default function ArenaPage() {
   const chosenTactic = TACTICS.find((t) => t.value === lineup?.tactic);
   const limitReached = stats?.hourly_left === 0;
 
-  return (
-    <div className={`flex flex-col gap-3 ${squadOpen ? "" : "min-h-[calc(100dvh-10.6rem-env(safe-area-inset-bottom,0px))]"}`}>
-      {!squadOpen && <>
-        {stats?.division && (
-          <ArenaStatusStrip division={stats.division} form={lastFive.map((m) => m.result)} onOpen={() => setSheet("division")} />
-        )}
+  const cardShown = !!preview && !!activeLineup?.is_complete && !simulating;
+  const tileRow = (
+  <div className={`grid divide-x divide-white/10 border-t border-white/10 ${stats?.cup?.enabled ? "grid-cols-3" : "grid-cols-2"}`}>
+    {stats?.cup?.enabled && (
+      <ArenaTile
+        icon={<IconTrophy size={17} className="text-amber-300" />}
+        value={`${stats.cup.rounds_won}/${stats.cup.total_rounds}`}
+        label="Кубок"
+        tone={stats.cup.open && stats.cup.status !== "lost" && stats.cup.status !== "champion" ? "amber" : undefined}
+        onClick={() => setSheet("cup")}
+      />
+    )}
+    <ArenaTile
+      icon={<IconSwords size={17} className="text-red-300" />}
+      value={defenseItems?.length ?? 0}
+      label="Атаки"
+      badge={stats?.defense_unread}
+      onClick={() => { setSheet("defense"); if (stats?.defense_unread) defenseSeen.mutate(); }}
+    />
+    <ArenaTile icon={<IconHistory size={17} className="text-accent-cyan" />} label="История" onClick={() => setSheet("history")} />
+  </div>
+  );
 
+  // Newbies are walked through the style right on the page.
+  const extrasInSheet = matchesPlayed > 0;
+  const tipsCount = (benchUpgrades?.length ?? 0) + chemistryHints.length;
+  const styleBlock = (
+      <section ref={tacticsRef}>
+        <div className="grid grid-cols-4 gap-1">
+          {TACTICS.map((t) => (
+            <button
+              key={t.value}
+              onClick={() => setTacticMutation.mutate(t.value)}
+              disabled={setTacticMutation.isPending}
+              className={`rounded-xl py-2 text-center text-micro font-bold leading-tight disabled:opacity-60 ${
+                lineup?.tactic === t.value ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        {chosenTactic && (
+          <p className="mt-1.5 text-center text-micro text-ink-mist-dim">
+            {chosenTactic.description} · бьёт «{TACTIC_LABELS[chosenTactic.beats]}»
+          </p>
+        )}
+      </section>
+  );
+  const tipsBlock = (
+    <>
+      <BenchUpgradeHints hints={benchUpgrades} onApply={applyBenchUpgrade} busy={setLineupMutation.isPending} />
+      <ChemistrySummary chemistry={chemistry} />
+      <ChemistryHints hints={chemistryHints} onApply={applyChemistryHint} busy={setLineupMutation.isPending} />
+    </>
+  );
+
+  const tabBar = (
+    <div role="tablist" className="grid grid-cols-2">
+      {([[false, "Матч", IconBall], [true, "Состав", IconShirt]] as const).map(([value, label, Icon]) => (
+        <button
+          key={label}
+          role="tab"
+          aria-selected={squadOpen === value}
+          onClick={() => setSquadToggled(value)}
+          className={`flex items-center justify-center gap-1.5 py-2.5 text-sm font-bold transition ${squadOpen === value ? "text-accent-lime" : `bg-black/55 text-ink-mist ${value ? "rounded-bl-2xl" : "rounded-br-2xl"}`}`}
+        >
+          <Icon size={16} />
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
+  return (
+    <div
+      className="flex min-h-[calc(100dvh-10.6rem-env(safe-area-inset-bottom,0px))] flex-col gap-3"
+      onTouchStart={(e) => { swipeFrom.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }}
+      onTouchEnd={(e) => {
+        const from = swipeFrom.current;
+        swipeFrom.current = null;
+        if (!from) return;
+        const dx = e.changedTouches[0].clientX - from.x;
+        const dy = e.changedTouches[0].clientY - from.y;
+        if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) setSquadToggled(dx < 0);
+      }}
+    >
+      {stats?.division && (
+        <ArenaStatusStrip division={stats.division} form={lastFive.map((m) => m.result)} onOpen={() => setSheet("division")} />
+      )}
+      {!squadOpen && !cardShown && tabBar}
+
+      {!squadOpen && <>
         {matchError && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{matchError}</p>}
 
         {preview && activeLineup?.is_complete && !simulating ? (
@@ -393,61 +481,42 @@ export default function ArenaPage() {
               preview={preview}
               onStyle={(style) => activeStyleMutation.mutate(style)}
               stylePending={activeStyleMutation.isPending}
+              tabs={tabBar}
+              bottomTabs={tileRow}
+              lines={<ArenaLinesRow lines={preview.lines} />}
+              background={artOf("arena-stadium")}
             />
           </div>
         ) : activeLineup?.is_complete ? (
           <Skeleton className="h-72 rounded-3xl" />
         ) : null}
 
-        {preview && activeLineup?.is_complete && !simulating && (
-          <>
-            <ArenaLinesRow lines={preview.lines} />
-            {preview.key_duel && <ArenaKeyDuel duel={preview.key_duel} />}
-          </>
-        )}
+        {cardShown && preview?.key_duel && <ArenaKeyDuel duel={preview.key_duel} />}
 
-        <div className={`grid gap-2 ${stats?.cup?.enabled ? "grid-cols-4" : "grid-cols-3"}`}>
-          <ArenaTile
-            icon={<IconShirt size={17} className="text-accent-lime" />}
-            value={activeLineup?.is_complete ? activeLineup.team_strength : undefined}
-            label="Состав"
-            onClick={() => setSquadToggled(true)}
-          />
-          {stats?.cup?.enabled && (
-            <ArenaTile
-              icon={<IconTrophy size={17} className="text-amber-300" />}
-              value={`${stats.cup.rounds_won}/${stats.cup.total_rounds}`}
-              label="Кубок"
-              tone={stats.cup.open && stats.cup.status !== "lost" && stats.cup.status !== "champion" ? "amber" : undefined}
-              onClick={() => setSheet("cup")}
-            />
-          )}
-          <ArenaTile
-            icon={<IconSwords size={17} className="text-red-300" />}
-            value={defenseItems?.length ?? 0}
-            label="Атаки"
-            badge={stats?.defense_unread}
-            onClick={() => { setSheet("defense"); if (stats?.defense_unread) defenseSeen.mutate(); }}
-          />
-          <ArenaTile icon={<IconHistory size={17} className="text-accent-cyan" />} label="История" onClick={() => setSheet("history")} />
-        </div>
+        {!cardShown && tileRow}
       </>}
 
-      {squadOpen && <>
+      {squadOpen && <ArenaSquadShell tabs={tabBar} bottomTabs={<div className="[@media(max-height:760px)]:hidden">{tileRow}</div>}>
       <div className="flex items-center gap-1.5">
-        <button onClick={() => setSquadToggled(false)} aria-label="К матчу" className="px-1 font-display text-lg font-bold leading-none text-ink-chalk active:scale-95">
-          ←
-        </button>
         <button onClick={() => setSheet("templates")} className="min-w-0 truncate rounded-full bg-white/5 px-3 py-1.5 text-caption font-bold text-ink-chalk">
           {lineup?.name} ▾
         </button>
         <button onClick={() => setSheet("formations")} className="min-w-0 truncate rounded-full bg-white/5 px-3 py-1.5 text-caption font-bold text-ink-chalk">
           {formationLabel(lineup?.formation ?? "4-3-3")} ▾
         </button>
+        {extrasInSheet && (
+          <button
+            onClick={() => setSheet("tips")}
+            className="ml-auto flex shrink-0 items-center gap-1 rounded-full bg-accent-lime/15 px-2.5 py-1.5 text-caption font-bold text-accent-lime"
+          >
+            Советы
+            {tipsCount > 0 && <span className="rounded-full bg-accent-lime px-1 font-mono text-micro font-bold leading-4 text-bg-base">{tipsCount}</span>}
+          </button>
+        )}
         {lineup?.is_complete && (
           <button
             onClick={() => setStrengthHintOpen(true)}
-            className="-my-2 ml-auto flex shrink-0 items-center gap-1 py-2 pl-2 font-mono text-sm font-bold text-accent-cyan"
+            className={`-my-2 flex shrink-0 items-center gap-1 py-2 pl-2 font-mono text-sm font-bold text-accent-cyan ${extrasInSheet ? "" : "ml-auto"}`}
           >
             {lineup.team_strength}
             <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/10 text-micro font-bold text-ink-mist-dim">?</span>
@@ -469,10 +538,9 @@ export default function ArenaPage() {
 
       <div
         ref={pitchRef}
-        style={{ height: "clamp(270px, calc(100dvh - 21rem), 400px)" }}
-        className="relative flex shrink-0 flex-col justify-between overflow-hidden rounded-[22px] bg-gradient-to-b from-[#17633a] via-[#12512f] to-[#0e4026] px-1 py-2.5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
+        className="relative flex shrink-0 flex-col justify-between overflow-hidden rounded-[22px] bg-gradient-to-b from-[#17633a] via-[#12512f] to-[#0e4026] px-1 py-2.5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] h-[clamp(240px,calc(100dvh-31rem),400px)] [@media(max-height:760px)]:h-[clamp(228px,calc(100dvh-29.5rem),400px)]"
       >
-        <PitchBackground />
+        <PitchBackground vivid />
         <ChemistryLinksOverlay containerRef={pitchRef} chemistry={chemistry} thin />
         {pitchRows(lineup?.formation, (lineup?.slots ?? []).map((s) => s.slot_code)).map((row) => (
           <div key={row.key} className="relative flex justify-evenly gap-0.5">
@@ -485,7 +553,7 @@ export default function ArenaPage() {
                   onClick={() => setPickerSlot(formationSlot)}
                   disabled={setLineupMutation.isPending}
                   aria-label={card ? `${slot.slot_code}: ${card.player.display_name}` : `${slot.slot_code}: пусто`}
-                  className="relative flex min-w-0 flex-col items-center rounded-[10px] transition active:scale-95 disabled:opacity-60"
+                  className="relative flex min-w-0 flex-col items-center rounded-[10px] drop-shadow-[0_3px_4px_rgba(0,30,12,0.6)] transition active:scale-95 disabled:opacity-60"
                 >
                   {card ? (
                     <PitchTile
@@ -573,58 +641,32 @@ export default function ArenaPage() {
           )}
         </div>
 
-      <section ref={tacticsRef}>
-        <div className="grid grid-cols-4 gap-1">
-          {TACTICS.map((t) => (
+      {!extrasInSheet && <>{styleBlock}{tipsBlock}</>}
+      </ArenaSquadShell>}
+
+      <StickyActionBar className="mt-auto">
+        {stats && limitReached ? (
+          <ArenaLimitPanel
+            seconds={stats.retry_after_seconds}
+            limit={stats.hourly_limit}
+            onDone={() => queryClient.invalidateQueries({ queryKey: ["arena-stats"] })}
+          />
+        ) : (
+          <>
+            {stats && !!stats.hourly_limit && stats.hourly_left <= LOW_MATCHES_LEFT && (
+              <p className="mb-1 text-center text-micro text-ink-mist-dim">Осталось на этот час: {stats.hourly_left}</p>
+            )}
             <button
-              key={t.value}
-              onClick={() => setTacticMutation.mutate(t.value)}
-              disabled={setTacticMutation.isPending}
-              className={`rounded-xl py-2 text-center text-micro font-bold leading-tight disabled:opacity-60 ${
-                lineup?.tactic === t.value ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"
-              }`}
+              ref={playRef}
+              onClick={() => playMutation.mutate("ladder")}
+              disabled={!activeLineup?.is_complete || playMutation.isPending || simulating}
+              className="w-full rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:bg-none disabled:bg-bg-raised disabled:text-ink-mist"
             >
-              {t.label}
+              {playMutation.isPending || simulating ? "Идёт матч..." : !activeLineup?.is_complete ? "Собери состав, чтобы играть" : "Играть матч"}
             </button>
-          ))}
-        </div>
-        {chosenTactic && (
-          <p className="mt-1.5 text-center text-micro text-ink-mist-dim">
-            {chosenTactic.description} · бьёт «{TACTIC_LABELS[chosenTactic.beats]}»
-          </p>
+          </>
         )}
-      </section>
-
-      <BenchUpgradeHints hints={benchUpgrades} onApply={applyBenchUpgrade} busy={setLineupMutation.isPending} />
-      <ChemistrySummary chemistry={chemistry} />
-      <ChemistryHints hints={chemistryHints} onApply={applyChemistryHint} busy={setLineupMutation.isPending} />
-      </>}
-
-      {(!squadOpen || matchesPlayed === 0) && (
-        <StickyActionBar className="mt-auto">
-          {stats && limitReached ? (
-            <ArenaLimitPanel
-              seconds={stats.retry_after_seconds}
-              limit={stats.hourly_limit}
-              onDone={() => queryClient.invalidateQueries({ queryKey: ["arena-stats"] })}
-            />
-          ) : (
-            <>
-              {stats && !!stats.hourly_limit && stats.hourly_left <= LOW_MATCHES_LEFT && (
-                <p className="mb-1 text-center text-micro text-ink-mist-dim">Осталось на этот час: {stats.hourly_left}</p>
-              )}
-              <button
-                ref={playRef}
-                onClick={() => playMutation.mutate("ladder")}
-                disabled={!activeLineup?.is_complete || playMutation.isPending || simulating}
-                className="w-full rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95 disabled:bg-none disabled:bg-bg-raised disabled:text-ink-mist"
-              >
-                {playMutation.isPending || simulating ? "Идёт матч..." : !activeLineup?.is_complete ? "Собери состав, чтобы играть" : "Играть матч"}
-              </button>
-            </>
-          )}
-        </StickyActionBar>
-      )}
+      </StickyActionBar>
 
       <MatchSheet
         open={!!match && matchSheetOpen}
@@ -695,6 +737,16 @@ export default function ArenaPage() {
           finished={finishedMatch}
         />
       )}
+
+      <ArenaSheet open={sheet === "tips"} title="Советы" onClose={() => setSheet(null)}>
+        <div className="flex flex-col gap-3">
+          {tipsBlock}
+          <div>
+            <p className="mb-1.5 text-caption font-bold text-ink-mist">Стиль этого состава</p>
+            {styleBlock}
+          </div>
+        </div>
+      </ArenaSheet>
 
       <ArenaSheet open={sheet === "division"} title="Дивизион" onClose={() => setSheet(null)}>
         {stats?.division && (
