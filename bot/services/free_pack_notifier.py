@@ -22,6 +22,13 @@ TARGET_SENDS_PER_SECOND = 8.0
 MAX_CONCURRENT_SENDS = 10
 
 
+def _unreachable(exc: TelegramAPIError) -> bool:
+    """A user who opened the Mini App but never started the bot: no send will
+    work until they do, so they must not stay in the queue — a failed send
+    keeps the row, and every poll would try all of them again."""
+    return "chat not found" in str(exc).lower()
+
+
 async def _remind_one(bot: Bot, user, semaphore: asyncio.Semaphore, rate_limiter: RateLimiter) -> None:
     async with semaphore:
         await rate_limiter.acquire()
@@ -49,10 +56,12 @@ async def _remind_one(bot: Bot, user, semaphore: asyncio.Semaphore, rate_limiter
                 return
             except TelegramAPIError as exc2:
                 logger.warning("Failed to remind user %s after retry: %s", user["telegram_id"], exc2)
-                return
+                if not _unreachable(exc2):
+                    return
         except TelegramAPIError as exc:
             logger.warning("Failed to remind user %s: %s", user["telegram_id"], exc)
-            return
+            if not _unreachable(exc):
+                return
     await db.mark_free_pack_notified(user["id"])
 
 
