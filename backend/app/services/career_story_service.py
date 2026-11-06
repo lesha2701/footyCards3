@@ -309,6 +309,8 @@ def after_round(state: dict, *, team: int, round_index: int, match: dict, own: i
         add_news(state, team, round_index, "🟥", f"{name} удалён и пропустит матч", "bad")
     for text in report.get("auto_subs") or []:
         add_news(state, team, round_index, "⇄", f"Автозамена в старте: {text}")
+    for text in report.get("training") or []:
+        add_news(state, team, round_index, "🏋", text)
     place, before = report.get("place"), None
     previous = ((state.get("reports") or {}).get(str(round_index - 1)) or {}).get(str(team)) or {}
     before = previous.get("place")

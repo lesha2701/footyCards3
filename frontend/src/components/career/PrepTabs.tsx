@@ -29,7 +29,8 @@ function tacticStatus(season: CareerSeason): { text: string; tone: Tone } {
 }
 
 function trainingStatus(season: CareerSeason): { text: string; tone: Tone } {
-  return season.training ? { text: "Выбрана", tone: "good" } : { text: "Не выбрана", tone: "warn" };
+  const main = season.trainings?.find((t) => t.code === season.training)?.label;
+  return main ? { text: season.training_plan?.extra ? `${main} +1` : main, tone: "good" } : { text: "Не выбрана", tone: "warn" };
 }
 
 export function PrepTabs({ season, value, onChange }: { season: CareerSeason; value: PrepTab; onChange: (tab: PrepTab) => void }) {

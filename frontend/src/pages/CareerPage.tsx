@@ -21,7 +21,7 @@ import { fetchFriends } from "@/api/friends";
 import CareerSquad from "@/components/career/CareerSquad";
 import { PlanEditor, ScoutingCard, TacticsBoard } from "@/components/career/CareerTactics";
 import { SetPiecesCard, SquadWarnings } from "@/components/career/SetPiecesCard";
-import { CoachProfileCard, ObjectiveCard, TrainingCard } from "@/components/career/CareerManagement";
+import { CoachProfileCard, ObjectiveCard, ProgramCard, TrainingCard } from "@/components/career/CareerManagement";
 import CupCard from "@/components/career/CupCard";
 import { FlankDuelsCard } from "@/components/career/FlankDuels";
 import { CoachSpecCard, MoraleCard } from "@/components/career/Morale";
@@ -446,7 +446,10 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
             </>
           )}
           {prep === "training" && season.scouting && !season.live && hasTactics && catalog && (
-            <TrainingCard season={season} onView={onView} onError={onError} />
+            <>
+              <TrainingCard season={season} onView={onView} onError={onError} />
+              <ProgramCard season={season} onView={onView} onError={onError} />
+            </>
           )}
           {prep === "squad" && hasTactics && (
             <>
