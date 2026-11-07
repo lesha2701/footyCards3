@@ -130,6 +130,10 @@ Main features:
 - tasks/achievements (a `played:<mode>` metric counts finished games of any mode
   from its own rows on reading the tasks, no hook in the game), referrals,
   leaderboards and profile;
+- рекламные ссылки и «Подарок за возвращение»: `t.me/<bot>?startapp=penalty_vans` ведёт в
+  игру (`lib/startLink.ts`) и пишет метку в `users.acquisition_source`, итоги —
+  `backend/scripts/ad_source_stats.sql`; вернувшийся после `comeback_gift_days` получает
+  подарок раз в `comeback_gift_cooldown_days` (`comeback_gift_service.py`, бот предупреждает);
 - Telegram bot (notifications/reminders) and a React-based administrative panel.
 
 ## Stack

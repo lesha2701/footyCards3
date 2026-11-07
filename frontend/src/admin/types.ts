@@ -362,6 +362,11 @@ export interface GameConfig {
   bot_comeback_enabled: boolean;
   bot_comeback_days: number;
   bot_comeback_hour: number;
+  comeback_gift_enabled: boolean;
+  comeback_gift_days: number;
+  comeback_gift_cooldown_days: number;
+  comeback_gift_coins: number;
+  comeback_gift_pack_slug: string;
   shop_daily_offer_enabled: boolean;
   shop_daily_offer_discount_pct: number;
   shop_daily_offer_pack_id: number | null;

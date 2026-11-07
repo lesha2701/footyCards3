@@ -369,6 +369,11 @@ class GameConfigOut(BaseModel):
     bot_comeback_enabled: bool = True
     bot_comeback_days: int = 3
     bot_comeback_hour: int = 19
+    comeback_gift_enabled: bool = True
+    comeback_gift_days: int = 7
+    comeback_gift_cooldown_days: int = 30
+    comeback_gift_coins: int = 3000
+    comeback_gift_pack_slug: str = "elite"
     shop_daily_offer_enabled: bool = False
     shop_daily_offer_discount_pct: int = 25
     shop_daily_offer_pack_id: Optional[int] = None
@@ -1203,6 +1208,11 @@ class GameConfigUpdate(BaseModel):
     bot_comeback_enabled: Optional[bool] = None
     bot_comeback_days: Optional[int] = Field(default=None, ge=1, le=30)
     bot_comeback_hour: Optional[int] = Field(default=None, ge=0, le=23)
+    comeback_gift_enabled: Optional[bool] = None
+    comeback_gift_days: Optional[int] = Field(default=None, ge=1, le=90)
+    comeback_gift_cooldown_days: Optional[int] = Field(default=None, ge=1, le=365)
+    comeback_gift_coins: Optional[int] = Field(default=None, ge=0, le=100000)
+    comeback_gift_pack_slug: Optional[str] = Field(default=None, max_length=100)
     shop_daily_offer_enabled: Optional[bool] = None
     shop_daily_offer_discount_pct: Optional[int] = Field(default=None, ge=1, le=90)
     # 0 = rotate through active coin packs by date (stored as NULL).

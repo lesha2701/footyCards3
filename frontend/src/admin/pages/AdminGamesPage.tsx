@@ -217,6 +217,7 @@ export default function AdminGamesPage() {
       | "diamond_rating_cap_enabled"
       | "bot_daily_digest_enabled"
       | "bot_comeback_enabled"
+      | "comeback_gift_enabled"
       | "shop_daily_offer_enabled"
       | "club_league_enabled"
       | "career_enabled"
@@ -968,6 +969,27 @@ export default function AdminGamesPage() {
           {toggle("bot_comeback_enabled", "Включено")}
           {field("bot_comeback_days", "Через сколько дней без захода")}
           {field("bot_comeback_hour", "Час отправки (0–23)")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Подарок за возвращение</p>
+        <p className="mb-3 text-sm text-ink-mist">
+          Игрок, которого не было дольше порога, получает подарок при входе. Бот заранее пишет о нём вечером.
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {toggle("comeback_gift_enabled", "Включено")}
+          {field("comeback_gift_days", "Дней без захода")}
+          {field("comeback_gift_cooldown_days", "Не чаще, чем раз в дней")}
+          {field("comeback_gift_coins", "Монеты")}
+          <label className="col-span-2 block text-sm">
+            <span className="mb-1 block text-ink-mist">Пак (slug, пусто — без пака)</span>
+            <input
+              value={form.comeback_gift_pack_slug ?? ""}
+              onChange={(e) => setForm({ ...form, comeback_gift_pack_slug: e.target.value })}
+              className="w-full rounded-xl bg-bg-base px-3 py-2 text-ink-chalk"
+            />
+          </label>
         </div>
       </section>
 

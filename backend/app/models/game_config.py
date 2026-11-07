@@ -372,6 +372,13 @@ class GameConfig(TimestampMixin, Base):
     bot_comeback_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     bot_comeback_days: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     bot_comeback_hour: Mapped[int] = mapped_column(Integer, default=19, nullable=False)
+    # «Подарок за возвращение» (comeback_gift_service): a player away for
+    # comeback_gift_days+ gets it on return, at most once per cooldown.
+    comeback_gift_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    comeback_gift_days: Mapped[int] = mapped_column(Integer, default=7, nullable=False)
+    comeback_gift_cooldown_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    comeback_gift_coins: Mapped[int] = mapped_column(Integer, default=3000, nullable=False)
+    comeback_gift_pack_slug: Mapped[str] = mapped_column(String, default="elite", nullable=False)
     # Shop "предложение дня" (services/shop_offer_service.py): one coin pack a
     # day at a discount, once per player per day. pack_id = None rotates
     # through the active coin packs by date. Off by default.

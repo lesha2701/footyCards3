@@ -286,7 +286,10 @@ async def fetch_daily_digest_recipients(today: date) -> list[asyncpg.Record]:
 async def fetch_comeback_settings() -> Optional[asyncpg.Record]:
     pool = await get_pool()
     return await pool.fetchrow(
-        "SELECT bot_comeback_enabled, bot_comeback_days, bot_comeback_hour FROM game_config WHERE id = 1"
+        """SELECT bot_comeback_enabled, bot_comeback_days, bot_comeback_hour,
+                  comeback_gift_enabled, comeback_gift_days, comeback_gift_cooldown_days, comeback_gift_coins,
+                  (SELECT p.name FROM packs p WHERE p.slug = comeback_gift_pack_slug) AS comeback_gift_pack
+           FROM game_config WHERE id = 1"""
     )
 
 
@@ -308,6 +311,33 @@ async def fetch_comeback_recipients(days: int, limit: int = 2000) -> list[asyncp
            LIMIT $2""",
         days, limit,
     )
+
+
+async def fetch_comeback_gift_recipients(days: int, cooldown_days: int, limit: int = 2000) -> list[asyncpg.Record]:
+    """Players away long enough for the gift, under the same 30-day limit as
+    the ping, told once per absence, not within the gift's cooldown."""
+    pool = await get_pool()
+    return await pool.fetch(
+        """SELECT u.id, u.telegram_id, u.first_name
+           FROM users u
+           WHERE u.is_banned = false AND u.bot_blocked = false
+             AND u.last_seen_at IS NOT NULL
+             AND u.last_seen_at < now() - make_interval(days => $1)
+             AND u.last_seen_at > now() - interval '30 days'
+             AND (u.comeback_gift_sent_at IS NULL OR u.comeback_gift_sent_at < u.last_seen_at)
+             AND NOT EXISTS (
+                 SELECT 1 FROM comeback_gifts g
+                 WHERE g.user_id = u.id AND g.granted_at > now() - make_interval(days => $2)
+             )
+           ORDER BY u.last_seen_at DESC
+           LIMIT $3""",
+        days, cooldown_days, limit,
+    )
+
+
+async def mark_comeback_gift_sent(user_id: int) -> None:
+    pool = await get_pool()
+    await pool.execute("UPDATE users SET comeback_gift_sent_at = now() WHERE id = $1", user_id)
 
 
 async def mark_comeback_sent(user_id: int) -> None:

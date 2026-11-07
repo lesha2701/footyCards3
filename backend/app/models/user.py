@@ -277,6 +277,11 @@ class User(TimestampMixin, Base):
     # When the bot last sent «Возвращайся» (once per absence: only if the
     # player has been back since — last_seen_at after it).
     comeback_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The bot told them about the gift during this absence (bot/services/comeback.py).
+    comeback_gift_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Where the player came from: the label of the link first opened
+    # («penalty_vans»), set once at registration. An analytics label only.
+    acquisition_source: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     referral_reward_granted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Highest referral milestone (friends count) already paid (referral_service).
     referral_milestone_paid: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

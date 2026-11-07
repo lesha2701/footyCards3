@@ -7,12 +7,14 @@ import AdminPaySheet from "@/components/common/AdminPaySheet";
 import LoadingScreen from "@/components/common/LoadingScreen";
 import ErrorScreen from "@/components/common/ErrorScreen";
 import NewbieTaskWatcher from "@/components/newbie/NewbieTaskWatcher";
+import ComebackGiftPopup from "@/components/common/ComebackGiftPopup";
 import StreakRewardPopup from "@/components/common/StreakRewardPopup";
 import NewbieWelcome from "@/components/newbie/NewbieWelcome";
 import { createSession } from "@/api/auth";
 import { joinByInvite } from "@/api/clubs";
 import { useAuthStore } from "@/store/authStore";
 import { useUiStore } from "@/store/uiStore";
+import { startLink, takeStartPath } from "@/lib/startLink";
 import { getTelegramWebApp, initTelegramApp } from "@/lib/telegram";
 import { ApiRequestError } from "@/lib/api";
 import { hasSeenOnboarding, markOnboardingSeen } from "@/lib/onboarding";
@@ -204,7 +206,7 @@ export default function App() {
     let cancelled = false;
     const referralCode = new URLSearchParams(window.location.search).get("ref") ?? undefined;
     setError(null);
-    startSession((timeoutMs) => createSession(referralCode, timeoutMs))
+    startSession((timeoutMs) => createSession(referralCode, timeoutMs, startLink().source))
       .then((res) => {
         if (cancelled) return;
         setUser(res.user);
@@ -236,6 +238,14 @@ export default function App() {
       });
   }, [isReady, user, navigate]);
 
+  // An ad link: straight to its game. A new player gets there through the
+  // first pack (NewbieWelcome): a kick needs a card.
+  useEffect(() => {
+    if (!isReady || !user || !onboardingSeen) return;
+    const target = takeStartPath();
+    if (target) navigate(target, { replace: true });
+  }, [isReady, user, onboardingSeen, navigate]);
+
   if (error) return <ErrorScreen message={error} onRetry={() => setAttempt((n) => n + 1)} />;
   if (!isReady) return <LoadingScreen />;
 
@@ -256,6 +266,7 @@ export default function App() {
     <NewbieTaskWatcher />
     <AdminPaySheet />
     {!window.location.pathname.startsWith("/admin") && <StreakRewardPopup />}
+    {!window.location.pathname.startsWith("/admin") && <ComebackGiftPopup />}
     <Routes>
       <Route path="/admin" element={<AdminGuard><AdminLayout /></AdminGuard>}>
         <Route index element={<AdminDashboardPage />} />

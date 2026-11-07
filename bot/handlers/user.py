@@ -1,3 +1,5 @@
+import re
+
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
@@ -12,6 +14,7 @@ router = Router(name="user")
 # are private-chat only.
 router.message.filter(F.chat.type == "private")
 settings = get_bot_settings()
+SAFE_SOURCE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 
 HELP_TEXT = (
     "⚽ <b>VICTOR FC</b> — коллекционируй футболистов, открывай паки и играй!\n\n"
@@ -104,6 +107,18 @@ async def cmd_start(message: Message) -> None:
         keyboard = (
             open_app_keyboard(path=f"/play/penalty/open/{match_id}") if match_id.isdigit() else open_app_keyboard()
         )
+    elif payload and (payload == "penalty" or payload.startswith("penalty_") or payload.startswith("ad_")):
+        # An ad link through the bot; the app reads ?src= as it does Telegram's
+        # startapp (frontend lib/startLink.ts). Only the safe alphabet passes.
+        if payload.startswith("penalty") and SAFE_SOURCE.fullmatch(payload):
+            text = (
+                f"Привет, {message.from_user.first_name}! 👋\n\n"
+                "🥅 Ворота ждут. Один свайп — и мяч в сетке, а карточки и паки уже рядом.\n\n"
+                "Нажми кнопку ниже 👇"
+            )
+            keyboard = open_app_keyboard(query=f"?src={payload}", text="🥅 Пробить пенальти")
+        elif SAFE_SOURCE.fullmatch(payload):
+            keyboard = open_app_keyboard(query=f"?src={payload}")
     elif payload and payload.startswith("magnate_"):
         code = payload[len("magnate_"):]
         text = (

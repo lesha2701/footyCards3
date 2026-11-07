@@ -1,7 +1,9 @@
 """«Возвращайся»: one message to a player who hasn't opened the game for a
 few days (GameConfig.bot_comeback_*), once per absence — users.comeback_sent_at
 is set before sending, and a player only qualifies again after coming back
-(last_seen_at moves past it). Players gone 30+ days are left alone."""
+(last_seen_at moves past it). Players gone 30+ days are left alone. Later in
+the same absence a second message announces the «Подарок за возвращение»
+(backend comeback_gift_service), once — users.comeback_gift_sent_at."""
 import asyncio
 import html
 import logging
@@ -32,18 +34,24 @@ def comeback_text(first_name: Optional[str], free_pack_ready: bool) -> str:
     return f"{hello}\nВ VICTOR FC тебя ждут {waiting}. Загляни — это минута ⚽"
 
 
-async def _send(bot: Bot, user, rate_limiter: RateLimiter, retry: bool = True) -> None:
+def gift_text(first_name: Optional[str], coins: int, pack_name: Optional[str]) -> str:
+    name = html.escape(first_name.strip()) if first_name and first_name.strip() else ""
+    hello = f"🎁 {name}, тебе подарок!" if name else "🎁 Тебе подарок!"
+    pack = f"пак «{html.escape(pack_name)}»" if pack_name else ""
+    what = " и ".join(part for part in (f"{coins} монет" if coins else "", pack) if part)
+    return f"{hello}\nВозвращайся в VICTOR FC — {what} ждут тебя при входе ⚽"
+
+
+async def _send(bot: Bot, user, text: str, rate_limiter: RateLimiter, retry: bool = True) -> None:
     await rate_limiter.acquire()
     try:
-        await bot.send_message(
-            user["telegram_id"], comeback_text(user["first_name"], user["free_pack_ready"]), reply_markup=open_app_keyboard(),
-        )
+        await bot.send_message(user["telegram_id"], text, reply_markup=open_app_keyboard())
     except TelegramForbiddenError:
         await db.mark_bot_blocked(user["id"])
     except TelegramRetryAfter as exc:
         await asyncio.sleep(exc.retry_after)
         if retry:
-            await _send(bot, user, rate_limiter, retry=False)
+            await _send(bot, user, text, rate_limiter, retry=False)
     except TelegramAPIError as exc:
         logger.warning("Failed to send comeback to %s: %s", user["telegram_id"], exc)
 
@@ -56,11 +64,18 @@ async def run_comeback_loop(bot: Bot) -> None:
             config = await db.fetch_comeback_settings()
             now_local = datetime.now(tz)
             # Evenings only (after the hour, before midnight) — no 3 a.m. pings.
-            if config is not None and config["bot_comeback_enabled"] and now_local.hour >= config["bot_comeback_hour"]:
+            evening = config is not None and now_local.hour >= config["bot_comeback_hour"]
+            if evening and config["bot_comeback_enabled"]:
                 for user in await db.fetch_comeback_recipients(max(1, config["bot_comeback_days"])):
                     # Marked first: a crash mid-send must not ping anyone twice.
                     await db.mark_comeback_sent(user["id"])
-                    await _send(bot, user, rate_limiter)
+                    await _send(bot, user, comeback_text(user["first_name"], user["free_pack_ready"]), rate_limiter)
+            if evening and config["comeback_gift_enabled"]:
+                for user in await db.fetch_comeback_gift_recipients(
+                    max(1, config["comeback_gift_days"]), max(1, config["comeback_gift_cooldown_days"]),
+                ):
+                    await db.mark_comeback_gift_sent(user["id"])
+                    await _send(bot, user, gift_text(user["first_name"], config["comeback_gift_coins"], config["comeback_gift_pack"]), rate_limiter)
         except Exception:  # noqa: BLE001 - keep the loop alive across transient DB/network errors
             logger.exception("Comeback iteration failed")
         await asyncio.sleep(CHECK_INTERVAL_SECONDS)
