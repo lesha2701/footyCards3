@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
+import { ClubBackButton } from "@/components/clubs/ClubBackButton";
 import { fetchClubLeague } from "@/api/clubs";
 import { ClubLogo } from "@/components/clubs/ClubLogo";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconChevronLeft, IconClock, IconCoin, IconTrophy, IconUsers } from "@/components/icons";
+import { IconClock, IconCoin, IconTrophy, IconUsers } from "@/components/icons";
 import { DIVISION_STYLES } from "@/lib/clubDivisions";
 import type { ClubLeagueRow, ClubSeasonRow } from "@/types";
 
@@ -71,9 +72,7 @@ export default function ClubLeaguePage() {
 
   const header = (
     <div className="flex items-center gap-2">
-      <button onClick={() => navigate("/clubs")} className="rounded-full bg-bg-surface p-2 active:scale-95">
-        <IconChevronLeft size={18} className="text-ink-chalk" />
-      </button>
+      <ClubBackButton />
       <h1 className="font-display text-xl font-bold text-ink-chalk">Лига клубов</h1>
       {league?.division_names && league.division != null && (
         <span className={`ml-auto rounded-full px-3 py-1 text-caption font-bold ${(DIVISION_STYLES[league.division] ?? DIVISION_STYLES[0]).badge}`}>
@@ -176,6 +175,7 @@ export default function ClubLeaguePage() {
           </div>
         </div>
         <p className="mt-2 text-caption text-ink-mist-dim">
+          {league.lost_game_pct < 100 && <>Проигранная игра — {league.lost_game_pct}% очков. </>}
           Каждый участник приносит клубу до {league.member_weekly_cap} очков за неделю. Призовые места:{" "}
           {league.rewards.length} — монеты идут в бюджет клуба.
         </p>

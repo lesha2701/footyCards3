@@ -4,7 +4,10 @@ Points are not stored per event — they are derived on read from the tables
 that already record the activity, so no game/pack/task service needs a hook:
 
 - a finished mini-game session, Arena match, penalty duel or Tactico match
-  → `club_league_points_game` (both humans of a PvP duel score);
+  → `club_league_points_game` (both humans of a PvP duel score); a lost one
+  is worth `club_league_lost_game_pct` of that, and a mini-game lost faster
+  than `club_league_min_game_seconds` does not count, so throwing games away
+  is not a way to climb;
 - a pack bought for coins (`PackOpening.price_paid > 0`) or for Stars
   (a completed `StarsInvoice` with a pack) → `club_league_points_pack`;
 - a completed task → `club_league_points_task`.
@@ -25,7 +28,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, literal, not_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,6 +38,7 @@ from app.models.club_league import ClubLeagueResult, ClubLeagueWeek, ClubSeasonR
 from app.models.enums import (
     ClubBudgetTransactionType,
     GameSessionStatus,
+    MatchResult,
     MatchStatus,
     MordoboiMatchStatus,
     NotificationType,
@@ -86,6 +90,8 @@ def week_bounds(week_start: date) -> tuple[datetime, datetime]:
 @dataclass
 class _Tally:
     games: int = 0
+    # How many of `games` were lost (club_league_lost_game_pct).
+    lost: int = 0
     packs: int = 0
     tasks: int = 0
 
@@ -97,16 +103,25 @@ class _ClubTally:
     members: dict[int, int] = field(default_factory=dict)
 
 
+def _seconds_between(db: AsyncSession, start, end):
+    """SQL seconds from `start` to `end` — SQLite (the test DB) has no intervals."""
+    if db.get_bind().dialect.name == "sqlite":
+        return (func.julianday(end) - func.julianday(start)) * 86400
+    return func.extract("epoch", end - start)
+
+
 async def _activity(
     db: AsyncSession, start: datetime, end: datetime, club_id: Optional[int] = None,
 ) -> dict[tuple[int, int], _Tally]:
     """(club_id, user_id) -> counts for every member of every active club
     (or of one club) with activity in [start, end) after they joined."""
     tallies: dict[tuple[int, int], _Tally] = {}
+    config = await get_config(db)
 
-    async def add(kind: str, user_col, ts_col, *conditions) -> None:
+    async def add(kind: str, user_col, ts_col, *conditions, lost=None) -> None:
+        lost_count = func.sum(case((lost, 1), else_=0)) if lost is not None else literal(0)
         query = (
-            select(ClubMember.club_id, ClubMember.user_id, func.count())
+            select(ClubMember.club_id, ClubMember.user_id, func.count(), lost_count)
             .select_from(ClubMember)
             .join(Club, Club.id == ClubMember.club_id)
             .join(ts_col.class_, user_col == ClubMember.user_id)
@@ -119,28 +134,57 @@ async def _activity(
         )
         if club_id is not None:
             query = query.where(ClubMember.club_id == club_id)
-        for cid, uid, count in (await db.execute(query)).all():
+        for cid, uid, count, lost_games in (await db.execute(query)).all():
             tally = tallies.setdefault((cid, uid), _Tally())
             setattr(tally, kind, getattr(tally, kind) + count)
+            tally.lost += int(lost_games or 0)
 
-    finished_session = GameSession.status.in_([GameSessionStatus.won, GameSessionStatus.lost, GameSessionStatus.rewarded])
-    await add("games", GameSession.user_id, GameSession.created_at, finished_session)
-    await add("games", Match.user_id, Match.created_at, Match.status == MatchStatus.finished)
+    def duel_lost(model, user_col):
+        # `result` is from the point of view of the match's `user_id`.
+        return model.result == (MatchResult.loss if user_col is model.user_id else MatchResult.win)
+
+    session_lost = GameSession.status == GameSessionStatus.lost
+    played_seconds = _seconds_between(db, GameSession.created_at, GameSession.finished_at)
+    await add(
+        "games", GameSession.user_id, GameSession.created_at,
+        GameSession.status.in_([GameSessionStatus.won, GameSessionStatus.lost, GameSessionStatus.rewarded]),
+        or_(
+            not_(session_lost), GameSession.finished_at.is_(None),
+            played_seconds >= max(0, config.club_league_min_game_seconds),
+        ),
+        lost=session_lost,
+    )
+    await add("games", Match.user_id, Match.created_at, Match.status == MatchStatus.finished, lost=Match.result == MatchResult.loss)
     for user_col in (PenaltyMatch.user_id, PenaltyMatch.opponent_user_id):
-        await add("games", user_col, PenaltyMatch.resolved_at, PenaltyMatch.status == PenaltyMatchStatus.finished)
+        await add(
+            "games", user_col, PenaltyMatch.resolved_at, PenaltyMatch.status == PenaltyMatchStatus.finished,
+            lost=duel_lost(PenaltyMatch, user_col),
+        )
     for user_col in (TacticoMatch.user_id, TacticoMatch.opponent_user_id):
-        await add("games", user_col, TacticoMatch.resolved_at, TacticoMatch.status == TacticoMatchStatus.finished)
+        await add(
+            "games", user_col, TacticoMatch.resolved_at, TacticoMatch.status == TacticoMatchStatus.finished,
+            lost=duel_lost(TacticoMatch, user_col),
+        )
     for user_col in (MordoboiMatch.user_id, MordoboiMatch.opponent_user_id):
-        await add("games", user_col, MordoboiMatch.resolved_at, MordoboiMatch.status == MordoboiMatchStatus.finished)
+        await add(
+            "games", user_col, MordoboiMatch.resolved_at, MordoboiMatch.status == MordoboiMatchStatus.finished,
+            lost=duel_lost(MordoboiMatch, user_col),
+        )
     await add("packs", PackOpening.user_id, PackOpening.created_at, PackOpening.price_paid > 0)
     await add("packs", StarsInvoice.user_id, StarsInvoice.completed_at, StarsInvoice.pack_id.is_not(None))
     await add("tasks", UserTask.user_id, UserTask.completed_at)
     return tallies
 
 
+def game_points(tally: _Tally, config) -> int:
+    """Points for the member's games: a lost one is worth a share of a full one."""
+    full = (tally.games - tally.lost) * config.club_league_points_game
+    return full + tally.lost * config.club_league_points_game * config.club_league_lost_game_pct // 100
+
+
 def _member_points(tally: _Tally, config) -> int:
     raw = (
-        tally.games * config.club_league_points_game
+        game_points(tally, config)
         + tally.packs * config.club_league_points_pack
         + tally.tasks * config.club_league_points_task
     )
@@ -181,6 +225,7 @@ async def _shown_table(db: AsyncSession, week_start: date, config, division: int
     key = (
         week_start, division, config.club_league_points_game, config.club_league_points_pack,
         config.club_league_points_task, config.club_league_member_weekly_cap,
+        config.club_league_lost_game_pct, config.club_league_min_game_seconds,
     )
     hit = _table_cache.get(key)
     now = _time.monotonic()
@@ -419,7 +464,8 @@ async def get_league(db: AsyncSession, user: User) -> ClubLeagueOut:
         division=division, division_names=DIVISION_NAMES,
         division_reward_pct=int(pct[division]) if division < len(pct) else 100,
         week_start=week, ends_at=end,
-        points_game=config.club_league_points_game, points_pack=config.club_league_points_pack,
+        points_game=config.club_league_points_game, lost_game_pct=config.club_league_lost_game_pct,
+        points_pack=config.club_league_points_pack,
         points_task=config.club_league_points_task, member_weekly_cap=config.club_league_member_weekly_cap,
         rewards=[_reward_for(i, config, division) for i in range(1, len(config.club_league_rewards or []) + 1)],
         clubs_count=len(table),

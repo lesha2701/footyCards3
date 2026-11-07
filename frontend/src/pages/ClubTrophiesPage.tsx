@@ -2,9 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { fetchClubTrophies } from "@/api/clubFeatures";
+import { ClubBackButton } from "@/components/clubs/ClubBackButton";
 import { ClubLogo } from "@/components/clubs/ClubLogo";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconChevronLeft, IconFlagCheckered, IconStar, IconTarget, IconTrophy } from "@/components/icons";
+import { IconFlagCheckered, IconStar, IconTarget, IconTrophy } from "@/components/icons";
 import { DIVISION_STYLES } from "@/lib/clubDivisions";
 
 const date = (iso: string) => new Date(iso).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit" });
@@ -19,9 +20,10 @@ function Stat({ value, label, className = "text-ink-chalk" }: { value: number | 
 }
 
 /** «Трофейная комната» клуба — сезоны лиги, подиумы недель, турниры, задания, войны. */
-export default function ClubTrophiesPage() {
+export default function ClubTrophiesPage({ clubId }: { clubId?: number }) {
   const navigate = useNavigate();
-  const { id } = useParams();
+  const params = useParams();
+  const id = String(clubId ?? params.id);
   const { data: t, isLoading } = useQuery({ queryKey: ["clubs", "trophies", id], queryFn: () => fetchClubTrophies(Number(id)) });
   if (isLoading || !t) return <ListSkeleton />;
   const division = DIVISION_STYLES[t.division] ?? DIVISION_STYLES[0];
@@ -29,9 +31,7 @@ export default function ClubTrophiesPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
-        <button onClick={() => navigate(-1)} className="rounded-full bg-bg-surface p-2 active:scale-95">
-          <IconChevronLeft size={18} className="text-ink-chalk" />
-        </button>
+        <ClubBackButton onBack={() => navigate(-1)} />
         <h1 className="font-display text-xl font-bold text-ink-chalk">Трофейная комната</h1>
       </div>
 

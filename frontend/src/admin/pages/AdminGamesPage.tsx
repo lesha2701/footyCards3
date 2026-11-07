@@ -509,6 +509,8 @@ export default function AdminGamesPage() {
           {field("club_league_points_game", "Очки за игру / матч")}
           {field("club_league_points_pack", "Очки за покупку пака")}
           {field("club_league_points_task", "Очки за задание")}
+          {field("club_league_lost_game_pct", "Проигранная игра, % от очков")}
+          {field("club_league_min_game_seconds", "Мини-игра проиграна быстрее — не считается, сек")}
           {listField("club_league_rewards", "Награды за места, монеты в бюджет клуба")}
           {listField("club_league_division_reward_pct", "Множитель наград по лигам Бронза, Серебро, Золото, %")}
           {field("club_league_season_weeks", "Сезон, недель")}
@@ -534,7 +536,11 @@ export default function AdminGamesPage() {
           {field("club_war_win_budget", "Победа: в бюджет клуба")}
           {field("club_war_draw_budget", "Ничья: в бюджет клуба")}
           {field("club_war_loss_budget", "Поражение: в бюджет клуба")}
-          {field("club_war_win_member_coins", "Победа: монет каждому участнику")}
+          {field("club_war_win_member_coins", "Победа: монет участнику")}
+          {field("club_war_min_points", "Минимум очков для личной награды")}
+          {field("club_reward_min_tenure_hours", "Стаж для наград войн, заданий и рейдов, ч")}
+          {field("club_rejoin_cooldown_hours", "Пауза после выхода из клуба, ч")}
+          {field("club_captain_absent_days", "Передать капитанство после отсутствия, дней (0 — выкл.)")}
           {field("club_ring_win_points", "«Клубный ринг»: очков за победу в «Мордобое»")}
           {field("club_ring_member_cap", "«Клубный ринг»: максимум очков с игрока")}
         </div>

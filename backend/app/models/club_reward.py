@@ -6,7 +6,7 @@ of a rarity, a badge and/or a cosmetic — per member."""
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -18,7 +18,7 @@ class ClubRewardGrant(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     club_id: Mapped[int] = mapped_column(ForeignKey("clubs.id", ondelete="CASCADE"), nullable=False)
-    # "shop" | "quest" | "war"
+    # "shop" | "quest" | "war" | "raid"
     source: Mapped[str] = mapped_column(String(16), nullable=False)
     source_ref_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     title: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -29,6 +29,9 @@ class ClubRewardGrant(Base):
     cosmetic_id: Mapped[Optional[int]] = mapped_column(ForeignKey("cosmetics.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Only these users may claim (a war win: members who earned enough points).
+    # NULL = every member.
+    eligible_user_ids: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     __table_args__ = (Index("ix_club_reward_grants_club_id_expires", "club_id", "expires_at"),)
 

@@ -1,8 +1,9 @@
 import secrets
+import math
 from datetime import datetime, time, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -278,9 +279,26 @@ async def get_club_detail(db: AsyncSession, club_id: int, requester_user_id: int
     return await _club_to_detail(db, club, requester_user_id=requester_user_id)
 
 
+def _rejoin_hours_left(user: User, config, now: Optional[datetime] = None) -> int:
+    """Whole hours until a player who left a club may join another (0 = may)."""
+    if user.club_left_at is None:
+        return 0
+    left_at = user.club_left_at if user.club_left_at.tzinfo else user.club_left_at.replace(tzinfo=timezone.utc)
+    ends_at = left_at + timedelta(hours=max(0, config.club_rejoin_cooldown_hours))
+    remaining = (ends_at - (now or datetime.now(timezone.utc))).total_seconds()
+    return math.ceil(remaining / 3600) if remaining > 0 else 0
+
+
+async def _require_rejoin_allowed(db: AsyncSession, user: User) -> None:
+    hours = _rejoin_hours_left(user, await get_config(db))
+    if hours:
+        raise ConflictError(f"После выхода из клуба новый можно выбрать через {hours} ч")
+
+
 async def join_open_club(db: AsyncSession, user: User, club_id: int) -> ClubDetailOut:
     if await _get_membership(db, user.id) is not None:
         raise ConflictError("Ты уже состоишь в клубе")
+    await _require_rejoin_allowed(db, user)
     club = await _lock_club(db, club_id)
     if club.is_disbanded:
         raise NotFoundError("Клуб не найден")
@@ -306,6 +324,7 @@ async def join_open_club(db: AsyncSession, user: User, club_id: int) -> ClubDeta
 async def create_join_request(db: AsyncSession, user: User, club_id: int) -> ClubJoinRequestOut:
     if await _get_membership(db, user.id) is not None:
         raise ConflictError("Ты уже состоишь в клубе")
+    await _require_rejoin_allowed(db, user)
     club = await db.get(Club, club_id)
     if club is None or club.is_disbanded:
         raise NotFoundError("Клуб не найден")
@@ -376,6 +395,9 @@ async def respond_to_join_request(db: AsyncSession, actor: User, request_id: int
     if accept:
         if await _get_membership(db, request.user_id) is not None:
             raise ConflictError("Игрок уже состоит в другом клубе")
+        applicant = await db.get(User, request.user_id)
+        if applicant is not None and _rejoin_hours_left(applicant, await get_config(db)):
+            raise ConflictError("Игрок недавно вышел из другого клуба — прими заявку позже")
         if await _member_count(db, club.id) >= MAX_MEMBERS:
             raise ConflictError("В клубе нет свободных мест")
         request.status = ClubJoinRequestStatus.accepted
@@ -466,6 +488,8 @@ async def _disband_or_soft_disband(db: AsyncSession, club: Club) -> None:
 async def leave_club(db: AsyncSession, user: User) -> None:
     membership = await _require_membership(db, user.id)
     club = await _lock_club(db, membership.club_id)
+    # An UPDATE, not an attribute: disbanding below commits on its own path.
+    await db.execute(update(User).where(User.id == user.id).values(club_left_at=datetime.now(timezone.utc)))
 
     if membership.role == ClubRole.captain:
         successor = await _promote_longest_tenured_assistant(db, club)
@@ -612,6 +636,57 @@ async def transfer_captain(db: AsyncSession, captain: User, target_user_id: int)
     return await _club_to_detail(db, club, requester_user_id=captain.id)
 
 
+async def replace_absent_captains(db: AsyncSession, now: Optional[datetime] = None) -> int:
+    """Hands the armband of every captain away for `club_captain_absent_days`
+    to the first active member: vice-captain, assistants, then the longest
+    in the club. A club with nobody active is left as it is. The absence is
+    re-read under the club lock, so a repeated or concurrent sweep is a
+    no-op. Returns how many clubs changed captain."""
+    config = await get_config(db)
+    if config.club_captain_absent_days <= 0:
+        return 0
+    now = now or datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=config.club_captain_absent_days)
+    last_seen = func.coalesce(User.last_seen_at, User.created_at)
+    club_ids = (await db.execute(
+        select(Club.id).join(User, User.id == Club.captain_id).where(Club.is_disbanded.is_(False), last_seen < cutoff)
+    )).scalars().all()
+
+    role_order = case(
+        (ClubMember.role == ClubRole.vice_captain, 0), (ClubMember.role == ClubRole.assistant, 1), else_=2,
+    )
+    transferred = 0
+    for club_id in club_ids:
+        club = await _lock_club(db, club_id)
+        captain_seen = (await db.execute(select(last_seen).where(User.id == club.captain_id))).scalar_one()
+        if captain_seen.tzinfo is None:
+            captain_seen = captain_seen.replace(tzinfo=timezone.utc)
+        successor = (await db.execute(
+            select(ClubMember).join(User, User.id == ClubMember.user_id)
+            .where(ClubMember.club_id == club_id, ClubMember.user_id != club.captain_id, last_seen >= cutoff)
+            .order_by(role_order, ClubMember.joined_at, ClubMember.id).limit(1)
+        )).scalar_one_or_none()
+        old = await _get_membership(db, club.captain_id)
+        if club.is_disbanded or captain_seen >= cutoff or successor is None or old is None:
+            await db.rollback()
+            continue
+        old.role = ClubRole.member
+        successor.role = ClubRole.captain
+        club.captain_id = successor.user_id
+        db.add_all([old, successor, club])
+        await notify(
+            db, successor.user_id, NotificationType.club_captain_transferred, "Ты теперь капитан",
+            f"Капитан «{club.name}» давно не заходил — клуб теперь ведёшь ты",
+        )
+        await notify(
+            db, old.user_id, NotificationType.club_captain_transferred, "Капитанство передано",
+            f"Тебя не было {config.club_captain_absent_days} дней, поэтому капитаном «{club.name}» стал другой участник",
+        )
+        await db.commit()
+        transferred += 1
+    return transferred
+
+
 async def disband_club(db: AsyncSession, captain: User) -> None:
     membership = await _require_membership(db, captain.id)
     if membership.role != ClubRole.captain:
@@ -630,6 +705,7 @@ async def disband_club(db: AsyncSession, captain: User) -> None:
 async def join_by_invite(db: AsyncSession, user: User, invite_code: str) -> ClubDetailOut:
     if await _get_membership(db, user.id) is not None:
         raise ConflictError("Ты уже состоишь в клубе")
+    await _require_rejoin_allowed(db, user)
     result = await db.execute(select(Club).where(Club.invite_code == invite_code).with_for_update())
     club = result.scalar_one_or_none()
     if club is None or club.is_disbanded:

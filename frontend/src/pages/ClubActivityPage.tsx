@@ -1,12 +1,12 @@
+import { ClubBackButton } from "@/components/clubs/ClubBackButton";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { CLUB_ROLE_LABELS, isClubManager } from "@/lib/clubRoles";
 
 import { fetchClubActivity, fetchMyClub, remindMember } from "@/api/clubs";
 import EmptyState from "@/components/common/EmptyState";
-import { IconBrain, IconChevronLeft, IconGift, IconUsers } from "@/components/icons";
+import { IconBrain, IconGift, IconUsers } from "@/components/icons";
 import { ApiRequestError } from "@/lib/api";
 import { hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -14,7 +14,6 @@ import { useAuthStore } from "@/store/authStore";
 const ACTIVITY_WINDOW_DAYS = 7;
 
 export default function ClubActivityPage() {
-  const navigate = useNavigate();
   const userId = useAuthStore((s) => s.user?.id);
   const queryClient = useQueryClient();
   const [remindedIds, setRemindedIds] = useState<Set<number>>(new Set());
@@ -44,9 +43,7 @@ export default function ClubActivityPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
-        <button onClick={() => navigate("/clubs")} className="rounded-full bg-bg-surface p-2 active:scale-95">
-          <IconChevronLeft size={18} className="text-ink-chalk" />
-        </button>
+        <ClubBackButton />
         <h1 className="font-display text-xl font-bold text-ink-chalk">Активность клуба</h1>
       </div>
 

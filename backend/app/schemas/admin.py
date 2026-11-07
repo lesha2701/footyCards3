@@ -376,6 +376,8 @@ class GameConfigOut(BaseModel):
     club_league_points_game: int = 2
     club_league_points_pack: int = 5
     club_league_points_task: int = 3
+    club_league_lost_game_pct: int = 50
+    club_league_min_game_seconds: int = 20
     club_league_member_weekly_cap: int = 200
     club_league_rewards: list[int] = []
     career_enabled: bool = True
@@ -887,6 +889,10 @@ class GameConfigOut(BaseModel):
     club_war_draw_budget: int = 1500
     club_war_loss_budget: int = 500
     club_war_win_member_coins: int = 200
+    club_war_min_points: int = 10
+    club_reward_min_tenure_hours: int = 24
+    club_rejoin_cooldown_hours: int = 24
+    club_captain_absent_days: int = 14
     weekly_cup_enabled: bool = True
     weekly_cup_games: list[str] = []
     weekly_cup_best_of: int = 5
@@ -1205,6 +1211,8 @@ class GameConfigUpdate(BaseModel):
     club_league_points_game: Optional[int] = Field(default=None, ge=0, le=1000)
     club_league_points_pack: Optional[int] = Field(default=None, ge=0, le=1000)
     club_league_points_task: Optional[int] = Field(default=None, ge=0, le=1000)
+    club_league_lost_game_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    club_league_min_game_seconds: Optional[int] = Field(default=None, ge=0, le=3600)
     club_league_member_weekly_cap: Optional[int] = Field(default=None, ge=1)
     # Club budget coins by weekly place (index 0 = 1st); places past the list get nothing.
     club_league_rewards: Optional[list[Annotated[int, Field(ge=0)]]] = Field(default=None, min_length=1, max_length=50)
@@ -1768,6 +1776,10 @@ class GameConfigUpdate(BaseModel):
     club_war_draw_budget: Optional[int] = Field(default=None, ge=0, le=10000000)
     club_war_loss_budget: Optional[int] = Field(default=None, ge=0, le=10000000)
     club_war_win_member_coins: Optional[int] = Field(default=None, ge=0, le=10000000)
+    club_war_min_points: Optional[int] = Field(default=None, ge=0, le=100000)
+    club_reward_min_tenure_hours: Optional[int] = Field(default=None, ge=0, le=720)
+    club_rejoin_cooldown_hours: Optional[int] = Field(default=None, ge=0, le=720)
+    club_captain_absent_days: Optional[int] = Field(default=None, ge=0, le=365)
     weekly_cup_enabled: Optional[bool] = None
     weekly_cup_games: Optional[list[Literal["penalty", "free_kick", "memory", "saboteur", "pairs"]]] = Field(
         default=None, min_length=1, max_length=10,

@@ -10,8 +10,8 @@ No scheduler of its own: `sweep` (bot every few minutes via
 /internal/clubs/wars/sweep, and lazily when anyone opens the war screen)
 pairs the week once — the `club_war_rounds` primary key makes a concurrent
 second pairing roll back — and settles every finished war under its row
-lock: budget prizes, a reward every member of the winner claims, Elo update
-and notifications."""
+lock: budget prizes, a reward the winner's members with at least
+`club_war_min_points` claim, Elo update and notifications."""
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 
@@ -29,7 +29,7 @@ from app.models.user import User
 from app.schemas.club_war import ClubWarMemberOut, ClubWarOut, ClubWarSideOut, ClubWarSummaryOut
 from app.services.club_budget_service import credit_club_budget
 from app.services.club_emblem_service import emblem_out
-from app.services.club_league_service import _activity, week_start_for
+from app.services.club_league_service import _activity, game_points, week_start_for
 from app.services.club_reward_service import create_grant
 from app.services.game_config_service import get_config
 from app.services.notification_service import notify
@@ -56,7 +56,7 @@ def window_for(week: date, config: GameConfig) -> tuple[datetime, datetime]:
 
 def _member_points(tally, config: GameConfig) -> int:
     raw = (
-        tally.games * config.club_league_points_game
+        game_points(tally, config)
         + tally.packs * config.club_league_points_pack
         + tally.tasks * config.club_league_points_task
     )
@@ -180,9 +180,12 @@ async def settle_due(db: AsyncSession, now: Optional[datetime] = None) -> int:
                 text += f". В казну +{prize}"
             await _notify_club(db, club.id, NotificationType.club_war_finished, title, text)
             if war.winner_club_id == club.id:
+                # Past settlement nobody's points change, so the list is final.
+                earned = [uid for uid, v in scores[club.id].items() if v[3] >= config.club_war_min_points]
                 await create_grant(
                     db, club.id, "war", f"Победа над «{opponent.name}»",
                     Bundle(coins=config.club_war_win_member_coins), source_ref_id=war.id, notify_members=False,
+                    eligible_user_ids=earned if config.club_war_min_points > 0 else None,
                 )
         await db.commit()
         settled += 1
@@ -251,6 +254,7 @@ async def get_war(db: AsyncSession, user: User) -> ClubWarOut:
         member_count=member_count, war_rating=my_club.war_rating,
         win_budget=config.club_war_win_budget, draw_budget=config.club_war_draw_budget,
         loss_budget=config.club_war_loss_budget, win_member_coins=config.club_war_win_member_coins,
+        min_points=config.club_war_min_points, reward_tenure_hours=config.club_reward_min_tenure_hours,
         history=history,
     )
     if war is None:

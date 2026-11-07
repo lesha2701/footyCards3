@@ -3,9 +3,10 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { ClubBackButton } from "@/components/clubs/ClubBackButton";
 import { attackClubRaid, fetchClubRaid, type ClubRaid } from "@/api/events";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconChevronLeft, IconClock, IconCoin } from "@/components/icons";
+import { IconClock, IconCoin } from "@/components/icons";
 import { RewardBundleChips } from "@/components/rewards/RewardBundleView";
 import { formatGameError } from "@/lib/errors";
 import { formatCountdown } from "@/lib/format";
@@ -46,9 +47,7 @@ export default function ClubRaidPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
-        <button onClick={() => navigate("/clubs")} className="rounded-full bg-bg-surface p-2 active:scale-95" aria-label="Назад">
-          <IconChevronLeft size={18} className="text-ink-chalk" />
-        </button>
+        <ClubBackButton />
         <h1 className="font-display text-xl font-bold text-ink-chalk">Клубный рейд</h1>
         <span className="ml-auto flex shrink-0 items-center gap-1 text-caption text-ink-mist-dim">
           <IconClock size={12} /> {secondsLeft >= 86400 ? `${Math.floor(secondsLeft / 86400)} д ${Math.floor((secondsLeft % 86400) / 3600)} ч` : formatCountdown(secondsLeft)}
@@ -142,7 +141,7 @@ export default function ClubRaidPage() {
           <RewardBundleChips bundle={data.reward} />
         </div>
         {data.defeated && (
-          <button onClick={() => navigate("/clubs/shop")} className="rounded-xl bg-floodlight py-2.5 text-xs font-bold text-bg-base active:scale-95">
+          <button onClick={() => navigate("/clubs?sheet=shop")} className="rounded-xl bg-floodlight py-2.5 text-xs font-bold text-bg-base active:scale-95">
             Забрать награду
           </button>
         )}

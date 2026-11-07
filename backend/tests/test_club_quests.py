@@ -50,7 +50,7 @@ async def test_quest_goal_scales_and_completes_once(client, db_session, bot_toke
     m_h, member = await _register(client, db_session, 910001, bot_token)
     await client.post(f"/api/v1/clubs/{club_id}/join", headers=m_h)
     for row in (await db_session.execute(select(ClubMember).where(ClubMember.club_id == club_id))).scalars():
-        row.joined_at = row.joined_at - timedelta(hours=1)
+        row.joined_at = row.joined_at - timedelta(hours=25)
     await db_session.commit()
     budget = (await db_session.get(Club, club_id)).budget
 

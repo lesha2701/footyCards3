@@ -164,6 +164,10 @@ export interface GameConfig {
   club_war_draw_budget: number;
   club_war_loss_budget: number;
   club_war_win_member_coins: number;
+  club_war_min_points: number;
+  club_reward_min_tenure_hours: number;
+  club_rejoin_cooldown_hours: number;
+  club_captain_absent_days: number;
   weekly_cup_enabled: boolean;
   weekly_cup_games: string[];
   weekly_cup_best_of: number;
@@ -365,6 +369,8 @@ export interface GameConfig {
   club_league_points_game: number;
   club_league_points_pack: number;
   club_league_points_task: number;
+  club_league_lost_game_pct: number;
+  club_league_min_game_seconds: number;
   club_league_member_weekly_cap: number;
   club_league_rewards: number[];
   career_enabled: boolean;

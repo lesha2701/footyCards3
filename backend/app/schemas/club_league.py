@@ -66,6 +66,7 @@ class ClubLeagueOut(BaseModel):
     week_start: date
     ends_at: datetime
     points_game: int
+    lost_game_pct: int = 100
     points_pack: int
     points_task: int
     member_weekly_cap: int

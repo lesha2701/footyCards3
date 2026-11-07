@@ -105,7 +105,7 @@ async def get_surplus(db: AsyncSession, user: User) -> ClubSurplusOut:
 async def _lock_for_change(db: AsyncSession, user: User, card_ids: list[int]) -> tuple[Club, list[ClubCard], GameConfig]:
     config = await get_config(db)
     if not config.club_card_market_enabled:
-        raise ConflictError("Продажа и обмен клубных карт сейчас недоступны")
+        raise ConflictError("Продажа и слив клубных карт сейчас недоступны")
     membership = await _membership(db, user.id)
     from app.services.club_service import require_budget_spender
 
@@ -123,7 +123,7 @@ async def _lock_for_change(db: AsyncSession, user: User, card_ids: list[int]) ->
     if len(cards) != len(card_ids):
         raise NotFoundError("Карта не найдена в клубе")
     if await protected_card_ids(db, club.id) & set(card_ids):
-        raise ConflictError("Карту из состава нельзя продать или обменять — сначала убери её из всех составов")
+        raise ConflictError("Карту из состава нельзя продать или слить — сначала убери её из всех составов")
     return club, list(cards), config
 
 
@@ -143,9 +143,9 @@ async def sell_cards(db: AsyncSession, user: User, card_ids: list[int]) -> Surpl
 async def exchange_cards(db: AsyncSession, user: User, card_ids: list[int]) -> ClubPackOpenResult:
     club, cards, config = await _lock_for_change(db, user, card_ids)
     if len(cards) != config.club_card_exchange_count:
-        raise ConflictError(f"Для обмена нужно ровно {config.club_card_exchange_count} карт")
+        raise ConflictError(f"Для слива нужно ровно {config.club_card_exchange_count} карт")
     pack = await exchange_pack(db, config)
     if pack is None:
-        raise ConflictError("Сейчас нет клубного пака для обмена")
+        raise ConflictError("Сейчас нет клубного пака для слива")
     await db.execute(delete(ClubCard).where(ClubCard.id.in_(card_ids)))
     return await mint_opening(db, club, pack, user.id, 0, None)

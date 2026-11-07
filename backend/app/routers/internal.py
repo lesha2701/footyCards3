@@ -6,7 +6,7 @@ from app.database import get_db
 from app.schemas.auction import AuctionSweepResult
 from app.schemas.chat_pack import ChatPackOpenIn
 from app.schemas.club_league import ClubLeagueSettleResult
-from app.schemas.club_war import ClubWarSweepResult
+from app.schemas.club_war import ClubCaptainSweepResult, ClubWarSweepResult
 from app.schemas.magnate import MagnateSweepResult
 from app.schemas.pack import PackOpenResult
 from app.schemas.stars import (
@@ -115,6 +115,15 @@ async def settle_club_league(slot_key: str | None = None, db: AsyncSession = Dep
     """Called by the bot at its career slots: pays out last week's «Лига
     клубов» once. Repeated calls are no-ops (club_league_weeks primary key)."""
     return ClubLeagueSettleResult(clubs_rewarded=await club_league_service.settle_due(db))
+
+
+@router.post("/clubs/captains/sweep", response_model=ClubCaptainSweepResult)
+async def sweep_club_captains(slot_key: str | None = None, db: AsyncSession = Depends(get_db)):
+    """Called by the bot every hour: replaces captains who have been away
+    for `club_captain_absent_days`. Repeated calls are no-ops."""
+    from app.services import club_service
+
+    return ClubCaptainSweepResult(transferred=await club_service.replace_absent_captains(db))
 
 
 @router.post("/clubs/wars/sweep", response_model=ClubWarSweepResult)

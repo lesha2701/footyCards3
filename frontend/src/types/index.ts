@@ -2343,6 +2343,7 @@ export interface ClubLeague {
   week_start: string;
   ends_at: string;
   points_game: number;
+  lost_game_pct: number;
   points_pack: number;
   points_task: number;
   member_weekly_cap: number;
@@ -2526,6 +2527,8 @@ export interface ClubWar {
   draw_budget: number;
   loss_budget: number;
   win_member_coins: number;
+  min_points: number;
+  reward_tenure_hours: number;
   war_id: number | null;
   me: ClubWarSide | null;
   opponent: ClubWarSide | null;

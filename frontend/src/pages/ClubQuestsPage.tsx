@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
+import { ClubBackButton } from "@/components/clubs/ClubBackButton";
 import { fetchClubQuests } from "@/api/clubFeatures";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconCheck, IconChevronLeft, IconClock, IconCoin, IconTarget } from "@/components/icons";
+import { IconCheck, IconClock, IconCoin, IconTarget } from "@/components/icons";
 import { RewardBundleChips } from "@/components/rewards/RewardBundleView";
 import { formatCountdown } from "@/lib/format";
 
@@ -19,9 +20,7 @@ export default function ClubQuestsPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
-        <button onClick={() => navigate("/clubs")} className="rounded-full bg-bg-surface p-2 active:scale-95">
-          <IconChevronLeft size={18} className="text-ink-chalk" />
-        </button>
+        <ClubBackButton />
         <h1 className="font-display text-xl font-bold text-ink-chalk">Задания недели</h1>
         <span className="ml-auto flex items-center gap-1 text-caption text-ink-mist-dim">
           <IconClock size={12} /> {formatCountdown(secondsLeft)}
@@ -63,7 +62,7 @@ export default function ClubQuestsPage() {
       })}
 
       {data.quests.some((q) => q.completed) && (
-        <button onClick={() => navigate("/clubs/shop")} className="rounded-xl bg-floodlight py-2.5 text-xs font-bold text-bg-base active:scale-95">
+        <button onClick={() => navigate("/clubs?sheet=shop")} className="rounded-xl bg-floodlight py-2.5 text-xs font-bold text-bg-base active:scale-95">
           Забрать награды
         </button>
       )}

@@ -388,6 +388,10 @@ class GameConfig(TimestampMixin, Base):
     club_league_points_pack: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     club_league_points_task: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     club_league_member_weekly_cap: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+    # A lost game is worth this % of club_league_points_game; a mini-game lost
+    # faster than club_league_min_game_seconds does not count at all.
+    club_league_lost_game_pct: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    club_league_min_game_seconds: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
     club_league_rewards: Mapped[list] = mapped_column(
         JSON, default=lambda: [1500, 1000, 750, 500, 400, 300, 200, 150, 100, 100], nullable=False,
     )
@@ -1427,6 +1431,15 @@ class GameConfig(TimestampMixin, Base):
     club_war_draw_budget: Mapped[int] = mapped_column(Integer, default=1500, nullable=False)
     club_war_loss_budget: Mapped[int] = mapped_column(Integer, default=500, nullable=False)
     club_war_win_member_coins: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+    # War points a member needs to claim the win reward (0 = everyone).
+    club_war_min_points: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    # War, quest and raid rewards go to members who joined at least this long
+    # before the reward appeared; leaving a club blocks joining another for
+    # club_rejoin_cooldown_hours (a kick or a disband does not).
+    club_reward_min_tenure_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
+    club_rejoin_cooldown_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
+    # A captain away this long loses the armband to an active member (0 = off).
+    club_captain_absent_days: Mapped[int] = mapped_column(Integer, default=14, nullable=False)
 
     # --- «Экипировка» (services/equipment_service.py) ---
     # Off = the shop and equipping are closed and worn things give nothing.

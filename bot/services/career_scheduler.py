@@ -86,6 +86,20 @@ async def run_club_league_loop() -> None:
 
 
 CLUB_WAR_SWEEP_SECONDS = 300
+CLUB_CAPTAIN_SWEEP_SECONDS = 3600
+
+
+async def run_club_captain_loop() -> None:
+    """Every hour: hands the armband of a long-absent club captain to an
+    active member. Idempotent backend-side."""
+    while True:
+        try:
+            data = await _post_internal("/clubs/captains/sweep", datetime.now(ZoneInfo(settings.timezone)).isoformat())
+            if data.get("transferred"):
+                logger.info("Club captains sweep: %s", data)
+        except Exception:  # noqa: BLE001 - keep the loop alive across transient HTTP/network errors
+            logger.exception("Club captains loop iteration failed")
+        await asyncio.sleep(CLUB_CAPTAIN_SWEEP_SECONDS)
 
 
 async def run_club_war_loop() -> None:

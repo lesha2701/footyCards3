@@ -38,6 +38,8 @@ class User(TimestampMixin, Base):
 
     received_starting_bonus: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # When the player last left a club themselves (club_rejoin_cooldown_hours).
+    club_left_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Card Arena stats
     matches_won: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

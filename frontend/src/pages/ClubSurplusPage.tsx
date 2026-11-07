@@ -83,7 +83,7 @@ export default function ClubSurplusPage() {
         Карты из составов защищены. Помни: в турнире запасные выходят вместо дисквалифицированных — оставь пару игроков на скамейке.
       </p>
       {!data.can_manage && <p className="text-xs text-ink-mist-dim">Продавать и сливать карты могут капитан, вице-капитан, казначей и ассистенты.</p>}
-      {!data.enabled && <p className="text-xs text-ink-mist-dim">Продажа и обмен временно недоступны.</p>}
+      {!data.enabled && <p className="text-xs text-ink-mist-dim">Продажа и слив карт временно недоступны.</p>}
 
       <div className="flex gap-1 rounded-xl bg-bg-surface p-1">
         {([["sell", "Продать в казну"], ["burn", `${need} карт → пак`]] as [Mode, string][]).map(([id, label]) => (
@@ -110,7 +110,7 @@ export default function ClubSurplusPage() {
               </p>
             </div>
           ) : (
-            <p className="text-xs text-ink-mist">Сейчас нет клубного пака для обмена.</p>
+            <p className="text-xs text-ink-mist">Сейчас нет клубного пака для слива.</p>
           )}
         </div>
       )}

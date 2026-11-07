@@ -4,6 +4,9 @@ the «Клубный магазин», weekly club quests and club wars.
 A `ClubRewardGrant` holds a reward bundle; every member who was already in
 the club when it was created (joined_at <= created_at — so nobody joins a
 club just to collect what it bought) may claim it once before it expires.
+War, quest and raid rewards also want `club_reward_min_tenure_hours` in the
+club, since their moment can be seen coming (a mercenary joining a minute
+before a war ends), and a grant may name its `eligible_user_ids`.
 Claiming locks the member's user row and grants the bundle through
 reward_bundle_service; the (grant_id, user_id) unique constraint is what
 makes a double-tap or a retry a no-op."""
@@ -22,11 +25,14 @@ from app.models.user import User
 from app.schemas.club_reward import ClubRewardOut
 from app.schemas.monetization import GrantedRewardsOut
 from app.services import reward_bundle_service
+from app.services.game_config_service import get_config
 from app.services.notification_service import notify
 from app.services.reward_bundle_service import Bundle
 from app.services.wallet_service import lock_user_for_update
 
 CLAIM_DAYS = 7
+# A shop purchase is the captain's own call and cannot be timed from outside.
+TENURE_SOURCES = ("war", "quest", "raid")
 
 
 def _now() -> datetime:
@@ -40,6 +46,7 @@ def _aware(value: datetime) -> datetime:
 async def create_grant(
     db: AsyncSession, club_id: int, source: str, title: str, bundle: Bundle,
     source_ref_id: Optional[int] = None, notify_members: bool = True, notify_text: Optional[str] = None,
+    eligible_user_ids: Optional[list[int]] = None,
 ) -> Optional[ClubRewardGrant]:
     """Flushes a grant (an empty bundle creates nothing) and tells the
     members; the caller commits."""
@@ -50,13 +57,14 @@ async def create_grant(
         club_id=club_id, source=source, source_ref_id=source_ref_id, title=title,
         coins=bundle.coins, pack_id=bundle.pack_id, card_rarity=bundle.card_rarity,
         badge_id=bundle.badge_id, cosmetic_id=bundle.cosmetic_id,
-        created_at=now, expires_at=now + timedelta(days=CLAIM_DAYS),
+        created_at=now, expires_at=now + timedelta(days=CLAIM_DAYS), eligible_user_ids=eligible_user_ids,
     )
     db.add(grant)
     await db.flush()
     if notify_members:
-        member_ids = (await db.execute(select(ClubMember.user_id).where(ClubMember.club_id == club_id))).scalars().all()
-        for member_id in member_ids:
+        members = (await db.execute(select(ClubMember).where(ClubMember.club_id == club_id))).scalars().all()
+        tenure_hours = (await get_config(db)).club_reward_min_tenure_hours
+        for member_id in (m.user_id for m in members if _can_claim(grant, m, tenure_hours)):
             await notify(
                 db, member_id, NotificationType.club_reward_available, "🎁 Награда клуба",
                 notify_text or f"«{title}» — забери свою награду в клубе", related_object_type="club_reward_grant",
@@ -70,6 +78,18 @@ def _bundle_of(grant: ClubRewardGrant) -> Bundle:
         coins=grant.coins, pack_id=grant.pack_id, card_rarity=grant.card_rarity,
         badge_id=grant.badge_id, cosmetic_id=grant.cosmetic_id,
     )
+
+
+def _tenure_ok(grant: ClubRewardGrant, membership: ClubMember, tenure_hours: int) -> bool:
+    if grant.source not in TENURE_SOURCES:
+        return True
+    return _aware(grant.created_at) >= _aware(membership.joined_at) + timedelta(hours=max(0, tenure_hours))
+
+
+def _can_claim(grant: ClubRewardGrant, membership: ClubMember, tenure_hours: int) -> bool:
+    if grant.eligible_user_ids is not None and membership.user_id not in grant.eligible_user_ids:
+        return False
+    return _tenure_ok(grant, membership, tenure_hours)
 
 
 async def _eligible_query(membership: ClubMember):
@@ -86,8 +106,14 @@ async def _eligible_query(membership: ClubMember):
     )
 
 
-async def unclaimed(db: AsyncSession, membership: ClubMember) -> list[ClubRewardOut]:
+async def _eligible(db: AsyncSession, membership: ClubMember) -> list[ClubRewardGrant]:
+    tenure_hours = (await get_config(db)).club_reward_min_tenure_hours
     grants = (await db.execute(await _eligible_query(membership))).scalars().all()
+    return [g for g in grants if _can_claim(g, membership, tenure_hours)]
+
+
+async def unclaimed(db: AsyncSession, membership: ClubMember) -> list[ClubRewardOut]:
+    grants = await _eligible(db, membership)
     return [
         ClubRewardOut(
             id=g.id, source=g.source, title=g.title, reward=await reward_bundle_service.describe(db, _bundle_of(g)),
@@ -98,7 +124,7 @@ async def unclaimed(db: AsyncSession, membership: ClubMember) -> list[ClubReward
 
 
 async def unclaimed_count(db: AsyncSession, membership: ClubMember) -> int:
-    return len((await db.execute(await _eligible_query(membership))).scalars().all())
+    return len(await _eligible(db, membership))
 
 
 async def claim(db: AsyncSession, user: User, grant_id: int) -> GrantedRewardsOut:
@@ -108,6 +134,11 @@ async def claim(db: AsyncSession, user: User, grant_id: int) -> GrantedRewardsOu
         raise NotFoundError("Награда не найдена")
     if _aware(grant.created_at) < _aware(membership.joined_at):
         raise ConflictError("Эта награда — для тех, кто был в клубе раньше")
+    if grant.eligible_user_ids is not None and user.id not in grant.eligible_user_ids:
+        raise ConflictError("Эта награда — для тех, кто набрал достаточно очков в войне")
+    tenure_hours = (await get_config(db)).club_reward_min_tenure_hours
+    if not _tenure_ok(grant, membership, tenure_hours):
+        raise ConflictError(f"Эта награда — для тех, кто в клубе дольше {tenure_hours} ч")
     if _aware(grant.expires_at) <= _now():
         raise ConflictError("Срок получения награды истёк")
 

@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 
+import { ClubBackButton } from "@/components/clubs/ClubBackButton";
 import { buyClubShopItem, claimClubReward, fetchClubShop } from "@/api/clubFeatures";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconChevronLeft, IconCoin, IconGift, IconShop } from "@/components/icons";
+import { IconCoin, IconGift, IconShop } from "@/components/icons";
 import { GrantedRewardModal, RewardBundleChips } from "@/components/rewards/RewardBundleView";
 import { formatGameError } from "@/lib/errors";
 import { hapticNotify } from "@/lib/telegram";
@@ -17,7 +17,6 @@ const SOURCE_LABELS: Record<string, string> = { shop: "Магазин", quest: "
 /** «Клубный магазин»: клуб тратит бюджет — каждый участник забирает награду себе.
  * Здесь же — все невостребованные награды клуба (магазин, задания, войны). */
 export default function ClubShopPage() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const updateBalance = useAuthStore((s) => s.updateBalance);
   const { data: shop, isLoading } = useQuery({ queryKey: ["clubs", "shop"], queryFn: fetchClubShop });
@@ -52,9 +51,7 @@ export default function ClubShopPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
-        <button onClick={() => navigate("/clubs")} className="rounded-full bg-bg-surface p-2 active:scale-95">
-          <IconChevronLeft size={18} className="text-ink-chalk" />
-        </button>
+        <ClubBackButton />
         <h1 className="font-display text-xl font-bold text-ink-chalk">Клубный магазин</h1>
         <span className="ml-auto flex items-center gap-1 font-mono text-sm font-bold text-accent-lime">
           <IconCoin size={14} /> {shop.budget}
