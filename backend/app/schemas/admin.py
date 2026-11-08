@@ -934,8 +934,9 @@ class GameConfigOut(BaseModel):
     anti_bot_enabled: bool = True
     anti_bot_max_streak_hours: int = 20
     anti_bot_rest_hours: int = 4
-    ranked_daily_limit: int = 40
+    ranked_daily_limit: int = 30
     presence_check_enabled: bool = True
+    weekly_rating_reset_enabled: bool = True
     presence_check_minutes: int = 60
     presence_check_max_wrong: int = 3
     presence_check_lock_minutes: int = 60
@@ -1685,6 +1686,7 @@ class GameConfigUpdate(BaseModel):
     anti_bot_rest_hours: Optional[int] = Field(default=None, ge=1, le=24)
     ranked_daily_limit: Optional[int] = Field(default=None, ge=0, le=1000)
     presence_check_enabled: Optional[bool] = None
+    weekly_rating_reset_enabled: Optional[bool] = None
     presence_check_minutes: Optional[int] = Field(default=None, ge=5, le=1440)
     presence_check_max_wrong: Optional[int] = Field(default=None, ge=1, le=20)
     presence_check_lock_minutes: Optional[int] = Field(default=None, ge=1, le=1440)

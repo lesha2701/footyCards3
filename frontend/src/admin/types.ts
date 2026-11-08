@@ -865,6 +865,7 @@ export interface GameConfig {
   anti_bot_rest_hours: number;
   ranked_daily_limit: number;
   presence_check_enabled: boolean;
+  weekly_rating_reset_enabled: boolean;
   presence_check_minutes: number;
   presence_check_max_wrong: number;
   presence_check_lock_minutes: number;

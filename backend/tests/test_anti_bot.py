@@ -196,3 +196,14 @@ async def test_three_wrong_answers_pause_rewards(client, db_session, bot_token):
     assert resp.get("locked_until")
     await db_session.refresh(user)
     assert user.presence_challenge is None and user.game_rewards_blocked is True  # resting
+
+
+async def test_limits_show_the_modes_whose_ranked_matches_are_used_up(client, db_session, bot_token):
+    from app.core.timeutil import local_today
+
+    user, headers = await _presence_user(client, db_session, bot_token, 990321)
+    config = await get_config(db_session)
+    user.ranked_today = {"day": local_today().isoformat(), "arena": config.ranked_daily_limit, "tactico": 1}
+    await db_session.commit()
+    limits = (await client.get("/api/v1/games/limits", headers=headers)).json()
+    assert limits["ranked_done"] == ["arena"] and limits["ranked_limit"] == config.ranked_daily_limit == 30

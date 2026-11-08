@@ -55,7 +55,7 @@ function playerTournamentStatusLabel(status?: string, queuePosition?: number | n
   }
 }
 
-type LimitKey = Exclude<keyof GameLimits, "hourly_limit" | "free_kick_hourly_limit" | "resets_at" | "rest_until" | "rest_hours">;
+type LimitKey = Exclude<keyof GameLimits, "hourly_limit" | "free_kick_hourly_limit" | "resets_at" | "rest_until" | "rest_hours" | "ranked_limit" | "ranked_done">;
 type Group = "quick" | "tactics" | "long";
 type Filter = "all" | Group | "friend" | "favs";
 
@@ -344,6 +344,14 @@ export default function PlayPage() {
         </p>
       )}
 
+      {!limits?.rest_until && !!limits?.ranked_done?.length && (
+        <p className="rounded-2xl border border-sky-400/30 bg-sky-400/10 px-3 py-2.5 text-xs text-sky-100" role="status">
+          🏆 Сегодня ты сыграл {limits.ranked_limit} рейтинговых матчей в:{" "}
+          {games.filter((g) => g.limitKey && limits.ranked_done!.includes(g.limitKey)).map((g) => g.title).join(", ")}. Там
+          можно играть дальше и получать награды, но рейтинг снова начнёт расти завтра.
+        </p>
+      )}
+
       {now.length > 0 && (
         <section>
           <h2 className="mb-2 font-mono text-caption uppercase tracking-wider text-ink-mist">Сейчас</h2>
@@ -425,6 +433,7 @@ export default function PlayPage() {
             remaining={g.limitKey ? limits?.[g.limitKey] : undefined}
             limit={g.limitKey === "free_kick" ? (limits?.free_kick_hourly_limit ?? limits?.hourly_limit) : limits?.hourly_limit}
             resetsAt={g.limitKey ? limits?.resets_at?.[g.limitKey] : undefined}
+            rankedDone={!!g.limitKey && !!limits?.ranked_done?.includes(g.limitKey)}
           />
         ))}
         {!shown.length && (
@@ -438,7 +447,7 @@ export default function PlayPage() {
 }
 
 function GameRow({
-  game, fav, onToggleFav, onClick, remaining, limit, resetsAt,
+  game, fav, onToggleFav, onClick, remaining, limit, resetsAt, rankedDone,
 }: {
   game: GameDef;
   fav: boolean;
@@ -447,6 +456,8 @@ function GameRow({
   remaining?: number;
   limit?: number;
   resetsAt?: string;
+  /** The daily ranked matches of this mode are used up: rating waits for tomorrow. */
+  rankedDone?: boolean;
 }) {
   const { Icon } = game;
   const used = remaining === 0;
@@ -473,6 +484,7 @@ function GameRow({
             {game.friend && <span>👥 с другом</span>}
             {game.bot && <span>🤖 с ботом</span>}
             {game.stat && <span className="font-mono">{game.stat}</span>}
+            {rankedDone && <span className="text-sky-300">рейтинг — завтра</span>}
           </span>
         </span>
         <span className="shrink-0 text-right">

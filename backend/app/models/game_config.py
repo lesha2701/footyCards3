@@ -1248,15 +1248,19 @@ class GameConfig(TimestampMixin, Base):
     stake_daily_profit_cap: Mapped[int] = mapped_column(Integer, default=2000, nullable=False)
     # Anti-bot (services/anti_bot_service.py): after max_streak_hours of play
     # without a rest_hours break, games stop paying and rating until the
-    # player rests rest_hours. ranked_daily_limit: Card Arena / Тактико
-    # matches a day that move points / rating (0 = no limit).
+    # player rests rest_hours. ranked_daily_limit: matches a day per rating
+    # mode that move points / rating (0 = no limit).
     anti_bot_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     anti_bot_max_streak_hours: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
     anti_bot_rest_hours: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
-    ranked_daily_limit: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
+    ranked_daily_limit: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     # «Ты здесь?» (services/presence_service.py): every N minutes of continuous
     # play; max wrong answers in a row before rewards pause for lock_minutes.
     presence_check_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Every Monday, right after «Топ недели» pays the closed week, the game
+    # ratings start over (weekly_top_service.reset_ratings) — the top is
+    # about this week, not about who has been grinding the longest.
+    weekly_rating_reset_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     presence_check_minutes: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
     presence_check_max_wrong: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     presence_check_lock_minutes: Mapped[int] = mapped_column(Integer, default=60, nullable=False)

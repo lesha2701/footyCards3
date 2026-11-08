@@ -208,6 +208,7 @@ export default function AdminGamesPage() {
       | "trade_coins_enabled"
       | "anti_bot_enabled"
       | "presence_check_enabled"
+      | "weekly_rating_reset_enabled"
       | "trade_cards_both_sides"
       | "club_war_enabled"
       | "blackjack_enabled"
@@ -1535,6 +1536,13 @@ export default function AdminGamesPage() {
           значения. «Игр / звёзд / рефералов за неделю» считаются за прошедшую неделю.
         </p>
         <div className="mb-3">{toggle("weekly_top_enabled", "Награды топа недели включены")}</div>
+        <div className="mb-3">
+          {toggle("weekly_rating_reset_enabled", "Обнулять рейтинги игр каждый понедельник (после раздачи наград)")}
+          <p className="mt-1 text-xs text-ink-mist">
+            Арена, Тактико, Пенальти, Стратего, Мордобой — в 0, Контратака — в 1000. Дивизионы Арены и полученные
+            награды лиг не трогаются.
+          </p>
+        </div>
         <div className="mb-3 grid grid-cols-2 gap-3">{field("weekly_top_size", "Сколько мест награждать")}</div>
         <p className="mb-1 text-xs text-slate-400">Рейтинги с наградами (ничего не отмечено — все)</p>
         <div className="mb-3 grid grid-cols-2 gap-1 sm:grid-cols-3">

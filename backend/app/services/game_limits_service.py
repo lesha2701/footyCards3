@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from app.core.timeutil import ensure_aware
+from app.core.timeutil import ensure_aware, local_today
 from app.models.game_config import GameConfig
 from app.models.user import User
 from app.schemas.game import GameLimitsOut
@@ -33,6 +33,15 @@ def _resets_at(user: User, limit: int, free_kick_limit: int) -> dict[str, dateti
     return resets
 
 
+def _ranked_done(user: User, config: GameConfig) -> list[str]:
+    from app.services.anti_bot_service import RANKED_MODES
+
+    data = user.ranked_today or {}
+    if config.ranked_daily_limit <= 0 or data.get("day") != local_today().isoformat():
+        return []
+    return [mode for mode in RANKED_MODES if int(data.get(mode, 0)) >= config.ranked_daily_limit]
+
+
 def get_remaining_plays(user: User, config: GameConfig) -> GameLimitsOut:
     limit = config.hourly_game_limit
     free_kick_limit = config.free_kick_hourly_limit
@@ -44,6 +53,8 @@ def get_remaining_plays(user: User, config: GameConfig) -> GameLimitsOut:
     return GameLimitsOut(
         rest_until=rest_until,
         rest_hours=config.anti_bot_rest_hours,
+        ranked_limit=config.ranked_daily_limit,
+        ranked_done=_ranked_done(user, config),
         hourly_limit=limit,
         free_kick_hourly_limit=free_kick_limit,
         resets_at=_resets_at(user, limit, free_kick_limit),

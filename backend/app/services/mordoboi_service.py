@@ -778,14 +778,15 @@ def _reward_for(result: MatchResult, config: GameConfig) -> int:
 
 async def _grant_reward(
     db: AsyncSession, user: User, result: MatchResult, config: GameConfig, match_id: int, pct: int, ko: bool,
-) -> int:
+) -> tuple[int, bool]:
+    """(coins, whether the bout fit in today's rewarded attempts)."""
     _ensure_daily_reset(user)
     from app.services.club_pass_service import extra_rewarded_attempts
 
     limit = config.mordoboi_daily_limit + await extra_rewarded_attempts(db, user.id, config)
     if user.game_rewards_blocked or user.mordoboi_rewarded_attempts_today >= limit:
         db.add(user)
-        return 0
+        return 0, False
     base = _reward_for(result, config) + (config.mordoboi_reward_ko_bonus if ko and result == MatchResult.win else 0)
     reward = round(base * pct / 100)
     user.mordoboi_rewarded_attempts_today += 1
@@ -795,7 +796,7 @@ async def _grant_reward(
             f"Награда за бой в «Мордобое» ({result.value})", RELATED, match_id,
         )
     db.add(user)
-    return reward
+    return reward, True
 
 
 async def _finish_match(
@@ -833,10 +834,12 @@ async def _finish_match(
             delta = min(0, _BASE_RATING_DELTA[side_result[side]] * multiplier)
         else:
             pct = config.mordoboi_bot_easy_reward_pct if easy else 100
-            reward = await _grant_reward(db, locked[uid], side_result[side], config, match.id, pct, reason == "ko")
+            reward, rewarded = await _grant_reward(db, locked[uid], side_result[side], config, match.id, pct, reason == "ko")
             delta = _BASE_RATING_DELTA[side_result[side]] * multiplier
             if easy and delta > 1:
                 delta = 1  # the easy bot is no rating farm (same rule as Stratego)
+            if is_bot and not rewarded:
+                delta = 0  # past today's rewarded bouts the bot is no rating farm either
         if not anti_bot_service.take_ranked_slot(locked[uid], config, "mordoboi"):
             delta = 0  # daily ranked limit / resting (anti_bot_service)
         locked[uid].mordoboi_rating = max(0, locked[uid].mordoboi_rating + delta)

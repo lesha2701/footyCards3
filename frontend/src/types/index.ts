@@ -1007,6 +1007,9 @@ export interface GameLimits {
   /** Anti-bot «усталость»: games don't pay coins / rating until then. */
   rest_until?: string | null;
   rest_hours?: number;
+  /** Rating modes (limit keys) whose daily ranked matches are used up today. */
+  ranked_limit?: number;
+  ranked_done?: string[];
 }
 
 export interface ArenaLeaderboardEntry {
@@ -4044,6 +4047,7 @@ export interface WeeklyTopInfo {
   places: WeeklyTopPlace[];
   metrics: RankingMetric[];
   starting_values: Partial<Record<RankingMetric, number>>;
+  resetting?: RankingMetric[];
 }
 
 /** «Карты за звёзды»: a footballer card on sale for Telegram Stars. */
