@@ -243,6 +243,18 @@ async def test_no_cards_no_bout(client, db_session, bot_token):
     assert (await client.post(f"{API}/matches/bot", headers=headers)).status_code == 409
 
 
+async def test_bot_bouts_past_the_daily_rewarded_limit_move_no_rating(client, db_session, bot_token):
+    await _set_config(db_session, mordoboi_rounds=1, mordoboi_exchanges_per_round=1, mordoboi_daily_limit=1)
+    headers, _, _ = await _player(client, db_session, bot_token, 980016)
+    for expected in (3, 0):  # the 2nd bout of the day is past the cap: no coins, no rating
+        match = (await client.post(f"{API}/matches/bot", headers=headers)).json()
+        await _rewrite_state(db_session, match["id"], _ko_ready)
+        end = (await _pick(client, headers, match, "jab")).json()
+        assert end["result"] == "win" and end["rating_delta"] == expected
+    db_session.expire_all()
+    assert (await get_user_by_telegram_id(db_session, 980016)).mordoboi_rating == 3
+
+
 async def test_bot_bout_resolves_each_pick_and_hides_nothing_unfair(client, db_session, bot_token):
     headers, _, _ = await _player(client, db_session, bot_token, 980005)
     match = (await client.post(f"{API}/matches/bot", headers=headers)).json()

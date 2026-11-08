@@ -946,6 +946,15 @@ class GameConfigOut(BaseModel):
     stake_max_coins: int = 500
     stake_pair_daily_limit: int = 2
     stake_daily_profit_cap: int = 2000
+    anti_bot_enabled: bool = True
+    anti_bot_max_streak_hours: int = 20
+    anti_bot_rest_hours: int = 4
+    ranked_daily_limit: int = 30
+    presence_check_enabled: bool = True
+    weekly_rating_reset_enabled: bool = True
+    presence_check_minutes: int = 60
+    presence_check_max_wrong: int = 3
+    presence_check_lock_minutes: int = 60
     trade_verified_min_age_days: int = 3
     trade_verified_min_active_days: int = 0
     trade_verified_min_stars: int = 49
@@ -1702,6 +1711,15 @@ class GameConfigUpdate(BaseModel):
     stake_max_coins: Optional[int] = Field(default=None, ge=0, le=1_000_000)
     stake_pair_daily_limit: Optional[int] = Field(default=None, ge=0, le=100)
     stake_daily_profit_cap: Optional[int] = Field(default=None, ge=0)
+    anti_bot_enabled: Optional[bool] = None
+    anti_bot_max_streak_hours: Optional[int] = Field(default=None, ge=4, le=72)
+    anti_bot_rest_hours: Optional[int] = Field(default=None, ge=1, le=24)
+    ranked_daily_limit: Optional[int] = Field(default=None, ge=0, le=1000)
+    presence_check_enabled: Optional[bool] = None
+    weekly_rating_reset_enabled: Optional[bool] = None
+    presence_check_minutes: Optional[int] = Field(default=None, ge=5, le=1440)
+    presence_check_max_wrong: Optional[int] = Field(default=None, ge=1, le=20)
+    presence_check_lock_minutes: Optional[int] = Field(default=None, ge=1, le=1440)
     trade_verified_min_age_days: Optional[int] = Field(default=None, ge=0, le=365)
     trade_verified_min_active_days: Optional[int] = Field(default=None, ge=0, le=365)
     trade_verified_min_stars: Optional[int] = Field(default=None, ge=0, le=100_000)

@@ -45,6 +45,7 @@ from app.schemas.kontra import (
     KontraUnitOut,
 )
 from app.schemas.ranking import RankingMetric
+from app.services import anti_bot_service
 from app.services import kontra_catalog as catalog
 from app.services import kontra_engine as engine
 from app.services import my_player_service, ranking_service
@@ -696,6 +697,8 @@ async def _finish(db: AsyncSession, battle: KontraBattle, state: dict, config: G
         won = state["winner"] == "me"
         battle.result = "win" if won else "loss"
         delta = config.kontra_rating_win if won else -config.kontra_rating_loss
+        if not anti_bot_service.take_ranked_slot(user, config, "kontra"):
+            delta = 0  # daily ranked limit / resting (anti_bot_service)
         user.kontra_rating = max(0, user.kontra_rating + delta)
         battle.rating_delta = delta
         _ensure_daily_reset(user)

@@ -81,18 +81,22 @@ def points_preview(points: int, opponent_points: int, config) -> dict:
     return {r.value: points_change(points, opponent_points, r, config) for r in MatchResult}
 
 
-async def apply_result(db: AsyncSession, locked_user: User, opponent_points: int, result: MatchResult, config) -> dict:
+async def apply_result(
+    db: AsyncSession, locked_user: User, opponent_points: int, result: MatchResult, config, ranked: bool = True,
+) -> dict:
     """Moves the (already row-locked) user on the ladder and grants the
     first-reach reward of every division newly reached. The caller commits.
     Returns the audit dict stored as server_state["ladder"]."""
     before = locked_user.arena_points
     division_before = division_of(before, config)
-    delta = points_change(before, opponent_points, result, config)
+    # Unranked (daily ranked limit reached, or resting — anti_bot_service):
+    # the match plays and pays as usual but doesn't move the ladder.
+    delta = points_change(before, opponent_points, result, config) if ranked else 0
     after = max(0, before + delta)
 
     shield_used = False
     shield = locked_user.arena_shield_matches
-    if shield > 0:
+    if shield > 0 and ranked:
         floor = thresholds(config)[division_before - 1]
         if after < floor:
             after, shield_used = floor, True

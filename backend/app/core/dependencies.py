@@ -200,6 +200,10 @@ async def get_current_user(
     user = await _get_or_create_user(db, tg_user, referral_code=x_referral_code, start_source=x_start_source)
     if user.is_banned:
         raise ForbiddenError("This account has been banned")
+    from app.services import anti_bot_service
+
+    if anti_bot_service.is_game_action(request.method, request.url.path):
+        await anti_bot_service.track_play(db, user)
     return user
 
 

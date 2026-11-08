@@ -9,14 +9,17 @@ every few minutes and the Mini App settles lazily on GET /weekly-top/awards.
 The WeeklyTopRun primary key makes a week settle exactly once. Standings
 (ratings, collection sizes) are read when the week is settled — a few
 minutes into Monday; the weekly boards count the closed week itself.
+Right after paying, the game ratings start over for the new week
+(reset_ratings, GameConfig.weekly_rating_reset_enabled).
 """
 import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.models.enums import CardSource, NotificationType, TransactionType
 from app.models.game_config import GameConfig
@@ -110,10 +113,30 @@ async def settle(db: AsyncSession, week_start: date) -> int:
             paid += 1
     run.winners = paid
     db.add(run)
+    if config.weekly_rating_reset_enabled:
+        await reset_ratings(db)
     await db.commit()
     if paid:
         logger.info("Weekly top %s settled: %s places paid", week_start, paid)
     return paid
+
+
+# Game ratings that start over every week, and their starting value.
+WEEKLY_RATINGS = {
+    "arena_rating": 0, "tactics_rating": 0, "penalty_rating": 0,
+    "stratego_rating": 0, "mordoboi_rating": 0, "kontra_rating": 1000,
+}
+
+
+async def reset_ratings(db: AsyncSession) -> None:
+    """The new week starts from scratch: called inside settle(), after the
+    closed week's standings are read and paid, in the same transaction (so
+    a week is paid and reset exactly once). Claimed league tiers stay claimed
+    — climbing back never pays a tier twice."""
+    await db.execute(update(User).values(**WEEKLY_RATINGS).execution_options(synchronize_session=False))
+    for user in [o for o in db.identity_map.values() if isinstance(o, User)]:
+        for column, value in WEEKLY_RATINGS.items():
+            set_committed_value(user, column, value)
 
 
 async def _award(
@@ -234,4 +257,6 @@ async def info(db: AsyncSession) -> WeeklyTopInfoOut:
         enabled=config.weekly_top_enabled, size=size, ends_at=ends_at, places=places,
         metrics=[m.value for m in metrics_for(config)],
         starting_values={m.value: v for m in RankingMetric if (v := ranking_service.starting_value(m))},
+        # The league board is the sum of three of them, so it starts over too.
+        resetting=[*WEEKLY_RATINGS, RankingMetric.league_rating.value] if config.weekly_rating_reset_enabled else [],
     )

@@ -1007,6 +1007,12 @@ export interface GameLimits {
   fergie_time?: number;
   /** Exhausted games only: when the hourly cap frees up again. */
   resets_at?: Partial<Record<string, string>>;
+  /** Anti-bot «усталость»: games don't pay coins / rating until then. */
+  rest_until?: string | null;
+  rest_hours?: number;
+  /** Rating modes (limit keys) whose daily ranked matches are used up today. */
+  ranked_limit?: number;
+  ranked_done?: string[];
 }
 
 export interface ArenaLeaderboardEntry {
@@ -2413,6 +2419,7 @@ export interface Club {
   can_spend_budget?: boolean;
   wall_unread?: number | null;
   rewards_unclaimed?: number | null;
+  games_rewards_left?: { game: number; penalty: number; position_match: number } | null;
   cups_count: number;
   stars_count: number;
   daily_reward_seconds_remaining: number | null;
@@ -4043,6 +4050,7 @@ export interface WeeklyTopInfo {
   places: WeeklyTopPlace[];
   metrics: RankingMetric[];
   starting_values: Partial<Record<RankingMetric, number>>;
+  resetting?: RankingMetric[];
 }
 
 /** «Карты за звёзды»: a footballer card on sale for Telegram Stars. */

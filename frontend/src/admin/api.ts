@@ -264,6 +264,33 @@ export async function resetUserLimits(userId: number) {
   await api.post(`/admin/users/${userId}/reset-limits`);
 }
 
+export interface BotSuspect {
+  id: number;
+  username: string | null;
+  registered: string | null;
+  games: number;
+  active_hours_per_day: number;
+  days_without_sleep: number;
+  longest_break_hours: number;
+  median_seconds_between: number;
+  arena_points: number;
+  tactics_rating: number;
+  balance: number;
+  stars_paid: number;
+  rewards_blocked: boolean;
+  resting: boolean;
+}
+
+export async function fetchBotSuspects(params: { days: number; min_games: number }): Promise<BotSuspect[]> {
+  const { data } = await api.get<BotSuspect[]>("/admin/antifraud/bots", { params });
+  return data;
+}
+
+export async function setRewardsBlocked(userIds: number[], blocked: boolean): Promise<{ changed: number }> {
+  const { data } = await api.post<{ changed: number }>("/admin/antifraud/rewards-block", { user_ids: userIds, blocked });
+  return data;
+}
+
 export async function toggleRewardBlock(userId: number): Promise<AdminUser> {
   const { data } = await api.post<AdminUser>(`/admin/users/${userId}/toggle-reward-block`);
   return data;

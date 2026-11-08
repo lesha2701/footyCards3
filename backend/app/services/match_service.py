@@ -36,6 +36,7 @@ from app.schemas.match import (
 )
 from app.schemas.lineup import LineupOut
 from app.services import (
+    anti_bot_service,
     arena_cup_service,
     arena_ladder_service,
     arena_moments,
@@ -1119,6 +1120,10 @@ async def _finalize_match(
         locked_user.matches_lost += 1
     else:
         locked_user.matches_drawn += 1
+    # Daily ranked limit / resting (anti_bot_service): played, paid, not ranked.
+    ranked = anti_bot_service.take_ranked_slot(locked_user, config, "arena")
+    if not ranked:
+        rating_delta = 0
     locked_user.arena_rating = max(0, locked_user.arena_rating + rating_delta)
 
     difficulty_multiplier = {
@@ -1186,8 +1191,9 @@ async def _finalize_match(
     else:
         # Divisions: a forfeit moves the ladder like any loss.
         state["ladder"] = await arena_ladder_service.apply_result(
-            db, locked_user, int(state.get("opponent_points", locked_user.arena_points)), result, config,
+            db, locked_user, int(state.get("opponent_points", locked_user.arena_points)), result, config, ranked=ranked,
         )
+        state["ladder"]["ranked"] = ranked
     events = (await db.execute(select(MatchEvent).where(MatchEvent.match_id == match.id))).scalars().all()
     await _settle_card_stats(db, locked_user, state, list(events), forced_result is not None)
     state["report"] = build_report(match, state, list(events), result, forfeited=forced_result is not None)

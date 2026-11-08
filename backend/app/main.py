@@ -16,6 +16,7 @@ from app.database import get_db
 from app.core.exceptions import register_exception_handlers
 from app.core.slow_log import SlowRequestMiddleware, StallSampler, watch_event_loop
 from app.routers import (
+    presence,
     admin_badges,
     admin_bingo,
     admin_card_collections,
@@ -175,6 +176,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 API_PREFIX = "/api/v1"
 app.include_router(auth.router, prefix=API_PREFIX)
+app.include_router(presence.router, prefix=API_PREFIX)
 app.include_router(tasks.router, prefix=API_PREFIX)
 app.include_router(players.router, prefix=API_PREFIX)
 app.include_router(card_collections.router, prefix=API_PREFIX)

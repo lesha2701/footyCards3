@@ -1,7 +1,8 @@
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from sqlalchemy import BigInteger, Boolean, Date, ForeignKey, Integer, JSON, String, DateTime
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -21,7 +22,47 @@ class User(TimestampMixin, Base):
     balance: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    game_rewards_blocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Admin flag «Без наград за игры» (column game_rewards_blocked). Code reads
+    # `game_rewards_blocked` below, which also covers «усталость».
+    game_rewards_blocked_flag: Mapped[bool] = mapped_column(
+        "game_rewards_blocked", Boolean, default=False, nullable=False,
+    )
+    # Anti-bot «усталость» (services/anti_bot_service.py): the current stretch
+    # of play (gaps < anti_bot_rest_hours don't break it), the last game
+    # action, and — after a too long stretch — until when the player must rest
+    # before games pay and rate again.
+    play_streak_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_play_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    rest_required_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Ranked matches played today per rating mode, {"day": iso date, mode: n}
+    # (anti_bot_service.take_ranked_slot, GameConfig.ranked_daily_limit).
+    ranked_today: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # «Ты здесь?» (services/presence_service.py): when the next check is due
+    # and the open one ({token, answer, options, wrong}; answer never sent out).
+    presence_due_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    presence_challenge: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+
+    @hybrid_property
+    def game_rewards_blocked(self) -> bool:
+        """No game rewards / rating: the admin flag, an unanswered «Ты здесь?»
+        check, or resting after a too long stretch of play (a script that
+        never sleeps)."""
+        if self.game_rewards_blocked_flag or self.presence_challenge:
+            return True
+        until = self.rest_required_until
+        if until is None:
+            return False
+        if until.tzinfo is None:
+            until = until.replace(tzinfo=timezone.utc)
+        return until > datetime.now(timezone.utc)
+
+    @game_rewards_blocked.setter
+    def game_rewards_blocked(self, value: bool) -> None:
+        self.game_rewards_blocked_flag = value
+
+    @game_rewards_blocked.expression
+    def game_rewards_blocked(cls):
+        return cls.game_rewards_blocked_flag
     # Set by the bot (asyncpg, not this ORM) when a send_message attempt
     # raises TelegramForbiddenError; cleared when the user next sends /start.
     # Broadcasts/gifts/notifications should never queue a Telegram message
