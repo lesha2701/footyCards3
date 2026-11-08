@@ -1505,6 +1505,8 @@ export interface LeagueRewardClaim {
 
 export interface LeagueStatus {
   total_rating: number;
+  /** Banked from the past weeks; the three ratings are this week's. */
+  league_points?: number;
   arena_rating: number;
   tactics_rating: number;
   penalty_rating: number;

@@ -1537,7 +1537,7 @@ export default function AdminGamesPage() {
         </p>
         <div className="mb-3">{toggle("weekly_top_enabled", "Награды топа недели включены")}</div>
         <div className="mb-3">
-          {toggle("weekly_rating_reset_enabled", "Обнулять рейтинги игр каждый понедельник (после раздачи наград)")}
+          {toggle("weekly_rating_reset_enabled", "Обнулять рейтинги игр каждый понедельник (после раздачи наград; очки Лиги переходят в копилку и копятся дальше)")}
           <p className="mt-1 text-xs text-ink-mist">
             Арена, Тактико, Пенальти, Стратего, Мордобой — в 0, Контратака — в 1000. Дивизионы Арены и полученные
             награды лиг не трогаются.

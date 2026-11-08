@@ -115,6 +115,11 @@ class User(TimestampMixin, Base):
 
     # Penalty stats
     penalty_rating: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # «Лига»: the points of the past weeks. The game ratings start over every
+    # Monday (weekly_top_service.reset_ratings) and their sum is banked here
+    # first, so the league = league_points + arena + tactics + penalty keeps
+    # growing week after week (league_service.total_rating).
+    league_points: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Memory sequence
     memory_best_score: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

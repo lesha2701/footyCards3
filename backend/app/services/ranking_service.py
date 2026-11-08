@@ -10,7 +10,10 @@ from app.models.user import User
 from app.schemas.badge import BadgeOut
 from app.schemas.ranking import RankingEntry, RankingMetric, RankingOut
 
-_LEAGUE_RATING_EXPR = (User.arena_rating + User.tactics_rating + User.penalty_rating).label("league_rating")
+# The banked past weeks plus this week's ratings (league_service.total_rating).
+_LEAGUE_RATING_EXPR = (
+    User.league_points + User.arena_rating + User.tactics_rating + User.penalty_rating
+).label("league_rating")
 
 _DIRECT_COLUMNS = {
     RankingMetric.arena_rating: User.arena_rating,
@@ -124,7 +127,8 @@ def _start_value(column) -> int:
 def starting_value(metric: RankingMetric) -> int:
     """What a player who never played has (ratings start at 1000 etc.)."""
     if metric == RankingMetric.league_rating:
-        return sum(_start_value(c) for c in (User.arena_rating, User.tactics_rating, User.penalty_rating))
+        return sum(_start_value(c) for c in (
+            User.league_points, User.arena_rating, User.tactics_rating, User.penalty_rating))
     column = _DIRECT_COLUMNS.get(metric)
     return _start_value(column) if column is not None and hasattr(column, "property") else 0
 

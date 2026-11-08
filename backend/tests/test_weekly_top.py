@@ -167,6 +167,13 @@ async def test_ratings_start_over_after_the_week_is_paid(client, db_session, bot
     assert award.value == 1700  # paid from the closed week's standings
     user = await db_session.get(type(u1), uid)
     assert (user.arena_rating, user.mordoboi_rating, user.tactics_rating, user.kontra_rating) == (0, 0, 0, 1000)
+    # The week's league points are banked: the league itself never resets.
+    assert user.league_points == 8000
+
+    from app.services import league_service
+
+    user.arena_rating = 100  # the new week adds on top of the bank
+    assert league_service.total_rating(user) == 8100
 
 
 async def test_rating_reset_can_be_turned_off(client, db_session, bot_token):

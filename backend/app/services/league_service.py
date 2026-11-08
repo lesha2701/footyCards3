@@ -14,7 +14,12 @@ from app.services.wallet_service import credit_coins
 
 
 def total_rating(user: User) -> int:
-    return user.arena_rating + user.tactics_rating + user.penalty_rating
+    """The league points: the banked past weeks plus this week's ratings."""
+    return user.league_points + user.arena_rating + user.tactics_rating + user.penalty_rating
+
+
+def total_rating_expr():
+    return User.league_points + User.arena_rating + User.tactics_rating + User.penalty_rating
 
 
 async def _pack_name(db: AsyncSession, pack_id: Optional[int]) -> Optional[str]:
@@ -92,7 +97,7 @@ async def _current_league_percent(
     rows = (
         await db.execute(
             select(
-                (User.arena_rating + User.tactics_rating + User.penalty_rating).label("total"),
+                total_rating_expr().label("total"),
                 func.coalesce(func.max(LeagueTier.min_rating), 0).label("floor"),
             )
             .select_from(User)
@@ -130,7 +135,7 @@ async def get_league_status(db: AsyncSession, user: User) -> LeagueStatusOut:
 
     return LeagueStatusOut(
         total_rating=total, arena_rating=user.arena_rating, tactics_rating=user.tactics_rating,
-        penalty_rating=user.penalty_rating,
+        penalty_rating=user.penalty_rating, league_points=user.league_points,
         current_league=await _to_public_out(db, current) if current else None,
         next_league=await _to_public_out(db, next_tier) if next_tier else None,
         points_to_next=(next_tier.min_rating - total) if next_tier else None,
