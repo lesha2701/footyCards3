@@ -28,6 +28,7 @@ from app.models.user import User
 from app.models.coach import Coach
 from app.models.muse import Muse
 from app.models.stadium import Stadium
+from app.models.town import TownResident
 from app.schemas.card_offer import CardOfferAdminIn, CardOfferAdminOut, CardOfferOut, OfferItemOut
 from app.schemas.player import PlayerOut
 from app.services.wallet_service import lock_user_for_update
@@ -44,11 +45,14 @@ def _kind(offer: CardOffer) -> str:
         return "stadium"
     if offer.muse_id:
         return "muse"
+    if offer.resident_id:
+        return "resident"
     return "player"
 
 
 def _target(offer: CardOffer):
-    return {"coach": offer.coach, "stadium": offer.stadium, "muse": offer.muse}.get(_kind(offer), offer.player)
+    return {"coach": offer.coach, "stadium": offer.stadium, "muse": offer.muse,
+            "resident": offer.resident}.get(_kind(offer), offer.player)
 
 
 def _name(offer: CardOffer) -> str:
@@ -69,6 +73,10 @@ def _item_out(offer: CardOffer) -> Optional[OfferItemOut]:
         from app.services.collection_service import stadium_effect_lines
 
         effects = stadium_effect_lines(target)
+    elif kind == "resident":
+        from app.services.town_service import bonus_label
+
+        effects = [x for x in ("Житель города", bonus_label(target.bonus, target.bonus_value)) if x]
     else:
         from app.services.muse_service import effect_label
 
@@ -155,7 +163,7 @@ async def stars_order(db: AsyncSession, user: User, offer_id: int) -> tuple[str,
     if reason:
         raise ConflictError(reason)
     name = _name(offer)
-    what = {"coach": "тренера", "stadium": "стадиона", "muse": "музы"}.get(_kind(offer))
+    what = {"coach": "тренера", "stadium": "стадиона", "muse": "музы", "resident": "жителя города"}.get(_kind(offer))
     description = (
         f"Карточка {what} «{name}» в твою коллекцию." if what
         else f"Карточка футболиста {name} ({offer.player.rating}) в твою коллекцию."
@@ -198,6 +206,11 @@ async def deliver_stars(db: AsyncSession, user: User, invoice) -> dict:
         from app.services.card_creation import create_user_stadium_card
 
         await create_user_stadium_card(db, user.id, offer.stadium_id, CardSource.stars_purchase, invoice.id)
+    elif kind == "resident":
+        from app.services import town_service
+
+        await lock_user_for_update(db, user.id)  # town_service.grant needs the user lock
+        await town_service.grant(db, user.id, offer.resident, "stars")
     else:
         from app.services import muse_service
 
@@ -268,9 +281,10 @@ async def admin_list(db: AsyncSession) -> list[CardOfferAdminOut]:
 async def _apply(db: AsyncSession, offer: CardOffer, data: CardOfferAdminIn) -> None:
     chosen = [(key, model) for key, model in (
         ("player_id", Player), ("coach_id", Coach), ("stadium_id", Stadium), ("muse_id", Muse),
+        ("resident_id", TownResident),
     ) if getattr(data, key)]
     if len(chosen) != 1:
-        raise ConflictError("Выбери одну карточку: футболиста, тренера, стадион или музу")
+        raise ConflictError("Выбери одну карточку: футболиста, тренера, стадион, музу или жителя")
     key, model = chosen[0]
     target = await db.get(model, getattr(data, key))
     if target is None:
@@ -285,6 +299,7 @@ async def _apply(db: AsyncSession, offer: CardOffer, data: CardOfferAdminIn) -> 
     offer.coach = target if model is Coach else None
     offer.stadium = target if model is Stadium else None
     offer.muse = target if model is Muse else None
+    offer.resident = target if model is TownResident else None
 
 
 async def admin_create(db: AsyncSession, data: CardOfferAdminIn) -> CardOfferAdminOut:

@@ -14,7 +14,7 @@ from app.models.game import GameSession
 from app.models.match import Match
 from app.models.user import User
 from app.schemas.admin import GameConfigOut, GameConfigUpdate, SuspiciousMatchOut, SuspiciousMemorySessionOut
-from app.services import club_base_service, magnate_engine
+from app.services import club_base_service, magnate_engine, town_service
 from app.services.admin_log_service import log_action
 from app.services.game_config_service import get_config
 
@@ -48,6 +48,21 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
             updates["club_base_cosmetics"] = club_base_service.validate_cosmetics(updates["club_base_cosmetics"])
         except (ValueError, TypeError) as exc:
             raise ConflictError(f"Клубная база, магазин стадиона: {exc}")
+    if updates.get("town_districts") is not None:
+        try:
+            updates["town_districts"] = town_service.validate_districts(updates["town_districts"])
+        except ValueError as exc:
+            raise ConflictError(f"Город: {exc}")
+    if updates.get("town_decor") is not None:
+        try:
+            updates["town_decor"] = town_service.validate_decor(updates["town_decor"])
+        except ValueError as exc:
+            raise ConflictError(f"Город, места на карте: {exc}")
+    if updates.get("town_resident_spare_coins") is not None:
+        try:
+            updates["town_resident_spare_coins"] = town_service.validate_spare_coins(updates["town_resident_spare_coins"])
+        except ValueError as exc:
+            raise ConflictError(f"Жители: {exc}")
     if updates.get("manager_finance") is not None:
         from app.services import manager_finance
 

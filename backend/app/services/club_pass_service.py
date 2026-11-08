@@ -54,10 +54,14 @@ async def get_subscription(db: AsyncSession, user_id: int, lock: bool = False) -
 
 
 async def extra_rewarded_attempts(db: AsyncSession, user_id: int, config: GameConfig) -> int:
-    """Added to every mini-game's daily rewarded-attempt cap while active."""
-    if not config.club_pass_extra_rewarded_attempts:
-        return 0
-    return config.club_pass_extra_rewarded_attempts if is_active(await get_subscription(db, user_id)) else 0
+    """Added to every mini-game's daily rewarded-attempt cap: the club pass
+    while active plus the «Жители города» bonus game_attempts."""
+    from app.services import town_service
+
+    extra = await town_service.user_bonus(db, user_id, "game_attempts", config)
+    if config.club_pass_extra_rewarded_attempts and is_active(await get_subscription(db, user_id)):
+        extra += config.club_pass_extra_rewarded_attempts
+    return extra
 
 
 async def _grant_perk_items(db: AsyncSession, user: User, config: GameConfig) -> None:

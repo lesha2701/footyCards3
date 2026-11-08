@@ -83,6 +83,28 @@ DEFAULT_CLUB_BASE_COSMETICS: list = [
     _cosmetic("facade_gold", "facade", "gold", "Золотой фасад", 100000, 500, 25),
 ]
 
+# «Город» (services/town_service.py): per district — the price of a house
+# (before town_price_growth_pct for every house already owned) and its rent
+# in coins a day. The 0267 migration writes the same values.
+DEFAULT_TOWN_DISTRICTS: dict = {
+    "favela": {"price": 1000, "rent": 15},
+    "center": {"price": 2000, "rent": 25},
+    "mountains": {"price": 3000, "rent": 35},
+    "beach": {"price": 4000, "rent": 45},
+    "business": {"price": 6000, "rent": 60},
+}
+
+# «Город», closed places on the map (pier, park, island): the price of
+# opening one and the +% it adds to the houses' rent. 0267 writes the same.
+DEFAULT_TOWN_DECOR: dict = {
+    "pier": {"price": 20000, "rent_pct": 5},
+    "park": {"price": 40000, "rent_pct": 8},
+    "island": {"price": 75000, "rent_pct": 12},
+}
+
+# «Жители города»: coins for one spare copy of a resident, by rarity.
+DEFAULT_TOWN_RESIDENT_SPARE_COINS: dict = {"common": 10, "rare": 30, "epic": 100, "legendary": 300}
+
 DEFAULT_CLUB_BASE_CAPS: dict = {
     "matchday_pct": 100, "injury_pct": 50, "recovery": 15, "familiarity_pct": 60, "my_player_xp_pct": 30,
     "prep_pct": 25, "rep_pct": 30, "sell_pct": 15, "discount_pct": 25, "daily": 600,
@@ -1318,6 +1340,46 @@ class GameConfig(TimestampMixin, Base):
     # for coins and/or Stars; see DEFAULT_CLUB_BASE_COSMETICS.
     club_base_cosmetics: Mapped[list] = mapped_column(
         JSON, nullable=False, default=lambda: [dict(i) for i in DEFAULT_CLUB_BASE_COSMETICS],
+    )
+
+    # «Город» (services/town_service.py): houses bought for coins in five
+    # districts, each pays its district's rent a day. Every house the player
+    # already owns makes the next one town_price_growth_pct dearer; unclaimed
+    # rent stops growing after town_income_max_hours.
+    town_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    town_districts: Mapped[dict] = mapped_column(
+        JSON, nullable=False, default=lambda: {k: dict(v) for k, v in DEFAULT_TOWN_DISTRICTS.items()},
+    )
+    town_price_growth_pct: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    town_income_max_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
+    # The town opens for town_unlock_coins coins (0 = open to everyone), a
+    # new name costs town_rename_stars Telegram Stars (0 = not sold). The
+    # «Отель» is bought once for town_hotel_price coins and pays
+    # town_hotel_rent_per_100_cards a day for every 100 cards the player
+    # holds right now (selling cards lowers it), counted up to
+    # town_hotel_max_cards.
+    town_unlock_coins: Mapped[int] = mapped_column(Integer, default=5000, nullable=False)
+    town_rename_stars: Mapped[int] = mapped_column(Integer, default=99, nullable=False)
+    town_hotel_price: Mapped[int] = mapped_column(Integer, default=5000, nullable=False)
+    town_hotel_rent_per_100_cards: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    town_hotel_max_cards: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
+    # «Жители города» (town_service, admin «Жители»): resident cards from
+    # their own packs. Every copy held pays town_resident_rent coins a day
+    # into the town's rent; a spare copy sells for
+    # town_resident_spare_coins[rarity]. Bonuses of residents (the
+    # legendary ones) add up per kind, capped by town_resident_bonus_max_pct
+    # (the % kinds) and town_resident_max_daily_coins (the coins kind).
+    town_residents_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    town_resident_rent: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    town_resident_spare_coins: Mapped[dict] = mapped_column(
+        JSON, default=lambda: dict(DEFAULT_TOWN_RESIDENT_SPARE_COINS), nullable=False,
+    )
+    town_resident_bonus_max_pct: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    town_resident_max_daily_coins: Mapped[int] = mapped_column(Integer, default=500, nullable=False)
+    # Closed places on the town map (town_service.DECOR): {code: {price,
+    # rent_pct}}; a bought place adds rent_pct % to the houses' rent.
+    town_decor: Mapped[dict] = mapped_column(
+        JSON, nullable=False, default=lambda: {k: dict(v) for k, v in DEFAULT_TOWN_DECOR.items()},
     )
 
     # --- Monetization (models/monetization.py) ---------------------------

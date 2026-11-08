@@ -412,8 +412,8 @@ def _look(base: UserClubBase, stadium_level: int, config, owned: set) -> dict:
 
 
 def state_out(base: UserClubBase, academy: Optional[UserAcademy], config, now: Optional[datetime] = None,
-              owned: frozenset | set = frozenset()) -> dict:
-    from app.services import academy_service
+              owned: frozenset | set = frozenset(), build_pct: int = 0) -> dict:
+    from app.services import academy_service, town_service
 
     now = now or _now()
     levels = effective_levels(base, now)
@@ -437,7 +437,8 @@ def state_out(base: UserClubBase, academy: Optional[UserAcademy], config, now: O
             "next_effects": texts(level + 1) if level < top else [],
             "next_cost": discounted(next_cost, discount) if next_cost is not None else None,
             "next_cost_full": next_cost,
-            "next_hours": cfg["hours"][level] if level < top and level < len(cfg.get("hours", [])) else None,
+            "next_hours": town_service.build_hours(cfg["hours"][level], build_pct)
+            if level < top and level < len(cfg.get("hours", [])) else None,
             "locked": level < top and level >= cap,
             "building": code == building,
         })
@@ -513,7 +514,10 @@ async def get_state(db: AsyncSession, user: User) -> dict:
         base = UserClubBase(user_id=user.id, levels={}, total_level=0, appearance=dict(DEFAULT_LOOK),
                             income_accrued=0, income_since=None)
     academy = await db.get(UserAcademy, user.id)
-    return state_out(base, academy, config, owned=await owned_cosmetics(db, user.id))
+    from app.services import town_service
+
+    return state_out(base, academy, config, owned=await owned_cosmetics(db, user.id),
+                     build_pct=await town_service.user_bonus(db, user.id, "build_pct", config))
 
 
 def _ledger_complete(user_id: int, done: dict) -> ClubBaseLedger:
@@ -568,7 +572,10 @@ async def start_upgrade(db: AsyncSession, user: User, code: str, idempotency_key
     cfg = _building_config(config, code)
     full_cost = cfg["costs"][level]
     cost = discounted(full_cost, effects_from_levels(levels, config).get("discount_pct", 0))
-    hours = cfg["hours"][level] if level < len(cfg.get("hours", [])) else 0
+    from app.services import town_service
+
+    hours = town_service.build_hours(cfg["hours"][level] if level < len(cfg.get("hours", [])) else 0,
+                                     await town_service.user_bonus(db, user.id, "build_pct", config))
     if cost:
         await debit_coins(db, locked_user, cost, TransactionType.club_base_upgrade,
                           f"Клубная база: {BUILDINGS[code].name}, уровень {level + 1}")

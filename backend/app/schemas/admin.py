@@ -822,6 +822,21 @@ class GameConfigOut(BaseModel):
     club_base_income_max_days: int = 3
     club_base_art: dict = {}
     club_base_cosmetics: list[dict] = []
+    town_enabled: bool = True
+    town_districts: dict = {}
+    town_price_growth_pct: int = 4
+    town_income_max_hours: int = 24
+    town_unlock_coins: int = 5000
+    town_rename_stars: int = 99
+    town_hotel_price: int = 5000
+    town_hotel_rent_per_100_cards: int = 30
+    town_hotel_max_cards: int = 1000
+    town_residents_enabled: bool = True
+    town_resident_rent: int = 1
+    town_resident_spare_coins: dict = {}
+    town_resident_bonus_max_pct: int = 100
+    town_resident_max_daily_coins: int = 500
+    town_decor: dict = {}
     calendar_catchup_coins: int = 150
     calendar_catchup_stars: int = 10
     calendar_catchup_max_per_month: int = 5
@@ -1657,6 +1672,21 @@ class GameConfigUpdate(BaseModel):
     club_base_stars_per_hour: Optional[int] = Field(default=None, ge=1, le=100)
     club_base_income_max_days: Optional[int] = Field(default=None, ge=1, le=30)
     club_base_cosmetics: Optional[list[dict]] = Field(default=None, max_length=100)
+    town_enabled: Optional[bool] = None
+    town_districts: Optional[dict[str, dict[str, int]]] = None
+    town_price_growth_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    town_income_max_hours: Optional[int] = Field(default=None, ge=1, le=168)
+    town_unlock_coins: Optional[int] = Field(default=None, ge=0, le=10_000_000)
+    town_rename_stars: Optional[int] = Field(default=None, ge=0, le=10000)
+    town_hotel_price: Optional[int] = Field(default=None, ge=0, le=10_000_000)
+    town_hotel_rent_per_100_cards: Optional[int] = Field(default=None, ge=0, le=100_000)
+    town_hotel_max_cards: Optional[int] = Field(default=None, ge=0, le=100_000)
+    town_residents_enabled: Optional[bool] = None
+    town_resident_rent: Optional[int] = Field(default=None, ge=0, le=10_000)
+    town_resident_spare_coins: Optional[dict[str, int]] = None
+    town_resident_bonus_max_pct: Optional[int] = Field(default=None, ge=0, le=1000)
+    town_resident_max_daily_coins: Optional[int] = Field(default=None, ge=0, le=1_000_000)
+    town_decor: Optional[dict[str, dict[str, int]]] = None
     trade_send_min_account_age_days: Optional[int] = Field(default=None, ge=0, le=365)
     trade_send_min_active_days: Optional[int] = Field(default=None, ge=0, le=365)
     trade_daily_coins_receive_cap: Optional[int] = Field(default=None, ge=0)

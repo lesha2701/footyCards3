@@ -310,6 +310,7 @@ export interface Pack {
   skill_token_drop_chance?: number;
   /** Per-slot chance of a «Муза» instead of a footballer (the «Музы» pack: 0.1). */
   muse_drop_chance?: number;
+  resident_drop_chance?: number;
   /** "path" = the «Академия» pack (diamond slots drop only path cards). */
   player_pool?: string;
   pity_enabled?: boolean;
@@ -386,6 +387,8 @@ export interface OpenedMuse {
   muse: Muse;
   is_new: boolean;
   copies: number;
+  /** "resident" — a «Житель города» card riding the same list (the same card fields). */
+  kind?: "muse" | "resident";
 }
 
 export interface PackBulkOpenResult {
@@ -4045,7 +4048,7 @@ export interface WeeklyTopInfo {
 /** «Карты за звёзды»: a footballer card on sale for Telegram Stars. */
 /** A coach, stadium or Muse on sale (footballers come as `player`). */
 export interface CardOfferItem {
-  kind: "coach" | "stadium" | "muse";
+  kind: "coach" | "stadium" | "muse" | "resident";
   id: number;
   name: string;
   rarity: Rarity;
@@ -4056,7 +4059,7 @@ export interface CardOfferItem {
 
 export interface CardOffer {
   id: number;
-  kind?: "player" | "coach" | "stadium" | "muse";
+  kind?: "player" | "coach" | "stadium" | "muse" | "resident";
   player: Player | null;
   item?: CardOfferItem | null;
   stars_price: number;
@@ -4071,11 +4074,12 @@ export interface CardOffer {
 }
 
 export interface CardOfferAdminInput {
-  /** Exactly one of the four ids. */
+  /** Exactly one of the five ids. */
   player_id?: number | null;
   coach_id?: number | null;
   stadium_id?: number | null;
   muse_id?: number | null;
+  resident_id?: number | null;
   stars_price: number;
   title: string | null;
   starts_at: string | null;
@@ -4088,7 +4092,7 @@ export interface CardOfferAdminInput {
 
 export interface CardOfferAdmin extends Omit<CardOfferAdminInput, "player_id"> {
   id: number;
-  kind?: "player" | "coach" | "stadium" | "muse";
+  kind?: "player" | "coach" | "stadium" | "muse" | "resident";
   player: Player | null;
   item?: CardOfferItem | null;
   sold_count: number;

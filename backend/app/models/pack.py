@@ -75,6 +75,10 @@ class Pack(TimestampMixin, Base):
     # (muse_service.pick_random_muse, the slot's rarity; diamond → legendary)
     # instead of a footballer. The «Музы» pack has 0.1.
     muse_drop_chance: Mapped[float] = mapped_column(Numeric(5, 4), default=0.0, nullable=False)
+    # And after the Muses: the slot drops a «Житель города»
+    # (town_service.pick_random_resident, the slot's rarity; diamond →
+    # legendary). The «Жители» packs have 1.0 — residents only.
+    resident_drop_chance: Mapped[float] = mapped_column(Numeric(5, 4), default=0.0, nullable=False)
 
     rarity_probabilities: Mapped[list["PackRarityProbability"]] = relationship(
         back_populates="pack", cascade="all, delete-orphan"
@@ -142,6 +146,10 @@ class PackOpeningCard(Base):
     user_muse_id: Mapped[int | None] = mapped_column(
         ForeignKey("user_muses.id", ondelete="CASCADE"), nullable=True
     )
+    # A slot that dropped a «Житель города» (the owned row; a repeat adds a copy).
+    user_town_resident_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user_town_residents.id", ondelete="CASCADE"), nullable=True
+    )
     is_new: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     opening: Mapped["PackOpening"] = relationship(back_populates="cards")
@@ -152,7 +160,8 @@ class PackOpeningCard(Base):
             "CASE WHEN user_coach_card_id IS NOT NULL THEN 1 ELSE 0 END + "
             "CASE WHEN user_stadium_card_id IS NOT NULL THEN 1 ELSE 0 END + "
             "CASE WHEN skill_code IS NOT NULL THEN 1 ELSE 0 END + "
-            "CASE WHEN user_muse_id IS NOT NULL THEN 1 ELSE 0 END) = 1",
+            "CASE WHEN user_muse_id IS NOT NULL THEN 1 ELSE 0 END + "
+            "CASE WHEN user_town_resident_id IS NOT NULL THEN 1 ELSE 0 END) = 1",
             name="ck_pack_opening_card_exactly_one_kind",
         ),
         CheckConstraint(

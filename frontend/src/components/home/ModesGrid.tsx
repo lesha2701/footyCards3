@@ -9,10 +9,11 @@ import { claimDailyReward, fetchMyClub, fetchNextOpponent, fetchTournamentCurren
 import { fetchArenaStats } from "@/api/matches";
 import { fetchMyPlayer } from "@/api/myPlayer";
 import { fetchPlayerTournamentCurrent } from "@/api/personalTournament";
+import { fetchTown } from "@/api/town";
 import { ClubLogo } from "@/components/clubs/ClubLogo";
 import NewBadge from "@/components/common/NewBadge";
 import ManagerFeature from "@/components/home/ManagerFeature";
-import { IconBall, IconCampus, IconProfile, IconTrophy, IconUsers, IconWhistle } from "@/components/icons";
+import { IconBall, IconCampus, IconHome, IconProfile, IconTrophy, IconUsers, IconWhistle } from "@/components/icons";
 import { artOf } from "@/lib/gameArt";
 import { hapticNotify } from "@/lib/telegram";
 
@@ -64,6 +65,7 @@ export default function ModesGrid() {
     queryFn: fetchPlayerTournamentCurrent,
   });
   const { data: arena } = useQuery({ queryKey: ["arena-stats"], queryFn: fetchArenaStats });
+  const { data: town } = useQuery({ queryKey: ["town"], queryFn: fetchTown, staleTime: 60_000 });
 
   const claimClub = useMutation({
     mutationFn: claimDailyReward,
@@ -79,6 +81,8 @@ export default function ModesGrid() {
   const place = season?.status === "active" ? careerPlace(season) : null;
   const baseIncome = base?.income.pending ?? 0;
   const scoutReady = !!academy?.scout_report?.available;
+  const townRent = town?.income.pending ?? 0;
+  const townOpen = !!town && town.enabled && town.unlocked;
 
   return (
     <section>
@@ -128,7 +132,30 @@ export default function ModesGrid() {
           alert={clubRewardReady}
           onClick={() => (clubRewardReady && !claimClub.isPending ? claimClub.mutate() : navigate("/clubs"))}
         />
-        {base?.enabled !== false && (
+        {/* An opened town takes the base's place (the base is a district of it); otherwise the base. */}
+        {townOpen ? (
+          <ModeTile
+            tint="cyan"
+            icon={<IconHome size={18} />}
+            art="home-town"
+            title={town.name ?? "Город"}
+            corner={<NewBadge section="town" />}
+            status={
+              townRent > 0
+                ? `Рента готова: +${townRent}`
+                : baseIncome > 0
+                  ? `База: доход +${baseIncome}`
+                  : scoutReady
+                    ? "Скаутский отчёт готов!"
+                    : town.owned_total > 0
+                      ? `Домов: ${town.owned_total} из ${town.total_houses}`
+                      : "Купи первый дом"
+            }
+            alert={townRent > 0 || baseIncome > 0 || scoutReady}
+            onClick={() => navigate("/town")}
+          />
+        ) : (
+          base?.enabled !== false && (
           <ModeTile
             tint="path"
             icon={<IconCampus size={18} />}
@@ -151,6 +178,7 @@ export default function ModesGrid() {
             alert={baseIncome > 0 || scoutReady}
             onClick={() => navigate("/base")}
           />
+        )
         )}
         {myPlayer?.enabled !== false && (
           <ModeTile

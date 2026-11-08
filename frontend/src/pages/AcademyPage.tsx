@@ -15,6 +15,7 @@ import PlayerCard from "@/components/cards/PlayerCard";
 import CardDetailModal from "@/components/collection/CardDetailModal";
 import { useCardActions } from "@/components/collection/useCardActions";
 import { cardLockProps } from "@/lib/cardLocks";
+import { hoursLabel } from "@/lib/clubBase";
 import { IconCoin } from "@/components/icons";
 import { formatGameError } from "@/lib/errors";
 import { hapticNotify, openTelegramInvoice } from "@/lib/telegram";
@@ -264,7 +265,7 @@ export default function AcademyPage() {
                 className="mt-2.5 flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl bg-bg-raised text-xs font-semibold text-ink-chalk disabled:opacity-40"
               >
                 {wing.building ? "Строится…" : wing.level ? "Улучшить" : "Построить"} · <IconCoin size={12} /> {wing.next_cost.toLocaleString("ru-RU")}
-                {wing.next_hours ? ` · ${wing.next_hours} ч` : ""}
+                {wing.next_hours ? ` · ${hoursLabel(wing.next_hours)}` : ""}
               </button>
             ) : (
               <p className="mt-2 text-center text-xs font-semibold text-legend">Максимальный уровень</p>

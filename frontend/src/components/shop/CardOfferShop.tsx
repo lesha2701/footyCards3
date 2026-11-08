@@ -20,7 +20,7 @@ function useNow(): number {
   return now;
 }
 
-const ITEM_KIND: Record<CardOfferItem["kind"], string> = { coach: "Тренер", stadium: "Стадион", muse: "Муза" };
+const ITEM_KIND: Record<CardOfferItem["kind"], string> = { coach: "Тренер", stadium: "Стадион", muse: "Муза", resident: "Житель" };
 
 /** A coach / stadium / Muse on sale: art in a rarity frame, what it does. */
 function ItemCard({ item, dimmed }: { item: CardOfferItem; dimmed: boolean }) {
@@ -66,7 +66,7 @@ export default function CardOfferShop() {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-caption text-ink-mist">
-        Особые карточки за Telegram Stars: футболисты, тренеры, стадионы и музы. Лимитки — карты, которые больше не выпадают из паков: купить их можно только здесь и только пока идёт предложение.
+        Особые карточки за Telegram Stars: футболисты, тренеры, стадионы, музы и жители города. Лимитки — карты, которые больше не выпадают из паков: купить их можно только здесь и только пока идёт предложение.
       </p>
       <div className="grid grid-cols-2 gap-3">
         {offers.map((o) => <OfferTile key={o.id} offer={o} now={now} />)}

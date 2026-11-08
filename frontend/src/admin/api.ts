@@ -1468,6 +1468,35 @@ export async function grantAdminMuse(museId: number, userId: number): Promise<{ 
   return data;
 }
 
+// --- «Жители города» (backend: routers/admin_town.py; numbers live on GameConfig) ---
+const RESIDENT_FIELDS = [
+  "name", "title", "description", "icon", "rarity", "bonus", "bonus_value", "drop_weight", "is_pack_droppable",
+  "is_active", "sort_order",
+] as const;
+export async function fetchAdminTownResidents(): Promise<import("@/admin/types").AdminTownResidentCatalog> {
+  const { data } = await api.get("/admin/town/residents");
+  return data;
+}
+export async function saveAdminTownResident(
+  row: import("@/admin/types").AdminTownResident,
+): Promise<import("@/admin/types").AdminTownResident> {
+  const body = Object.fromEntries(RESIDENT_FIELDS.map((k) => [k, row[k]]));
+  const { data } = row.id ? await api.put(`/admin/town/residents/${row.id}`, body) : await api.post("/admin/town/residents", body);
+  return data;
+}
+export async function grantAdminTownResident(residentId: number, userId: number): Promise<{ copies: number; is_new: boolean }> {
+  const { data } = await api.post(`/admin/town/residents/${residentId}/grant`, { user_id: userId });
+  return data;
+}
+export async function uploadAdminTownResidentImage(id: number, file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post(`/admin/town/residents/${id}/image`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
 // --- «Трансферный рынок» (backend: routers/admin_auction.py; settings live on GameConfig) ---
 export async function fetchAdminAuctionLots(status?: string, username?: string): Promise<AuctionLot[]> {
   const { data } = await api.get<AuctionLot[]>("/admin/auction/lots", { params: { status, username: username || undefined } });

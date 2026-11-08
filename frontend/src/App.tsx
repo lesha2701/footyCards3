@@ -44,6 +44,7 @@ const AdminLeaguesPage = lazy(() => import("@/admin/pages/AdminLeaguesPage"));
 const AdminGiftsPage = lazy(() => import("@/admin/pages/AdminGiftsPage"));
 const AdminLifestylePage = lazy(() => import("@/admin/pages/AdminLifestylePage"));
 const AdminMusesPage = lazy(() => import("@/admin/pages/AdminMusesPage"));
+const AdminResidentsPage = lazy(() => import("@/admin/pages/AdminResidentsPage"));
 const AdminDailyRewardsPage = lazy(() => import("@/admin/pages/AdminDailyRewardsPage"));
 const AdminWheelPage = lazy(() => import("@/admin/pages/AdminWheelPage"));
 const AdminGamesPage = lazy(() => import("@/admin/pages/AdminGamesPage"));
@@ -76,6 +77,8 @@ const PlayPage = lazy(() => import("@/pages/PlayPage"));
 const MemoryGamePage = lazy(() => import("@/pages/MemoryGamePage"));
 const ArenaPage = lazy(() => import("@/pages/ArenaPage"));
 const AcademyPage = lazy(() => import("@/pages/AcademyPage"));
+const TownPage = lazy(() => import("@/pages/TownPage"));
+const TownResidentsPage = lazy(() => import("@/pages/TownResidentsPage"));
 const ClubBasePage = lazy(() => import("@/pages/ClubBasePage"));
 const TacticoMatchesPage = lazy(() => import("@/pages/TacticoMatchesPage"));
 const TacticoMatchPage = lazy(() => import("@/pages/TacticoMatchPage"));
@@ -287,6 +290,7 @@ export default function App() {
         <Route path="gifts" element={<AdminGiftsPage />} />
         <Route path="lifestyle" element={<AdminLifestylePage />} />
         <Route path="muses" element={<AdminMusesPage />} />
+        <Route path="residents" element={<AdminResidentsPage />} />
         <Route path="wheel" element={<AdminWheelPage />} />
         <Route path="halloween" element={<AdminHalloweenPage />} />
         <Route path="fan-battle" element={<AdminFanBattlePage />} />
@@ -319,6 +323,9 @@ export default function App() {
         <Route path="/play/arena" element={<ArenaPage />} />
         <Route path="/academy" element={<AcademyPage />} />
         <Route path="/base" element={<ClubBasePage />} />
+        <Route path="/town" element={<TownPage />} />
+        <Route path="/town/residents" element={<TownResidentsPage />} />
+        <Route path="/town/:district" element={<TownPage />} />
         <Route path="/play/tactico" element={<TacticoMatchesPage />} />
         <Route path="/play/career" element={<CareerPage />} />
         <Route path="/play/career/seasons/:seasonId/rounds/:round/matches/:match" element={<CareerMatchPage />} />

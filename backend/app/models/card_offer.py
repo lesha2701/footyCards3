@@ -23,6 +23,8 @@ class CardOffer(TimestampMixin, Base):
     coach_id: Mapped[Optional[int]] = mapped_column(ForeignKey("coaches.id", ondelete="CASCADE"), nullable=True)
     stadium_id: Mapped[Optional[int]] = mapped_column(ForeignKey("stadiums.id", ondelete="CASCADE"), nullable=True)
     muse_id: Mapped[Optional[int]] = mapped_column(ForeignKey("muses.id", ondelete="CASCADE"), nullable=True)
+    # A «Житель города» (town_residents) — the fifth kind.
+    resident_id: Mapped[Optional[int]] = mapped_column(ForeignKey("town_residents.id", ondelete="CASCADE"), nullable=True)
     stars_price: Mapped[int] = mapped_column(Integer, nullable=False)
     # Shown on the tile, e.g. «Переиздание легенды» (optional).
     title: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
@@ -42,6 +44,7 @@ class CardOffer(TimestampMixin, Base):
     coach = relationship("Coach", lazy="joined")
     stadium = relationship("Stadium", lazy="joined")
     muse = relationship("Muse", lazy="joined")
+    resident = relationship("TownResident", lazy="joined")
 
 
 class CardOfferView(Base):

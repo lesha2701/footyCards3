@@ -39,6 +39,7 @@ from app.routers import (
     admin_log,
     admin_equipment,
     admin_muses,
+    admin_town,
     admin_monetization,
     admin_packs,
     admin_players,
@@ -67,6 +68,7 @@ from app.routers import (
     path,
     academy,
     club_base,
+    town,
     career,
     club_features,
     clubs,
@@ -181,6 +183,7 @@ app.include_router(card_skills.router, prefix=API_PREFIX)
 app.include_router(path.router, prefix=API_PREFIX)
 app.include_router(academy.router, prefix=API_PREFIX)
 app.include_router(club_base.router, prefix=API_PREFIX)
+app.include_router(town.router, prefix=API_PREFIX)
 app.include_router(bingo.router, prefix=API_PREFIX)
 app.include_router(packs.router, prefix=API_PREFIX)
 app.include_router(free_pack.router, prefix=API_PREFIX)
@@ -270,6 +273,7 @@ app.include_router(events.router, prefix=API_PREFIX)
 app.include_router(events.admin_router, prefix=API_PREFIX)
 app.include_router(admin_equipment.router, prefix=API_PREFIX)
 app.include_router(admin_muses.router, prefix=API_PREFIX)
+app.include_router(admin_town.router, prefix=API_PREFIX)
 app.include_router(admin_monetization.router, prefix=API_PREFIX)
 
 

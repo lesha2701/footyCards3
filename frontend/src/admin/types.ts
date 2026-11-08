@@ -843,6 +843,21 @@ export interface GameConfig {
   club_base_income_max_days: number;
   club_base_art: { background?: string | null; buildings?: Record<string, string> };
   club_base_cosmetics: AdminStadiumCosmetic[];
+  town_enabled: boolean;
+  town_districts: Record<string, { price: number; rent: number }>;
+  town_price_growth_pct: number;
+  town_income_max_hours: number;
+  town_unlock_coins: number;
+  town_rename_stars: number;
+  town_hotel_price: number;
+  town_hotel_rent_per_100_cards: number;
+  town_hotel_max_cards: number;
+  town_residents_enabled: boolean;
+  town_resident_rent: number;
+  town_resident_spare_coins: Record<string, number>;
+  town_resident_bonus_max_pct: number;
+  town_resident_max_daily_coins: number;
+  town_decor: Record<string, { price: number; rent_pct: number }>;
   trade_send_min_account_age_days: number;
   trade_send_min_active_days: number;
   trade_daily_coins_receive_cap: number;
@@ -1427,4 +1442,29 @@ export interface TaskChestConfig {
   coins: number;
   card_rarity?: "common" | "rare" | "epic" | "legendary" | null;
   pack_id?: number | null;
+}
+
+/** «Жители города» (backend: routers/admin_town.py). */
+export interface AdminTownResident {
+  id?: number;
+  name: string;
+  title: string | null;
+  description: string | null;
+  icon: string;
+  image_path?: string | null;
+  rarity: string;
+  bonus: string;
+  bonus_value: number;
+  bonus_label?: string;
+  drop_weight: number;
+  is_pack_droppable: boolean;
+  is_active: boolean;
+  sort_order: number;
+  copies_held?: number;
+}
+
+export interface AdminTownResidentCatalog {
+  rarities: string[];
+  bonuses: { code: string; label: string }[];
+  residents: AdminTownResident[];
 }
