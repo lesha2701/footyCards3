@@ -2410,6 +2410,7 @@ export interface Club {
   can_spend_budget?: boolean;
   wall_unread?: number | null;
   rewards_unclaimed?: number | null;
+  games_rewards_left?: { game: number; penalty: number; position_match: number } | null;
   cups_count: number;
   stars_count: number;
   daily_reward_seconds_remaining: number | null;

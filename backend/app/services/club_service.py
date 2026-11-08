@@ -132,6 +132,24 @@ async def _daily_reward_seconds_remaining(db: AsyncSession, club_id: int, user_i
     return max(0, int(remaining))
 
 
+_CLUB_GAMES = (("game", "club_game"), ("penalty", "club_penalty"), ("position_match", "club_position_match"))
+
+
+async def _games_rewards_left(db: AsyncSession, user_id: int) -> dict[str, int]:
+    """Rewarded plays left today in each club mini-game: the daily cap minus
+    today's count, which counts as 0 after the local midnight that the
+    games' own _ensure_daily_reset would apply. Read-only."""
+    config = await get_config(db)
+    user = await db.get(User, user_id)
+    today = local_today()
+    left = {}
+    for key, prefix in _CLUB_GAMES:
+        reset_at = getattr(user, f"{prefix}_attempts_reset_at")
+        used = getattr(user, f"{prefix}_rewarded_attempts_today") if reset_at and local_today(reset_at) == today else 0
+        left[key] = max(0, getattr(config, f"{prefix}_daily_reward_limit") - used)
+    return left
+
+
 async def _personal_match_earnings(db: AsyncSession, user_id: int) -> int:
     """All-time total of this user's own personal club-tournament-match reward
     credits (TransactionType.club_tournament_match_reward) — the per-member
@@ -160,7 +178,9 @@ async def _club_to_detail(db: AsyncSession, club: Club, requester_user_id: Optio
     )
     wall_unread = None
     rewards_unclaimed = None
+    games_rewards_left = None
     if is_member and requester_user_id is not None:
+        games_rewards_left = await _games_rewards_left(db, requester_user_id)
         from app.services.club_wall_service import unread_count
 
         from app.services.club_reward_service import unclaimed_count
@@ -181,6 +201,7 @@ async def _club_to_detail(db: AsyncSession, club: Club, requester_user_id: Optio
         star_balance=club.star_balance,
         wall_unread=wall_unread,
         rewards_unclaimed=rewards_unclaimed,
+        games_rewards_left=games_rewards_left,
         can_spend_budget=bool(my_membership) and (
             my_membership.role in (ClubRole.captain, ClubRole.vice_captain, ClubRole.treasurer)
             or (my_membership.role == ClubRole.assistant and not club.budget_treasurer_only)

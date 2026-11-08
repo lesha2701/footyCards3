@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import { ClubLogo } from "@/components/clubs/ClubLogo";
 import { ClubNow, ClubSection, ClubTabs, ClubTile } from "@/components/clubs/ClubNow";
+import { ClubToday } from "@/components/clubs/ClubToday";
 import { ClubPreviewPopup } from "@/components/clubs/ClubPreviewPopup";
 import { ClubSheet } from "@/components/clubs/ClubSheet";
 import { SponsorBadge } from "@/components/clubs/SponsorBadge";
@@ -305,7 +306,7 @@ function ClubHome({ club }: { club: Club }) {
           </div>
         </div>
         {club.description && <p className="mt-3 text-sm text-ink-mist">{club.description}</p>}
-        <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/5 pt-3">
+        <div className="mt-3 border-t border-white/5 pt-3">
           <button onClick={() => openSheet("treasury")} className="min-w-0 text-left active:scale-95">
             <span className="block text-caption text-ink-mist">Бюджет клуба</span>
             <span className="flex items-center gap-1 font-mono text-lg font-bold text-accent-lime">
@@ -319,20 +320,6 @@ function ClubHome({ club }: { club: Club }) {
               )}
             </span>
           </button>
-          {club.daily_reward_seconds_remaining !== null ? (
-            <span className="flex shrink-0 items-center gap-1 text-caption text-ink-mist">
-              <IconClock size={12} />
-              награда через {formatCountdown(club.daily_reward_seconds_remaining)}
-            </span>
-          ) : (
-            <button
-              onClick={() => claimMutation.mutate()}
-              disabled={claimMutation.isPending}
-              className="shrink-0 rounded-xl bg-floodlight px-4 py-2 text-xs font-bold text-bg-base active:scale-95 disabled:opacity-40"
-            >
-              Ежедневная награда
-            </button>
-          )}
         </div>
         </div>
         <ClubTabs
@@ -344,6 +331,7 @@ function ClubHome({ club }: { club: Club }) {
       {claimError && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{claimError}</p>}
 
       {tab === "now" && <>
+      <ClubToday club={club} onClaim={() => claimMutation.mutate()} claiming={claimMutation.isPending} />
       <ClubNow
         club={club}
         war={war}
@@ -382,7 +370,12 @@ function ClubHome({ club }: { club: Club }) {
           hint={war?.state === "active" ? `идёт · ${war.me?.score ?? 0}:${war.opponent?.score ?? 0}` : war ? `рейтинг ${war.war_rating}` : undefined}
           onClick={() => openSheet("war")}
         />
-        <ClubTile icon={IconBrain} title="Клубные игры" onClick={() => openSheet("games")} />
+        <ClubTile
+          icon={IconBrain}
+          title="Клубные игры"
+          hint={club.games_rewards_left ? `наград сегодня: ${club.games_rewards_left.game + club.games_rewards_left.penalty + club.games_rewards_left.position_match}` : undefined}
+          onClick={() => openSheet("games")}
+        />
       </ClubSection>
       {isManager && !tournamentCurrent?.can_apply && tournamentCurrent?.cooldown_seconds_remaining != null && (
         <p className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-xs text-ink-mist">
