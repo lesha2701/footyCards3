@@ -5,7 +5,7 @@ import { type TokenStage } from "@/components/cards/revealStages";
 import { RARITY_LABELS } from "@/lib/rarity";
 import type { OpenedMuse } from "@/types";
 
-/** Reveal for a pack slot that dropped a «Муза» — the same two-beat rhythm
+/** Reveal for a pack slot that dropped a «Муза» (or a «Житель города») — the same two-beat rhythm
  * as the skill-token reveal (glow, then the reveal). */
 export function MuseRevealStage({
   opened,
@@ -22,6 +22,7 @@ export function MuseRevealStage({
 }) {
   const revealed = stage === "reveal";
   const { muse } = opened;
+  const resident = opened.kind === "resident";
   return (
     <div
       onClick={onTap}
@@ -35,7 +36,7 @@ export function MuseRevealStage({
         initial={{ scale: 0.7, opacity: 0, rotate: -6 }}
         animate={{ scale: revealed ? 1 : 0.9, opacity: 1, rotate: 0 }}
         transition={{ type: "spring", damping: 14, stiffness: 180 }}
-        className="relative w-52 rounded-2xl shadow-[0_0_60px_-10px] shadow-pink-400/60"
+        className={`relative w-52 rounded-2xl shadow-[0_0_60px_-10px] ${resident ? "shadow-cyan-400/60" : "shadow-pink-400/60"}`}
       >
         {revealed ? (
           <MuseArt muse={muse} className="aspect-[3/4] w-full rounded-2xl" iconClass="text-8xl" />
@@ -43,10 +44,12 @@ export function MuseRevealStage({
           <motion.span
             animate={{ opacity: [0.4, 1, 0.4] }}
             transition={{ repeat: Infinity, duration: 1.2 }}
-            className="flex aspect-[3/4] w-full items-center justify-center rounded-2xl bg-gradient-to-b from-pink-500/30 to-fuchsia-500/10 text-7xl"
+            className={`flex aspect-[3/4] w-full items-center justify-center rounded-2xl bg-gradient-to-b text-7xl ${
+              resident ? "from-cyan-500/30 to-teal-500/10" : "from-pink-500/30 to-fuchsia-500/10"
+            }`}
             aria-hidden
           >
-            💖
+            {resident ? "🏘️" : "💖"}
           </motion.span>
         )}
         {revealed && opened.is_new && (
@@ -61,11 +64,13 @@ export function MuseRevealStage({
             <p className="text-xs text-ink-mist">
               {muse.title ? `${muse.title} · ` : ""}{RARITY_LABELS[muse.rarity]}
             </p>
-            <p className="text-sm font-semibold text-pink-300">{muse.effect_label}</p>
+            <p className={`text-sm font-semibold ${resident ? "text-cyan-300" : "text-pink-300"}`}>{muse.effect_label}</p>
             {!opened.is_new && <p className="text-caption text-ink-mist-dim">Уже в альбоме — копий: {opened.copies}</p>}
           </>
         ) : (
-          <p className="font-display text-base font-semibold text-pink-300">Муза!</p>
+          <p className={`font-display text-base font-semibold ${resident ? "text-cyan-300" : "text-pink-300"}`}>
+            {resident ? "Новый житель!" : "Муза!"}
+          </p>
         )}
       </div>
 

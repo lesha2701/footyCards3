@@ -417,3 +417,55 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .fans-spark, .fans-pulse { animation: none; }
 }
+
+/* «Город»: water strips shimmer — a soft light band drifting across, on the
+   GPU (background position of one element), never with reduced motion. */
+.town-water {
+  background: linear-gradient(100deg, transparent 30%, rgb(255 236 190 / 0.16) 45%, rgb(255 255 255 / 0.1) 50%, transparent 65%);
+  background-size: 250% 100%;
+  mix-blend-mode: screen;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .town-water { animation: town-water 7s ease-in-out infinite alternate; }
+}
+@keyframes town-water {
+  0% { background-position: 120% 0; }
+  100% { background-position: -20% 0; }
+}
+
+/* «Город»: a bought place on the map twinkles; fireworks once every place is open. */
+.town-twinkle {
+  background-image: radial-gradient(circle, rgb(255 228 150 / 0.95) 0 1.5px, transparent 2.5px);
+  background-size: 13px 11px;
+  mix-blend-mode: screen;
+  opacity: 0.55;
+  -webkit-mask-image: radial-gradient(ellipse at center, black 35%, transparent 72%);
+  mask-image: radial-gradient(ellipse at center, black 35%, transparent 72%);
+}
+.town-decor-glow { filter: drop-shadow(0 0 6px rgb(255 214 120 / 0.95)) drop-shadow(0 0 14px rgb(255 170 60 / 0.6)); }
+.town-firework {
+  position: absolute;
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  background:
+    radial-gradient(circle, rgb(255 255 255 / 0.95) 0 4%, transparent 9%),
+    repeating-conic-gradient(var(--fw) 0 4deg, transparent 4deg 15deg);
+  -webkit-mask-image: radial-gradient(circle, black 0 8%, transparent 12%, black 20% 50%, transparent 68%);
+  mask-image: radial-gradient(circle, black 0 8%, transparent 12%, black 20% 50%, transparent 68%);
+  filter: drop-shadow(0 0 6px var(--fw)) brightness(1.3);
+  opacity: 0.95;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .town-twinkle { animation: town-twinkle 1.6s ease-in-out infinite alternate; }
+  .town-firework { opacity: 0; animation: town-firework 2.6s ease-out infinite; }
+}
+@keyframes town-twinkle {
+  0% { opacity: 0.2; }
+  100% { opacity: 0.85; }
+}
+@keyframes town-firework {
+  0% { transform: scale(0.15); opacity: 0; }
+  12% { opacity: 1; }
+  60% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.12); opacity: 0; }
+}

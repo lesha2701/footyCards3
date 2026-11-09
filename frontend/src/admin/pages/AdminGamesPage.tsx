@@ -206,6 +206,9 @@ export default function AdminGamesPage() {
       | "trades_enabled"
       | "arena_cup_enabled"
       | "trade_coins_enabled"
+      | "anti_bot_enabled"
+      | "presence_check_enabled"
+      | "weekly_rating_reset_enabled"
       | "trade_cards_both_sides"
       | "club_war_enabled"
       | "blackjack_enabled"
@@ -910,7 +913,6 @@ export default function AdminGamesPage() {
           {field("manager_parachute_pct", "Компенсация за вылет, % разницы грантов")}
           {field("manager_match_xp", "Опыт «Моему игроку» за матч")}
           {field("manager_freshness_cost", "Свежесть «Моего игрока» за матч (0 = не устаёт)")}
-          {field("manager_merch_cap_eur", "Мерч: € одному клубу за сезон, максимум")}
           {field("manager_pro_stars", "«Менеджер Pro»: цена, звёзды (0 = не продаётся)")}
           {field("manager_pro_days", "«Менеджер Pro»: дней")}
           {listField("manager_value_ratings", "Шкала стоимости: рейтинги")}
@@ -923,7 +925,7 @@ export default function AdminGamesPage() {
           {listField("manager_place_budget", "€ в бюджет за 1–3 места (× % дивизиона)")}
           {jsonField("manager_slots", "Время туров (местное), по порядку")}
           {jsonField("manager_cosmetics", "Магазин стиля клуба: kind = shape | symbol | rim | fx | kit | frame | theme | stadium_name | stands (трибуны) | poster (постер чемпиона); coins / stars 0 = не продаётся за них, оба 0 = бесплатно")}
-          {jsonField("manager_merch", "Мерч для болельщиков: coins сгорают, eur идут в бюджет клуба")}
+          {jsonField("manager_merch", "Мерч для болельщиков: coins сгорают; доход клуба — в «Кабинете президента» (% гранта за 1000 монет), eur не используется")}
           <ManagerFinanceFields value={form.manager_finance} onChange={(next) => setForm({ ...form, manager_finance: next })} />
         </div>
       </section>
@@ -1063,6 +1065,33 @@ export default function AdminGamesPage() {
           {field("stake_max_coins", "Макс. ставка с каждой стороны")}
           {field("stake_pair_daily_limit", "Матчей на ставку с одним игроком в день")}
           {field("stake_daily_profit_cap", "Лимит выигрыша на ставках в день")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-3 font-display text-base font-bold">Защита от ботов</p>
+        <p className="mb-3 text-xs text-slate-500">
+          «Усталость»: если игрок играет дольше N часов без перерыва (перерыв — пауза не меньше «отдыха»), игры
+          перестают приносить монеты и рейтинг, пока он не отдохнёт. Человек, который спит, этого не замечает; скрипт,
+          играющий круглосуточно, — теряет всё. Рейтинговых матчей в день — сколько матчей Card Arena и Тактико в сутки
+          двигают очки и рейтинг (дальше матчи играются и награждаются, но не в рейтинг; 0 — без лимита).
+          Подозреваемых смотри в «Антифрод» → «Похоже на ботов».
+        </p>
+        <div className="mb-3">{toggle("anti_bot_enabled", "Включить «усталость»")}</div>
+        <div className="grid grid-cols-2 gap-3">
+          {field("anti_bot_max_streak_hours", "Часов игры без перерыва до «усталости»")}
+          {field("anti_bot_rest_hours", "Нужный отдых, часов")}
+          {field("ranked_daily_limit", "Рейтинговых матчей в день на режим (Арена, Тактико, Мордобой, Стратего, Контратака, Пенальти)")}
+        </div>
+        <p className="mb-2 mt-4 text-xs text-slate-500">
+          «Ты здесь?»: после каждых N минут непрерывной игры игрок нажимает число с картинки. Пока не ответит, игры не
+          приносят монеты и рейтинг. После стольких ошибок подряд награды встают на паузу.
+        </p>
+        <div className="mb-3">{toggle("presence_check_enabled", "Включить проверку «Ты здесь?»")}</div>
+        <div className="grid grid-cols-2 gap-3">
+          {field("presence_check_minutes", "Каждые N минут игры")}
+          {field("presence_check_max_wrong", "Ошибок подряд до паузы")}
+          {field("presence_check_lock_minutes", "Пауза наград после ошибок, мин")}
         </div>
       </section>
 
@@ -1506,6 +1535,13 @@ export default function AdminGamesPage() {
           значения. «Игр / звёзд / рефералов за неделю» считаются за прошедшую неделю.
         </p>
         <div className="mb-3">{toggle("weekly_top_enabled", "Награды топа недели включены")}</div>
+        <div className="mb-3">
+          {toggle("weekly_rating_reset_enabled", "Обнулять рейтинги игр каждый понедельник (после раздачи наград; очки Лиги переходят в копилку и копятся дальше)")}
+          <p className="mt-1 text-xs text-ink-mist">
+            Арена, Тактико, Пенальти, Стратего, Мордобой — в 0, Контратака — в 1000. Дивизионы Арены и полученные
+            награды лиг не трогаются.
+          </p>
+        </div>
         <div className="mb-3 grid grid-cols-2 gap-3">{field("weekly_top_size", "Сколько мест награждать")}</div>
         <p className="mb-1 text-xs text-slate-400">Рейтинги с наградами (ничего не отмечено — все)</p>
         <div className="mb-3 grid grid-cols-2 gap-1 sm:grid-cols-3">

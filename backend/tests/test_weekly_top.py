@@ -150,3 +150,38 @@ async def test_info_and_admin_ladder(client, db_session, bot_token):
                             json={"weekly_top_rewards": [{"coins": 999}], "weekly_top_metrics": ["kontra_rating", "nope"]})
     assert ok.status_code == 200, ok.text
     assert ok.json()["weekly_top_rewards"][0]["coins"] == 999 and ok.json()["weekly_top_metrics"] == ["kontra_rating"]
+
+
+async def test_ratings_start_over_after_the_week_is_paid(client, db_session, bot_token):
+    week = weekly_top_service.last_closed_week()
+    _, u1 = await _user(client, db_session, bot_token, 980101, kontra=1700)
+    u1.arena_rating, u1.mordoboi_rating, u1.tactics_rating = 5000, 900, 3000
+    await db_session.commit()
+    uid = u1.id
+
+    await weekly_top_service.settle(db_session, week)
+    db_session.expire_all()
+    award = (await db_session.execute(
+        select(WeeklyTopAward).where(WeeklyTopAward.week_start == week, WeeklyTopAward.user_id == uid)
+    )).scalars().one()
+    assert award.value == 1700  # paid from the closed week's standings
+    user = await db_session.get(type(u1), uid)
+    assert (user.arena_rating, user.mordoboi_rating, user.tactics_rating, user.kontra_rating) == (0, 0, 0, 1000)
+    # The week's league points are banked: the league itself never resets.
+    assert user.league_points == 8000
+
+    from app.services import league_service
+
+    user.arena_rating = 100  # the new week adds on top of the bank
+    assert league_service.total_rating(user) == 8100
+
+
+async def test_rating_reset_can_be_turned_off(client, db_session, bot_token):
+    config = await db_session.get(GameConfig, 1)
+    config.weekly_rating_reset_enabled = False
+    await db_session.commit()
+    _, u1 = await _user(client, db_session, bot_token, 980111, kontra=1700)
+    uid = u1.id
+    await weekly_top_service.settle(db_session, weekly_top_service.last_closed_week())
+    db_session.expire_all()
+    assert (await db_session.get(type(u1), uid)).kontra_rating == 1700

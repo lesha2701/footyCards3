@@ -22,6 +22,7 @@ from app.models.enums import (
 from app.models.penalty import PenaltyMatch, PenaltyQueueEntry
 from app.models.user import User
 from app.schemas.penalty_match import PenaltyMatchOut, PenaltyOpenChallengePreviewOut, PenaltyRoundOut
+from app.services import anti_bot_service
 from app.services import bingo_service, league_service, stake_guard_service
 from app.services.game_config_service import get_config
 from app.services.notification_service import notify
@@ -516,6 +517,13 @@ async def _finish_match(db: AsyncSession, match: PenaltyMatch, state: dict, forc
     locked_user = first_locked if first_locked.id == match.user_id else second_locked
     locked_opponent = first_locked if first_locked.id == match.opponent_user_id else second_locked
 
+    # Daily ranked limit / resting (anti_bot_service): played, not ranked.
+    config = await get_config(db)
+    if not anti_bot_service.take_ranked_slot(locked_user, config, "penalty"):
+        user_delta = 0
+        match.rating_delta = 0
+    if not anti_bot_service.take_ranked_slot(locked_opponent, config, "penalty"):
+        opponent_delta = 0
     locked_user.penalty_rating = max(0, locked_user.penalty_rating + user_delta)
     locked_opponent.penalty_rating = max(0, locked_opponent.penalty_rating + opponent_delta)
     db.add(locked_user)

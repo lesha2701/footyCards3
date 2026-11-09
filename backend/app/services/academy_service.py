@@ -32,7 +32,7 @@ from app.core.timeutil import ensure_aware
 from app.models.card_path import AcademyLedger, UserAcademy
 from app.models.enums import CardSource, Rarity, TransactionType
 from app.models.user import User
-from app.services import club_base_service
+from app.services import club_base_service, town_service
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
@@ -153,7 +153,7 @@ def _scout(config, level: int) -> dict:
 
 
 def state_out(academy: UserAcademy, config, academy_cards: int = 0, now: Optional[datetime] = None,
-              discount_pct: int = 0) -> dict:
+              discount_pct: int = 0, build_pct: int = 0) -> dict:
     """`discount_pct` — the «Клубная база» accounting discount on costs."""
     now = now or _now()
     levels = effective_levels(academy, now)
@@ -169,7 +169,8 @@ def state_out(academy: UserAcademy, config, academy_cards: int = 0, now: Optiona
             "effect": wing.effect_text.format(value=effect_at(config, code, level)) if level else None,
             "next_effect": wing.effect_text.format(value=effect_at(config, code, level + 1)) if level < top else None,
             "next_cost": cfg["costs"][level] - cfg["costs"][level] * discount_pct // 100 if level < top else None,
-            "next_hours": cfg["hours"][level] if level < top and level < len(cfg["hours"]) else None,
+            "next_hours": town_service.build_hours(cfg["hours"][level], build_pct)
+            if level < top and level < len(cfg["hours"]) else None,
             "building": code == building,
         })
     scout_level = levels.get("scout", 0)
@@ -236,7 +237,8 @@ async def get_state(db: AsyncSession, user: User) -> dict:
         academy = UserAcademy(user_id=user.id, levels={}, total_level=0)
     cards = await _academy_card_list(db, user.id)
     discount = await club_base_service.construction_discount_pct(db, user.id, config)
-    return {**state_out(academy, config, len(cards), discount_pct=discount), "cards": cards}
+    build_pct = await town_service.user_bonus(db, user.id, "build_pct", config)
+    return {**state_out(academy, config, len(cards), discount_pct=discount, build_pct=build_pct), "cards": cards}
 
 
 async def _replay(db: AsyncSession, user_id: int, key: Optional[str]) -> bool:
@@ -272,7 +274,8 @@ async def start_upgrade(db: AsyncSession, user: User, code: str, idempotency_key
     cost = club_base_service.discounted(
         cfg["costs"][level], await club_base_service.construction_discount_pct(db, user.id, config),
     )
-    hours = cfg["hours"][level] if level < len(cfg["hours"]) else 0
+    hours = town_service.build_hours(cfg["hours"][level] if level < len(cfg["hours"]) else 0,
+                                     await town_service.user_bonus(db, user.id, "build_pct", config))
     if cost:
         await debit_coins(db, locked_user, cost, TransactionType.academy_upgrade,
                           f"Академия: {WINGS[code].name}, уровень {level + 1}")
@@ -320,7 +323,10 @@ async def deliver_speedup(db: AsyncSession, user: User, invoice) -> dict:
     """Called by stars_payment_service.deliver_payment under the invoice
     lock. Finishes that exact construction; if it already finished on its
     own meanwhile, the payment is still recorded (nothing left to speed up).
-    A "base:" invoice is a «Клубная база» construction."""
+    A "base:" invoice is a «Клубная база» construction, a "town:" one opens
+    or renames the «Город»."""
+    if (invoice.academy_speedup or "").startswith("town:"):
+            return await town_service.deliver_stars_invoice(db, user, invoice)
     if (invoice.academy_speedup or "").startswith(club_base_service.SPEEDUP_PREFIX):
         return await club_base_service.deliver_speedup(db, user, invoice)
     if (invoice.academy_speedup or "").startswith(club_base_service.COSMETIC_PREFIX):

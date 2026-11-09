@@ -822,6 +822,21 @@ class GameConfigOut(BaseModel):
     club_base_income_max_days: int = 3
     club_base_art: dict = {}
     club_base_cosmetics: list[dict] = []
+    town_enabled: bool = True
+    town_districts: dict = {}
+    town_price_growth_pct: int = 4
+    town_income_max_hours: int = 24
+    town_unlock_coins: int = 5000
+    town_rename_stars: int = 99
+    town_hotel_price: int = 5000
+    town_hotel_rent_per_100_cards: int = 30
+    town_hotel_max_cards: int = 1000
+    town_residents_enabled: bool = True
+    town_resident_rent: int = 1
+    town_resident_spare_coins: dict = {}
+    town_resident_bonus_max_pct: int = 100
+    town_resident_max_daily_coins: int = 500
+    town_decor: dict = {}
     calendar_catchup_coins: int = 150
     calendar_catchup_stars: int = 10
     calendar_catchup_max_per_month: int = 5
@@ -931,6 +946,15 @@ class GameConfigOut(BaseModel):
     stake_max_coins: int = 500
     stake_pair_daily_limit: int = 2
     stake_daily_profit_cap: int = 2000
+    anti_bot_enabled: bool = True
+    anti_bot_max_streak_hours: int = 20
+    anti_bot_rest_hours: int = 4
+    ranked_daily_limit: int = 30
+    presence_check_enabled: bool = True
+    weekly_rating_reset_enabled: bool = True
+    presence_check_minutes: int = 60
+    presence_check_max_wrong: int = 3
+    presence_check_lock_minutes: int = 60
     trade_verified_min_age_days: int = 3
     trade_verified_min_active_days: int = 0
     trade_verified_min_stars: int = 49
@@ -1657,6 +1681,21 @@ class GameConfigUpdate(BaseModel):
     club_base_stars_per_hour: Optional[int] = Field(default=None, ge=1, le=100)
     club_base_income_max_days: Optional[int] = Field(default=None, ge=1, le=30)
     club_base_cosmetics: Optional[list[dict]] = Field(default=None, max_length=100)
+    town_enabled: Optional[bool] = None
+    town_districts: Optional[dict[str, dict[str, int]]] = None
+    town_price_growth_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    town_income_max_hours: Optional[int] = Field(default=None, ge=1, le=168)
+    town_unlock_coins: Optional[int] = Field(default=None, ge=0, le=10_000_000)
+    town_rename_stars: Optional[int] = Field(default=None, ge=0, le=10000)
+    town_hotel_price: Optional[int] = Field(default=None, ge=0, le=10_000_000)
+    town_hotel_rent_per_100_cards: Optional[int] = Field(default=None, ge=0, le=100_000)
+    town_hotel_max_cards: Optional[int] = Field(default=None, ge=0, le=100_000)
+    town_residents_enabled: Optional[bool] = None
+    town_resident_rent: Optional[int] = Field(default=None, ge=0, le=10_000)
+    town_resident_spare_coins: Optional[dict[str, int]] = None
+    town_resident_bonus_max_pct: Optional[int] = Field(default=None, ge=0, le=1000)
+    town_resident_max_daily_coins: Optional[int] = Field(default=None, ge=0, le=1_000_000)
+    town_decor: Optional[dict[str, dict[str, int]]] = None
     trade_send_min_account_age_days: Optional[int] = Field(default=None, ge=0, le=365)
     trade_send_min_active_days: Optional[int] = Field(default=None, ge=0, le=365)
     trade_daily_coins_receive_cap: Optional[int] = Field(default=None, ge=0)
@@ -1672,6 +1711,15 @@ class GameConfigUpdate(BaseModel):
     stake_max_coins: Optional[int] = Field(default=None, ge=0, le=1_000_000)
     stake_pair_daily_limit: Optional[int] = Field(default=None, ge=0, le=100)
     stake_daily_profit_cap: Optional[int] = Field(default=None, ge=0)
+    anti_bot_enabled: Optional[bool] = None
+    anti_bot_max_streak_hours: Optional[int] = Field(default=None, ge=4, le=72)
+    anti_bot_rest_hours: Optional[int] = Field(default=None, ge=1, le=24)
+    ranked_daily_limit: Optional[int] = Field(default=None, ge=0, le=1000)
+    presence_check_enabled: Optional[bool] = None
+    weekly_rating_reset_enabled: Optional[bool] = None
+    presence_check_minutes: Optional[int] = Field(default=None, ge=5, le=1440)
+    presence_check_max_wrong: Optional[int] = Field(default=None, ge=1, le=20)
+    presence_check_lock_minutes: Optional[int] = Field(default=None, ge=1, le=1440)
     trade_verified_min_age_days: Optional[int] = Field(default=None, ge=0, le=365)
     trade_verified_min_active_days: Optional[int] = Field(default=None, ge=0, le=365)
     trade_verified_min_stars: Optional[int] = Field(default=None, ge=0, le=100_000)

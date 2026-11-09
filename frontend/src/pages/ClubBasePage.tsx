@@ -14,6 +14,7 @@ import {
   setStadiumLook,
   upgradeClubBaseBuilding,
 } from "@/api/clubBase";
+import { fetchTown } from "@/api/town";
 import IllustratedBaseMap from "@/components/base/IllustratedBaseMap";
 import GameHero from "@/components/common/GameHero";
 import FirstVisitHint from "@/components/common/FirstVisitHint";
@@ -227,6 +228,7 @@ export default function ClubBasePage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const { data: state, isLoading } = useQuery({ queryKey: ["club-base"], queryFn: fetchClubBase, refetchInterval: 30_000 });
+  const { data: town } = useQuery({ queryKey: ["town"], queryFn: fetchTown, staleTime: 60_000 });
   const remaining = useCountdown(state?.construction?.ends_at);
 
   // A construction that just finished: pull the new level.
@@ -330,6 +332,27 @@ export default function ClubBasePage() {
           <p className="text-micro uppercase tracking-wider text-ink-chalk/70">из {state.max_level + state.academy_max_level}</p>
         </div>
       </GameHero>
+
+      {town?.enabled && (
+        <button
+          type="button"
+          onClick={() => navigate("/town")}
+          className="flex items-center gap-3 rounded-2xl border border-legend/40 bg-legend/10 p-3 text-left active:scale-[0.99]"
+        >
+          <span className="text-2xl" aria-hidden>🏙️</span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-display text-sm font-bold text-ink-chalk">
+              {town.unlocked ? `${town.name ?? "Город"} — к карте` : "Свой город у моря"}
+            </span>
+            <span className="block text-caption text-ink-mist">
+              {town.unlocked
+                ? "База — один из районов твоего города"
+                : `Дома, отель для твоих карт и рента каждый день · ${town.unlock_coins.toLocaleString("ru-RU")} монет`}
+            </span>
+          </span>
+          <span className="text-ink-mist" aria-hidden>›</span>
+        </button>
+      )}
 
       <FirstVisitHint
         id="club-base"

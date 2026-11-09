@@ -42,6 +42,7 @@ class PackOut(BaseModel):
     stadium_drop_chance: float
     skill_token_drop_chance: float = 0.0
     muse_drop_chance: float = 0.0
+    resident_drop_chance: float = 0.0
     # "default" | "path" | "collection:<id>" — see Pack.player_pool.
     player_pool: str = "default"
     pity_enabled: bool = True
@@ -87,6 +88,7 @@ class PackCreate(BaseModel):
     stadium_drop_chance: float = Field(default=0.0, ge=0, le=1)
     skill_token_drop_chance: float = Field(default=0.0, ge=0, le=1)
     muse_drop_chance: float = Field(default=0.0, ge=0, le=1)
+    resident_drop_chance: float = Field(default=0.0, ge=0, le=1)
     player_pool: str = Field(default="default", pattern=r"^(default|path|collection:\d{1,9})$")
     pity_enabled: bool = True
 
@@ -111,6 +113,7 @@ class PackUpdate(BaseModel):
     stadium_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)
     skill_token_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)
     muse_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)
+    resident_drop_chance: Optional[float] = Field(default=None, ge=0, le=1)
     player_pool: Optional[str] = Field(default=None, pattern=r"^(default|path|collection:\d{1,9})$")
     pity_enabled: Optional[bool] = None
 
@@ -165,11 +168,15 @@ class OpenedSkillTokenOut(BaseModel):
 
 
 class OpenedMuseOut(BaseModel):
-    """One pack slot that dropped a «Муза» (muse_service.muse_out)."""
+    """One pack slot that dropped a «Муза» (muse_service.muse_out) or — with
+    kind "resident" — a «Житель города» (town_service.resident_out, the same
+    card fields: name, title, icon, image_path, rarity, effect_label). Both
+    ride the pack result's `muses` list so every pack opener forwards them."""
 
     muse: dict
     is_new: bool
     copies: int
+    kind: str = "muse"
 
 
 class CollectionRewardGrantOut(BaseModel):

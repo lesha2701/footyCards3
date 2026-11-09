@@ -9,6 +9,7 @@ import { ListSkeleton } from "@/components/common/Skeleton";
 import AnnouncementBanner from "@/components/layout/AnnouncementBanner";
 import BottomNav from "@/components/layout/BottomNav";
 import MaintenanceBanner from "@/components/layout/MaintenanceBanner";
+import PresenceCheck from "@/components/layout/PresenceCheck";
 import TopBar from "@/components/layout/TopBar";
 import UpdateBanner from "@/components/layout/UpdateBanner";
 import { apiUrl, buildAuthHeaders } from "@/lib/api";
@@ -77,6 +78,7 @@ export default function AppLayout() {
       </main>
       <BottomNav />
       <LeaveConfirmDialog />
+      <PresenceCheck />
       <WeeklyTopAwardModal />
     </div>
   );

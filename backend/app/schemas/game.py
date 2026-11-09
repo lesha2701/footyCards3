@@ -375,6 +375,13 @@ class GameLimitsOut(BaseModel):
     # When a game's hourly cap is used up: the moment it frees up again
     # (key = the field name above). Games with plays left are absent.
     resets_at: dict[str, datetime] = {}
+    # Anti-bot «усталость»: games don't pay / rate until then (None = they do).
+    rest_until: Optional[datetime] = None
+    rest_hours: int = 0
+    # Rating modes whose ranked_daily_limit is used up today (anti_bot_service):
+    # they still play and pay, the rating waits for tomorrow.
+    ranked_limit: int = 0
+    ranked_done: list[str] = []
 
 
 # --- «Атака 1 на 1» ---

@@ -145,7 +145,8 @@ async def _delivered_result(db: AsyncSession, invoice: StarsInvoice) -> StarsInv
             status="completed", path_result={"kind": "path_attempt", "user_card_id": invoice.path_user_card_id},
         )
     if invoice.academy_speedup:
-        kind = ("base_speedup" if invoice.academy_speedup.startswith("base:")
+        kind = ("town_" + invoice.academy_speedup.split(":", 1)[1] if invoice.academy_speedup.startswith("town:")
+                else "base_speedup" if invoice.academy_speedup.startswith("base:")
                 else "base_cosmetic" if invoice.academy_speedup.startswith("basecos:") else "academy_speedup")
         return StarsInvoiceStatusOut(status="completed", path_result={"kind": kind})
     if invoice.shop_product:
@@ -345,6 +346,10 @@ async def validate_pre_checkout(db: AsyncSession, payload_token: str, total_amou
         from app.services.club_base_service import COSMETIC_PREFIX, SPEEDUP_PREFIX, validate_cosmetic_invoice
         from app.services.game_config_service import get_config
 
+        if invoice.academy_speedup.startswith("town:"):
+            from app.services import town_service
+
+            return await town_service.validate_stars_invoice(db, invoice)
         if invoice.academy_speedup.startswith(COSMETIC_PREFIX):
             return await validate_cosmetic_invoice(db, invoice)
         if invoice.academy_speedup.startswith(SPEEDUP_PREFIX):

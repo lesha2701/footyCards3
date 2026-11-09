@@ -310,6 +310,7 @@ export interface Pack {
   skill_token_drop_chance?: number;
   /** Per-slot chance of a «Муза» instead of a footballer (the «Музы» pack: 0.1). */
   muse_drop_chance?: number;
+  resident_drop_chance?: number;
   /** "path" = the «Академия» pack (diamond slots drop only path cards). */
   player_pool?: string;
   pity_enabled?: boolean;
@@ -386,6 +387,8 @@ export interface OpenedMuse {
   muse: Muse;
   is_new: boolean;
   copies: number;
+  /** "resident" — a «Житель города» card riding the same list (the same card fields). */
+  kind?: "muse" | "resident";
 }
 
 export interface PackBulkOpenResult {
@@ -885,6 +888,10 @@ export interface ArenaLineCompare {
 }
 
 export interface ArenaMatchReport {
+  /** Why the match paid / rated nothing (backend anti_bot_service.paused). */
+  paused?: { reason: "blocked" | "presence" | "rest"; until: string | null } | null;
+  /** False: today's ranked matches are used up — paid, not rated. */
+  ranked?: boolean;
   mvp?: MatchDuelActor | null;
   goal?: ArenaGoal | null;
   cup?: { coins: number; status: string; round: number; rounds_won?: number } | null;
@@ -1004,6 +1011,12 @@ export interface GameLimits {
   fergie_time?: number;
   /** Exhausted games only: when the hourly cap frees up again. */
   resets_at?: Partial<Record<string, string>>;
+  /** Anti-bot «усталость»: games don't pay coins / rating until then. */
+  rest_until?: string | null;
+  rest_hours?: number;
+  /** Rating modes (limit keys) whose daily ranked matches are used up today. */
+  ranked_limit?: number;
+  ranked_done?: string[];
 }
 
 export interface ArenaLeaderboardEntry {
@@ -1496,6 +1509,8 @@ export interface LeagueRewardClaim {
 
 export interface LeagueStatus {
   total_rating: number;
+  /** Banked from the past weeks; the three ratings are this week's. */
+  league_points?: number;
   arena_rating: number;
   tactics_rating: number;
   penalty_rating: number;
@@ -4041,12 +4056,13 @@ export interface WeeklyTopInfo {
   places: WeeklyTopPlace[];
   metrics: RankingMetric[];
   starting_values: Partial<Record<RankingMetric, number>>;
+  resetting?: RankingMetric[];
 }
 
 /** «Карты за звёзды»: a footballer card on sale for Telegram Stars. */
 /** A coach, stadium or Muse on sale (footballers come as `player`). */
 export interface CardOfferItem {
-  kind: "coach" | "stadium" | "muse";
+  kind: "coach" | "stadium" | "muse" | "resident";
   id: number;
   name: string;
   rarity: Rarity;
@@ -4057,7 +4073,7 @@ export interface CardOfferItem {
 
 export interface CardOffer {
   id: number;
-  kind?: "player" | "coach" | "stadium" | "muse";
+  kind?: "player" | "coach" | "stadium" | "muse" | "resident";
   player: Player | null;
   item?: CardOfferItem | null;
   stars_price: number;
@@ -4072,11 +4088,12 @@ export interface CardOffer {
 }
 
 export interface CardOfferAdminInput {
-  /** Exactly one of the four ids. */
+  /** Exactly one of the five ids. */
   player_id?: number | null;
   coach_id?: number | null;
   stadium_id?: number | null;
   muse_id?: number | null;
+  resident_id?: number | null;
   stars_price: number;
   title: string | null;
   starts_at: string | null;
@@ -4089,7 +4106,7 @@ export interface CardOfferAdminInput {
 
 export interface CardOfferAdmin extends Omit<CardOfferAdminInput, "player_id"> {
   id: number;
-  kind?: "player" | "coach" | "stadium" | "muse";
+  kind?: "player" | "coach" | "stadium" | "muse" | "resident";
   player: Player | null;
   item?: CardOfferItem | null;
   sold_count: number;

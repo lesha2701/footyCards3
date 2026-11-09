@@ -35,7 +35,7 @@ from app.schemas.tactico import (
     TacticoSquadOut,
     TacticoStatsOut,
 )
-from app.services import bingo_service, league_service, ranking_service, stake_guard_service
+from app.services import anti_bot_service, bingo_service, league_service, ranking_service, stake_guard_service
 from app.services.game_config_service import get_config
 from app.services.lineup_service import CATEGORY_POSITIONS
 from app.services.match_service import BOT_NAMES
@@ -913,6 +913,14 @@ async def _finish_match(
     else:
         locked_user = await lock_user_for_update(db, match.user_id)
 
+    # Daily ranked limit / resting (anti_bot_service): the match still counts
+    # as played, it just doesn't move the rating.
+    if not anti_bot_service.take_ranked_slot(locked_user, config, "tactico"):
+        user_delta = 0
+        match.rating_delta = 0
+    if locked_opponent is not None and not anti_bot_service.take_ranked_slot(locked_opponent, config, "tactico"):
+        opponent_delta = 0
+        state["opponent_rating_delta"] = 0
     locked_user.tactics_rating = max(0, locked_user.tactics_rating + user_delta)
     db.add(locked_user)
 

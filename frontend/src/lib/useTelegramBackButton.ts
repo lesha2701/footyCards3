@@ -14,6 +14,7 @@ function parentOf(pathname: string): string {
   if (pathname.startsWith("/trades") || pathname.startsWith("/upgrade") || pathname.startsWith("/market")) return "/collection";
   if (pathname.startsWith("/play") || pathname.startsWith("/player-tournament")) return "/play";
   if (pathname.startsWith("/packs")) return "/packs";
+  if (pathname.startsWith("/town/")) return "/town";
   if (pathname.startsWith("/friends") || pathname.startsWith("/gifts") || pathname.startsWith("/my-player")) return "/profile";
   return "/";
 }

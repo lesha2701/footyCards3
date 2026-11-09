@@ -26,6 +26,7 @@ CLUB_BASE_DIR = STATIC_DIR / "club_base" / "uploads"
 EQUIPMENT_DIR = STATIC_DIR / "equipment" / "uploads"
 COSMETICS_DIR = STATIC_DIR / "cosmetics" / "uploads"
 MUSES_DIR = STATIC_DIR / "muses" / "uploads"
+RESIDENTS_DIR = STATIC_DIR / "residents" / "uploads"
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif"}
 ALLOWED_CONTENT_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
@@ -49,6 +50,7 @@ MAX_SIDE = {
     "equipment": 512,
     "cosmetics": 512,
     "muses": 768,
+    "residents": 768,
     "leagues": 384,
     "badges": 256,
     "trophies": 256,
@@ -266,4 +268,13 @@ async def save_muse_image(upload: UploadFile, name: str) -> str:
 
 
 def delete_muse_image(relative_path: str | None) -> None:
+    _delete_static(relative_path)
+
+
+async def save_resident_image(upload: UploadFile, name: str) -> str:
+    """Validates and stores an uploaded «Жители города» card picture."""
+    return await _save_upload(upload, RESIDENTS_DIR, "residents/uploads", name, "residents")
+
+
+def delete_resident_image(relative_path: str | None) -> None:
     _delete_static(relative_path)

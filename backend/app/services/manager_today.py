@@ -93,16 +93,21 @@ async def _today(db: AsyncSession, user: User, club: Optional[ManagerClub], seas
                  next_match: Optional[dict], now: datetime, config) -> list[dict]:
     """What to do now, most urgent first: {code, icon, text, tab, urgent}."""
     items: list[dict] = []
-    offers_to_me = int((await db.execute(
-        select(func.count(ManagerContract.id)).where(ManagerContract.user_id == user.id, ManagerContract.status == "offered")
-    )).scalar_one())
+    mine = (await db.execute(
+        select(ManagerContract.kind == ms.RENEW, func.count(ManagerContract.id))
+        .where(ManagerContract.user_id == user.id, ManagerContract.status == "offered").group_by(ManagerContract.kind == ms.RENEW)
+    )).all()
+    renew_me = sum(n for is_renew, n in mine if is_renew)
+    offers_to_me = sum(n for is_renew, n in mine if not is_renew)
+    if renew_me:
+        items.append({"code": "renew_me", "icon": "✍️", "text": "Клуб предлагает тебе новый контракт", "tab": "me", "urgent": True})
     if club is None:
         if offers_to_me:
             items.append({"code": "offers_me", "icon": "✍️", "text": f"Тебя зовут в клуб: {offers_to_me}", "tab": "me", "urgent": True})
         return items
     incoming = int((await db.execute(
         select(func.count(ManagerContract.id)).where(
-            ManagerContract.status == "offered",
+            ManagerContract.status == "offered", ManagerContract.kind != ms.RENEW,
             ManagerContract.from_contract_id.in_(
                 select(ManagerContract.id).where(ManagerContract.club_id == club.id, ManagerContract.status == "active")
             ),

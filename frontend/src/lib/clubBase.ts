@@ -23,7 +23,12 @@ export function formatBuildTime(seconds: number): string {
 
 /** Build hours as shown on a button: whole days as "N д". */
 export function hoursLabel(hours: number): string {
-  return hours >= 24 && hours % 24 === 0 ? `${hours / 24} д` : `${hours} ч`;
+  if (hours >= 24 && hours % 24 === 0) return `${hours / 24} д`;
+  // Residents («Оксана») shorten the build time to whole minutes.
+  const minutes = Math.round(hours * 60);
+  const h = Math.floor(minutes / 60), m = minutes % 60;
+  if (!m) return `${h} ч`;
+  return h ? `${h} ч ${m} мин` : `${m} мин`;
 }
 
 /** Why the upgrade button is off, or null when it can be pressed (the

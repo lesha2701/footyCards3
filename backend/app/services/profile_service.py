@@ -53,13 +53,10 @@ async def _arena_rank(db: AsyncSession, user: User) -> int:
 
 
 async def _league_rank(db: AsyncSession, user: User) -> int:
-    league_total = user.arena_rating + user.tactics_rating + user.penalty_rating
+    from app.services.league_service import total_rating, total_rating_expr
+
     higher = (
-        await db.execute(
-            select(func.count(User.id)).where(
-                (User.arena_rating + User.tactics_rating + User.penalty_rating) > league_total
-            )
-        )
+        await db.execute(select(func.count(User.id)).where(total_rating_expr() > total_rating(user)))
     ).scalar_one()
     return higher + 1
 
