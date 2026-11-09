@@ -7,7 +7,7 @@
   "centurion");
 - «Старожил» (100 days in the game, 50 active days): the green badge, a
   profile frame, a legendary card and the anniversary pack;
-- «Основатель» (the first 100 players): a badge and a gold profile frame;
+- «Первопроходец» (the first 100 players): a badge and a gold profile frame;
 - «Путь к Центуриону»: milestones 30 and 60 added to streak_rewards when the
   admin hasn't set them;
 - «Страховка серии»: users.streak_saved_value / _until / streak_save_free_used_at.
@@ -33,11 +33,11 @@ BADGES = {
     # key: (name, icon, image, sort)
     "centurion": ("Центурион", "💜", "badges/centurion_100.svg", 954),
     "oldtimer": ("Старожил", "💚", "badges/oldtimer_100.svg", 955),
-    "founder": ("Основатель", "🏛️", "badges/founder.svg", 956),
+    "pioneer": ("Первопроходец", "🏛️", "badges/pioneer.svg", 956),
 }
 FRAMES = {
     "oldtimer": ("Старожил", "100 дней в VICTOR FC — живой и активный", "oldtimer", 957),
-    "founder": ("Основатель", "Один из первых 100 игроков VICTOR FC", "founder", 958),
+    "pioneer": ("Первопроходец", "Один из первых 100 игроков VICTOR FC", "pioneer", 958),
 }
 CENTURION_IMAGE = "players/legendary/centurion_beckenbauer.webp"
 # Added to the «дней подряд» ladder only when the admin has no such step.

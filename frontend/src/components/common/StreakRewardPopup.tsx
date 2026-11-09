@@ -28,7 +28,7 @@ const BURST = ["🎉", "⚽", "🏆", "✨", "🎖️", "🎊", "⭐", "🔥"];
 const LOYALTY_COPY: Record<LoyaltyCode, { big: string; caption: string; title: string }> = {
   centurion: { big: "100", caption: "дней подряд · Центурион", title: "Эксклюзивная карта — только для своих!" },
   oldtimer: { big: "100", caption: "дней в игре · Старожил", title: "Спасибо, что ты с нами так долго!" },
-  founder: { big: "🏛️", caption: "Основатель", title: "Ты один из первых 100 игроков!" },
+  pioneer: { big: "🏛️", caption: "Первопроходец", title: "Ты один из первых 100 игроков!" },
 };
 
 /** Keepsakes the server already granted — «N дней подряд»

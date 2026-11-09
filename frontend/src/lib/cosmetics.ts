@@ -18,9 +18,9 @@ export const FRAME_STYLES: Record<string, string> = {
   weekly_top: "bg-gradient-to-br from-slate-100 via-amber-200 to-slate-400 shadow-[0_0_14px_rgba(226,232,240,0.55)]",
   // «Ультрас»: the stands' flare red and smoke.
   ultras: "bg-[conic-gradient(from_90deg,#ef4444,#111827,#f97316,#111827,#ef4444)] shadow-[0_0_18px_rgba(239,68,68,0.65)]",
-  // Loyalty keepsakes (loyalty_service), never sold: «Основатель» — the first
+  // Loyalty keepsakes (loyalty_service), never sold: «Первопроходец» — the first
   // 100 players, «Старожил» — 100 days in the game.
-  founder: "bg-[conic-gradient(from_45deg,#fff7d6,#f59e0b,#7c2d12,#fbbf24,#fff7d6)] shadow-[0_0_20px_rgba(251,191,36,0.7)]",
+  pioneer: "bg-[conic-gradient(from_45deg,#fff7d6,#f59e0b,#7c2d12,#fbbf24,#fff7d6)] shadow-[0_0_20px_rgba(251,191,36,0.7)]",
   oldtimer: "bg-[conic-gradient(from_0deg,#bbf7d0,#16a34a,#064e3b,#4ade80,#bbf7d0)] shadow-[0_0_18px_rgba(74,222,128,0.6)]",
 };
 

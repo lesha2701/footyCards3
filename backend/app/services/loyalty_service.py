@@ -6,7 +6,7 @@
   Badge «Старожил» (green 100), the profile frame, a card of
   `oldtimer_card_rarity` and a pack (`oldtimer_pack_id`, else the anniversary
   pack).
-- «Основатель»: one of the first `founder_limit` registered players (by id,
+- «Первопроходец»: one of the first `pioneer_limit` registered players (by id,
   like the anniversary recap's player number). Badge and gold frame.
 - «Центурион» backpay: the card for 100 days in a row lives in
   GameConfig.streak_rewards (player_id); whoever got the 100-day keepsake
@@ -43,7 +43,7 @@ from app.services.wallet_service import lock_user_for_update
 logger = logging.getLogger(__name__)
 
 OLDTIMER = "oldtimer"
-FOUNDER = "founder"
+PIONEER = "pioneer"
 CENTURION = "centurion"
 CENTURION_DAYS = 100
 
@@ -56,9 +56,9 @@ DEFAULTS: dict[str, Any] = {
     "oldtimer_pack_id": None,
     "oldtimer_badge_id": None,
     "oldtimer_cosmetic_id": None,
-    "founder_limit": 100,
-    "founder_badge_id": None,
-    "founder_cosmetic_id": None,
+    "pioneer_limit": 100,
+    "pioneer_badge_id": None,
+    "pioneer_cosmetic_id": None,
     "centurion_player_id": None,
     "centurion_badge_id": None,
     "streak_save_enabled": True,
@@ -68,16 +68,16 @@ DEFAULTS: dict[str, Any] = {
     "streak_save_free_period_days": 30,
 }
 INT_KEYS = (
-    "oldtimer_days", "oldtimer_active_days", "oldtimer_coins", "founder_limit", "streak_save_min_streak",
+    "oldtimer_days", "oldtimer_active_days", "oldtimer_coins", "pioneer_limit", "streak_save_min_streak",
     "streak_save_hours", "streak_save_stars", "streak_save_free_period_days",
 )
 ID_KEYS = (
-    "oldtimer_pack_id", "oldtimer_badge_id", "oldtimer_cosmetic_id", "founder_badge_id", "founder_cosmetic_id",
+    "oldtimer_pack_id", "oldtimer_badge_id", "oldtimer_cosmetic_id", "pioneer_badge_id", "pioneer_cosmetic_id",
     "centurion_player_id", "centurion_badge_id",
 )
 TITLES = {
     OLDTIMER: ("Старожил", "100 дней в VICTOR FC — спасибо, что ты с нами!"),
-    FOUNDER: ("Основатель", "Ты один из первых игроков VICTOR FC."),
+    PIONEER: ("Первопроходец", "Ты один из первых игроков VICTOR FC."),
     CENTURION: ("Центурион", "100 дней подряд — эксклюзивная карта, которой нет в паках."),
 }
 
@@ -124,10 +124,10 @@ async def _due(db: AsyncSession, user: User, s: dict, have: set[str]) -> list[tu
     due: list[tuple[str, Bundle]] = []
     if user.is_banned:
         return due
-    if FOUNDER not in have and (s["founder_badge_id"] or s["founder_cosmetic_id"]):
+    if PIONEER not in have and (s["pioneer_badge_id"] or s["pioneer_cosmetic_id"]):
         number = (await db.execute(select(func.count(User.id)).where(User.id <= user.id))).scalar_one()
-        if number <= s["founder_limit"]:
-            due.append((FOUNDER, Bundle(badge_id=s["founder_badge_id"], cosmetic_id=s["founder_cosmetic_id"])))
+        if number <= s["pioneer_limit"]:
+            due.append((PIONEER, Bundle(badge_id=s["pioneer_badge_id"], cosmetic_id=s["pioneer_cosmetic_id"])))
     created = _aware(user.created_at)
     if OLDTIMER not in have and created and created <= _now() - timedelta(days=s["oldtimer_days"]):
         active = (await db.execute(

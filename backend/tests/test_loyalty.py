@@ -116,17 +116,17 @@ async def test_oldtimer_needs_100_days_and_50_active(client, db_session, bot_tok
     assert popup[0]["rewards"]["cards"][0]["player"]["rarity"] == "legendary"
 
 
-async def test_founder_only_for_the_first_players(client, db_session, bot_token):
-    gold = await create_badge(db_session, name="Основатель", icon="🏛️")
+async def test_pioneer_only_for_the_first_players(client, db_session, bot_token):
+    gold = await create_badge(db_session, name="Первопроходец", icon="🏛️")
     config = await get_config(db_session)
-    config.loyalty_settings = {"founder_badge_id": gold.id, "founder_limit": 1}
+    config.loyalty_settings = {"pioneer_badge_id": gold.id, "pioneer_limit": 1}
     await db_session.commit()
     first_headers, first = await _register(client, db_session, bot_token, 871004)
     second_headers, second = await _register(client, db_session, bot_token, 871005)
 
     await _new_day(client, db_session, first_headers, first)
     await _new_day(client, db_session, second_headers, second)
-    assert [p["code"] for p in (await client.get("/api/v1/loyalty/unseen", headers=first_headers)).json()] == ["founder"]
+    assert [p["code"] for p in (await client.get("/api/v1/loyalty/unseen", headers=first_headers)).json()] == ["pioneer"]
     assert (await client.get("/api/v1/loyalty/unseen", headers=second_headers)).json() == []
 
 

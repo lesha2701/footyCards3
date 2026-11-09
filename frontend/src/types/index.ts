@@ -4438,7 +4438,7 @@ export interface LoyaltyStatus {
   streak_save: StreakSave | null;
 }
 
-export type LoyaltyCode = "oldtimer" | "founder" | "centurion";
+export type LoyaltyCode = "oldtimer" | "pioneer" | "centurion";
 
 export interface LoyaltyReward {
   id: number;

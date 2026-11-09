@@ -12,9 +12,9 @@ const FIELDS: [string, string][] = [
   ["oldtimer_pack_id", "«Старожил»: ID пака (пусто = пак юбилея)"],
   ["oldtimer_badge_id", "«Старожил»: ID значка"],
   ["oldtimer_cosmetic_id", "«Старожил»: ID рамки"],
-  ["founder_limit", "«Основатель»: первые N игроков"],
-  ["founder_badge_id", "«Основатель»: ID значка"],
-  ["founder_cosmetic_id", "«Основатель»: ID рамки"],
+  ["pioneer_limit", "«Первопроходец»: первые N игроков"],
+  ["pioneer_badge_id", "«Первопроходец»: ID значка"],
+  ["pioneer_cosmetic_id", "«Первопроходец»: ID рамки"],
   ["centurion_player_id", "«Центурион»: ID футболиста"],
   ["centurion_badge_id", "«Центурион»: ID значка"],
   ["streak_save_min_streak", "Страховка: от скольки дней серии"],
@@ -23,9 +23,9 @@ const FIELDS: [string, string][] = [
   ["streak_save_free_period_days", "Страховка: бесплатно с абонементом раз в N дней"],
 ];
 const RARITIES = ["", "common", "rare", "epic", "legendary", "diamond"];
-const LABELS: Record<string, string> = { oldtimer: "Старожил", founder: "Основатель", centurion: "Центурион (доплата)" };
+const LABELS: Record<string, string> = { oldtimer: "Старожил", pioneer: "Первопроходец", centurion: "Центурион (доплата)" };
 
-/** Admin «Лояльность»: «Старожил», «Основатель», «Центурион» and «Страховка серии». */
+/** Admin «Лояльность»: «Старожил», «Первопроходец», «Центурион» and «Страховка серии». */
 export default function LoyaltySettingsPanel() {
   const queryClient = useQueryClient();
   const { data } = useQuery({ queryKey: ["admin-loyalty"], queryFn: fetchAdminLoyalty });
@@ -66,7 +66,7 @@ export default function LoyaltySettingsPanel() {
     <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
       <p className="mb-1 font-display text-base font-bold">Лояльность</p>
       <p className="mb-3 text-xs text-slate-500">
-        «Старожил» (100 дней в игре и 50 активных), «Основатель» (первые игроки), карта «Центурион» за 100 дней подряд
+        «Старожил» (100 дней в игре и 50 активных), «Первопроходец» (первые игроки), карта «Центурион» за 100 дней подряд
         (её саму выдаёт порог 100 в «Наградах за дни подряд»; здесь — доплата тем, кто дошёл до 100 раньше) и «Страховка
         серии». Выдано: {granted || "пока никому"}.
       </p>
