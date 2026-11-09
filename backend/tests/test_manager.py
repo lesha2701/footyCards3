@@ -421,8 +421,24 @@ async def test_style_shop_merch_and_pro(client, db_session, bot_token):
     assert (await client.post(f"{API}/manager/clubs/{club_id}/merch/scarf", headers=a_headers)).status_code == 409
     db_session.expire_all()
     assert (await db_session.get(User, fan_id)).balance == START - scarf["coins"]
-    assert (await db_session.get(ManagerClub, club_id)).budget == budget + scarf["eur"]
+    config = await get_config(db_session)
+    club = await db_session.get(ManagerClub, club_id)
+    scarf_eur = manager_shop.merch_eur(scarf["coins"], club.division, config)
+    merch_cap = manager_shop.merch_cap(club.division, config)
+    assert 0 < scarf_eur < scarf["eur"] and merch_cap < config.manager_merch_cap_eur  # in % of the grant now
+    assert club.budget == budget + scarf_eur
+    assert next(m for m in card["merch"] if m["code"] == "scarf")["eur"] == scarf_eur
     assert (await client.get(f"{API}/manager/popular", headers=fan_headers)).json()["clubs"][0]["id"] == club_id
+    assert card["merch_left_eur"] == merch_cap - scarf_eur
+
+    # The season cap reached: no more sales (the fan's coins would bring nothing).
+    club = await db_session.get(ManagerClub, club_id)
+    club.merch_eur = merch_cap
+    await db_session.commit()
+    assert (await client.get(f"{API}/manager/clubs/{club_id}", headers=fan_headers)).json()["merch_left_eur"] == 0
+    assert (await client.post(f"{API}/manager/clubs/{club_id}/merch/cap", headers=fan_headers)).status_code == 409
+    db_session.expire_all()
+    assert (await db_session.get(User, fan_id)).balance == START - scarf["coins"]
 
     # «Менеджер Pro» through Stars: the scout opens, the gold frame becomes usable.
     assert (await client.get(f"{API}/manager/scout", headers=a_headers)).status_code == 403

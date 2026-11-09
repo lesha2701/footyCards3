@@ -913,7 +913,6 @@ export default function AdminGamesPage() {
           {field("manager_parachute_pct", "Компенсация за вылет, % разницы грантов")}
           {field("manager_match_xp", "Опыт «Моему игроку» за матч")}
           {field("manager_freshness_cost", "Свежесть «Моего игрока» за матч (0 = не устаёт)")}
-          {field("manager_merch_cap_eur", "Мерч: € одному клубу за сезон, максимум")}
           {field("manager_pro_stars", "«Менеджер Pro»: цена, звёзды (0 = не продаётся)")}
           {field("manager_pro_days", "«Менеджер Pro»: дней")}
           {listField("manager_value_ratings", "Шкала стоимости: рейтинги")}
@@ -926,7 +925,7 @@ export default function AdminGamesPage() {
           {listField("manager_place_budget", "€ в бюджет за 1–3 места (× % дивизиона)")}
           {jsonField("manager_slots", "Время туров (местное), по порядку")}
           {jsonField("manager_cosmetics", "Магазин стиля клуба: kind = shape | symbol | rim | fx | kit | frame | theme | stadium_name | stands (трибуны) | poster (постер чемпиона); coins / stars 0 = не продаётся за них, оба 0 = бесплатно")}
-          {jsonField("manager_merch", "Мерч для болельщиков: coins сгорают, eur идут в бюджет клуба")}
+          {jsonField("manager_merch", "Мерч для болельщиков: coins сгорают; доход клуба — в «Кабинете президента» (% гранта за 1000 монет), eur не используется")}
           <ManagerFinanceFields value={form.manager_finance} onChange={(next) => setForm({ ...form, manager_finance: next })} />
         </div>
       </section>

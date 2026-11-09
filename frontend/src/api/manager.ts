@@ -334,6 +334,8 @@ export interface ManagerClubCard {
   is_mine: boolean;
   xi: Pick<ManagerSquadPlayer, "slot" | "kind" | "name" | "position" | "rating">[];
   merch: (ManagerMerchItem & { bought: boolean })[];
+  /** What merch can still bring the club this season (0 = sales closed). */
+  merch_left_eur?: number;
 }
 
 export async function fetchManager(): Promise<ManagerView> {

@@ -68,6 +68,10 @@ DEFAULTS: dict = {
     "value_per_base_level": 300_000, "value_per_fan": 20_000, "value_per_title": 5_000_000,
     # Fans won on tours buy tickets: € per fan per home match (× % of the division).
     "fan_ticket_eur": 100,
+    # Fans' merchandise (manager_shop): the club gets merch_eur_pct_per_1000_coins %
+    # of its division grant G per 1000 coins the fan burns (the same rate for every
+    # item), at most merch_cap_pct % of G a season.
+    "merch_eur_pct_per_1000_coins": 0.6, "merch_cap_pct": 30,
     # Shirt sponsor: € per season = base + per «Клубный магазин» level (× % of the
     # division), +% per season beyond the first.
     "kit_base_eur": 300_000, "kit_eur_per_level": 60_000, "kit_long_bonus_pct": 10, "kit_seasons_max": 3,
