@@ -246,13 +246,13 @@ async def test_no_cards_no_bout(client, db_session, bot_token):
 async def test_bot_bouts_past_the_daily_rewarded_limit_move_no_rating(client, db_session, bot_token):
     await _set_config(db_session, mordoboi_rounds=1, mordoboi_exchanges_per_round=1, mordoboi_daily_limit=1)
     headers, _, _ = await _player(client, db_session, bot_token, 980016)
-    for expected in (3, 0):  # the 2nd bout of the day is past the cap: no coins, no rating
+    for expected in (1, 0):  # the 2nd bout of the day is past the cap: no coins, no rating
         match = (await client.post(f"{API}/matches/bot", headers=headers)).json()
         await _rewrite_state(db_session, match["id"], _ko_ready)
         end = (await _pick(client, headers, match, "jab")).json()
         assert end["result"] == "win" and end["rating_delta"] == expected
     db_session.expire_all()
-    assert (await get_user_by_telegram_id(db_session, 980016)).mordoboi_rating == 3
+    assert (await get_user_by_telegram_id(db_session, 980016)).mordoboi_rating == 1
 
 
 async def test_bot_bout_resolves_each_pick_and_hides_nothing_unfair(client, db_session, bot_token):
@@ -276,10 +276,10 @@ async def test_bot_bout_to_the_end_pays_reward_and_rating(client, db_session, bo
     assert end["status"] == "finished" and end["win_reason"] == "ko"
     config = await db_session.get(GameConfig, 1)
     assert end["reward_coins"] == config.mordoboi_reward_win + config.mordoboi_reward_ko_bonus
-    assert end["rating_delta"] == 3
+    assert end["rating_delta"] == 1  # a win over the bot is worth a third (bot_win_rating_pct)
     db_session.expire_all()
     fresh = await get_user_by_telegram_id(db_session, 980006)
-    assert fresh.mordoboi_rating == 3 and fresh.mordoboi_rewarded_attempts_today == 1
+    assert fresh.mordoboi_rating == 1 and fresh.mordoboi_rewarded_attempts_today == 1
     txs = (await db_session.execute(
         select(CoinTransaction).where(CoinTransaction.user_id == fresh.id, CoinTransaction.type == TransactionType.mordoboi_reward)
     )).scalars().all()

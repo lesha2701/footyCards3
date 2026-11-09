@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 import { useAdminToastStore } from "@/admin/adminToastStore";
-import { banAntifraudUsers, fetchAntifraudScan, fetchBotSuspects, setRewardsBlocked, type BotSuspect } from "@/admin/api";
+import { banAntifraudUsers, fetchAntifraudScan, fetchBotSuspects, setAntiBotWatch, setRewardsBlocked, type BotSuspect } from "@/admin/api";
 import type { AntifraudAccount, AntifraudFarm, AntifraudHub } from "@/admin/types";
 import { ApiRequestError } from "@/lib/api";
 
@@ -245,6 +245,15 @@ function BotsSection() {
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
+  const watch = useMutation({
+    mutationFn: ({ ids, watched }: { ids: number[]; watched: boolean }) => setAntiBotWatch(ids, watched),
+    onSuccess: (res, vars) => {
+      toast(`${vars.watched ? "Под наблюдением" : "Сняты с наблюдения"}: ${res.changed}`, "success");
+      setSelected(new Set());
+      queryClient.invalidateQueries({ queryKey: ["admin-bot-suspects"] });
+    },
+    onError: (err) => toast(err instanceof ApiRequestError ? err.message : "Не получилось", "error"),
+  });
   const sure = (data ?? []).filter((b) => !b.rewards_blocked && (b.days_without_sleep >= 2 || b.active_hours_per_day >= 16));
 
   return (
@@ -277,12 +286,20 @@ function BotsSection() {
               className="rounded-lg bg-white/10 px-3 py-1.5 font-bold text-slate-200 disabled:opacity-40">
               Вернуть выбранным
             </button>
+            <button disabled={watch.isPending} onClick={() => watch.mutate({ ids: [...selected], watched: true })}
+              className="rounded-lg bg-sky-500/80 px-3 py-1.5 font-bold text-white disabled:opacity-40">
+              👁 Под наблюдение
+            </button>
+            <button disabled={watch.isPending} onClick={() => watch.mutate({ ids: [...selected], watched: false })}
+              className="rounded-lg bg-white/10 px-3 py-1.5 font-bold text-slate-200 disabled:opacity-40">
+              Снять наблюдение
+            </button>
           </>
         )}
       </div>
       {isLoading ? <p className="text-xs text-slate-400">Загрузка…</p> : (
         <Table
-          head={["", "Аккаунт", "Игр", "Часов/день", "Дней без сна", "Макс. перерыв, ч", "Сек. между играми", "Арена", "Баланс", "Stars", "Награды"]}
+          head={["", "Аккаунт", "Игр", "Часов/день", "Дней без сна", "Макс. перерыв, ч", "Сек. между играми", "Арена", "Баланс", "Stars", "Награды", "Наблюдение"]}
           rows={(data ?? []).map((b: BotSuspect) => [
             <input key="p" type="checkbox" checked={selected.has(b.id)} onChange={() => toggle(b.id)} aria-label={`Выбрать ${b.username ?? b.id}`} />,
             <span key="w" className={b.stars_paid ? "text-amber-300" : ""}>
@@ -294,6 +311,7 @@ function BotsSection() {
             b.longest_break_hours, b.median_seconds_between, fmt(b.arena_points), fmt(b.balance),
             b.stars_paid ? `⭐ ${b.stars_paid}` : "—",
             b.rewards_blocked ? <span key="r" className="text-red-400">выкл.</span> : b.resting ? "отдых" : "вкл.",
+            b.watched ? <span key="o" className="text-sky-300">👁 да</span> : "—",
           ])}
         />
       )}

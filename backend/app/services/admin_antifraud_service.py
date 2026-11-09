@@ -243,6 +243,7 @@ async def bot_suspects(db: AsyncSession, days: int = 7, min_games: int = 150) ->
             "stars_paid": paid.get(uid, 0),
             "rewards_blocked": user.game_rewards_blocked_flag,
             "resting": user.game_rewards_blocked and not user.game_rewards_blocked_flag,
+            "watched": user.anti_bot_watch,
         })
     rows.sort(key=lambda r: (-r["days_without_sleep"], -r["active_hours_per_day"]))
     return rows[:BOT_LIST]
@@ -258,4 +259,22 @@ async def set_rewards_blocked(db: AsyncSession, user_ids: list[int], blocked: bo
     )).scalars().all())
     if targets:
         await db.execute(update(User).where(User.id.in_(targets)).values(game_rewards_blocked=blocked))
+    return targets
+
+
+async def set_watched(db: AsyncSession, user_ids: list[int], watched: bool) -> list[int]:
+    """«Под наблюдением» on / off: only these accounts get «Ты здесь?» and
+    «усталость». Taking an account off clears its open check / rest. The
+    caller commits."""
+    ids = list(dict.fromkeys(user_ids))[:MAX_BAN_BATCH]
+    if not ids:
+        return []
+    targets = list((await db.execute(
+        select(User.id).where(User.id.in_(ids), User.is_admin.is_(False))
+    )).scalars().all())
+    if targets:
+        values: dict = {"anti_bot_watch": watched}
+        if not watched:
+            values.update(presence_challenge=None, presence_due_at=None, rest_required_until=None)
+        await db.execute(update(User).where(User.id.in_(targets)).values(**values))
     return targets

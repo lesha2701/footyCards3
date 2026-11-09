@@ -1108,6 +1108,8 @@ async def _finish_match(
         delta = _BASE_RATING_DELTA[side_result[side]] * multiplier
         if state.get("difficulty") == "easy" and delta > 1:
             delta = 1  # the easy bot is no rating farm (same rule as Tactico)
+        if match.opponent_type == StrategoOpponentType.bot:
+            delta = anti_bot_service.bot_win_delta(delta, config)
         if not anti_bot_service.take_ranked_slot(locked[uid], config, "stratego"):
             delta = 0  # daily ranked limit / resting (anti_bot_service)
         locked[uid].stratego_rating = max(0, locked[uid].stratego_rating + delta)

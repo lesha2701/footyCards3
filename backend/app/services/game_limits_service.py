@@ -46,7 +46,7 @@ def get_remaining_plays(user: User, config: GameConfig) -> GameLimitsOut:
     limit = config.hourly_game_limit
     free_kick_limit = config.free_kick_hourly_limit
     rest_until = None
-    if config.anti_bot_enabled and user.rest_required_until is not None:
+    if config.anti_bot_enabled and user.anti_bot_watch and user.rest_required_until is not None:
         until = ensure_aware(user.rest_required_until)
         if until > datetime.now(timezone.utc):
             rest_until = until

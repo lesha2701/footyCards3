@@ -77,7 +77,7 @@ export default function PresenceCheck() {
 
   if (!challenge) {
     return message ? (
-      <div className="fixed inset-x-4 bottom-24 z-50 rounded-2xl bg-bg-surface p-3 text-center text-xs text-amber-200 shadow-lg" role="status">
+      <div className="fixed inset-x-4 bottom-24 z-[200] rounded-2xl bg-bg-surface p-3 text-center text-xs text-amber-200 shadow-lg" role="status">
         {message}
         <button onClick={() => setMessage(null)} className="ml-2 font-semibold text-accent-lime">OK</button>
       </div>
@@ -85,7 +85,7 @@ export default function PresenceCheck() {
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true">
       <div className="w-full max-w-sm rounded-3xl bg-bg-surface p-5 text-center">
         <p className="font-display text-lg font-bold text-ink-chalk">Ты здесь? 👋</p>
         <p className="mt-1 text-xs text-ink-mist">

@@ -279,6 +279,8 @@ export interface BotSuspect {
   stars_paid: number;
   rewards_blocked: boolean;
   resting: boolean;
+  /** «Под наблюдением»: gets «Ты здесь?» and «усталость». */
+  watched: boolean;
 }
 
 export async function fetchBotSuspects(params: { days: number; min_games: number }): Promise<BotSuspect[]> {
@@ -288,6 +290,11 @@ export async function fetchBotSuspects(params: { days: number; min_games: number
 
 export async function setRewardsBlocked(userIds: number[], blocked: boolean): Promise<{ changed: number }> {
   const { data } = await api.post<{ changed: number }>("/admin/antifraud/rewards-block", { user_ids: userIds, blocked });
+  return data;
+}
+
+export async function setAntiBotWatch(userIds: number[], watched: boolean): Promise<{ changed: number }> {
+  const { data } = await api.post<{ changed: number }>("/admin/antifraud/watch", { user_ids: userIds, watched });
   return data;
 }
 

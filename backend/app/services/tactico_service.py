@@ -882,14 +882,17 @@ async def _finish_match(
     # - friend: zero change either side — an alt account farming rating for
     #   a main account is otherwise trivial to pull off.
     # - online (matchmaking): every outcome doubled both sides.
-    # - bot on Лёгкий difficulty: a win is capped to +1 — this difficulty is
-    #   trivially beatable and would otherwise be the obvious rating farm.
+    # - bot: a win is cut to config.bot_win_rating_pct (+1) on any difficulty —
+    #   beating the bot over and over would otherwise be the rating farm.
     if match.opponent_type == TacticoOpponentType.friend:
         user_delta, opponent_delta = 0, 0
     elif match.opponent_type == TacticoOpponentType.online:
         user_delta, opponent_delta = user_base * 2, opponent_base * 2
-    elif match.opponent_type == TacticoOpponentType.bot and match.difficulty == MatchDifficulty.easy and result == MatchResult.win:
-        user_delta, opponent_delta = 1, 0
+    elif match.opponent_type == TacticoOpponentType.bot:
+        user_delta = anti_bot_service.bot_win_delta(user_base, config)
+        if match.difficulty == MatchDifficulty.easy and result == MatchResult.win:
+            user_delta = min(user_delta, 1)
+        opponent_delta = 0
     else:
         user_delta, opponent_delta = user_base, opponent_base
     state["opponent_rating_delta"] = opponent_delta

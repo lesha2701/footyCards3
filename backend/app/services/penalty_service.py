@@ -148,7 +148,7 @@ async def _apply_finish(db: AsyncSession, user: User, session: GameSession, stat
     session.reward_coins = {
         "win": config.penalty_reward_win, "loss": config.penalty_reward_loss,
     }[result]
-    rating_delta = 3 if result == "win" else -1
+    rating_delta = anti_bot_service.bot_win_delta(3 if result == "win" else -1, config)  # the shootout is vs the bot
     locked_user = await lock_user_for_update(db, user.id)
     if not anti_bot_service.take_ranked_slot(locked_user, config, "penalty"):
         rating_delta = 0  # daily ranked limit / resting (anti_bot_service)
