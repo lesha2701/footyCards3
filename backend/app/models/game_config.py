@@ -87,19 +87,19 @@ DEFAULT_CLUB_BASE_COSMETICS: list = [
 # (before town_price_growth_pct for every house already owned) and its rent
 # in coins a day. The 0267 migration writes the same values.
 DEFAULT_TOWN_DISTRICTS: dict = {
-    "favela": {"price": 1000, "rent": 15},
-    "center": {"price": 2000, "rent": 25},
-    "mountains": {"price": 3000, "rent": 35},
-    "beach": {"price": 4000, "rent": 45},
-    "business": {"price": 6000, "rent": 60},
+    "favela": {"price": 1500, "rent": 10},
+    "center": {"price": 3000, "rent": 18},
+    "mountains": {"price": 4500, "rent": 25},
+    "beach": {"price": 6000, "rent": 32},
+    "business": {"price": 9000, "rent": 42},
 }
 
 # «Город», closed places on the map (pier, park, island): the price of
-# opening one and the +% it adds to the houses' rent. 0267 writes the same.
+# opening one and the +% it adds to the houses' rent (0270 raised the prices).
 DEFAULT_TOWN_DECOR: dict = {
-    "pier": {"price": 20000, "rent_pct": 5},
-    "park": {"price": 40000, "rent_pct": 8},
-    "island": {"price": 75000, "rent_pct": 12},
+    "pier": {"price": 30000, "rent_pct": 5},
+    "park": {"price": 60000, "rent_pct": 8},
+    "island": {"price": 110000, "rent_pct": 12},
 }
 
 # «Жители города»: coins for one spare copy of a resident, by rarity.
@@ -1373,7 +1373,7 @@ class GameConfig(TimestampMixin, Base):
         JSON, nullable=False, default=lambda: {k: dict(v) for k, v in DEFAULT_TOWN_DISTRICTS.items()},
     )
     town_price_growth_pct: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
-    town_income_max_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
+    town_income_max_hours: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
     # The town opens for town_unlock_coins coins (0 = open to everyone), a
     # new name costs town_rename_stars Telegram Stars (0 = not sold). The
     # «Отель» is bought once for town_hotel_price coins and pays
@@ -1382,8 +1382,8 @@ class GameConfig(TimestampMixin, Base):
     # town_hotel_max_cards.
     town_unlock_coins: Mapped[int] = mapped_column(Integer, default=5000, nullable=False)
     town_rename_stars: Mapped[int] = mapped_column(Integer, default=99, nullable=False)
-    town_hotel_price: Mapped[int] = mapped_column(Integer, default=5000, nullable=False)
-    town_hotel_rent_per_100_cards: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    town_hotel_price: Mapped[int] = mapped_column(Integer, default=8000, nullable=False)
+    town_hotel_rent_per_100_cards: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
     town_hotel_max_cards: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
     # «Жители города» (town_service, admin «Жители»): resident cards from
     # their own packs. Every copy held pays town_resident_rent coins a day
@@ -1397,7 +1397,7 @@ class GameConfig(TimestampMixin, Base):
         JSON, default=lambda: dict(DEFAULT_TOWN_RESIDENT_SPARE_COINS), nullable=False,
     )
     town_resident_bonus_max_pct: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
-    town_resident_max_daily_coins: Mapped[int] = mapped_column(Integer, default=500, nullable=False)
+    town_resident_max_daily_coins: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
     # Closed places on the town map (town_service.DECOR): {code: {price,
     # rent_pct}}; a bought place adds rent_pct % to the houses' rent.
     town_decor: Mapped[dict] = mapped_column(

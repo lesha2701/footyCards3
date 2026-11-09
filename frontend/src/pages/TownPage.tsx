@@ -115,11 +115,7 @@ export default function TownPage() {
       {state && !state.enabled && <p className="rounded-xl bg-amber-400/10 px-3 py-2 text-xs text-legend">Город временно закрыт.</p>}
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
       {notice && <p className="rounded-xl bg-accent-lime/10 px-3 py-2 text-xs text-accent-lime">{notice}</p>}
-      {locked ? (
-        <UnlockCard coins={state.unlock_coins} busy={unlock.isPending} onUnlock={() => unlock.mutate()} />
-      ) : (
-        <RentBar state={state} busy={claim.isPending} onClaim={() => claim.mutate()} />
-      )}
+      {locked && <UnlockCard coins={state.unlock_coins} busy={unlock.isPending} onUnlock={() => unlock.mutate()} />}
     </>
   );
 
@@ -128,7 +124,7 @@ export default function TownPage() {
       key={district.code}
       district={district}
       state={state}
-      messages={messages}
+      messages={<>{messages}{!locked && <RentBar state={state} busy={claim.isPending} onClaim={() => claim.mutate()} />}</>}
       buying={buy.isPending}
       onBuy={(c) => buy.mutateAsync({ district: district.code, code: c })}
     />
@@ -136,6 +132,8 @@ export default function TownPage() {
     <TownMap
       state={state}
       messages={messages}
+      claimBusy={claim.isPending}
+      onClaim={() => claim.mutate()}
       hotelBusy={hotel.isPending}
       onHotel={() => hotel.mutate()}
       renameBusy={rename.isPending}
@@ -164,59 +162,6 @@ function UnlockCard({ coins, busy, onUnlock }: { coins: number; busy: boolean; o
         {short > 0 ? `Открыть город: не хватает ${fmt(short)} монет` : `Открыть город за ${fmt(coins)} монет`}
       </button>
     </section>
-  );
-}
-
-function HotelCard({ state, busy, onBuy }: { state: TownState; busy: boolean; onBuy: () => void }) {
-  const balance = useAuthStore((s) => s.user?.balance ?? 0);
-  const { hotel } = state;
-  const short = Math.max(0, hotel.price - balance);
-  const full = hotel.cards >= hotel.max_cards;
-  return (
-    <section className="flex items-center gap-3 rounded-2xl border border-white/10 bg-bg-surface p-3" aria-label="Отель">
-      <img src={hotelArt} alt="" className="h-12 w-12 shrink-0 object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)]" draggable={false} />
-      <div className="min-w-0 flex-1 text-xs">
-        <p className="font-semibold text-ink-chalk">
-          Отель · {hotel.owned ? `гостей ${fmt(Math.min(hotel.cards, hotel.max_cards))}` : "твои карты — его гости"}
-        </p>
-        <p className="text-ink-mist">
-          {hotel.owned
-            ? `+${fmt(hotel.rent)} в день${full ? " · отель полон" : ` · +${fmt(hotel.rent_per_100_cards)} за каждые 100 карт`}`
-            : `${fmt(hotel.cards)} карт → +${fmt(hotel.rent)} в день. Больше карт — больше прибыль, продал — меньше`}
-        </p>
-      </div>
-      {!hotel.owned && (
-        <button
-          type="button"
-          disabled={!state.enabled || !state.unlocked || busy || short > 0}
-          onClick={onBuy}
-          className="min-h-[40px] shrink-0 rounded-xl bg-floodlight px-3 text-xs font-bold text-bg-base disabled:opacity-40"
-        >
-          <span className="flex items-center gap-1"><IconCoin size={12} /> {fmt(hotel.price)}</span>
-        </button>
-      )}
-    </section>
-  );
-}
-
-function ResidentsBar({ state }: { state: TownState }) {
-  const r = state.residents;
-  const bonus = [
-    r.rent_pct ? `+${r.rent_pct}% к ренте` : "",
-    r.hotel_pct ? `+${r.hotel_pct}% к отелю` : "",
-    r.daily_coins ? `+${fmt(r.daily_coins)} бонус` : "",
-  ].filter(Boolean).join(" · ");
-  return (
-    <Link to="/town/residents" className="flex items-center gap-3 rounded-2xl border border-cyan-300/25 bg-cyan-400/5 p-3" aria-label="Жители города">
-      <img src={residentsArt} alt="" className="h-12 w-12 shrink-0 object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)]" draggable={false} />
-      <span className="min-w-0 flex-1 text-xs">
-        <span className="block font-semibold text-ink-chalk">Жители · население {fmt(r.population)}</span>
-        <span className="block truncate text-ink-mist">
-          {r.population > 0 ? `+${fmt(r.rent)} в день${bonus ? ` · ${bonus}` : ""}` : `Каждый житель платит +${fmt(r.rent_per_resident)} в день`}
-        </span>
-      </span>
-      <span className="text-ink-mist" aria-hidden>›</span>
-    </Link>
   );
 }
 
@@ -249,10 +194,68 @@ function RentBar({ state, busy, onClaim }: { state?: TownState; busy: boolean; o
   );
 }
 
+/** Rent, hotel and residents in one row of three tiles, so the map stays in view. */
+function TownStrip({ state, claimBusy, onClaim, hotelBusy, onHotel }: {
+  state: TownState; claimBusy: boolean; onClaim: () => void; hotelBusy: boolean; onHotel: () => void;
+}) {
+  const balance = useAuthStore((s) => s.user?.balance ?? 0);
+  const { income, hotel, residents } = state;
+  const tile = "flex min-h-[92px] flex-col items-center justify-between gap-1 rounded-2xl border p-2 text-center";
+  const art = "h-8 w-8 object-contain drop-shadow-[0_3px_8px_rgba(0,0,0,0.5)]";
+  const hotelShort = Math.max(0, hotel.price - balance);
+  return (
+    <div className="grid grid-cols-3 gap-2" data-testid="town-strip">
+      <button
+        type="button"
+        aria-label="Рента города"
+        disabled={!state.enabled || income.pending <= 0 || claimBusy}
+        onClick={onClaim}
+        className={`${tile} border-legend/30 bg-legend/5 disabled:opacity-100`}
+      >
+        <img src={housesArt} alt="" className={art} draggable={false} />
+        <span className="text-[11px] leading-tight text-ink-mist">
+          Рента · +{fmt(income.rate_per_day)}/д
+        </span>
+        <span className={`w-full rounded-lg px-1 py-1 text-[11px] font-bold ${income.pending > 0 ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"}`}>
+          {income.pending > 0 ? `Забрать ${fmt(income.pending)}` : `0 из ${fmt(income.cap)}`}
+        </span>
+      </button>
+      {hotel.owned ? (
+        <div className={`${tile} border-white/10 bg-bg-surface`} aria-label="Отель">
+          <img src={hotelArt} alt="" className={art} draggable={false} />
+          <span className="text-[11px] leading-tight text-ink-mist">Отель · гостей {fmt(Math.min(hotel.cards, hotel.max_cards))}</span>
+          <span className="w-full rounded-lg bg-white/5 px-1 py-1 text-[11px] font-bold text-ink-chalk">+{fmt(hotel.rent)}/д</span>
+        </div>
+      ) : (
+        <button
+          type="button"
+          aria-label="Отель"
+          disabled={!state.enabled || !state.unlocked || hotelBusy || hotelShort > 0}
+          onClick={onHotel}
+          className={`${tile} border-white/10 bg-bg-surface`}
+        >
+          <img src={hotelArt} alt="" className={art} draggable={false} />
+          <span className="text-[11px] leading-tight text-ink-mist">Отель · +{fmt(hotel.rent)}/д</span>
+          <span className={`flex w-full items-center justify-center gap-0.5 rounded-lg px-1 py-1 text-[11px] font-bold ${hotelShort > 0 ? "bg-white/5 text-ink-mist" : "bg-floodlight text-bg-base"}`}>
+            <IconCoin size={11} /> {fmt(hotel.price)}
+          </span>
+        </button>
+      )}
+      {residents.enabled ? (
+        <Link to="/town/residents" className={`${tile} border-cyan-300/25 bg-cyan-400/5`} aria-label="Жители города">
+          <img src={residentsArt} alt="" className={art} draggable={false} />
+          <span className="text-[11px] leading-tight text-ink-mist">Жители · {fmt(residents.population)}</span>
+          <span className="w-full rounded-lg bg-white/5 px-1 py-1 text-[11px] font-bold text-ink-chalk">+{fmt(residents.rent)}/д ›</span>
+        </Link>
+      ) : <span />}
+    </div>
+  );
+}
+
 function TownMap({
-  state, messages, hotelBusy, onHotel, renameBusy, onRename, decorBusy, onDecor,
+  state, messages, claimBusy, onClaim, hotelBusy, onHotel, renameBusy, onRename, decorBusy, onDecor,
 }: {
-  state?: TownState; messages: ReactNode; hotelBusy: boolean; onHotel: () => void;
+  state?: TownState; messages: ReactNode; claimBusy: boolean; onClaim: () => void; hotelBusy: boolean; onHotel: () => void;
   renameBusy: boolean; onRename: (name: string) => Promise<unknown>;
   decorBusy: boolean; onDecor: (code: string) => Promise<unknown>;
 }) {
@@ -276,8 +279,9 @@ function TownMap({
         </button>
       )}
       {messages}
-      {state && !(state.enabled && !state.unlocked) && <HotelCard state={state} busy={hotelBusy} onBuy={onHotel} />}
-      {state && !(state.enabled && !state.unlocked) && state.residents.enabled && <ResidentsBar state={state} />}
+      {state && !(state.enabled && !state.unlocked) && (
+        <TownStrip state={state} claimBusy={claimBusy} onClaim={onClaim} hotelBusy={hotelBusy} onHotel={onHotel} />
+      )}
       <section className="rounded-3xl border border-white/10 bg-bg-surface p-2">
         <TownScene
           art={TOWN_MAP}
