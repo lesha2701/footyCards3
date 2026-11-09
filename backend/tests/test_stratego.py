@@ -772,14 +772,15 @@ async def test_bot_matches_move_stratego_rating(client, db_session, bot_token):
     headers, _, _ = await _player(client, db_session, bot_token, 970050)
     body = (await client.post(f"{API}/matches/bot", headers=headers)).json()
     end = await _win_by_cup(client, db_session, headers, body["id"])
-    assert end["rating_delta"] == 3
+    assert end["rating_delta"] == 1  # a win over the bot is worth a third (bot_win_rating_pct)
+    stats = (await client.get(f"{API}/stats", headers=headers)).json()
+    assert stats["stratego_rating"] == 1 and stats["stratego_rank"] == 1
+    ranking = (await client.get("/api/v1/leaderboard/ranking?metric=stratego_rating", headers=headers))
+    assert ranking.status_code == 200 and ranking.json()["top"][0]["value"] == 1
     second = (await client.post(f"{API}/matches/bot", headers=headers)).json()
     lost = (await client.post(f"{API}/matches/{second['id']}/forfeit", headers=headers)).json()
-    assert lost["rating_delta"] == -1
-    stats = (await client.get(f"{API}/stats", headers=headers)).json()
-    assert stats["stratego_rating"] == 2 and stats["stratego_rank"] == 1
-    ranking = (await client.get("/api/v1/leaderboard/ranking?metric=stratego_rating", headers=headers))
-    assert ranking.status_code == 200 and ranking.json()["top"][0]["value"] == 2
+    assert lost["rating_delta"] == -1  # losses stay as they are
+    assert (await client.get(f"{API}/stats", headers=headers)).json()["stratego_rating"] == 0
 
 
 async def test_friend_matches_do_not_move_rating(client, db_session, bot_token):
@@ -1206,7 +1207,7 @@ async def test_easy_bot_pays_less_and_caps_rating(client, db_session, bot_token)
     hard = (await client.post(f"{API}/matches/bot", headers=headers)).json()
     assert hard["difficulty"] == "hard"
     end = await _win_by_cup(client, db_session, headers, hard["id"])
-    assert end["reward_coins"] == 100 and end["rating_delta"] == 3
+    assert end["reward_coins"] == 100 and end["rating_delta"] == 1
 
 
 async def test_matchmaking_match_is_live_with_short_deadline(client, db_session, bot_token):

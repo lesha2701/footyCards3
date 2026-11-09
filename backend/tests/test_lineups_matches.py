@@ -330,7 +330,7 @@ async def test_full_match_loop_finishes_and_credits_once(client, db_session, bot
 
     match = await _play_to_completion(client, headers)
     assert match["result"] in ("win", "draw", "loss")
-    assert match["rating_delta"] == {"win": 3, "draw": 1, "loss": -1}[match["result"]]
+    assert match["rating_delta"] == {"win": 1, "draw": 1, "loss": -1}[match["result"]]  # vs the bot: a third of a win
     assert match["reward_coins"] >= 0
 
     await db_session.refresh(user)

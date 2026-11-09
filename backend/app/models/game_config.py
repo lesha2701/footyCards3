@@ -1283,6 +1283,10 @@ class GameConfig(TimestampMixin, Base):
     # ratings start over (weekly_top_service.reset_ratings) — the top is
     # about this week, not about who has been grinding the longest.
     weekly_rating_reset_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # A win over a bot is worth this % of a normal win in every rating mode
+    # (anti_bot_service.bot_win_delta; 33 → +1 instead of +3, Контратака +7
+    # instead of +20) — full points only for beating people.
+    bot_win_rating_pct: Mapped[int] = mapped_column(Integer, default=33, nullable=False)
     presence_check_minutes: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
     presence_check_max_wrong: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     presence_check_lock_minutes: Mapped[int] = mapped_column(Integer, default=60, nullable=False)

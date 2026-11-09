@@ -1120,6 +1120,8 @@ async def _finalize_match(
         locked_user.matches_lost += 1
     else:
         locked_user.matches_drawn += 1
+    if match.opponent_user_id is None:
+        rating_delta = anti_bot_service.bot_win_delta(rating_delta, config)
     # Daily ranked limit / resting (anti_bot_service): played, paid, not ranked.
     ranked = anti_bot_service.take_ranked_slot(locked_user, config, "arena")
     if not ranked:

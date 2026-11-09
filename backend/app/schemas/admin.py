@@ -952,6 +952,7 @@ class GameConfigOut(BaseModel):
     ranked_daily_limit: int = 30
     presence_check_enabled: bool = True
     weekly_rating_reset_enabled: bool = True
+    bot_win_rating_pct: int = 33
     presence_check_minutes: int = 60
     presence_check_max_wrong: int = 3
     presence_check_lock_minutes: int = 60
@@ -1717,6 +1718,7 @@ class GameConfigUpdate(BaseModel):
     ranked_daily_limit: Optional[int] = Field(default=None, ge=0, le=1000)
     presence_check_enabled: Optional[bool] = None
     weekly_rating_reset_enabled: Optional[bool] = None
+    bot_win_rating_pct: Optional[int] = Field(default=None, ge=0, le=100)
     presence_check_minutes: Optional[int] = Field(default=None, ge=5, le=1440)
     presence_check_max_wrong: Optional[int] = Field(default=None, ge=1, le=20)
     presence_check_lock_minutes: Optional[int] = Field(default=None, ge=1, le=1440)

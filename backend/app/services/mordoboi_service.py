@@ -838,6 +838,8 @@ async def _finish_match(
             delta = _BASE_RATING_DELTA[side_result[side]] * multiplier
             if easy and delta > 1:
                 delta = 1  # the easy bot is no rating farm (same rule as Stratego)
+            if is_bot:
+                delta = anti_bot_service.bot_win_delta(delta, config)
             if is_bot and not rewarded:
                 delta = 0  # past today's rewarded bouts the bot is no rating farm either
         if not anti_bot_service.take_ranked_slot(locked[uid], config, "mordoboi"):

@@ -154,7 +154,7 @@ async def test_penalty_bot_match_win_increases_penalty_rating(client, db_session
 
     assert result == "win"
     await db_session.refresh(user)
-    assert user.penalty_rating == 3
+    assert user.penalty_rating == 1  # a win over the bot is worth a third (bot_win_rating_pct)
 
 
 async def test_penalty_bot_match_loss_decreases_penalty_rating_with_floor(client, db_session, bot_token, monkeypatch):

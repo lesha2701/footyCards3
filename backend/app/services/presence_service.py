@@ -60,7 +60,7 @@ def next_values(user: User, config: GameConfig, now: datetime, new_stretch: bool
 
 
 def view(user: User) -> Optional[dict]:
-    c = user.presence_challenge
+    c = user.presence_challenge if user.anti_bot_watch else None
     if not c:
         return None
     return {"token": c["token"], "options": c["options"], "image_url": f"/api/v1/presence/image/{c['token']}"}
