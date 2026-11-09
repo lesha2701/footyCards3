@@ -514,8 +514,27 @@ export function ArenaMatchReport({ match, division }: { match: Match; division?:
   if (!ladder && !report) return null;
   const goal = report?.goal;
   const span = division?.next_min_points != null ? division.next_min_points - division.min_points : null;
+  const paused = report?.paused;
   return (
     <div className="flex flex-col gap-2">
+      {paused && (
+        <p className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200" role="status" data-testid="rewards-paused">
+          {paused.reason === "rest" && paused.until ? (
+            <>😴 Ты играешь очень долго без перерыва — награды на паузе до{" "}
+              {new Date(paused.until).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}. Пока
+              продолжаешь играть, пауза сдвигается — отложи игры, и монеты с очками вернутся.</>
+          ) : paused.reason === "presence" ? (
+            <>🤖 Ответь на проверку «Ты здесь?» (выбери число с картинки) — до этого игры не дают монет и очков.</>
+          ) : (
+            <>⛔ Награды за игры на этом аккаунте отключены. Напиши в поддержку.</>
+          )}
+        </p>
+      )}
+      {!paused && report?.ranked === false && (
+        <p className="rounded-xl border border-sky-400/30 bg-sky-400/10 px-3 py-2 text-xs text-sky-100" role="status">
+          🏆 Рейтинговые матчи на сегодня закончились: монеты платятся, а очки снова начнут расти завтра.
+        </p>
+      )}
       {report?.mvp && (
         <div className="flex items-center gap-3 rounded-xl bg-accent-lime/10 px-3 py-2">
           <img

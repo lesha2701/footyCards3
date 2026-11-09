@@ -888,6 +888,10 @@ export interface ArenaLineCompare {
 }
 
 export interface ArenaMatchReport {
+  /** Why the match paid / rated nothing (backend anti_bot_service.paused). */
+  paused?: { reason: "blocked" | "presence" | "rest"; until: string | null } | null;
+  /** False: today's ranked matches are used up — paid, not rated. */
+  ranked?: boolean;
   mvp?: MatchDuelActor | null;
   goal?: ArenaGoal | null;
   cup?: { coins: number; status: string; round: number; rounds_won?: number } | null;
