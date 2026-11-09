@@ -10,6 +10,8 @@ import NewbieTaskWatcher from "@/components/newbie/NewbieTaskWatcher";
 import ComebackGiftPopup from "@/components/common/ComebackGiftPopup";
 import StreakRewardPopup from "@/components/common/StreakRewardPopup";
 import NewbieWelcome from "@/components/newbie/NewbieWelcome";
+import NewbieGiftPopup from "@/components/newbie/NewbieGiftPopup";
+import NewbieNextPage from "@/pages/NewbieNextPage";
 import { createSession } from "@/api/auth";
 import { joinByInvite } from "@/api/clubs";
 import { useAuthStore } from "@/store/authStore";
@@ -267,6 +269,7 @@ export default function App() {
     <AdminPaySheet />
     {!window.location.pathname.startsWith("/admin") && <StreakRewardPopup />}
     {!window.location.pathname.startsWith("/admin") && <ComebackGiftPopup />}
+    {!window.location.pathname.startsWith("/admin") && <NewbieGiftPopup />}
     <Routes>
       <Route path="/admin" element={<AdminGuard><AdminLayout /></AdminGuard>}>
         <Route index element={<AdminDashboardPage />} />
@@ -310,6 +313,7 @@ export default function App() {
       </Route>
 
       <Route path="/packs/:packId/open" element={<PackOpenPage />} />
+      <Route path="/newbie/next" element={<NewbieNextPage />} />
 
       <Route element={<AppLayout />}>
         <Route path="/" element={<HomePage />} />

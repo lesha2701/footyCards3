@@ -29,8 +29,9 @@ export default function NewbieWelcome({ onFinish }: { onFinish: () => void }) {
       hapticNotify("success");
       queryClient.invalidateQueries({ queryKey: ["newbie"] });
       queryClient.invalidateQueries({ queryKey: ["collection"] });
-      // takeStartPath before onFinish: the link's game comes after the pack.
-      const returnTo = takeStartPath() ?? "/";
+      // takeStartPath before onFinish: the link's game comes after the pack;
+      // otherwise straight on to the team pack and the first match.
+      const returnTo = takeStartPath() ?? "/newbie/next";
       onFinish();
       navigate(`/packs/${data.pack.id}/open`, { state: { result: data, returnTo } });
     },

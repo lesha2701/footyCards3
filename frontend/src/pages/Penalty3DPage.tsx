@@ -76,6 +76,11 @@ export default function Penalty3DPage() {
   // The «Путь дебютанта» card lives on the home screen: that's his next step.
   const { data: newbie } = useQuery({ queryKey: ["newbie"], queryFn: fetchNewbie });
   const onNewbiePath = !!newbie?.active;
+  // Came by the penalty link: the debut path's next step right after the kicks.
+  const newbieNext =
+    onNewbiePath && newbie.first_pack_done
+      ? !newbie.squad_pack_done ? "Дальше: получи команду" : !newbie.arena_played ? "Дальше: первый матч" : null
+      : null;
 
   const start = useMutation({
     mutationFn: (card: UserCard) => startPenalty3D(card.id).then((data) => ({ ...data, card })),
@@ -165,9 +170,18 @@ export default function Penalty3DPage() {
             {formatGameError(start.error, "Не удалось начать серию")}
           </p>
         )}
-        <button onClick={() => navigate(onNewbiePath ? "/" : "/play")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist">
-          {onNewbiePath ? "На главную" : "Вернуться к играм"}
-        </button>
+        {newbieNext ? (
+          <button
+            onClick={() => navigate("/newbie/next")}
+            className="animate-claim-glow rounded-2xl bg-floodlight px-6 py-3 font-display font-bold text-bg-base active:scale-95"
+          >
+            {newbieNext}
+          </button>
+        ) : (
+          <button onClick={() => navigate(onNewbiePath ? "/" : "/play")} className="rounded-2xl bg-white/5 px-5 py-2.5 text-sm font-semibold text-ink-mist">
+            {onNewbiePath ? "На главную" : "Вернуться к играм"}
+          </button>
+        )}
       </div>
     );
   }
