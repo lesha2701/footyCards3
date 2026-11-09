@@ -181,7 +181,8 @@ async def _fake_invoice_link(monkeypatch):
 
 
 async def test_town_opens_for_coins_once(client, db_session, bot_token):
-    await _config(db_session, town_unlock_coins=5000)
+    await _config(db_session, town_unlock_coins=5000, town_price_growth_pct=0,
+                  town_districts={"favela": {"price": 1000, "rent": 15}})
     headers, user = await _login(client, db_session, bot_token, 990106, balance=6000)
 
     state = (await client.get(f"{API}/town", headers=headers)).json()

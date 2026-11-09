@@ -93,12 +93,14 @@ async def _today(db: AsyncSession, user: User, club: Optional[ManagerClub], seas
                  next_match: Optional[dict], now: datetime, config) -> list[dict]:
     """What to do now, most urgent first: {code, icon, text, tab, urgent}."""
     items: list[dict] = []
-    mine = (await db.execute(
-        select(ManagerContract.kind == ms.RENEW, func.count(ManagerContract.id))
-        .where(ManagerContract.user_id == user.id, ManagerContract.status == "offered").group_by(ManagerContract.kind == ms.RENEW)
-    )).all()
-    renew_me = sum(n for is_renew, n in mine if is_renew)
-    offers_to_me = sum(n for is_renew, n in mine if not is_renew)
+    # Grouped by the plain column: an expression with a bound value in both
+    # SELECT and GROUP BY gets two parameters, and Postgres refuses it.
+    mine = dict((await db.execute(
+        select(ManagerContract.kind, func.count(ManagerContract.id))
+        .where(ManagerContract.user_id == user.id, ManagerContract.status == "offered").group_by(ManagerContract.kind)
+    )).all())
+    renew_me = mine.pop(ms.RENEW, 0)
+    offers_to_me = sum(mine.values())
     if renew_me:
         items.append({"code": "renew_me", "icon": "✍️", "text": "Клуб предлагает тебе новый контракт", "tab": "me", "urgent": True})
     if club is None:

@@ -203,7 +203,7 @@ describe("TownPage", () => {
 
   it("shows the residents on the map and their album, and sells a spare copy", async () => {
     at("/town");
-    expect(await screen.findByRole("link", { name: "Жители города" })).toHaveTextContent(/население 7.*\+7 в день · \+20% к ренте/);
+    expect(await screen.findByRole("link", { name: "Жители города" })).toHaveTextContent(/Жители · 7.*\+7\/д/);
     at("/town/residents");
     expect(await screen.findByText(/Собрано 2 из 3 · население 3/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Тень, ещё нет" })).toBeInTheDocument();
@@ -219,8 +219,8 @@ describe("TownPage", () => {
     at("/town");
     expect(await screen.findByText("Сан-Виктор")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Переименовать · ⭐ 99/ })).toBeInTheDocument();
-    expect(screen.getByText(/250 карт → \+75 в день/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /5\s000/ }));
+    expect(screen.getByRole("button", { name: "Отель" })).toHaveTextContent(/\+75\/д.*5\s000/);
+    fireEvent.click(screen.getByRole("button", { name: "Отель" }));
     await waitFor(() => expect(buyTownHotel).toHaveBeenCalled());
     expect(await screen.findByText(/Отель открыт/)).toBeInTheDocument();
   });
