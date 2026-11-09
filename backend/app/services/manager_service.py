@@ -89,6 +89,9 @@ from app.services.player_identity import person_key
 from app.services.player_tournament_simulation_service import _EngineCard, _engine_card
 
 CONTRACT_SEASONS = (1, 2, 3)
+# An offered row of this kind is the club's new contract for its own player
+# (`from_contract_id`): only the player answers, and it changes that contract.
+RENEW = "renew"
 LINES = ("GK", "DEF", "MID", "FWD")
 NAME_MIN, NAME_MAX = 3, 32
 FIRST_ROUND_LEAD = timedelta(hours=1)
@@ -641,7 +644,7 @@ async def update_club(
 
 async def _live_count(db: AsyncSession, club_id: int, owner_id: int) -> int:
     rows = await _contracts(db, club_id, ("active", "offered"))
-    return sum(1 for c in rows if c.user_id != owner_id)
+    return sum(1 for c in rows if c.user_id != owner_id and c.kind != RENEW)
 
 
 async def _squad_size(db: AsyncSession, club: ManagerClub) -> int:
@@ -758,6 +761,101 @@ async def cancel_offer(db: AsyncSession, user: User, contract_id: int) -> dict:
     return await get_view(db, user)
 
 
+async def renew_offer(db: AsyncSession, user: User, contract_id: int, wage: int, seasons: int) -> dict:
+    """The club offers its user's player a new contract: `seasons` from now
+    (not shorter than what is left) at a new wage. Only the player answers;
+    the club's consent is the offer itself."""
+    config = await get_config(db)
+    _enabled(config)
+    club = await _owned_club(db, user.id, lock=True)
+    contract = await db.get(ManagerContract, contract_id)
+    if club is None or contract is None or contract.club_id != club.id or contract.status != "active":
+        raise NotFoundError("Контракт не найден")
+    if contract.kind == "loan":
+        raise ConflictError("Игрок в аренде — новый контракт ему предлагает его клуб")
+    if seasons not in CONTRACT_SEASONS:
+        raise ConflictError("Контракт — на 1, 2 или 3 сезона")
+    if seasons < contract.seasons_left:
+        raise ConflictError(f"У него ещё {contract.seasons_left} сез. — новый контракт не короче")
+    wage = int(wage)
+    if not 0 <= wage <= config.manager_live_wage_max:
+        raise ConflictError(f"Зарплата — от 0 до {config.manager_live_wage_max} монет за сезон")
+    if seasons == contract.seasons_left and wage == contract.wage:
+        raise ConflictError("Это те же условия — измени срок или зарплату")
+    target = await wallet_service.lock_user_for_update(db, contract.user_id)
+    if target.is_trade_banned and wage > 0:
+        raise ConflictError("Этому игроку нельзя платить зарплату — только контракт за 0")
+    pending = await _contracts(db, club.id, ("offered",))
+    if any(c.kind == RENEW and c.from_contract_id == contract.id for c in pending):
+        raise ConflictError("Новый контракт уже предложен — дождись ответа или отзови")
+    # The next season start pays the new wage instead of the old one (or at
+    # all, when the old contract runs out with this season).
+    old = wage_eur(min(contract.wage, config.manager_live_wage_max), config) if contract.seasons_left > 0 else 0
+    need = max(0, wage_eur(wage, config) - old)
+    reserved = await start_bill(db, club, config)
+    if need > club.budget - reserved:
+        raise ConflictError(_short_of(need, club.budget, reserved))
+    db.add(ManagerContract(
+        club_id=club.id, user_id=contract.user_id, kind=RENEW, status="offered", fee=0, wage=wage,
+        seasons_total=seasons, seasons_left=seasons, club_agreed=True, from_contract_id=contract.id,
+    ))
+    await db.flush()
+    await notify(
+        db, contract.user_id, NotificationType.manager_event, f"«{club.name}» предлагает новый контракт ✍️",
+        f"{wage} монет за сезон, {seasons} сез. (сейчас {contract.wage} монет, осталось {contract.seasons_left} сез.)",
+        related_object_type=RELATED, related_object_id=club.id,
+    )
+    await db.commit()
+    return await get_view(db, user)
+
+
+async def _answer_renew(db: AsyncSession, user: User, found: ManagerContract, accept: bool) -> dict:
+    """The player takes or turns down his club's new contract."""
+    if found.user_id != user.id:
+        raise NotFoundError("Предложение не найдено")
+    club = (await _lock_clubs(db, [found.club_id]))[found.club_id]
+    offer = (await db.execute(
+        select(ManagerContract).where(ManagerContract.id == found.id).with_for_update().execution_options(populate_existing=True)
+    )).scalar_one()
+    if offer.status != "offered":
+        raise ConflictError("Предложение уже неактуально")
+    parent = (await db.execute(
+        select(ManagerContract).where(ManagerContract.id == offer.from_contract_id).with_for_update()
+        .execution_options(populate_existing=True)
+    )).scalar_one_or_none() if offer.from_contract_id else None
+    now = datetime.now(timezone.utc)
+    offer.decided_at = now
+    mp = await my_player_service.get_my_player(db, user.id)
+    name = mp.name if mp else _name(user)
+    if not accept:
+        offer.status = "declined"
+        await notify(db, club.owner_id, NotificationType.manager_event, f"{name}: отказ",
+                     f"{name} не стал подписывать новый контракт с «{club.name}»",
+                     related_object_type=RELATED, related_object_id=club.id)
+        await db.commit()
+        return await get_view(db, user)
+    if parent is None or parent.status != "active" or parent.club_id != club.id:
+        offer.status = "cancelled"
+        await db.commit()
+        raise ConflictError("Контракт уже закончился — предложение неактуально")
+    if user.is_trade_banned and offer.wage > 0:
+        raise ConflictError("Тебе нельзя получать зарплату от других игроков")
+    config = await get_config(db)
+    old = wage_eur(min(parent.wage, config.manager_live_wage_max), config) if parent.seasons_left > 0 else 0
+    need = max(0, wage_eur(offer.wage, config) - old)
+    if need > club.budget - await start_bill(db, club, config):
+        raise ConflictError(f"У «{club.name}» не хватает свободного бюджета на новую зарплату")
+    parent.seasons_total += max(0, offer.seasons_left - parent.seasons_left)
+    parent.seasons_left = max(parent.seasons_left, offer.seasons_left)
+    parent.wage = offer.wage
+    offer.status = "accepted"
+    await notify(db, club.owner_id, NotificationType.manager_event, f"{name} продлил контракт ✍️",
+                 f"«{club.name}»: {parent.wage} монет за сезон, ещё {parent.seasons_left} сез.",
+                 related_object_type=RELATED, related_object_id=club.id)
+    await db.commit()
+    return await get_view(db, user)
+
+
 async def respond_offer(db: AsyncSession, user: User, contract_id: int, accept: bool) -> dict:
     """The player answers, or — for a transfer/loan — the selling club's
     owner. Both yes → the deal is done."""
@@ -765,6 +863,8 @@ async def respond_offer(db: AsyncSession, user: User, contract_id: int, accept: 
     found = await db.get(ManagerContract, contract_id)
     if found is None:
         raise NotFoundError("Предложение не найдено")
+    if found.kind == RENEW:
+        return await _answer_renew(db, user, found, accept)
     parent = await db.get(ManagerContract, found.from_contract_id) if found.from_contract_id else None
     clubs = await _lock_clubs(db, [found.club_id, parent.club_id if parent else None])
     buyer = clubs[found.club_id]
@@ -898,6 +998,12 @@ async def _close_contract(db: AsyncSession, contract: ManagerContract, now: date
     """`reason` goes to the transfer log: release | expired | unpaid."""
     contract.status = "ended"
     contract.decided_at = now
+    for offer in (await db.execute(
+        select(ManagerContract).where(ManagerContract.from_contract_id == contract.id, ManagerContract.kind == RENEW,
+                                      ManagerContract.status == "offered")
+    )).scalars().all():
+        offer.status = "cancelled"
+        offer.decided_at = now
     club = await db.get(ManagerClub, contract.club_id)
     who = await _live_who(db, contract.user_id)
     parent = None
@@ -970,7 +1076,7 @@ async def moves(db: AsyncSession, user: User) -> dict:
         "season_key": key,
         "spent": sum(m.fee for m in window if m.direction == "in"),
         "earned": sum(m.fee for m in window if m.direction == "out"),
-        "came": sum(1 for m in window if m.direction == "in"),
+        "came": sum(1 for m in window if m.direction == "in" and m.kind != "extend"),  # an extension is no new player
         "left": sum(1 for m in window if m.direction == "out"),
         "moves": [
             {"id": m.id, "season_key": m.season_key, "direction": m.direction, "kind": m.kind, "who": m.who,
@@ -1121,6 +1227,48 @@ async def sign_npc(db: AsyncSession, user: User, player_id: int, kind: str, seas
     except IntegrityError:
         raise ConflictError("Его только что забрал другой клуб")
     await _move(db, club, "in", kind, _npc_who(player), datetime.now(timezone.utc), fee=fee)
+    await db.commit()
+    return await get_view(db, user)
+
+
+async def extend_npc(db: AsyncSession, user: User, npc_id: int, seasons: int = 1) -> dict:
+    """Keep a catalog footballer: a bought one gets a contract of `seasons`
+    from now (not shorter than what is left); a loan — one more season for
+    a new loan fee (an automatic loan becomes the club's own choice)."""
+    config = await get_config(db)
+    _enabled(config)
+    club = await _owned_club(db, user.id, lock=True)
+    npc = await db.get(ManagerNpc, npc_id)
+    if club is None or npc is None or npc.club_id != club.id or npc.status != "active":
+        raise NotFoundError("Футболист не найден")
+    await _ensure_window(db, club)
+    await finance.ensure_can_transfer(db, club)
+    player = await db.get(Player, npc.player_id)
+    if player is None:
+        raise NotFoundError("Футболист не найден")
+    if npc.kind == "loan":
+        seasons = 1
+        if npc.seasons_left >= 1:
+            raise ConflictError("Аренда и так на весь следующий сезон")
+    elif seasons not in CONTRACT_SEASONS:
+        raise ConflictError("Контракт — на 1, 2 или 3 сезона")
+    elif seasons <= npc.seasons_left:
+        raise ConflictError(f"У него ещё {npc.seasons_left} сез. — новый контракт должен быть длиннее")
+    snap = await base_snapshot(db, club.owner_id, config)
+    terms = npc_terms(player.rating, config, club.division, snap["discount_pct"], await _farm_loan_cut(db, club))
+    fee = terms["loan_fee"] if npc.kind == "loan" else 0
+    # A contract that ran out is not in the next start's wages yet.
+    need = fee + (terms["wage_now"] if npc.seasons_left <= 0 else 0)
+    reserved = await start_bill(db, club, config, snap)
+    if need > club.budget - reserved:
+        raise ConflictError(_short_of(need, club.budget, reserved))
+    now = datetime.now(timezone.utc)
+    if fee:
+        await finance.book(db, club, "npc_loan", -fee, await finance.upcoming_key(db, now), note=player.display_name)
+        npc.fee = fee
+    npc.seasons_left = seasons
+    npc.auto = False
+    await _move(db, club, "in", "extend", _npc_who(player), now, fee=fee)
     await db.commit()
     return await get_view(db, user)
 
@@ -1968,7 +2116,8 @@ async def get_view(db: AsyncSession, user: User, now: Optional[datetime] = None)
     if club is not None:
         mine_ids = [c.id for c in club_contracts if c.status == "active"]
         incoming = list((await db.execute(
-            select(ManagerContract).where(ManagerContract.from_contract_id.in_(mine_ids or [0]), ManagerContract.status == "offered")
+            select(ManagerContract).where(ManagerContract.from_contract_id.in_(mine_ids or [0]), ManagerContract.status == "offered",
+                                          ManagerContract.kind != RENEW)
         )).scalars().all())
     parents = {c.id: c for c in club_contracts}
     all_contracts = [*offers_to_me, *club_contracts, *incoming, *([contract] if contract else [])]
@@ -1994,6 +2143,7 @@ async def get_view(db: AsyncSession, user: User, now: Optional[datetime] = None)
         wage_pct = _pct(config.manager_division_wage_pct, club.division)
         reserved = await wage_bill(db, club, config, snap)
         due = await finance.loan_due(db, club)
+        loan_cut = await _farm_loan_cut(db, club)
         club_out = {
             "id": club.id, "name": club.name, "formation": tactics.clean_formation(club.formation),
             "style": tactics.clean_style(club.style), "budget": club.budget,
@@ -2009,14 +2159,16 @@ async def get_view(db: AsyncSession, user: User, now: Optional[datetime] = None)
                 {"id": n.id, "player_id": n.player_id, "name": players[n.player_id].display_name, "position": players[n.player_id].position.value,
                  "rating": players[n.player_id].rating, "kind": n.kind, "auto": n.auto, "seasons_left": n.seasons_left,
                  "wage": n.wage * wage_pct // 100 * (100 - snap["discount_pct"]) // 100, "goals": n.goals,
-                 **{k: v for k, v in npc_terms(players[n.player_id].rating, config).items() if k in ("value", "sell_back")}}
+                 **{k: v for k, v in npc_terms(players[n.player_id].rating, config).items() if k in ("value", "sell_back")},
+                 # What one more season of a loan costs now (`extend_npc`).
+                 "loan_fee": npc_terms(players[n.player_id].rating, config, club.division, snap["discount_pct"], loan_cut)["loan_fee"]}
                 for n in npcs if n.player_id in players
             ],
             # What the next season start pays for the squad already signed:
             # the window's deals spend only the budget above it.
             "wages_per_season": reserved, "loan_due": due, "free_budget": max(0, club.budget - reserved - due),
             "squad_value": sum(p.get("value", 0) for p in (*squad["xi"], *squad["bench"])), "next_match": None,
-            "live_count": sum(1 for c in club_contracts if c.status in ("active", "offered") and c.user_id != club.owner_id),
+            "live_count": sum(1 for c in club_contracts if c.status in ("active", "offered") and c.user_id != club.owner_id and c.kind != RENEW),
             "academy_card_id": club.academy_card_id,
             "kit_sponsor": await _kit_sponsor(db, club, now),
             "academy_options": [

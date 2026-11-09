@@ -13,6 +13,7 @@ from app.schemas.manager import (
     ManagerClubUpdateIn,
     ManagerDealIn,
     ManagerEventChoiceIn,
+    ManagerExtendIn,
     ManagerFoundIn,
     ManagerLoanIn,
     ManagerLookIn,
@@ -20,6 +21,7 @@ from app.schemas.manager import (
     ManagerNpcIn,
     ManagerOfferIn,
     ManagerPlanIn,
+    ManagerRenewIn,
     ManagerRepayIn,
     ManagerRespondIn,
     ManagerShareListIn,
@@ -186,6 +188,15 @@ async def end_contract(contract_id: int, db: AsyncSession = Depends(get_db), use
     return await manager_service.end_contract(db, user, contract_id)
 
 
+@router.post("/contracts/{contract_id}/renew")
+async def renew_contract(
+    contract_id: int, payload: ManagerRenewIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    """The club offers its user's player a new contract (he answers like any offer)."""
+    await check_rate_limit(f"manager_offer:{user.id}", max_calls=20, window_seconds=60)
+    return await manager_service.renew_offer(db, user, contract_id, payload.wage, payload.seasons)
+
+
 @router.post("/market")
 async def set_market(payload: ManagerMarketIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     """List / unlist my «Мой игрок» as a free agent."""
@@ -197,6 +208,15 @@ async def sign_npc(payload: ManagerNpcIn, db: AsyncSession = Depends(get_db), us
     """Buy a catalog footballer (1-3 seasons) or loan him for a season."""
     await check_rate_limit(f"manager_npc:{user.id}", max_calls=30, window_seconds=60)
     return await manager_service.sign_npc(db, user, payload.player_id, payload.kind, payload.seasons)
+
+
+@router.post("/npc/{npc_id}/extend")
+async def extend_npc(
+    npc_id: int, payload: ManagerExtendIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    """Extend a bought footballer's contract, or a loan for one more season."""
+    await check_rate_limit(f"manager_npc:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_service.extend_npc(db, user, npc_id, payload.seasons)
 
 
 @router.post("/npc/{npc_id}/release")

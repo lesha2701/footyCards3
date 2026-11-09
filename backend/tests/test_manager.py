@@ -736,3 +736,71 @@ async def test_metal_finish_for_stars_then_on_the_symbol(client, db_session, bot
     await db_session.commit()
     r = await client.patch(f"{API}/manager/look", json={"finish": "metal"}, headers=headers)
     assert r.status_code == 200 and r.json()["club"]["look"]["finish"] == "metal"
+
+
+async def test_club_offers_its_player_a_new_contract(client, db_session, bot_token):
+    config = await get_config(db_session)
+    config.manager_max_live = 1
+    await db_session.commit()
+    a_id, a_headers = await _player(client, db_session, bot_token, 894901)
+    p_id, p_headers = await _player(client, db_session, bot_token, 894902)
+    q_id, q_headers = await _player(client, db_session, bot_token, 894903)
+    await _club(client, a_headers, "Совы")
+    await client.post(f"{API}/manager/market", headers=p_headers, json={"open": True})
+    await client.post(f"{API}/manager/offers", headers=a_headers, json={"user_id": p_id, "wage": 300, "seasons": 1})
+    await _accept_latest(client, p_headers)
+    contract_id = (await client.get(f"{API}/manager", headers=a_headers)).json()["club"]["contracts"][0]["id"]
+    renew = f"{API}/manager/contracts/{contract_id}/renew"
+    assert (await client.post(renew, headers=a_headers, json={"wage": 300, "seasons": 1})).status_code == 409  # same terms
+    assert (await client.post(renew, headers=q_headers, json={"wage": 400, "seasons": 3})).status_code == 404  # not his club
+    resp = await client.post(renew, headers=a_headers, json={"wage": 400, "seasons": 3})
+    assert resp.status_code == 200, resp.text
+    club = resp.json()["club"]
+    # Not a new player: the live limit and the seller's «incoming» don't see it.
+    assert club["live_count"] == 1 and club["incoming"] == [] and club["offers_sent"][0]["kind"] == "renew"
+    assert (await client.post(renew, headers=a_headers, json={"wage": 500, "seasons": 3})).status_code == 409  # one at a time
+    today = (await client.get(f"{API}/manager", headers=p_headers)).json()
+    assert today["offers"][0]["kind"] == "renew"
+    await _accept_latest(client, p_headers)
+    row = await db_session.get(ManagerContract, contract_id)
+    await db_session.refresh(row)
+    assert (row.status, row.wage, row.seasons_left, row.seasons_total) == ("active", 400, 3, 3)
+    a_view = (await client.get(f"{API}/manager", headers=a_headers)).json()["club"]
+    assert a_view["offers_sent"] == [] and a_view["wages_per_season"] >= manager_service.wage_eur(400, config)
+
+    # Released before answering: the pending offer goes with the contract.
+    await client.post(renew, headers=a_headers, json={"wage": 100, "seasons": 3})
+    assert (await client.post(f"{API}/manager/contracts/{contract_id}/end", headers=a_headers)).status_code == 200
+    pending = (await db_session.execute(select(ManagerContract).where(ManagerContract.kind == "renew",
+                                                                       ManagerContract.wage == 100))).scalar_one()
+    assert pending.status == "cancelled"
+
+
+async def test_catalog_contract_and_loan_extend(client, db_session, bot_token):
+    config = await get_config(db_session)
+    star = await create_player(db_session, rating=62, position=Position.ST, display_name="Продлеваемый Форвард")
+    keeper = await create_player(db_session, rating=60, position=Position.GK, display_name="Арендный Вратарь")
+    a_id, a_headers = await _player(client, db_session, bot_token, 894911)
+    await _club(client, a_headers, "Совы")
+    await client.post(f"{API}/manager/npc", headers=a_headers, json={"player_id": star.id, "kind": "buy", "seasons": 1})
+    view = (await client.post(f"{API}/manager/npc", headers=a_headers, json={"player_id": keeper.id, "kind": "loan"})).json()
+    npcs = {n["player_id"]: n for n in view["club"]["npcs"]}
+    budget = view["club"]["budget"]
+    bought, loan = npcs[star.id]["id"], npcs[keeper.id]["id"]
+    assert (await client.post(f"{API}/manager/npc/{bought}/extend", headers=a_headers, json={"seasons": 1})).status_code == 409
+    view = (await client.post(f"{API}/manager/npc/{bought}/extend", headers=a_headers, json={"seasons": 3})).json()
+    assert view["club"]["budget"] == budget  # a bought one costs only his wages
+    assert next(n for n in view["club"]["npcs"] if n["id"] == bought)["seasons_left"] == 3
+    # A loan signed this window already covers the next season.
+    assert (await client.post(f"{API}/manager/npc/{loan}/extend", headers=a_headers, json={})).status_code == 409
+    row = await db_session.get(ManagerNpc, loan)
+    row.seasons_left = 0
+    row.auto = True
+    await db_session.commit()
+    view = (await client.post(f"{API}/manager/npc/{loan}/extend", headers=a_headers, json={})).json()
+    fee = manager_service.npc_terms(60, config, view["club"]["division"])["loan_fee"]
+    assert view["club"]["budget"] == budget - fee
+    kept = next(n for n in view["club"]["npcs"] if n["id"] == loan)
+    assert kept["seasons_left"] == 1 and not kept["auto"]
+    log = (await client.get(f"{API}/manager/moves", headers=a_headers)).json()
+    assert [m["kind"] for m in log["moves"][:2]] == ["extend", "extend"] and log["came"] == 2
