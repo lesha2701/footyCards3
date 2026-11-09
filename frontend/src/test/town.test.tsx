@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  buyTownDecor, buyTownHotel, buyTownHouse, claimTownIncome, fetchTown, sellTownResidentSpare, unlockTown, type TownResident, type TownResidentsAlbum, type TownState,
+  buyTownDecor, buyTownHotel, buyTownHouse, claimTownIncome, fetchTown, sellTownResidentSpare, settleTownResident, unlockTown, type TownResident, type TownResidentsAlbum, type TownState,
 } from "@/api/town";
 import { useAuthStore } from "@/store/authStore";
 import { DISTRICTS, MAP_ZONES, SCENE_H, SCENE_W, SPRITES, moverAt, type Mover } from "@/lib/town";
@@ -71,7 +71,13 @@ const town = (over: Partial<TownState> = {}): TownState => ({
   price_growth_pct: 4,
   districts: DISTRICTS.map((d) => ({
     code: d.code, name: d.name, rent: 45, next_price: 4160, owned: d.code === "beach" ? 1 : 0, total: 12,
+    mood: d.code === "beach" ? 61 : 40, pct: d.code === "beach" ? 100 : 90,
+    parts: { care: 40, houses: 1, decor: 10, residents: d.code === "beach" ? 10 : 0 }, residents: d.code === "beach" ? [1] : [],
   })),
+  mood: {
+    min_pct: 70, max_pct: 120, care: 40, care_full_hours: 12, care_zero_hours: 48, houses: 20, decor: 20,
+    resident: 10, resident_legendary: 20, resident_slots: 3, cared_at: null,
+  },
   income: { rate_per_day: 45, pending: 30, cap: 45, max_hours: 24 },
   ...over,
 });
@@ -105,6 +111,7 @@ vi.mock("@/api/town", () => ({
   unlockTown: vi.fn(async () => ({ ...town(), new_balance: 1000 })),
   fetchTownResidents: vi.fn(async () => album()),
   sellTownResidentSpare: vi.fn(async () => ({ ...album(), sold_coins: 10, new_balance: 5010 })),
+  settleTownResident: vi.fn(async () => town()),
   createTownRenameInvoice: vi.fn(),
   fetchTownInvoiceStatus: vi.fn(),
 }));
@@ -160,6 +167,17 @@ describe("TownPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Закрыть" }));
     fireEvent.click(screen.getByRole("button", { name: "Забрать" }));
     expect(await screen.findByText(/\+30 монет/)).toBeInTheDocument();
+  });
+
+  it("shows the district's mood and settles a resident in", async () => {
+    at("/town/beach");
+    const panel = await screen.findByTestId("mood-panel");
+    expect(panel).toHaveTextContent(/Настроение 61\/100/);
+    expect(panel).toHaveTextContent(/рента домов 100%/);
+    expect(await screen.findByRole("button", { name: "Рыбак — выписать из района" })).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Поселить жителя" })[0]);
+    fireEvent.click(await screen.findByRole("button", { name: /Капитан/ }));
+    await waitFor(() => expect(settleTownResident).toHaveBeenCalledWith(2, "beach"));
   });
 
   it("does not offer a house the player cannot afford", async () => {

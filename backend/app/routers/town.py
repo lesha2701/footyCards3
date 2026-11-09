@@ -21,6 +21,10 @@ class SellRequest(BaseModel):
     count: int = Field(default=1, ge=1, le=1000)
 
 
+class SettleRequest(BaseModel):
+    district: Optional[str] = Field(default=None, max_length=16)
+
+
 class RenameRequest(BaseModel):
     name: str = Field(max_length=64)
 
@@ -60,6 +64,12 @@ async def unlock(payload: KeyRequest, db: AsyncSession = Depends(get_db), user: 
 @router.get("/residents")
 async def residents(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await town_service.album(db, user)
+
+
+@router.post("/residents/{resident_id}/settle")
+async def settle(resident_id: int, payload: SettleRequest, db: AsyncSession = Depends(get_db),
+                 user: User = Depends(get_current_user)):
+    return await town_service.settle_resident(db, user, resident_id, payload.district)
 
 
 @router.post("/residents/{resident_id}/sell-spare")

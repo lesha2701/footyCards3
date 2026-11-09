@@ -39,6 +39,7 @@ async def _config(db_session, **overrides) -> GameConfig:
         config = GameConfig(id=1)
         db_session.add(config)
     overrides.setdefault("town_unlock_coins", 0)  # open for everyone unless a test sells it
+    overrides.setdefault("town_mood", {"min_pct": 100, "max_pct": 100})  # neutral unless a test is about mood
     for key, value in overrides.items():
         setattr(config, key, value)
     await db_session.commit()
@@ -451,3 +452,51 @@ def test_build_hours_never_go_below_a_tenth():
     row = UserTownResident(copies=1)
     row.resident = TownResident(name="x", rarity="legendary", bonus="build_pct", bonus_value=200, is_active=True)
     assert town_service.resident_effects(config, [row])["build_pct"] == 90
+
+
+async def test_district_mood_sets_the_rent_and_residents_settle_in(client, db_session, bot_token):
+    await _config(db_session, town_price_growth_pct=0, town_resident_rent=0, town_income_max_hours=48,
+                  town_districts={"beach": {"price": 0, "rent": 100}}, town_decor={"pier": {"price": 0, "rent_pct": 0}},
+                  town_mood={})  # the defaults: 70…120 %, care 40, houses 20, place 20, resident 10 / legendary 20
+    headers, user = await _login(client, db_session, bot_token, 990120)
+    assert (await client.post(f"{API}/town/houses/beach/surf/buy", headers=headers, json={})).status_code == 200
+    beach = next(d for d in (await client.get(f"{API}/town", headers=headers)).json()["districts"] if d["code"] == "beach")
+    # Cared for (just opened), 1 house of 12: 40 + 1 = 41 → 70 + 50 × 41 % = 90 %.
+    assert beach["mood"] == 41 and beach["pct"] == 90 and beach["rent"] == 90
+
+    assert (await client.post(f"{API}/town/decor/pier/buy", headers=headers, json={})).status_code == 200
+    fisher = await _resident(db_session, name="Рыбак")
+    star = await _resident(db_session, name="Звезда", rarity="legendary")
+    for r in (fisher, star):
+        await town_service.grant(db_session, user.id, r, "admin")
+    await db_session.commit()
+    for r in (fisher, star):
+        settled = await client.post(f"{API}/town/residents/{r.id}/settle", headers=headers, json={"district": "beach"})
+        assert settled.status_code == 200, settled.text
+    beach = next(d for d in settled.json()["districts"] if d["code"] == "beach")
+    assert beach["parts"] == {"care": 40, "houses": 1, "decor": 20, "residents": 30} and beach["mood"] == 91
+    assert sorted(beach["residents"]) == sorted([fisher.id, star.id])
+    assert settled.json()["income"]["rate_per_day"] == 100 * (70 + 50 * 91 // 100) // 100
+
+    # Three residents a district at most; moving one out frees the place.
+    third, fourth = await _resident(db_session, name="Третий"), await _resident(db_session, name="Четвёртый")
+    for r in (third, fourth):
+        await town_service.grant(db_session, user.id, r, "admin")
+    await db_session.commit()
+    assert (await client.post(f"{API}/town/residents/{third.id}/settle", headers=headers, json={"district": "beach"})).status_code == 200
+    assert (await client.post(f"{API}/town/residents/{fourth.id}/settle", headers=headers, json={"district": "beach"})).status_code == 409
+    assert (await client.post(f"{API}/town/residents/{third.id}/settle", headers=headers, json={"district": None})).status_code == 200
+    assert (await client.post(f"{API}/town/residents/{fourth.id}/settle", headers=headers, json={"district": "beach"})).status_code == 200
+    album = (await client.get(f"{API}/town/residents", headers=headers)).json()
+    assert {r["name"]: r["district"] for r in album["residents"] if r["owned"]}["Третий"] is None
+
+    # A town left alone: care fades after 12 h and is gone at 48 h.
+    town = await _town(db_session, user.id)
+    town.cared_at = datetime.now(timezone.utc) - timedelta(hours=30)
+    await db_session.commit()
+    beach = next(d for d in (await client.get(f"{API}/town", headers=headers)).json()["districts"] if d["code"] == "beach")
+    assert beach["parts"]["care"] == 20
+    town.cared_at = datetime.now(timezone.utc) - timedelta(hours=60)
+    await db_session.commit()
+    beach = next(d for d in (await client.get(f"{API}/town", headers=headers)).json()["districts"] if d["code"] == "beach")
+    assert beach["parts"]["care"] == 0
