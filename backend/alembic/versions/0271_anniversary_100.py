@@ -7,8 +7,8 @@ admin to fill.
 The event is switched on with its dates (21.11 – 30.11 Moscow, right after
 «Битва фанатов»): it starts by itself at midnight of the 21st.
 
-Revision ID: 0270
-Revises: 0269
+Revision ID: 0271
+Revises: 0270
 Create Date: 2026-11-02
 """
 import json
@@ -18,8 +18,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0270"
-down_revision: Union[str, None] = "0269"
+revision: str = "0271"
+down_revision: Union[str, None] = "0270"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -68,6 +68,10 @@ def upgrade() -> None:
             "INSERT INTO badges (name, icon, is_active, sort_order, created_at, updated_at) "
             "VALUES (:n, '💯', true, 920, now(), now()) RETURNING id"
         ), {"n": BADGE}).scalar_one()
+    # The medal art (static/badges/) unless an admin uploaded another one.
+    conn.execute(sa.text(
+        "UPDATE badges SET image_path = 'badges/anniversary_100.webp' WHERE id = :id AND image_path IS NULL"
+    ), {"id": badge_id})
     collection_id = conn.execute(sa.text("SELECT id FROM card_collections WHERE name = :n"), {"n": COLLECTION}).scalar()
     if collection_id is None:
         collection_id = conn.execute(sa.text(

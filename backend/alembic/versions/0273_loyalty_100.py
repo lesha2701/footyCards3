@@ -14,8 +14,8 @@
 
 Downgrade drops the schema only; the player, badges and frames stay.
 
-Revision ID: 0272
-Revises: 0271
+Revision ID: 0273
+Revises: 0272
 Create Date: 2026-11-09
 """
 import json
@@ -24,8 +24,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0272"
-down_revision: Union[str, None] = "0271"
+revision: str = "0273"
+down_revision: Union[str, None] = "0272"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -39,6 +39,7 @@ FRAMES = {
     "oldtimer": ("Старожил", "100 дней в VICTOR FC — живой и активный", "oldtimer", 957),
     "founder": ("Основатель", "Один из первых 100 игроков VICTOR FC", "founder", 958),
 }
+CENTURION_IMAGE = "players/legendary/centurion_beckenbauer.webp"
 # Added to the «дней подряд» ladder only when the admin has no such step.
 PATH_STEPS = [
     {"days": 30, "coins": 3000, "pack_id": None, "card_rarity": "epic", "badge_id": None, "cosmetic_id": None},
@@ -86,16 +87,18 @@ def upgrade() -> None:
         "SELECT id FROM players WHERE display_name = 'Франц Беккенбауэр · Центурион'"
     )).scalar()
     if player_id is None:
-        # No photo yet (image_path NULL = the placeholder); is_pack_droppable
-        # false keeps it out of packs, the wheel and random card rewards.
+        # is_pack_droppable false keeps it out of packs, the wheel and random
+        # card rewards.
         player_id = conn.execute(sa.text(
             "INSERT INTO players (first_name, last_name, display_name, rating, attack_rating, defense_rating, "
             "rarity, country, club, position, image_path, quick_sell_price, is_active, is_pack_droppable, "
             "next_serial_number, next_club_serial_number, created_at, updated_at) "
             "VALUES ('Франц', 'Беккенбауэр', 'Франц Беккенбауэр · Центурион', 95, 86, 97, "
-            "CAST('legendary' AS rarity_enum), 'Германия', 'Бавария', CAST('CB' AS position_enum), NULL, 400, "
+            "CAST('legendary' AS rarity_enum), 'Германия', 'Бавария', CAST('CB' AS position_enum), :img, 400, "
             "true, false, 1, 1, now(), now()) RETURNING id"
-        )).scalar_one()
+        ), {"img": CENTURION_IMAGE}).scalar_one()
+    conn.execute(sa.text("UPDATE players SET image_path = :img WHERE id = :id AND image_path IS NULL"),
+                 {"img": CENTURION_IMAGE, "id": player_id})
     ids["centurion_player_id"] = player_id
     conn.execute(sa.text("UPDATE game_config SET loyalty_settings = CAST(:s AS JSON) WHERE id = 1"),
                  {"s": json.dumps(ids)})

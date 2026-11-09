@@ -48,6 +48,7 @@ export default function AnniversaryPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const now = useMinuteTick();
+  const bannerArt = anniversaryArt("banner");
   const { data, isLoading } = useAnniversary({ poll: true });
   const { data: recap } = useAnniversaryRecap(!!data?.enabled);
   const [error, setError] = useState<string | null>(null);
@@ -86,19 +87,32 @@ export default function AnniversaryPage() {
         <IconChevronLeft size={16} /> Назад
       </button>
 
-      <section className="anni-sky relative overflow-hidden rounded-3xl p-5 text-center ring-1 ring-amber-300/30">
-        {anniversaryArt("banner") && (
-          <img src={anniversaryArt("banner")} alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover opacity-50" />
-        )}
-        <div className="relative flex flex-col items-center gap-1">
-          <span className="anni-glow font-display text-6xl font-black leading-none text-amber-200">100</span>
-          <h1 className="font-display text-xl font-black uppercase tracking-wide text-white drop-shadow">дней Victor FC</h1>
-          <p className="flex items-center gap-1 font-mono text-caption text-white/75">
-            <IconClock size={12} />
-            {before ? `старт через ${timeLeft(data.starts_at, now)}` : data.active ? `праздник ещё ${timeLeft(data.ends_at, now)}` : "праздник окончен"}
-          </p>
-        </div>
-      </section>
+      {bannerArt ? (
+        // The art carries its own golden «100»: only the caption goes on top.
+        <section className="relative aspect-[15/7] overflow-hidden rounded-3xl ring-1 ring-amber-300/30">
+          <img src={bannerArt} alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover" />
+          <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-4 pb-3 pt-8">
+            <h1 className="font-display text-lg font-black uppercase leading-tight tracking-wide text-white drop-shadow">
+              Нам 100 дней!
+            </h1>
+            <p className="flex shrink-0 items-center gap-1 font-mono text-caption text-white/80">
+              <IconClock size={12} />
+              {before ? `старт через ${timeLeft(data.starts_at, now)}` : data.active ? `праздник ещё ${timeLeft(data.ends_at, now)}` : "праздник окончен"}
+            </p>
+          </div>
+        </section>
+      ) : (
+        <section className="anni-sky relative overflow-hidden rounded-3xl p-5 text-center ring-1 ring-amber-300/30">
+          <div className="relative flex flex-col items-center gap-1">
+            <span className="anni-glow font-display text-6xl font-black leading-none text-amber-200">100</span>
+            <h1 className="font-display text-xl font-black uppercase tracking-wide text-white drop-shadow">дней Victor FC</h1>
+            <p className="flex items-center gap-1 font-mono text-caption text-white/75">
+              <IconClock size={12} />
+              {before ? `старт через ${timeLeft(data.starts_at, now)}` : data.active ? `праздник ещё ${timeLeft(data.ends_at, now)}` : "праздник окончен"}
+            </p>
+          </div>
+        </section>
+      )}
 
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-300">{error}</p>}
 
