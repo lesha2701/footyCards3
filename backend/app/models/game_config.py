@@ -83,6 +83,28 @@ DEFAULT_CLUB_BASE_COSMETICS: list = [
     _cosmetic("facade_gold", "facade", "gold", "Золотой фасад", 100000, 500, 25),
 ]
 
+# «Город» (services/town_service.py): per district — the price of a house
+# (before town_price_growth_pct for every house already owned) and its rent
+# in coins a day. The 0267 migration writes the same values.
+DEFAULT_TOWN_DISTRICTS: dict = {
+    "favela": {"price": 1000, "rent": 15},
+    "center": {"price": 2000, "rent": 25},
+    "mountains": {"price": 3000, "rent": 35},
+    "beach": {"price": 4000, "rent": 45},
+    "business": {"price": 6000, "rent": 60},
+}
+
+# «Город», closed places on the map (pier, park, island): the price of
+# opening one and the +% it adds to the houses' rent. 0267 writes the same.
+DEFAULT_TOWN_DECOR: dict = {
+    "pier": {"price": 20000, "rent_pct": 5},
+    "park": {"price": 40000, "rent_pct": 8},
+    "island": {"price": 75000, "rent_pct": 12},
+}
+
+# «Жители города»: coins for one spare copy of a resident, by rarity.
+DEFAULT_TOWN_RESIDENT_SPARE_COINS: dict = {"common": 10, "rare": 30, "epic": 100, "legendary": 300}
+
 DEFAULT_CLUB_BASE_CAPS: dict = {
     "matchday_pct": 100, "injury_pct": 50, "recovery": 15, "familiarity_pct": 60, "my_player_xp_pct": 30,
     "prep_pct": 25, "rep_pct": 30, "sell_pct": 15, "discount_pct": 25, "daily": 600,
@@ -225,6 +247,22 @@ class GameConfig(TimestampMixin, Base):
     # Scale of arena_tactics.FORMATION_SHIFT (100 = as tabled, 0 = formations
     # only matter through positions and chemistry).
     arena_formation_effect_pct: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    # The live layer (arena_moments): seconds a moment waits for the player,
+    # how often an auto-pick (skip/timeout) is the sensible one, minutes until
+    # an abandoned match is closed as a loss, how often the pre-match style
+    # hint is true, the match-goal bonus and the rolls of the decisions.
+    arena_moment_seconds: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
+    arena_auto_best_pct: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    arena_abandon_minutes: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    arena_hint_accuracy_pct: Mapped[int] = mapped_column(Integer, default=70, nullable=False)
+    arena_goal_bonus_coins: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    arena_decision_tuning: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # «Кубок выходных» (arena_cup_service): weekdays (0 = Monday), coins and
+    # opponent strength (% of yours) per round.
+    arena_cup_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    arena_cup_weekdays: Mapped[list] = mapped_column(JSON, default=lambda: [5, 6], nullable=False)
+    arena_cup_round_rewards: Mapped[list] = mapped_column(JSON, default=lambda: [100, 200, 400, 800], nullable=False)
+    arena_cup_round_strength_pct: Mapped[list] = mapped_column(JSON, default=lambda: [95, 100, 106, 112], nullable=False)
     # Card Arena divisions (arena_ladder_service): Elo-like points, division
     # N = index N-1 of these parallel lists (first threshold is always 0).
     arena_points_k: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
@@ -356,6 +394,13 @@ class GameConfig(TimestampMixin, Base):
     bot_comeback_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     bot_comeback_days: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     bot_comeback_hour: Mapped[int] = mapped_column(Integer, default=19, nullable=False)
+    # «Подарок за возвращение» (comeback_gift_service): a player away for
+    # comeback_gift_days+ gets it on return, at most once per cooldown.
+    comeback_gift_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    comeback_gift_days: Mapped[int] = mapped_column(Integer, default=7, nullable=False)
+    comeback_gift_cooldown_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    comeback_gift_coins: Mapped[int] = mapped_column(Integer, default=3000, nullable=False)
+    comeback_gift_pack_slug: Mapped[str] = mapped_column(String, default="elite", nullable=False)
     # Shop "предложение дня" (services/shop_offer_service.py): one coin pack a
     # day at a discount, once per player per day. pack_id = None rotates
     # through the active coin packs by date. Off by default.
@@ -372,6 +417,10 @@ class GameConfig(TimestampMixin, Base):
     club_league_points_pack: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     club_league_points_task: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     club_league_member_weekly_cap: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+    # A lost game is worth this % of club_league_points_game; a mini-game lost
+    # faster than club_league_min_game_seconds does not count at all.
+    club_league_lost_game_pct: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    club_league_min_game_seconds: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
     club_league_rewards: Mapped[list] = mapped_column(
         JSON, default=lambda: [1500, 1000, 750, 500, 400, 300, 200, 150, 100, 100], nullable=False,
     )
@@ -1225,6 +1274,24 @@ class GameConfig(TimestampMixin, Base):
     stake_max_coins: Mapped[int] = mapped_column(Integer, default=500, nullable=False)
     stake_pair_daily_limit: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     stake_daily_profit_cap: Mapped[int] = mapped_column(Integer, default=2000, nullable=False)
+    # Anti-bot (services/anti_bot_service.py): after max_streak_hours of play
+    # without a rest_hours break, games stop paying and rating until the
+    # player rests rest_hours. ranked_daily_limit: matches a day per rating
+    # mode that move points / rating (0 = no limit).
+    anti_bot_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    anti_bot_max_streak_hours: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    anti_bot_rest_hours: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    ranked_daily_limit: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    # «Ты здесь?» (services/presence_service.py): every N minutes of continuous
+    # play; max wrong answers in a row before rewards pause for lock_minutes.
+    presence_check_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Every Monday, right after «Топ недели» pays the closed week, the game
+    # ratings start over (weekly_top_service.reset_ratings) — the top is
+    # about this week, not about who has been grinding the longest.
+    weekly_rating_reset_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    presence_check_minutes: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    presence_check_max_wrong: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    presence_check_lock_minutes: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
     # Valuable cards (legendary, diamond, «Академия», limited —
     # card_value_service) may be given in a trade only by a «проверенный
     # аккаунт»: this old, active on this many days, and with at least this
@@ -1297,6 +1364,46 @@ class GameConfig(TimestampMixin, Base):
     # for coins and/or Stars; see DEFAULT_CLUB_BASE_COSMETICS.
     club_base_cosmetics: Mapped[list] = mapped_column(
         JSON, nullable=False, default=lambda: [dict(i) for i in DEFAULT_CLUB_BASE_COSMETICS],
+    )
+
+    # «Город» (services/town_service.py): houses bought for coins in five
+    # districts, each pays its district's rent a day. Every house the player
+    # already owns makes the next one town_price_growth_pct dearer; unclaimed
+    # rent stops growing after town_income_max_hours.
+    town_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    town_districts: Mapped[dict] = mapped_column(
+        JSON, nullable=False, default=lambda: {k: dict(v) for k, v in DEFAULT_TOWN_DISTRICTS.items()},
+    )
+    town_price_growth_pct: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    town_income_max_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
+    # The town opens for town_unlock_coins coins (0 = open to everyone), a
+    # new name costs town_rename_stars Telegram Stars (0 = not sold). The
+    # «Отель» is bought once for town_hotel_price coins and pays
+    # town_hotel_rent_per_100_cards a day for every 100 cards the player
+    # holds right now (selling cards lowers it), counted up to
+    # town_hotel_max_cards.
+    town_unlock_coins: Mapped[int] = mapped_column(Integer, default=5000, nullable=False)
+    town_rename_stars: Mapped[int] = mapped_column(Integer, default=99, nullable=False)
+    town_hotel_price: Mapped[int] = mapped_column(Integer, default=5000, nullable=False)
+    town_hotel_rent_per_100_cards: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    town_hotel_max_cards: Mapped[int] = mapped_column(Integer, default=1000, nullable=False)
+    # «Жители города» (town_service, admin «Жители»): resident cards from
+    # their own packs. Every copy held pays town_resident_rent coins a day
+    # into the town's rent; a spare copy sells for
+    # town_resident_spare_coins[rarity]. Bonuses of residents (the
+    # legendary ones) add up per kind, capped by town_resident_bonus_max_pct
+    # (the % kinds) and town_resident_max_daily_coins (the coins kind).
+    town_residents_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    town_resident_rent: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    town_resident_spare_coins: Mapped[dict] = mapped_column(
+        JSON, default=lambda: dict(DEFAULT_TOWN_RESIDENT_SPARE_COINS), nullable=False,
+    )
+    town_resident_bonus_max_pct: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    town_resident_max_daily_coins: Mapped[int] = mapped_column(Integer, default=500, nullable=False)
+    # Closed places on the town map (town_service.DECOR): {code: {price,
+    # rent_pct}}; a bought place adds rent_pct % to the houses' rent.
+    town_decor: Mapped[dict] = mapped_column(
+        JSON, nullable=False, default=lambda: {k: dict(v) for k, v in DEFAULT_TOWN_DECOR.items()},
     )
 
     # --- Monetization (models/monetization.py) ---------------------------
@@ -1417,6 +1524,15 @@ class GameConfig(TimestampMixin, Base):
     club_war_draw_budget: Mapped[int] = mapped_column(Integer, default=1500, nullable=False)
     club_war_loss_budget: Mapped[int] = mapped_column(Integer, default=500, nullable=False)
     club_war_win_member_coins: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+    # War points a member needs to claim the win reward (0 = everyone).
+    club_war_min_points: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    # War, quest and raid rewards go to members who joined at least this long
+    # before the reward appeared; leaving a club blocks joining another for
+    # club_rejoin_cooldown_hours (a kick or a disband does not).
+    club_reward_min_tenure_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
+    club_rejoin_cooldown_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
+    # A captain away this long loses the armband to an active member (0 = off).
+    club_captain_absent_days: Mapped[int] = mapped_column(Integer, default=14, nullable=False)
 
     # --- «Экипировка» (services/equipment_service.py) ---
     # Off = the shop and equipping are closed and worn things give nothing.

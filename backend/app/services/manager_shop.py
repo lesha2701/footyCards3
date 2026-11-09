@@ -12,7 +12,8 @@ Nothing here makes a club stronger.
   pick from PALETTE.
 - Merchandise (config.manager_merch): any user buys a scarf / shirt / flag
   of ANOTHER user's club with coins — the coins are burned, the club gets
-  euros (up to config.manager_merch_cap_eur a season). Euros never turn
+  euros in % of its division grant (merch_eur / merch_cap, «Кабинет
+  президента» numbers merch_eur_pct_per_1000_coins / merch_cap_pct). Euros never turn
   back into coins, so this is not a way to move coins between accounts.
   One of each item per fan and club (his collection).
 - «Менеджер Pro» (Stars, config.manager_pro_days): the scout (biggest
@@ -65,7 +66,24 @@ def catalog(config) -> list[dict]:
     return out
 
 
-def merch_items(config) -> list[dict]:
+def merch_eur(coins: int, division: int, config) -> int:
+    """What a fan's coins bring a club of this division: one rate for every
+    item, in % of the division grant (the old per-item "eur" is not used)."""
+    from app.services import manager_finance as mf
+
+    pct = mf._num(mf.cfg(config)["merch_eur_pct_per_1000_coins"])
+    return max(0, int(mf.grant_of(division, config) * coins * pct / 100_000))
+
+
+def merch_cap(division: int, config) -> int:
+    """At most this much merch money a season for a club of this division."""
+    from app.services import manager_finance as mf
+
+    return mf._share(mf.grant_of(division, config), mf.cfg(config)["merch_cap_pct"])
+
+
+def merch_items(config, division: Optional[int] = None) -> list[dict]:
+    """The items; with a division, "eur" is what each brings such a club."""
     out = []
     for raw in config.manager_merch or []:
         if not isinstance(raw, dict) or not raw.get("code"):
@@ -73,6 +91,9 @@ def merch_items(config) -> list[dict]:
         out.append({"code": str(raw["code"])[:32], "name": str(raw.get("name") or raw["code"])[:40],
                     "emoji": str(raw.get("emoji") or "🧣")[:4],
                     "coins": max(0, int(raw.get("coins") or 0)), "eur": max(0, int(raw.get("eur") or 0))})
+    if division is not None:
+        for i in out:
+            i["eur"] = merch_eur(i["coins"], division, config)
     return out
 
 
@@ -130,7 +151,7 @@ async def club_style(db: AsyncSession, club: ManagerClub, config, now: Optional[
         "stadium_name": club.stadium_name, "pro": is_pro(club, now),
         "pro_until": club.pro_until.isoformat() if club.pro_until else None,
         "merch": {"sold": merch_count, "eur_season": club.merch_eur if club.merch_season == season_key(now) else 0,
-                  "cap_eur": config.manager_merch_cap_eur},
+                  "cap_eur": merch_cap(club.division, config)},
     }
 
 
@@ -141,7 +162,7 @@ async def shop_out(db: AsyncSession, user: User, club: Optional[ManagerClub], co
         select(ManagerMerch, ManagerClub.name).join(ManagerClub, ManagerClub.id == ManagerMerch.club_id)
         .where(ManagerMerch.user_id == user.id).order_by(ManagerMerch.id.desc()).limit(50)
     )).all()
-    items = {i["code"]: i for i in merch_items(config)}
+    items = {i["code"]: i for i in merch_items(config, club.division if club else None)}
     return {
         "cosmetics": [{**i, "owned": i["code"] in have, "usable": _usable(i, have, pro)} for i in catalog(config)
                       if i["on_sale"] or i["code"] in have],
@@ -231,8 +252,8 @@ async def buy_merch(db: AsyncSession, user: User, club_id: int, code: str) -> di
     from app.services.manager_service import money, season_key
 
     config = await get_config(db)
-    item = next((i for i in merch_items(config) if i["code"] == code), None)
-    if item is None:
+    raw_item = next((i for i in merch_items(config) if i["code"] == code), None)
+    if raw_item is None:
         raise NotFoundError("Такого мерча нет")
     club = (await db.execute(
         select(ManagerClub).where(ManagerClub.id == club_id).with_for_update().execution_options(populate_existing=True)
@@ -241,12 +262,17 @@ async def buy_merch(db: AsyncSession, user: User, club_id: int, code: str) -> di
         raise NotFoundError("Клуб не найден")
     if club.owner_id == user.id:
         raise ConflictError("Свой мерч покупать нельзя — его покупают болельщики")
+    item = {**raw_item, "eur": merch_eur(raw_item["coins"], club.division, config)}
     locked = await wallet_service.lock_user_for_update(db, user.id)
     key = season_key(datetime.now(timezone.utc))
     if club.merch_season != key:
         club.merch_season = key
         club.merch_eur = 0
-    eur = max(0, min(item["eur"], config.manager_merch_cap_eur - club.merch_eur))
+    left = merch_cap(club.division, config) - club.merch_eur
+    if left <= 0:
+        # The fan's coins would bring the club nothing — don't take them.
+        raise ConflictError("Клуб уже собрал максимум с мерча в этом сезоне — покупка не даст ему денег. Загляни в новом сезоне")
+    eur = min(item["eur"], left)
     try:
         async with db.begin_nested():
             db.add(ManagerMerch(user_id=user.id, club_id=club.id, code=code, coins=item["coins"], eur=eur))
@@ -287,6 +313,10 @@ async def club_card(db: AsyncSession, user: User, club_id: int) -> dict:
     bought = set((await db.execute(
         select(ManagerMerch.code).where(ManagerMerch.club_id == club.id, ManagerMerch.user_id == user.id)
     )).scalars().all())
+    from app.services.manager_service import season_key
+
+    collected = club.merch_eur if club.merch_season == season_key(datetime.now(timezone.utc)) else 0
+    merch_left = max(0, merch_cap(club.division, config) - collected)
     return {
         "id": club.id, "name": club.name, "owner_name": _name(owner), "division": club.division,
         "division_name": division_name(club.division), "titles": club.titles, "seasons_played": club.seasons_played,
@@ -294,7 +324,9 @@ async def club_card(db: AsyncSession, user: User, club_id: int) -> dict:
         "kit_sponsor": await _kit_sponsor(db, club),
         "rating": squad["rating"], "fans": fans, "is_mine": club.owner_id == user.id,
         "xi": [{k: p[k] for k in ("slot", "kind", "name", "position", "rating")} for p in squad["xi"]],
-        "merch": [{**i, "bought": i["code"] in bought} for i in merch_items(config)],
+        "merch": [{**i, "bought": i["code"] in bought} for i in merch_items(config, club.division)],
+        # What merch can still bring the club this season (0 = sales closed).
+        "merch_left_eur": merch_left,
     }
 
 

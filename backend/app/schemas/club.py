@@ -90,6 +90,9 @@ class ClubDetailOut(BaseModel):
     wall_unread: Optional[int] = None
     # Club rewards (shop, quests, wars) the requester can still claim.
     rewards_unclaimed: Optional[int] = None
+    # Rewarded club mini-game plays the requester has left today, per game
+    # ("game", "penalty", "position_match") — the «Дела на сегодня» block.
+    games_rewards_left: Optional[dict[str, int]] = None
 
 
 class ClubJoinRequestOut(BaseModel):

@@ -35,6 +35,10 @@ class UserCard(Base):
     # The owner's own «замок» (migration 0161): protects this copy from being
     # sold or burned as material — it still plays in squads and can be traded.
     is_user_locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # What this very copy did in Card Arena.
+    arena_goals: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    arena_assists: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    arena_mvps: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # Diamond-rarity only: rating points earned by feeding this specific
     # copy other cards (see diamond_upgrade_service.py). Lives on the owned
     # card, not Player.rating, so leveling one copy never affects other

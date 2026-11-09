@@ -174,16 +174,21 @@ export default function ClubCardSheet({ clubId, onClose, onError }: { clubId: nu
                 {!data.is_mine && (
                   <div className="flex flex-col gap-2">
                     <p className="text-xs font-bold text-ink-chalk">Стань болельщиком — купи мерч</p>
+                    {data.merch_left_eur === 0 && (
+                      <p className="rounded-lg bg-bg-raised px-2 py-1.5 text-xs text-ink-mist" data-testid="merch-closed">
+                        Клуб уже собрал максимум с мерча в этом сезоне — покупка не даст ему денег. Загляни в новом сезоне.
+                      </p>
+                    )}
                     <div className="grid grid-cols-3 gap-2">
                       {data.merch.map((m) => (
-                        <button key={m.code} disabled={m.bought || buy.isPending} onClick={() => buy.mutate(m.code)}
-                          className={`flex flex-col items-center gap-0.5 rounded-xl p-2 ${m.bought ? "bg-accent-lime/15 ring-1 ring-accent-lime" : "bg-bg-raised"}`}>
+                        <button key={m.code} disabled={m.bought || buy.isPending || data.merch_left_eur === 0} onClick={() => buy.mutate(m.code)}
+                          className={`flex flex-col items-center gap-0.5 rounded-xl p-2 ${m.bought ? "bg-accent-lime/15 ring-1 ring-accent-lime" : "bg-bg-raised"} ${!m.bought && data.merch_left_eur === 0 ? "opacity-50" : ""}`}>
                           <span className="text-2xl">{m.emoji}</span>
                           <span className="text-micro text-ink-chalk">{m.name}</span>
                           {m.bought ? <span className="text-micro text-accent-lime">куплено</span> : (
                             <span className="flex items-center gap-0.5 text-micro font-bold text-ink-chalk">{m.coins} <IconCoin className="h-3 w-3" /></span>
                           )}
-                          <span className="text-[9px] text-ink-mist">клубу +{eur(m.eur)}</span>
+                          <span className="text-[9px] text-ink-mist">клубу +{eur(data.merch_left_eur == null ? m.eur : Math.min(m.eur, data.merch_left_eur))}</span>
                         </button>
                       ))}
                     </div>

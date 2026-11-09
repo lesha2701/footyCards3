@@ -344,12 +344,14 @@ async def boost_effects(db: AsyncSession, user_id: int, config=None) -> dict[str
 
 
 async def xp_bonus_pct(db: AsyncSession, user_id: int) -> int:
-    """XP bonus from the player's «Имущество», worn «Артефакты» and the active «Муза»."""
+    """XP bonus from the player's «Имущество», worn «Артефакты», the active
+    «Муза» and the «Жители города» (xp_pct)."""
+    from app.services import town_service
     from app.services.lifestyle_service import effects_of
 
     return (await effects_of(db, user_id)).get("xp_bonus_pct", 0) + (
         await boost_effects(db, user_id)
-    ).get("xp_bonus_pct", 0)
+    ).get("xp_bonus_pct", 0) + await town_service.user_bonus(db, user_id, "xp_pct")
 
 
 async def grant_reward_xp(db: AsyncSession, user: User, tx_type: TransactionType, amount: int) -> int:

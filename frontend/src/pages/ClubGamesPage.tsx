@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 
-import { IconBrain, IconChevronLeft, IconChevronRight, IconGoal, IconShirt } from "@/components/icons";
+import { ClubBackButton } from "@/components/clubs/ClubBackButton";
+import { IconBrain, IconChevronRight, IconGoal, IconShirt } from "@/components/icons";
 
 const GAMES = [
   {
@@ -29,9 +30,7 @@ export default function ClubGamesPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
-        <button onClick={() => navigate("/clubs")} className="rounded-full bg-bg-surface p-2 active:scale-95">
-          <IconChevronLeft size={18} className="text-ink-chalk" />
-        </button>
+        <ClubBackButton />
         <h1 className="font-display text-xl font-bold text-ink-chalk">Клубные игры</h1>
       </div>
 

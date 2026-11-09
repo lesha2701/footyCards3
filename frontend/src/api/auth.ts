@@ -1,9 +1,12 @@
 import { api } from "@/lib/api";
 import type { AuthResponse, UserMe } from "@/types";
 
-export async function createSession(referralCode?: string, timeoutMs?: number): Promise<AuthResponse> {
+export async function createSession(referralCode?: string, timeoutMs?: number, startSource?: string): Promise<AuthResponse> {
   const { data } = await api.post<AuthResponse>("/auth/session", null, {
-    headers: referralCode ? { "X-Referral-Code": referralCode } : undefined,
+    headers: {
+      ...(referralCode ? { "X-Referral-Code": referralCode } : {}),
+      ...(startSource ? { "X-Start-Source": startSource } : {}),
+    },
     timeout: timeoutMs,
   });
   return data;

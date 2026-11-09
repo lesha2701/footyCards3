@@ -127,6 +127,10 @@ export interface Stadium {
 export interface UserCard {
   id: number;
   serial_number: number;
+  /** What this copy did in Card Arena. */
+  arena_goals?: number;
+  arena_assists?: number;
+  arena_mvps?: number;
   player: Player;
   acquired_at: string;
   source: string;
@@ -308,6 +312,7 @@ export interface Pack {
   skill_token_drop_chance?: number;
   /** Per-slot chance of a «Муза» instead of a footballer (the «Музы» pack: 0.1). */
   muse_drop_chance?: number;
+  resident_drop_chance?: number;
   /** "path" = the «Академия» pack (diamond slots drop only path cards). */
   player_pool?: string;
   pity_enabled?: boolean;
@@ -384,6 +389,8 @@ export interface OpenedMuse {
   muse: Muse;
   is_new: boolean;
   copies: number;
+  /** "resident" — a «Житель города» card riding the same list (the same card fields). */
+  kind?: "muse" | "resident";
 }
 
 export interface PackBulkOpenResult {
@@ -728,6 +735,81 @@ export interface MatchActor {
   name: string;
   rating: number;
   position: string;
+  image_path?: string | null;
+  rarity?: string | null;
+}
+
+/** A side of a Card Arena duel (the opponent's players have no card id). */
+export interface MatchDuelActor {
+  name: string;
+  rating: number;
+  position: string;
+  image_path?: string | null;
+  rarity?: string | null;
+}
+
+export type ArenaActionKind =
+  | MatchActionKind | "dribble" | "keep_style" | "change_style" | "all_in" | "hold" | "kick" | "dive" | "auto";
+
+export interface MatchOption {
+  action: ArenaActionKind;
+  me: MatchDuelActor;
+  vs: MatchDuelActor;
+  risk: "low" | "mid" | "high";
+  note: string;
+}
+
+/** Card Arena's moment: FUT Draft keeps the plain MatchPendingMoment. */
+export interface ArenaPendingMoment extends Omit<MatchPendingMoment, "kind" | "actions" | "shot_type"> {
+  kind: MatchPendingMoment["kind"] | "halftime" | "late_call" | "penalty";
+  shot_type: ShotType | "halftime" | "late_call" | "penalty";
+  actions: ArenaActionKind[];
+  options?: MatchOption[];
+  /** The moment's clock, null when it has none. */
+  seconds?: number | null;
+  seed?: number | null;
+  rating?: number | null;
+  taker?: MatchDuelActor | null;
+}
+
+export interface ArenaGoal {
+  code: string;
+  text: string;
+  bonus: number;
+  done: boolean;
+}
+
+export interface ArenaCupStatus {
+  open: boolean;
+  enabled: boolean;
+  total_rounds: number;
+  rounds_won: number;
+  status: "none" | "active" | "lost" | "champion";
+  rewards: number[];
+  next_strength_pct: number | null;
+  champions: number;
+}
+
+export interface ArenaDefenseItem {
+  match_id: number;
+  attacker_name: string;
+  attacker_avatar_url: string | null;
+  result: MatchResult;
+  my_score: number;
+  their_score: number;
+  created_at: string;
+  can_revenge: boolean;
+}
+
+export interface MatchHistoryItem {
+  id: number;
+  opponent_name: string;
+  user_score: number;
+  opponent_score: number;
+  result: MatchResult | null;
+  reward_coins: number;
+  created_at: string;
+  ladder?: ArenaLadderResult | null;
 }
 
 export interface MatchPendingMoment {
@@ -754,7 +836,9 @@ export interface Match {
   rating_delta: number;
   created_at: string;
   events: MatchEvent[];
-  pending_moment: MatchPendingMoment | null;
+  pending_moment: ArenaPendingMoment | null;
+  /** This match was already running: show it as it stands. */
+  resumed?: boolean;
   /** «Академия»: static talents applied at kickoff / experience earned. */
   talent_notes?: MatchTalentNote[] | null;
   path_progress?: PathMatchProgress[] | null;
@@ -781,6 +865,8 @@ export interface MatchArenaInfo {
   matchup_bonus_pct: number;
   chances: ArenaChances | null;
   opponent_points: number | null;
+  goal?: ArenaGoal | null;
+  cup?: { run_id: number; round: number } | null;
 }
 
 export interface ArenaLadderResult {
@@ -804,6 +890,13 @@ export interface ArenaLineCompare {
 }
 
 export interface ArenaMatchReport {
+  /** Why the match paid / rated nothing (backend anti_bot_service.paused). */
+  paused?: { reason: "blocked" | "presence" | "rest"; until: string | null } | null;
+  /** False: today's ranked matches are used up — paid, not rated. */
+  ranked?: boolean;
+  mvp?: MatchDuelActor | null;
+  goal?: ArenaGoal | null;
+  cup?: { coins: number; status: string; round: number; rounds_won?: number } | null;
   verdict: string;
   reasons: string[];
   chances: ArenaChances;
@@ -838,15 +931,19 @@ export interface ArenaPreview {
   opponent_points: number;
   opponent_division: number;
   opponent_strength: number;
-  opponent_style: LineupTactic;
+  /** A tendency, not a fact: the real style opens at kickoff. */
+  opponent_style_hint: LineupTactic;
   opponent_formation: string;
   user_strength: number;
   user_style: LineupTactic;
   user_formation: string;
-  matchup: ArenaMatchup;
-  matchup_bonus_pct: number;
-  matchup_text: string;
+  head_to_head?: { win: number; draw: number; loss: number } | null;
+  goal_text?: string | null;
+  goal_bonus_coins: number;
+  revenge: boolean;
   lines: ArenaLineCompare[];
+  /** Your best outfield card and who faces him; a bot's side is a line, no photo. */
+  key_duel?: { me: MatchDuelActor; vs: MatchDuelActor } | null;
   chances: ArenaChances;
   points_at_stake: Record<MatchResult, number>;
   division: ArenaDivision;
@@ -863,6 +960,11 @@ export interface ArenaStats {
   /** Place by arena points (null before the first division match). */
   arena_rank: number | null;
   division?: ArenaDivision | null;
+  hourly_limit: number;
+  hourly_left: number;
+  retry_after_seconds: number;
+  defense_unread: number;
+  cup?: ArenaCupStatus | null;
 }
 
 export interface MaintenanceStatus {
@@ -911,6 +1013,12 @@ export interface GameLimits {
   fergie_time?: number;
   /** Exhausted games only: when the hourly cap frees up again. */
   resets_at?: Partial<Record<string, string>>;
+  /** Anti-bot «усталость»: games don't pay coins / rating until then. */
+  rest_until?: string | null;
+  rest_hours?: number;
+  /** Rating modes (limit keys) whose daily ranked matches are used up today. */
+  ranked_limit?: number;
+  ranked_done?: string[];
 }
 
 export interface ArenaLeaderboardEntry {
@@ -1403,6 +1511,8 @@ export interface LeagueRewardClaim {
 
 export interface LeagueStatus {
   total_rating: number;
+  /** Banked from the past weeks; the three ratings are this week's. */
+  league_points?: number;
   arena_rating: number;
   tactics_rating: number;
   penalty_rating: number;
@@ -2250,6 +2360,7 @@ export interface ClubLeague {
   week_start: string;
   ends_at: string;
   points_game: number;
+  lost_game_pct: number;
   points_pack: number;
   points_task: number;
   member_weekly_cap: number;
@@ -2316,6 +2427,7 @@ export interface Club {
   can_spend_budget?: boolean;
   wall_unread?: number | null;
   rewards_unclaimed?: number | null;
+  games_rewards_left?: { game: number; penalty: number; position_match: number } | null;
   cups_count: number;
   stars_count: number;
   daily_reward_seconds_remaining: number | null;
@@ -2433,6 +2545,8 @@ export interface ClubWar {
   draw_budget: number;
   loss_budget: number;
   win_member_coins: number;
+  min_points: number;
+  reward_tenure_hours: number;
   war_id: number | null;
   me: ClubWarSide | null;
   opponent: ClubWarSide | null;
@@ -3944,12 +4058,13 @@ export interface WeeklyTopInfo {
   places: WeeklyTopPlace[];
   metrics: RankingMetric[];
   starting_values: Partial<Record<RankingMetric, number>>;
+  resetting?: RankingMetric[];
 }
 
 /** «Карты за звёзды»: a footballer card on sale for Telegram Stars. */
 /** A coach, stadium or Muse on sale (footballers come as `player`). */
 export interface CardOfferItem {
-  kind: "coach" | "stadium" | "muse";
+  kind: "coach" | "stadium" | "muse" | "resident";
   id: number;
   name: string;
   rarity: Rarity;
@@ -3960,7 +4075,7 @@ export interface CardOfferItem {
 
 export interface CardOffer {
   id: number;
-  kind?: "player" | "coach" | "stadium" | "muse";
+  kind?: "player" | "coach" | "stadium" | "muse" | "resident";
   player: Player | null;
   item?: CardOfferItem | null;
   stars_price: number;
@@ -3975,11 +4090,12 @@ export interface CardOffer {
 }
 
 export interface CardOfferAdminInput {
-  /** Exactly one of the four ids. */
+  /** Exactly one of the five ids. */
   player_id?: number | null;
   coach_id?: number | null;
   stadium_id?: number | null;
   muse_id?: number | null;
+  resident_id?: number | null;
   stars_price: number;
   title: string | null;
   starts_at: string | null;
@@ -3994,7 +4110,7 @@ export interface CardOfferAdminInput {
 
 export interface CardOfferAdmin extends Omit<CardOfferAdminInput, "player_id"> {
   id: number;
-  kind?: "player" | "coach" | "stadium" | "muse";
+  kind?: "player" | "coach" | "stadium" | "muse" | "resident";
   player: Player | null;
   item?: CardOfferItem | null;
   sold_count: number;

@@ -416,8 +416,14 @@ async def test_match_min_rating_task_is_repeatable_after_claim(client, db_sessio
     task_reassigned = await _fetch_task(client, headers, "repeat_squad_check")
     assert task_reassigned["is_completed"] is False
 
+    # /matches/play resumes an unfinished match, so the first one has to end
+    # before the second can count.
+    match_id = resp.json()["id"]
+    await client.post(f"/api/v1/matches/{match_id}/forfeit", headers=headers)
+
     resp = await client.post("/api/v1/matches/play", headers=headers, json={"difficulty": "medium"})
     assert resp.status_code == 200
+    assert resp.json()["id"] != match_id
 
     task_done_again = await _fetch_task(client, headers, "repeat_squad_check")
     assert task_done_again["is_completed"] is True

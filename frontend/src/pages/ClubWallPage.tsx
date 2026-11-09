@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 
+import { ClubBackButton } from "@/components/clubs/ClubBackButton";
 import { createClubPost, deleteClubPost, fetchClubWall, pinClubPost } from "@/api/clubFeatures";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconChat, IconChevronLeft, IconFlag, IconTrash } from "@/components/icons";
+import { IconChat, IconFlag, IconTrash } from "@/components/icons";
 import { CLUB_ROLE_LABELS } from "@/lib/clubRoles";
 import { formatGameError } from "@/lib/errors";
 import { formatCountdown } from "@/lib/format";
@@ -22,7 +22,6 @@ const timeLabel = (iso: string) => {
 
 /** «Стена клуба»: сообщения участников, объявления капитана (бот присылает их всем), закреп. */
 export default function ClubWallPage() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: wall, isLoading } = useQuery({
     queryKey: ["clubs", "wall"],
@@ -53,9 +52,7 @@ export default function ClubWallPage() {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
-        <button onClick={() => navigate("/clubs")} className="rounded-full bg-bg-surface p-2 active:scale-95">
-          <IconChevronLeft size={18} className="text-ink-chalk" />
-        </button>
+        <ClubBackButton />
         <h1 className="font-display text-xl font-bold text-ink-chalk">Стена клуба</h1>
       </div>
 

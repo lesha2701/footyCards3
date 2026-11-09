@@ -80,6 +80,11 @@ class CareerParticipant(Base):
     # the training focus before the next round (career_service.TRAININGS).
     ambition: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
     training: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    # The plan around it (career_training_service): a second session, intensity.
+    training_extra: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    training_intensity: Mapped[str] = mapped_column(String(8), nullable=False, default="normal", server_default="normal")
+    # Individual programme of this season: who is on it, who finished it.
+    training_program: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     # Off-season: preseason camp focus, how many squad cards carried over
     # from the previous season (the "core"), and the familiarity carried
     # over (before the camp's own bonus).

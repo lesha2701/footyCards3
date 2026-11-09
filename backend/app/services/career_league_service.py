@@ -166,6 +166,7 @@ def record_meeting(profile: CareerProfile, club_id: Optional[int], own: int, opp
     history = dict(league.get("history") or {})
     row = dict(history.get(str(club_id)) or {"w": 0, "d": 0, "l": 0})
     row["w" if own > opp else "d" if own == opp else "l"] += 1
+    row["scores"] = (list(row.get("scores") or []) + [f"{own}:{opp}"])[-5:]
     history[str(club_id)] = row
     league["history"] = history
     if own > opp and tactic_preset:

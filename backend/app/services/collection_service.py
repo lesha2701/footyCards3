@@ -129,6 +129,10 @@ async def list_user_cards(
         query = query.where(Player.club == filters.club)
     if filters.position:
         query = query.where(Player.position == filters.position)
+    if filters.position_category:
+        from app.services.lineup_service import CATEGORY_POSITIONS
+
+        query = query.where(Player.position.in_(CATEGORY_POSITIONS.get(filters.position_category, ())))
     if filters.min_rating is not None:
         query = query.where(Player.rating >= filters.min_rating)
     if filters.max_rating is not None:

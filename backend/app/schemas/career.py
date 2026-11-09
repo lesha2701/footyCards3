@@ -54,6 +54,9 @@ class CareerCupIn(BaseModel):
 
 class CareerTrainingIn(BaseModel):
     training: Optional[str] = None
+    # The plan around it; what is left out stays as it was.
+    extra: Optional[str] = None
+    intensity: Optional[str] = None
     round_index: Optional[int] = None
 
 
@@ -157,6 +160,10 @@ class CareerScoutingOut(BaseModel):
     star: Optional[dict] = None
     marking: Optional[dict] = None
     marks_you: bool = False
+    # My XI next to theirs (career_service._compare) and what the club means
+    # to the coach (career_story_service.rivalry).
+    compare: Optional[dict] = None
+    rivalry: Optional[dict] = None
 
 
 class CareerDifficultyOut(BaseModel):
@@ -305,10 +312,19 @@ class CareerSeasonOut(BaseModel):
     # My match whose second half is on air right now (watch it live).
     second_half: Optional[dict] = None
     plan_hints: list[dict] = []
+    top_scorers: list[dict] = []
+    # The club around the matches (career_story_service).
+    news: list[dict] = []
+    moment: Optional[dict] = None
+    fans: Optional[dict] = None
+    legends: Optional[dict] = None
+    hot_seat: Optional[dict] = None
     ambition: Optional[str] = None
     ambitions: list[dict] = []
     training: Optional[str] = None
     trainings: list[dict] = []
+    training_plan: Optional[dict] = None
+    training_program: Optional[dict] = None
     # Cup bracket, my status, rotation and prizes (tactics seasons).
     cup: Optional[dict] = None
     # Off-season panel until round 1 of a season that follows another;
@@ -345,6 +361,16 @@ class CareerViewOut(BaseModel):
     invite: Optional[CareerInviteOut] = None
 
 
+class CareerProgramIn(BaseModel):
+    card_id: Optional[int] = None
+    round_index: Optional[int] = None
+
+
+class CareerMomentIn(BaseModel):
+    answer: str
+    round_index: Optional[int] = None
+
+
 class CareerMatchEventsOut(BaseModel):
     home_name: str
     away_name: str
@@ -363,6 +389,8 @@ class CareerMatchEventsOut(BaseModel):
     duels: Optional[list[dict]] = None
     duel_stories: Optional[list[str]] = None
     morale: Optional[dict] = None
+    # The match in two phrases (career_commentary_service).
+    story: list[str] = []
 
 
 class CareerReplayOut(BaseModel):

@@ -53,6 +53,9 @@ class ClubWarOut(BaseModel):
     draw_budget: int
     loss_budget: int
     win_member_coins: int
+    # To claim the win reward: war points, and time in the club before it ended.
+    min_points: int = 0
+    reward_tenure_hours: int = 0
     war_id: Optional[int] = None
     me: Optional[ClubWarSideOut] = None
     opponent: Optional[ClubWarSideOut] = None
@@ -63,3 +66,7 @@ class ClubWarOut(BaseModel):
 class ClubWarSweepResult(BaseModel):
     started: int
     settled: int
+
+
+class ClubCaptainSweepResult(BaseModel):
+    transferred: int

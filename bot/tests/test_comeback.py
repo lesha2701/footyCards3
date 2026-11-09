@@ -1,4 +1,4 @@
-from services.comeback import comeback_text
+from services.comeback import comeback_text, gift_text
 
 
 def test_text_names_the_player_and_what_waits():
@@ -13,3 +13,8 @@ def test_text_without_a_name_or_a_ready_pack():
 
 def test_name_is_escaped_for_html():
     assert "&lt;b&gt;" in comeback_text("<b>", False)
+
+
+def test_gift_names_what_waits():
+    assert "3000 монет и пак «Легендарный»" in gift_text("Лёша", 3000, "Легендарный")
+    assert "3000 монет ждут" in gift_text(None, 3000, None)

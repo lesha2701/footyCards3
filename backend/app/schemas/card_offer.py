@@ -9,7 +9,7 @@ from app.schemas.player import PlayerOut
 class OfferItemOut(BaseModel):
     """A coach, stadium or Muse on sale (footballers come as `player`)."""
 
-    kind: str  # "coach" | "stadium" | "muse"
+    kind: str  # "coach" | "stadium" | "muse" | "resident"
     id: int
     name: str
     rarity: str
@@ -43,6 +43,7 @@ class CardOfferAdminIn(BaseModel):
     coach_id: Optional[int] = None
     stadium_id: Optional[int] = None
     muse_id: Optional[int] = None
+    resident_id: Optional[int] = None
     stars_price: int = Field(ge=1, le=100_000)
     title: Optional[str] = Field(default=None, max_length=64)
     starts_at: Optional[datetime] = None

@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -6,10 +8,12 @@ from app.core.rate_limit import check_rate_limit
 from app.database import get_db
 from app.models.user import User
 from app.schemas.match import (
+    ArenaDefenseItemOut,
     ArenaLeaderboardEntry,
     ArenaPreviewOut,
     ArenaStatsOut,
     MatchActionRequest,
+    MatchHistoryItemOut,
     MatchOut,
     StartMatchRequest,
 )
@@ -44,9 +48,34 @@ async def forfeit(match_id: int, db: AsyncSession = Depends(get_db), user: User 
     return await match_service.forfeit_match(db, user, match_id)
 
 
+@router.get("/active", response_model=Optional[MatchOut])
+async def get_active_match(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await match_service.active_match(db, user)
+
+
+@router.get("/defense-log", response_model=list[ArenaDefenseItemOut])
+async def get_defense_log(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await match_service.defense_log(db, user)
+
+
+@router.post("/defense-log/seen", status_code=204)
+async def mark_defense_seen(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await match_service.mark_defense_seen(db, user)
+
+
+@router.post("/{match_id}/revenge", response_model=ArenaPreviewOut)
+async def revenge(match_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await match_service.take_revenge(db, user, match_id)
+
+
 @router.get("/history", response_model=list[MatchOut])
 async def get_match_history(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await match_service.match_history(db, user)
+
+
+@router.get("/recent", response_model=list[MatchHistoryItemOut])
+async def get_recent_matches(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await match_service.recent_matches(db, user)
 
 
 @router.get("/stats", response_model=ArenaStatsOut)

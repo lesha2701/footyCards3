@@ -164,6 +164,10 @@ export interface GameConfig {
   club_war_draw_budget: number;
   club_war_loss_budget: number;
   club_war_win_member_coins: number;
+  club_war_min_points: number;
+  club_reward_min_tenure_hours: number;
+  club_rejoin_cooldown_hours: number;
+  club_captain_absent_days: number;
   weekly_cup_enabled: boolean;
   weekly_cup_games: string[];
   weekly_cup_best_of: number;
@@ -301,6 +305,15 @@ export interface GameConfig {
   arena_edge_rating_per_10pct: number;
   arena_edge_rating_max: number;
   arena_formation_effect_pct: number;
+  arena_moment_seconds: number;
+  arena_auto_best_pct: number;
+  arena_abandon_minutes: number;
+  arena_hint_accuracy_pct: number;
+  arena_goal_bonus_coins: number;
+  arena_cup_enabled: boolean;
+  arena_cup_weekdays: number[];
+  arena_cup_round_rewards: number[];
+  arena_cup_round_strength_pct: number[];
   arena_points_k: number;
   arena_points_scale: number;
   arena_shield_matches: number;
@@ -349,6 +362,11 @@ export interface GameConfig {
   bot_comeback_enabled: boolean;
   bot_comeback_days: number;
   bot_comeback_hour: number;
+  comeback_gift_enabled: boolean;
+  comeback_gift_days: number;
+  comeback_gift_cooldown_days: number;
+  comeback_gift_coins: number;
+  comeback_gift_pack_slug: string;
   shop_daily_offer_enabled: boolean;
   shop_daily_offer_discount_pct: number;
   shop_daily_offer_pack_id: number | null;
@@ -356,6 +374,8 @@ export interface GameConfig {
   club_league_points_game: number;
   club_league_points_pack: number;
   club_league_points_task: number;
+  club_league_lost_game_pct: number;
+  club_league_min_game_seconds: number;
   club_league_member_weekly_cap: number;
   club_league_rewards: number[];
   career_enabled: boolean;
@@ -823,6 +843,21 @@ export interface GameConfig {
   club_base_income_max_days: number;
   club_base_art: { background?: string | null; buildings?: Record<string, string> };
   club_base_cosmetics: AdminStadiumCosmetic[];
+  town_enabled: boolean;
+  town_districts: Record<string, { price: number; rent: number }>;
+  town_price_growth_pct: number;
+  town_income_max_hours: number;
+  town_unlock_coins: number;
+  town_rename_stars: number;
+  town_hotel_price: number;
+  town_hotel_rent_per_100_cards: number;
+  town_hotel_max_cards: number;
+  town_residents_enabled: boolean;
+  town_resident_rent: number;
+  town_resident_spare_coins: Record<string, number>;
+  town_resident_bonus_max_pct: number;
+  town_resident_max_daily_coins: number;
+  town_decor: Record<string, { price: number; rent_pct: number }>;
   trade_send_min_account_age_days: number;
   trade_send_min_active_days: number;
   trade_daily_coins_receive_cap: number;
@@ -840,6 +875,15 @@ export interface GameConfig {
   first_coin_purchase_bonus_pct: number;
   stake_pair_daily_limit: number;
   stake_daily_profit_cap: number;
+  anti_bot_enabled: boolean;
+  anti_bot_max_streak_hours: number;
+  anti_bot_rest_hours: number;
+  ranked_daily_limit: number;
+  presence_check_enabled: boolean;
+  weekly_rating_reset_enabled: boolean;
+  presence_check_minutes: number;
+  presence_check_max_wrong: number;
+  presence_check_lock_minutes: number;
   trade_verified_min_age_days: number;
   trade_verified_min_active_days: number;
   trade_verified_min_stars: number;
@@ -1407,4 +1451,29 @@ export interface TaskChestConfig {
   coins: number;
   card_rarity?: "common" | "rare" | "epic" | "legendary" | null;
   pack_id?: number | null;
+}
+
+/** «Жители города» (backend: routers/admin_town.py). */
+export interface AdminTownResident {
+  id?: number;
+  name: string;
+  title: string | null;
+  description: string | null;
+  icon: string;
+  image_path?: string | null;
+  rarity: string;
+  bonus: string;
+  bonus_value: number;
+  bonus_label?: string;
+  drop_weight: number;
+  is_pack_droppable: boolean;
+  is_active: boolean;
+  sort_order: number;
+  copies_held?: number;
+}
+
+export interface AdminTownResidentCatalog {
+  rarities: string[];
+  bonuses: { code: string; label: string }[];
+  residents: AdminTownResident[];
 }

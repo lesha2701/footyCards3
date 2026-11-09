@@ -14,6 +14,15 @@ import SetPieceScene, { loadScene } from "./SetPieceScene";
 
 const SETUP = { home: "Твой клуб", away: "Гранит", homeRating: 0.78, awayRating: 0.76 };
 
+const LEVELS = ["Лёгкий", "Обычный", "Сложный"];
+const LEVEL_KEY = "match3d.level";
+const savedLevel = (): 0 | 1 | 2 => {
+  try {
+    const v = localStorage.getItem(LEVEL_KEY);
+    return v === "0" ? 0 : v === "2" ? 2 : 1;
+  } catch { return 1; }
+};
+
 type Box = { w: number; h: number; rotated: boolean };
 
 const measure = (): Box => {
@@ -99,6 +108,11 @@ export default function Match3DGame({ onExit, demo = false, onGame, onKickOff, o
   const [end, setEnd] = useState<GameEnd | null>(null);
   const [scene, setScene] = useState<SceneKick | null>(null);
   const [seed, setSeed] = useState(() => (Date.now() >>> 3) & 0xffffff);
+  const [level, setLevel] = useState(savedLevel);
+  const pickLevel = (v: 0 | 1 | 2) => {
+    setLevel(v);
+    try { localStorage.setItem(LEVEL_KEY, String(v)); } catch { /* the choice just isn't remembered */ }
+  };
   const canvas = useRef<HTMLCanvasElement>(null);
   const leave = useRef<() => void>(() => {});
   const gameRef = useRef<MatchGame | null>(null);
@@ -120,7 +134,7 @@ export default function Match3DGame({ onExit, demo = false, onGame, onKickOff, o
     void preloadFreeKickSfx();
     loadMatchAssets(setShare).then((assets) => {
       if (gone) return;
-      const g = new MatchGame(canvas.current!, assets, { ...SETUP, seed }, {
+      const g = new MatchGame(canvas.current!, assets, { ...SETUP, seed, level }, {
         onHud: setHud,
         onMessage: (text, big = false) => setMessage({ text, big, id: performance.now() }),
         onEnd: (e) => { setEnd(e); setStage("end"); onFullTime?.(); },
@@ -242,7 +256,12 @@ export default function Match3DGame({ onExit, demo = false, onGame, onKickOff, o
               <div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.4 }}>
                 Управление как в «Ответке»: слева бег, у края круга спринт. Удар: нажми, держи для силы, свайп вверх для закрутки, вбок для финта.
               </div>
-              <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 14 }}>
+              <div style={{ display: "flex", gap: 6, justifyContent: "center", marginTop: 12 }}>
+                {LEVELS.map((name, i) => (
+                  <button key={name} type="button" onClick={() => pickLevel(i as 0 | 1 | 2)} style={{ padding: "8px 12px", borderRadius: 10, border: 0, fontSize: 13, fontWeight: 700, background: level === i ? "#d6ff3f" : "rgba(255,255,255,.14)", color: level === i ? "#10210f" : "#fff" }}>{name}</button>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12 }}>
                 <button type="button" onClick={onExit} style={{ padding: "11px 18px", borderRadius: 10, border: 0, background: "rgba(255,255,255,.14)", color: "#fff", fontWeight: 700 }}>Назад</button>
                 <button type="button" onClick={start} style={{ padding: "11px 26px", borderRadius: 10, border: 0, background: "#d6ff3f", color: "#0c1a10", fontWeight: 800 }}>Начать матч</button>
               </div>

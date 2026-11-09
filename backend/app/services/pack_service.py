@@ -334,8 +334,8 @@ async def get_opening_result(db: AsyncSession, user: User, opening: PackOpening)
                     duplicate_count=dup_counts.get(card.player_id, 1),
                 )
             )
-        elif oc.skill_code is not None or oc.user_muse_id is not None:
-            continue  # token and Muse slots are listed separately below
+        elif oc.skill_code is not None or oc.user_muse_id is not None or oc.user_town_resident_id is not None:
+            continue  # token, Muse and resident slots are listed separately below
         elif oc.user_coach_card_id is not None:
             coach_card = coach_cards_by_id[oc.user_coach_card_id]
             coach_items.append(
@@ -375,6 +375,20 @@ async def get_opening_result(db: AsyncSession, user: User, opening: PackOpening)
                 muse_items.append(OpenedMuseOut(
                     muse=muse_service.muse_out(user_muse.muse, muse_config, user_muse), is_new=oc.is_new,
                     copies=user_muse.copies,
+                ))
+    resident_slots = [oc for oc in opening_cards if oc.user_town_resident_id is not None]
+    if resident_slots:
+        from app.models.town import UserTownResident
+        from app.services import town_service
+        from app.services.game_config_service import get_config as _town_config
+
+        town_config = await _town_config(db)
+        for oc in resident_slots:
+            owned = await db.get(UserTownResident, oc.user_town_resident_id)
+            if owned is not None:
+                muse_items.append(OpenedMuseOut(
+                    muse=town_service.resident_out(owned.resident, town_config, owned), is_new=oc.is_new,
+                    copies=owned.copies, kind="resident",
                 ))
     return PackOpenResult(
         opening_id=opening.id, pack=PackOut.model_validate(pack), cards=items, coach_cards=coach_items,
@@ -491,6 +505,17 @@ async def roll_and_create_cards(
         muse_pool = await muse_service.droppable(db) if muse_config.muses_enabled else []
     if not muse_pool:
         muse_drop_chance = 0.0
+    # «Жители города» come last on the same roll (the «Жители» packs: 1.0).
+    # Ride the `muses` list with kind "resident" (OpenedMuseOut).
+    from app.services import town_service
+
+    resident_drop_chance = float(getattr(pack, "resident_drop_chance", 0) or 0)
+    resident_pool = []
+    if resident_drop_chance > 0:
+        town_config = await _muse_config(db)
+        resident_pool = await town_service.droppable(db) if town_config.town_residents_enabled else []
+    if not resident_pool:
+        resident_drop_chance = 0.0
     coach_dup_counts = await _duplicate_coach_counts_snapshot(db, user.id) if coach_drop_chance > 0 else {}
     stadium_dup_counts = await _duplicate_stadium_counts_snapshot(db, user.id) if stadium_drop_chance > 0 else {}
 
@@ -509,6 +534,7 @@ async def roll_and_create_cards(
         # `roll < chance` comparison below, for any valid 0..1 chance value.
         roll = random.random() if (
             coach_drop_chance > 0 or stadium_drop_chance > 0 or token_drop_chance > 0 or muse_drop_chance > 0
+            or resident_drop_chance > 0
         ) else 1.0
         if coach_drop_chance > 0 and rarity != Rarity.diamond and roll < coach_drop_chance:
             coach = await pick_random_coach(db, rarity)
@@ -568,6 +594,21 @@ async def roll_and_create_cards(
             ))
             opened_muse_items.append(OpenedMuseOut(
                 muse=muse_service.muse_out(muse, muse_config, user_muse), is_new=is_new, copies=user_muse.copies,
+            ))
+        elif (
+            resident_drop_chance > 0
+            and roll < coach_drop_chance + stadium_drop_chance + token_drop_chance + muse_drop_chance
+            + resident_drop_chance
+        ):
+            resident = town_service.pick_random_resident(resident_pool, rarity)
+            owned, is_new = await town_service.grant(db, user.id, resident, "pack")
+            db.add(PackOpeningCard(
+                opening_id=opening.id, user_card_id=None, user_coach_card_id=None, user_stadium_card_id=None,
+                user_town_resident_id=owned.id, is_new=is_new,
+            ))
+            opened_muse_items.append(OpenedMuseOut(
+                muse=town_service.resident_out(resident, town_config, owned), is_new=is_new, copies=owned.copies,
+                kind="resident",
             ))
         else:
             player = await pick_random_player(db, rarity, getattr(pack, "player_pool", "default") or "default")
@@ -693,7 +734,7 @@ async def open_pack(
         db, locked_user, [item.card.player.id for item in opened_items],
         collection_ids=await collection_service.staff_collection_ids(
             db, [i.card.coach.id for i in opened_coach_items], [i.card.stadium.id for i in opened_stadium_items],
-            [i.muse["id"] for i in opened_muse_items],
+            [i.muse["id"] for i in opened_muse_items if i.kind == "muse"],
         ),
     )
 
@@ -879,7 +920,7 @@ async def open_pack_bulk(
         db, locked_user, [item.card.player.id for item in all_opened_items],
         collection_ids=await collection_service.staff_collection_ids(
             db, [i.card.coach.id for i in all_opened_coach_items], [i.card.stadium.id for i in all_opened_stadium_items],
-            [i.muse["id"] for i in all_opened_muse_items],
+            [i.muse["id"] for i in all_opened_muse_items if i.kind == "muse"],
         ),
     )
 
@@ -976,7 +1017,9 @@ async def list_available_packs(db: AsyncSession, user_id: Optional[int] = None) 
             item.user_today_count = await today_count(db, pack.id, user_id)
         item.is_available_now = is_available_now
         item.unavailable_reason = unavailable_reason
-        item.expected_value = pack_rarity_breakdown(pack, averages)[0]
+        # The players' card value means nothing for a pack of town residents only.
+        residents_only = float(pack.resident_drop_chance or 0) >= 1
+        item.expected_value = None if residents_only else pack_rarity_breakdown(pack, averages)[0]
         item.bulk10_discount_pct = config.bulk10_discount_pct if pack.stars_price is None else 0
         if user_id is not None and config.pity_packs > 0 and pity_eligible(pack):
             item.pity_left = max(1, config.pity_packs - pity_counter)

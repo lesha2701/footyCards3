@@ -1,9 +1,9 @@
+import { ClubBackButton } from "@/components/clubs/ClubBackButton";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
 
 import { fetchClubStats } from "@/api/clubs";
-import { IconChevronLeft, IconTarget } from "@/components/icons";
+import { IconTarget } from "@/components/icons";
 
 function StatTile({ label, value }: { label: string; value: string | number }) {
   return (
@@ -15,15 +15,12 @@ function StatTile({ label, value }: { label: string; value: string | number }) {
 }
 
 export default function ClubStatsPage() {
-  const navigate = useNavigate();
   const { data: stats, isLoading } = useQuery({ queryKey: ["clubs", "stats"], queryFn: fetchClubStats });
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
-        <button onClick={() => navigate("/clubs")} className="rounded-full bg-bg-surface p-2 active:scale-95">
-          <IconChevronLeft size={18} className="text-ink-chalk" />
-        </button>
+        <ClubBackButton />
         <h1 className="flex items-center gap-2 font-display text-xl font-bold text-ink-chalk">
           <IconTarget size={20} className="text-accent-lime" />
           Статистика клуба

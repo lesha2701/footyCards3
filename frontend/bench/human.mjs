@@ -18,7 +18,7 @@ let seedR = 12345;
 const r = () => { seedR = (seedR * 1103515245 + 12345) & 0x7fffffff; return seedR / 0x7fffffff; };
 
 for (let m = 0; m < matches; m++) {
-  const s = E.createMatch({ seed: 500 + m * 11, home: "A", away: "B", homeRating: 0.78, awayRating: 0.78 }, 0);
+  const s = E.createMatch({ seed: 500 + m * 11, home: "A", away: "B", homeRating: 0.78, awayRating: 0.78, level: process.env.LEVEL ? +process.env.LEVEL : 1 }, 0);
   let open = null; // { gk } a kick of ours on its way
   let wait = 0, sx = 1, sz = 0, wild = 0;
   while (s.phase !== 4 && s.tick < 60 * 400) {

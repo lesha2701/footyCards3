@@ -1,4 +1,5 @@
 import secrets
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -20,8 +21,18 @@ from app.services.wallet_service import credit_coins
 settings = get_settings()
 
 
+_SOURCE = re.compile(r"[A-Za-z0-9_-]{1,64}")
+
+
+def clean_source(value: Optional[str]) -> Optional[str]:
+    """The link's label, in Telegram's start_param alphabet. It comes from the
+    client, so it is only ever an analytics label; anything else is dropped."""
+    return value if value and _SOURCE.fullmatch(value) else None
+
+
 async def _get_or_create_user(
-    db: AsyncSession, tg_user: TelegramUser, referral_code: Optional[str] = None
+    db: AsyncSession, tg_user: TelegramUser, referral_code: Optional[str] = None,
+    start_source: Optional[str] = None,
 ) -> User:
     result = await db.execute(select(User).where(User.telegram_id == tg_user.id))
     user = result.scalar_one_or_none()
@@ -49,6 +60,7 @@ async def _get_or_create_user(
                     avatar_url=tg_user.photo_url,
                     balance=0,
                     is_admin=is_admin_now,
+                    acquisition_source=clean_source(start_source),
                 )
                 db.add(user)
                 await db.flush()
@@ -114,7 +126,8 @@ async def _get_or_create_user(
     # (any authenticated request), not by any specific in-app action, so it
     # only changes once per day regardless of how many requests come in.
     today = local_today()
-    previous_day = local_today(user.last_seen_at) if user.last_seen_at else None
+    previous_seen_at = user.last_seen_at
+    previous_day = local_today(previous_seen_at) if previous_seen_at else None
     if previous_day != today:
         user.daily_login_streak = user.daily_login_streak + 1 if previous_day == today - timedelta(days=1) else 1
         # Same once-a-day trigger feeds the analytics activity history.
@@ -130,6 +143,11 @@ async def _get_or_create_user(
         from app.services.streak_reward_service import check as check_streak
 
         await check_streak(db, user)
+        await db.refresh(user)
+        # Back after a long absence: a welcome gift may be due.
+        from app.services.comeback_gift_service import check as check_comeback
+
+        await check_comeback(db, user, previous_seen_at)
         await db.refresh(user)
     if previous_day != today and user.referred_by_id is not None and not user.referral_reward_granted:
         # A new active day may make him a counted friend (referral_service).
@@ -161,6 +179,7 @@ async def get_current_user(
     x_telegram_init_data: Optional[str] = Header(default=None, alias="X-Telegram-Init-Data"),
     x_dev_mode: Optional[str] = Header(default=None, alias="X-Dev-Mode"),
     x_referral_code: Optional[str] = Header(default=None, alias="X-Referral-Code"),
+    x_start_source: Optional[str] = Header(default=None, alias="X-Start-Source"),
 ) -> User:
     if x_telegram_init_data:
         try:
@@ -178,9 +197,13 @@ async def get_current_user(
     else:
         raise UnauthorizedError("Missing Telegram init data")
 
-    user = await _get_or_create_user(db, tg_user, referral_code=x_referral_code)
+    user = await _get_or_create_user(db, tg_user, referral_code=x_referral_code, start_source=x_start_source)
     if user.is_banned:
         raise ForbiddenError("This account has been banned")
+    from app.services import anti_bot_service
+
+    if anti_bot_service.is_game_action(request.method, request.url.path):
+        await anti_bot_service.track_play(db, user)
     return user
 
 

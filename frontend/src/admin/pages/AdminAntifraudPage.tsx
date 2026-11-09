@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 import { useAdminToastStore } from "@/admin/adminToastStore";
-import { banAntifraudUsers, fetchAntifraudScan } from "@/admin/api";
+import { banAntifraudUsers, fetchAntifraudScan, fetchBotSuspects, setRewardsBlocked, type BotSuspect } from "@/admin/api";
 import type { AntifraudAccount, AntifraudFarm, AntifraudHub } from "@/admin/types";
 import { ApiRequestError } from "@/lib/api";
 
@@ -62,6 +62,8 @@ export default function AdminAntifraudPage() {
           которые им отдавали монеты. Платившие Stars помечены и сами не выбираются.
         </p>
       </div>
+
+      <BotsSection />
 
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1 text-caption text-slate-400">
@@ -214,5 +216,87 @@ function Table({ head, rows }: { head: string[]; rows: React.ReactNode[][] }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+
+/** Accounts that play around the clock (no sleep) — likely scripts. Bulk
+ *  «Без наград за игры»: they keep playing, games just stop paying. */
+function BotsSection() {
+  const queryClient = useQueryClient();
+  const toast = useAdminToastStore.getState().push;
+  const [days, setDays] = useState(7);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-bot-suspects", days],
+    queryFn: () => fetchBotSuspects({ days, min_games: 150 }),
+  });
+  const block = useMutation({
+    mutationFn: ({ ids, blocked }: { ids: number[]; blocked: boolean }) => setRewardsBlocked(ids, blocked),
+    onSuccess: (res, vars) => {
+      toast(`${vars.blocked ? "Награды отключены" : "Награды включены"}: ${res.changed}`, "success");
+      setSelected(new Set());
+      queryClient.invalidateQueries({ queryKey: ["admin-bot-suspects"] });
+    },
+    onError: (err) => toast(err instanceof ApiRequestError ? err.message : "Не получилось", "error"),
+  });
+  const toggle = (id: number) => setSelected((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const sure = (data ?? []).filter((b) => !b.rewards_blocked && (b.days_without_sleep >= 2 || b.active_hours_per_day >= 16));
+
+  return (
+    <Section
+      title={`Похоже на ботов${data ? ` (${data.length})` : ""}`}
+      hint="Игроки, которые играют почти без сна. «Без сна» — сутки с 18+ часами игр и без перерыва 4+ часа. У живого игрока таких дней почти не бывает; 16+ активных часов в день неделю подряд — тоже почти наверняка скрипт."
+    >
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+        <span className="text-slate-400">Период:</span>
+        {[3, 7, 14].map((d) => (
+          <button key={d} onClick={() => setDays(d)}
+            className={`rounded-lg px-2.5 py-1 ${days === d ? "bg-accent text-bg-base" : "bg-white/5 text-slate-300"}`}>
+            {d} дн.
+          </button>
+        ))}
+        <button
+          disabled={!sure.length || block.isPending}
+          onClick={() => block.mutate({ ids: sure.map((b) => b.id), blocked: true })}
+          className="rounded-lg bg-red-500/80 px-3 py-1.5 font-bold text-white disabled:opacity-40"
+        >
+          Отключить награды явным ботам ({sure.length})
+        </button>
+        {selected.size > 0 && (
+          <>
+            <button disabled={block.isPending} onClick={() => block.mutate({ ids: [...selected], blocked: true })}
+              className="rounded-lg bg-amber-400 px-3 py-1.5 font-bold text-bg-base disabled:opacity-40">
+              Отключить выбранным ({selected.size})
+            </button>
+            <button disabled={block.isPending} onClick={() => block.mutate({ ids: [...selected], blocked: false })}
+              className="rounded-lg bg-white/10 px-3 py-1.5 font-bold text-slate-200 disabled:opacity-40">
+              Вернуть выбранным
+            </button>
+          </>
+        )}
+      </div>
+      {isLoading ? <p className="text-xs text-slate-400">Загрузка…</p> : (
+        <Table
+          head={["", "Аккаунт", "Игр", "Часов/день", "Дней без сна", "Макс. перерыв, ч", "Сек. между играми", "Арена", "Баланс", "Stars", "Награды"]}
+          rows={(data ?? []).map((b: BotSuspect) => [
+            <input key="p" type="checkbox" checked={selected.has(b.id)} onChange={() => toggle(b.id)} aria-label={`Выбрать ${b.username ?? b.id}`} />,
+            <span key="w" className={b.stars_paid ? "text-amber-300" : ""}>
+              {b.username ? `@${b.username}` : "—"} <span className="text-micro text-slate-500">#{b.id}</span>
+            </span>,
+            fmt(b.games),
+            <b key="h" className={b.active_hours_per_day >= 16 ? "text-red-400" : ""}>{b.active_hours_per_day}</b>,
+            <b key="d" className={b.days_without_sleep >= 2 ? "text-red-400" : ""}>{b.days_without_sleep}</b>,
+            b.longest_break_hours, b.median_seconds_between, fmt(b.arena_points), fmt(b.balance),
+            b.stars_paid ? `⭐ ${b.stars_paid}` : "—",
+            b.rewards_blocked ? <span key="r" className="text-red-400">выкл.</span> : b.resting ? "отдых" : "вкл.",
+          ])}
+        />
+      )}
+    </Section>
   );
 }

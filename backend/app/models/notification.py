@@ -21,4 +21,7 @@ class Notification(Base):
     related_object_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     telegram_sent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Not shown or sent before this moment (a career round's result while its
+    # second half is still on air).
+    deliver_after: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)

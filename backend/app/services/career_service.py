@@ -12,12 +12,13 @@ skills. All economy numbers come from GameConfig.career_*.
 """
 import contextlib
 import copy
+import logging
 import random
 from datetime import datetime, time, timedelta, timezone
 from types import SimpleNamespace
 from typing import Optional
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.attributes import flag_modified
@@ -27,13 +28,17 @@ from app.core.timeutil import app_timezone, ensure_aware
 from app.models.card import UserCard
 from app.models.career import CareerClub, CareerParticipant, CareerProfile, CareerSeason, Friendship
 from app.models.enums import NotificationType, Position, Rarity, TransactionType
+from app.models.notification import Notification
 from app.models.player import Player
 from app.models.trophy import TrophyDefinition, UserTrophy
 from app.models.user import User
 from app.services import career_achievements_service as achievements
 from app.services import career_league_service as league_service
 from app.services import career_replay_service as career_replay
+from app.services import career_commentary_service as commentary
+from app.services import career_story_service as story
 from app.services import career_tactics_service as tactics
+from app.services import career_training_service as training_plan
 from app.services import career_morale_service as morale
 from app.services import chemistry_service, duel_service
 from app.services import club_base_service, my_player_service, path_match_service, tournament_match_engine, wallet_service
@@ -46,6 +51,10 @@ from app.services.notification_service import notify
 from app.services.player_stats_service import card_rating_bonus
 from app.services.player_tournament_simulation_service import _EngineCard, _engine_card
 from app.services.player_identity import card_person
+
+logger = logging.getLogger(__name__)
+
+POSITIONS_DEF = {p.value for p in CATEGORY_POSITIONS["DEF"]}
 
 TEAMS = 8
 ROUNDS = 14
@@ -184,6 +193,9 @@ TRAININGS = {
     "tactical": ("Тактика", "Отработка схемы: сыгранность в этом матче выше. Нагрузка — немного усталости."),
     "opponent": ("Разбор соперника", "Взаимодействия в вашу пользу в этом матче сильнее. Нагрузка — немного усталости."),
     "set_pieces": ("Стандарты", "Угловые и штрафные в этом матче опаснее. Нагрузка — немного усталости."),
+    "fitness": ("Физподготовка", "Работа над выносливостью: в матче игроки устают меньше, концовки становятся сильнее."),
+    "attack": ("Атака", "Завершение и выходы к воротам: нападающие сильнее в этом матче."),
+    "defence": ("Оборона", "Позиционная игра и отбор: защитники сильнее в этом матче."),
     # Team morale seasons only (career_morale_service).
     "team_building": ("Сплочение", "Командный выезд: мораль команды выше к матчу. Без нагрузки, но и без других плюсов."),
 }
@@ -204,21 +216,72 @@ async def set_ambition(db: AsyncSession, user: User, ambition: str) -> None:
         raise ConflictError("Задачи руководства — с нового сезона")
     if season.rounds_played > 0:
         raise ConflictError("Цель на сезон уже не изменить — первый тур сыгран")
+    if story.hot_seat_out(await get_profile(db, user.id, await get_config(db))):
+        raise ConflictError("Задание на сезон поставило руководство")
     part.ambition = ambition
     await db.commit()
 
 
-async def set_training(db: AsyncSession, user: User, training: Optional[str], round_index: Optional[int] = None) -> None:
+async def set_training(db: AsyncSession, user: User, training: Optional[str], round_index: Optional[int] = None,
+                       plan: Optional[dict] = None) -> None:
+    """The training plan. `plan` holds only what the client sent: extra
+    (the second session) and intensity; what's left out stays as it was."""
+    plan = plan or {}
     if training is not None and training not in TRAININGS:
         raise ConflictError("Неизвестная тренировка")
+    if plan.get("extra") is not None and plan["extra"] not in TRAININGS:
+        raise ConflictError("Неизвестная тренировка")
+    if plan.get("intensity") is not None and plan["intensity"] not in training_plan.INTENSITY_LABELS:
+        raise ConflictError("Неизвестная интенсивность")
     part = await _editable_participation(db, user, round_index)
     season = await db.get(CareerSeason, part.season_id)
     if _tactics_version(season.state) < tactics.TACTICS_VERSION:
         raise ConflictError("Тренировки — с нового сезона")
-    if training == "team_building" and not morale.is_on(season.state):
+    extra = plan["extra"] if "extra" in plan else part.training_extra
+    if "team_building" in (training, extra) and not morale.is_on(season.state):
         raise ConflictError("«Сплочение» — в сезонах с моралью команды")
-    part.training = training
+    if training is None:
+        extra = None
+    if extra is not None and extra == training:
+        raise ConflictError("Дополнительное занятие должно отличаться от основного")
+    part.training, part.training_extra = training, extra
+    if plan.get("intensity"):
+        part.training_intensity = plan["intensity"]
     await db.commit()
+
+
+async def set_program(db: AsyncSession, user: User, card_id: Optional[int], round_index: Optional[int] = None) -> None:
+    """Puts a squad player on the individual programme (None = cancel it; the
+    matches played for it are lost)."""
+    part = await _editable_participation(db, user, round_index)
+    season = await db.get(CareerSeason, part.season_id)
+    if _tactics_version(season.state) < tactics.TACTICS_VERSION:
+        raise ConflictError("Тренировки — с нового сезона")
+    if card_id is None:
+        part.training_program = training_plan.program_cancel(part.training_program)
+    else:
+        config = await get_config(db)
+        cards = {c.id: c for c in await _career_cards(db, user.id, config)}
+        card = cards.get(card_id)
+        if card is None or card_id not in _squad_ids(part, cards) or getattr(card, "is_my_player", False):
+            raise ConflictError("Программа — только для игрока из заявки")
+        try:
+            part.training_program = training_plan.program_start(
+                part.training_program, card_id, card.player.display_name, tactics.tuning_of(config)["training"],
+            )
+        except ValueError as exc:
+            raise ConflictError(str(exc)) from exc
+    flag_modified(part, "training_program")
+    await db.commit()
+
+
+def _training_fx(part: CareerParticipant, config, fx: Optional[dict]) -> dict:
+    """What the coach's plan does to the next match."""
+    tuning = getattr(config, "career_tactics_tuning", None)
+    return training_plan.plan_effects(
+        part.training if part.training in TRAININGS else None, part.training_extra if part.training_extra in TRAININGS else None,
+        part.training_intensity, tactics.tuning_of(config)["training"], fx, morale.tuning_of(tuning)["team_building"],
+    )
 
 
 def _division_info(division: int, config) -> dict:
@@ -479,6 +542,20 @@ def _bot_cards(team: dict, round_index: int, config) -> list:
     return with_slots
 
 
+def _bot_bench(team: dict, round_index: int, config) -> list:
+    """The bot's three substitutes (seasons from before them have none)."""
+    growth = config.career_bot_growth_tenths * round_index / 10
+    bench = []
+    for i, p in enumerate(team.get("bench") or []):
+        player = SimpleNamespace(
+            display_name=p["name"], position=Position(p["position"]), rating=min(99, round(p["rating"] + growth)),
+            rarity=Rarity(p["rarity"]), club=p["club"], country=p["country"], attack_rating=None, defense_rating=None,
+        )
+        card = _EngineCard(id=-(team["index"] * 100 + 50 + i), player_id=p["player_id"], player=player)
+        bench.append(tactics.LivePlayer(card=card, base_rating=player.rating, pre_fatigue=0))
+    return bench
+
+
 def _bot_side(team: dict, round_index: int, config):
     with_slots = _bot_cards(team, round_index, config)
     side = build_side(with_slots, team["mentality"], team["playstyle"])
@@ -493,11 +570,13 @@ def _bot_side(team: dict, round_index: int, config):
 async def _build_bots(
     db: AsyncSession, season: CareerSeason, bot_indexes: list[int], human_avg: float, config,
     name_pool: Optional[list[str]] = None, seed_salt: int = 0, spreads: Optional[list[int]] = None,
-    clubs: Optional[list] = None,
+    clubs: Optional[list] = None, memory: Optional[dict] = None,
 ) -> list[dict]:
     """Bot teams around the humans' strength. With `clubs` (catalog
     CareerClub rows, living league) each team is that club: its name, its
-    real players first (pool_club), its formation / tactic / strength offset."""
+    real players first (pool_club), its formation / tactic / strength offset.
+    `memory` (career_story_service.keep_rosters): clubs seen last season keep
+    their players and their standing among the rivals."""
     rng = random.Random(season.id * 7919 + seed_salt * 104729)
     if season.division is not None:
         offset = int(_division_setting(config, "career_division_rating_offset", season.division, 0))
@@ -511,11 +590,14 @@ async def _build_bots(
         select(Player).where(Player.is_active.is_(True)).order_by(Player.id).limit(2000)
     )).scalars().all()
     by_category: dict[str, list[Player]] = {cat: [p for p in players if p.position in pos] for cat, pos in CATEGORY_POSITIONS.items()}
+    by_id = {p.id: p for p in players}
     teams = []
     for n, index in enumerate(bot_indexes):
         club = clubs[n] if clubs and n < len(clubs) else None
+        kept = (memory or {}).get(str(club.id)) if club else None
         formation = club.formation if club and club.formation in CLUB_FORMATIONS else rng.choice(BOT_FORMATIONS)
-        target = human_avg + offset + spreads[n % len(spreads)] + (club.rating_offset if club else 0)
+        spread = (kept or {}).get("spread", spreads[n % len(spreads)])
+        target = human_avg + offset + spread + (club.rating_offset if club else 0)
         own = [p for p in players if club and club.pool_club and (p.club or "").strip() == club.pool_club]
         used: set[int] = set()
         roster = []
@@ -524,6 +606,11 @@ async def _build_bots(
             candidates = own_fit or [p for p in by_category[slot.category] if p.id not in used] or players
             ideal = [p for p in candidates if on_ideal_position(p.position, slot.ideal_position)]
             pick = rng.choice(ideal or candidates) if candidates else None
+            edge = rng.uniform(-3, 3)
+            old_id, old_edge = ((kept or {}).get("players") or {}).get(slot.code) or (None, 0)
+            veteran = by_id.get(old_id)
+            if veteran is not None and veteran.id not in used and veteran.position in CATEGORY_POSITIONS[slot.category]:
+                pick, edge = veteran, old_edge
             if pick is not None:
                 used.add(pick.id)
             roster.append({
@@ -534,10 +621,22 @@ async def _build_bots(
                 "rarity": (pick.rarity if pick else Rarity.common).value,
                 "club": pick.club if pick else names[n],
                 "country": pick.country if pick else "",
-                "rating": max(40, min(99, round(target + rng.uniform(-3, 3)))),
+                "rating": max(40, min(99, round(target + edge))),
+                "edge": round(edge, 1),
             })
+        # Its own generator: the eleven above stay as they always were.
+        bench_rng = random.Random(season.id * 31 + seed_salt * 17 + n)
+        bench = []
+        for category in ("DEF", "MID", "FWD"):
+            pool = [p for p in own + by_category[category] if p.id not in used and p.position in CATEGORY_POSITIONS[category]]
+            if pool:
+                pick = bench_rng.choice(pool)
+                used.add(pick.id)
+                bench.append({"player_id": pick.id, "name": pick.display_name, "position": pick.position.value,
+                              "rarity": pick.rarity.value, "club": pick.club, "country": pick.country,
+                              "rating": max(40, min(99, round(target) - 2))})
         teams.append({
-            "index": index, "name": names[n], "user_id": None, "formation": formation,
+            "index": index, "name": names[n], "user_id": None, "formation": formation, "bench": bench, "spread": spread,
             "mentality": rng.choice([m for m in MENTALITIES if m != "PARK_THE_BUS"]),
             "playstyle": (preset := (club.preset if club and club.preset in tactics.PRESETS else rng.choice(PLAYSTYLES))),
             "tactic": dict(tactics.PRESETS[preset]), "players": roster, "club_id": club.id if club else None,
@@ -586,11 +685,12 @@ async def _activate(db: AsyncSession, season: CareerSeason, now: datetime, confi
         teams[part.team_index] = {"index": part.team_index, "name": _team_name(user), "user_id": part.user_id}
     human_avg = sum(human_ratings) / len(human_ratings) if human_ratings else 70
     bot_indexes = [i for i in range(TEAMS) if teams[i] is None]
-    clubs = None
+    clubs, memory = None, None
     if season.division is not None:
         creator = await get_profile(db, season.creator_id, config)
         clubs = await league_service.league_clubs(db, creator, season.division, config, seed=season.id * 17)
-    for bot in await _build_bots(db, season, bot_indexes, human_avg, config, clubs=clubs):
+        memory = (creator.league or {}).get("rosters")
+    for bot in await _build_bots(db, season, bot_indexes, human_avg, config, clubs=clubs, memory=memory):
         teams[bot["index"]] = bot
     season.state = {
         "teams": teams, "fixtures": double_round_robin(), "schedule": build_schedule(now), "results": [],
@@ -834,10 +934,15 @@ async def _create_next_season(
     for part in sorted(parts, key=lambda p: p.team_index):
         profile = await get_profile(db, part.user_id, config)
         if profile.last_active_at is None or ensure_aware(profile.last_active_at) < cutoff:
-            profile.division = min(division_count(config), profile.division + 1)
+            # A season's own verdict stands: an earned promotion isn't cancelled
+            # and a relegated club doesn't fall twice. Only staying put costs.
+            moved = part.next_division is not None and part.next_division != part.division
+            if not moved:
+                profile.division = min(division_count(config), profile.division + 1)
+            where = division_name(profile.division, config)
             await notify(
                 db, part.user_id, NotificationType.career_season_finished, "Карьера на паузе",
-                f"Тебя давно не было — новый сезон не начат, клуб опустился в дивизион «{division_name(profile.division, config)}». "
+                f"Тебя давно не было — новый сезон не начат, клуб {'ждёт тебя' if moved else 'опустился'} в дивизион{'е' if moved else ''} «{where}». "
                 "Загляни в карьеру, чтобы начать снова.",
                 related_object_type="career_season", related_object_id=prev.id,
             )
@@ -858,13 +963,14 @@ async def _create_next_season(
             status="pending", state={},
         )
         new_parts = []
-        for team_index, (part, _profile, squad) in enumerate(group):
+        for team_index, (part, next_profile, squad) in enumerate(group):
             lineup = {code: cid for code, cid in (part.lineup or {}).items() if cid in squad} or None
             new_part = CareerParticipant(
                 user_id=part.user_id, team_index=team_index, status="accepted", squad_card_ids=squad, division=division,
-                ambition=DEFAULT_AMBITION, formation=part.formation, mentality=part.mentality, playstyle=part.playstyle,
+                ambition="survive" if story.hot_seat_out(next_profile) else DEFAULT_AMBITION, formation=part.formation, mentality=part.mentality, playstyle=part.playstyle,
                 tactic=part.tactic, set_pieces=part.set_pieces, match_plan=part.match_plan, lineup=lineup,
-                training=part.training, roles=part.roles,
+                training=part.training, training_extra=part.training_extra, training_intensity=part.training_intensity,
+                roles=part.roles,
             )
             season.participants.append(new_part)
             new_parts.append((part, new_part))
@@ -1264,6 +1370,25 @@ async def set_speech(db: AsyncSession, user: User, speech: Optional[str], round_
     await db.commit()
 
 
+async def answer_moment(db: AsyncSession, user: User, answer: str, round_index: Optional[int] = None) -> None:
+    """The coach's word after a round: a press question or a player's request."""
+    part = await _editable_participation(db, user, round_index)
+    season = await _lock_season(db, part.season_id)
+    config = await get_config(db)
+    state = copy.deepcopy(season.state)
+    profile = await get_profile(db, user.id, config)
+    tuning = getattr(config, "career_tactics_tuning", None)
+    try:
+        delta = story.answer_moment(state, part.team_index, season.rounds_played, answer, profile, story.tuning_of(tuning))
+    except ValueError as exc:
+        raise ConflictError(str(exc)) from exc
+    if delta and morale.is_on(state):
+        _shift_morale(state, part.team_index, delta, "Слово тренера", season.rounds_played - 1, morale.tuning_of(tuning))
+    season.state = state
+    flag_modified(season, "state")
+    await db.commit()
+
+
 async def choose_coach_spec(db: AsyncSession, user: User, code: str) -> None:
     """Picks the coach's specialization, or switches it (once per
     `switch_days`; each one keeps its experience)."""
@@ -1549,7 +1674,8 @@ def _bot_runner(team: dict, label: str, round_index: int, config, chem_rules, ch
     on_pitch = [tactics.LivePlayer(card=c, base_rating=c.player.rating, pre_fatigue=0, slot=slot)
                 for c, slot in _bot_cards(team, round_index, config)]
     return tactics.CareerSideRunner(
-        label, team["name"], team["formation"], team["mentality"], choice["tactic"], on_pitch, [], config,
+        label, team["name"], team["formation"], team["mentality"], choice["tactic"], on_pitch,
+        _bot_bench(team, round_index, config), config,
         familiarity=choice["familiarity"], plan=choice["plan"], chem_rules=chem_rules,
         set_pieces=team.get("set_pieces"), roles=_bot_roles(choice["tactic"]),
     )
@@ -1710,9 +1836,19 @@ def _seeded(seed: int):
         random.setstate(saved)
 
 
+def _auto_subs(part: CareerParticipant, pairs: list, by_id: dict, round_index: int) -> list[str]:
+    """Saved starters who can't play and who stands in for them."""
+    subs = []
+    for card, slot in pairs:
+        saved = by_id.get((part.lineup or {}).get(slot.code) or -1)
+        if saved is not None and saved.id != card.id and (_is_out(part, saved.id, round_index) or not _usable(saved)):
+            subs.append(f"{saved.player.display_name} → {card.player.display_name}")
+    return subs
+
+
 def _human_runner(
     part: CareerParticipant, cards: list, config, chem_rules, label: str, team_name: str, *,
-    avail_round: int, rotate: bool = False, training: Optional[str] = None, profile=None,
+    avail_round: int, rotate: bool = False, training: Optional[str] = None, plan: Optional[dict] = None, profile=None,
     marking: Optional[dict] = None,
     base_fx: Optional[dict] = None,
 ):
@@ -1730,12 +1866,13 @@ def _human_runner(
     bench = [by_id[cid] for cid in _squad_ids(part, by_id) if cid in by_id]
     bench = [c for c in bench if _usable(c) and not _is_out(part, c.id, avail_round)
              and c.id not in xi_ids and card_person(c) not in xi_players]
-    tr = tactics.tuning_of(config)["training"]
+    plan = plan or {}
 
     def live(card, slot=None):
         engine_card = _engine_card(card, config)
         cond = _condition(part, card.id)
-        base = min(99, engine_card.player.rating + league_service.tenure_bonus(profile, card.id, config))
+        base = min(99, engine_card.player.rating + league_service.tenure_bonus(profile, card.id, config)
+                   + training_plan.program_bonus(part.training_program, card.id))
         return tactics.LivePlayer(card=engine_card, base_rating=base, pre_fatigue=cond["fatigue"], form=cond["form"],
                                   slot=slot)
 
@@ -1743,18 +1880,19 @@ def _human_runner(
         part.familiarity, part.familiar_formation, part.familiar_tactic, part.formation, _my_tactic(part), config,
     )
     familiarity = base_familiarity
-    if training == "tactical":  # this match only; growth counts from the base
-        familiarity = min(int(config.career_familiarity_max_tenths) + tr["tactical_familiarity_tenths"],
-                          familiarity + tr["tactical_familiarity_tenths"])
+    if plan.get("familiarity_tenths"):  # this match only; growth counts from the base
+        familiarity = min(int(config.career_familiarity_max_tenths) + plan["familiarity_tenths"],
+                          familiarity + plan["familiarity_tenths"])
     runner = tactics.CareerSideRunner(
         label, team_name, part.formation, part.mentality, _my_tactic(part),
         [live(c, slot) for c, slot in pairs], [live(c) for c in bench], config,
         familiarity=familiarity, plan=copy.deepcopy(part.match_plan), chem_rules=chem_rules,
         set_pieces=part.set_pieces, training=training, roles=part.roles, marking=marking,
         # «Клубная база» analytics centre makes these two trainings stronger.
-        boost=club_base_service.prep_boost(tr["opponent_boost"], base_fx or {}) if training == "opponent" else 1.0,
-        set_piece_boost=club_base_service.prep_boost(tr["set_piece_boost"], base_fx or {})
-        if training == "set_pieces" else 1.0,
+        boost=club_base_service.prep_boost(plan["opponent_boost"], base_fx or {}) if plan.get("opponent_boost", 1) > 1 else 1.0,
+        set_piece_boost=club_base_service.prep_boost(plan["set_piece_boost"], base_fx or {})
+        if plan.get("set_piece_boost", 1) > 1 else 1.0,
+        fitness_mult=plan.get("fitness_mult", 1.0), unit_bonus=plan.get("units") or {},
     )
     return runner, pairs, base_familiarity
 
@@ -1807,6 +1945,8 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
             if p.status == "accepted":
                 profiles[ti] = await get_profile(db, p.user_id, config)
     used_familiarity: dict[int, int] = {}
+    auto_subs: dict[int, list[str]] = {}
+    training_plans: dict[int, dict] = {}
     # «Клубная база»: effects frozen on the participant for the season.
     base_fx: dict[int, dict] = {}
     for ti, p in humans.items():
@@ -1855,24 +1995,33 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
                     "familiarity": tactics.familiarity_after_match(choice["familiarity"], config)
                     if season.difficulty == "legend" else 0,
                 }
-            return _bot_runner(team, label, round_index, config, chem_rules, choice)
+            runner = _bot_runner(team, label, round_index, config, chem_rules, choice)
+            if opponent_human:
+                runner.react_subs = tactics.tuning_of(config)["bot_halftime"].get(season.difficulty)
+            return runner
         part = humans.get(team_index)
         if part is None or part.status != "accepted":
             return None  # left the season / declined: technical defeat
         cards = await human_cards(part)
         by_id = {c.id: c for c in cards}
         training = part.training if part.training in TRAININGS and not cup else None
-        tr = tactics.tuning_of(config)["training"]
+        plan = _training_fx(part, config, base_fx.get(team_index)) if training else None
         if training:
             # Training load / recovery before kick-off, kept in the condition.
-            delta = tr["recovery_fatigue"] if training == "recovery" else tr["load_fatigue"]
-            if training == "recovery":  # «Клубная база» medical centre
-                delta -= int(base_fx.get(team_index, {}).get("recovery", 0))
+            training_plans[team_index] = plan
             condition = dict(part.condition or {})
             for cid in _squad_ids(part, by_id):
                 entry = {**_FRESH, **condition.get(str(cid), {})}
-                entry["fatigue"] = max(0, min(100, entry["fatigue"] + delta))
+                entry["fatigue"] = max(0, min(100, entry["fatigue"] + plan["fatigue"]))
                 condition[str(cid)] = entry
+            part.condition = condition
+            flag_modified(part, "condition")
+        program_cid = training_plan.program_card(part.training_program) if not cup else None
+        if program_cid is not None:  # the programme costs him extra work
+            condition = dict(part.condition or {})
+            entry = {**_FRESH, **condition.get(str(program_cid), {})}
+            entry["fatigue"] = min(100, entry["fatigue"] + int(tactics.tuning_of(config)["training"]["program_fatigue"]))
+            condition[str(program_cid)] = entry
             part.condition = condition
             flag_modified(part, "condition")
         # A cup tie follows the league match the same evening: players hurt
@@ -1881,7 +2030,7 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
             part, cards, config, chem_rules, label, team["name"],
             avail_round=round_index + 1 if cup else round_index,
             rotate=cup and bool(((state.get("cup") or {}).get("rotation") or {}).get(str(team_index))),
-            training=training, profile=profiles.get(team_index),
+            training=training, plan=plan, profile=profiles.get(team_index),
             marking=part.marking if not cup and (part.marking or {}).get("round") == round_index else None,
             base_fx=base_fx.get(team_index),
         )
@@ -1889,6 +2038,7 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
             return None  # fewer than 11 fit players in the whole collection
         if not cup:
             runner.halftime = orders.get(str(team_index))
+            auto_subs[team_index] = _auto_subs(part, pairs, by_id, round_index)
         (cup_played if cup else played)[team_index] = {c.id for c, _ in pairs}
         if not cup:
             used_familiarity[team_index] = base_familiarity
@@ -1906,9 +2056,9 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
         for ti in range(len(teams)):
             value = morale.value_of(state, ti, morale_tuning)
             part = humans.get(ti)
-            if part is not None and part.status == "accepted" and part.training == "team_building":
+            if part is not None and part.status == "accepted" and "team_building" in (part.training, part.training_extra):
                 orator = morale.orator_perk(coach_skills.get(ti, {}).get("orator", 0), "team_building")
-                value = morale.clamp(value + morale_tuning["team_building"] + 2 * orator)
+                value = morale.clamp(value + _training_fx(part, config, base_fx.get(ti))["morale"] + 2 * orator)
             morale_pre[ti] = value
 
     results = []
@@ -1958,6 +2108,7 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
                         }
                     continue
                 hs, as_ = match.score_a, match.score_b
+                commentary.add_scorers(state, round_index, match.event_log, home, away)
                 if morale_info is not None:
                     for index, runner, own, opp in ((home, run_h, hs, as_), (away, run_a, as_, hs)):
                         new, why = _morale_after(morale_info[index], runner, own, opp, book,
@@ -2053,6 +2204,7 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
                 del entries[:-8]
 
     rng = random.Random(season.id * 104729 + round_index)
+    story_tuning = story.tuning_of(getattr(config, "career_tactics_tuning", None))
     reports = state.setdefault("reports", {}).setdefault(str(round_index), {})
     for team_index, part in humans.items():
         if part.status != "accepted":
@@ -2088,7 +2240,20 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
             part, played.get(team_index, set()), own, opp, round_index, config, rng, names, _squad_ids(part, own_cards),
             gains=gains, base_fx=base_fx.get(team_index),
             card_mult=tactics.tuning_of(config)["foul"][_my_tactic(part).get("tackling", "normal")] if v1 else 1.0,
+            injury_mult=training_plans[team_index]["injury_mult"] if team_index in training_plans else 1.0,
         )
+        report["auto_subs"] = auto_subs.get(team_index, [])
+        if team_index in training_plans:
+            report["training"] = training_plan.match_results(
+                part.training, part.training_extra, training_plans[team_index], match.get("events"),
+                "a" if is_home else "b", own, opp,
+            )
+        part.training_program, program_line = training_plan.program_after_match(
+            part.training_program, played.get(team_index, set()), tactics.tuning_of(config)["training"],
+        )
+        if program_line:
+            flag_modified(part, "training_program")
+            report.setdefault("training", []).append(program_line)
         reports[str(team_index)] = report
         flag_modified(part, "condition")
         if team_index in used_familiarity and team_index in minutes_by_team:
@@ -2102,6 +2267,9 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
         part.coins_earned += await _credit(db, part.user_id, reward, f"Карьера: тур {round_index + 1}", season.id)
         # «Клубная база»: the stadium (+ hotel, ticket prices) earns on home matches.
         matchday = club_base_service.matchday_income(base_fx.get(team_index, {})) if is_home else 0
+        if v1 and matchday > 0:  # a full, happy stadium earns more
+            matchday = matchday * story.income_pct(
+                story.fans_mood(state, team_index, profiles.get(team_index), story_tuning), story_tuning) // 100
         if matchday > 0:
             locked = await wallet_service.lock_user_for_update(db, part.user_id)
             await wallet_service.credit_coins(
@@ -2136,6 +2304,10 @@ async def _play_round(db: AsyncSession, season: CareerSeason, round_index: int, 
     for place, row in enumerate(standings(state), start=1):
         if str(row["team_index"]) in reports:
             reports[str(row["team_index"])]["place"] = place
+
+    if v1:
+        _club_after_round(state, season, round_index, results, reports, humans, profiles, played, cards_cache,
+                          base_fx, config, story_tuning, morale_on)
 
     if v1 and state.get("cup") and round_index in CUP_AFTER_ROUNDS:
         await _play_cup_round(
@@ -2260,6 +2432,7 @@ def _after_match(
     part: CareerParticipant, played_ids: set[int], own: int, opp: int, round_index: int, config,
     rng: random.Random, names: dict[int, str], squad_ids: Optional[list[int]] = None,
     gains: Optional[dict[int, int]] = None, card_mult: float = 1.0, base_fx: Optional[dict] = None,
+    injury_mult: float = 1.0,
 ) -> dict:
     """Fatigue, injuries, yellow/red cards and form for one human squad after
     a round. Returns the round report (player names per event) shown in the
@@ -2278,7 +2451,7 @@ def _after_match(
                 gain = gains.get(card_id, gain)
             entry["fatigue"] = min(100, entry["fatigue"] + gain)
             injury_pct = club_base_service.injury_chance(config.career_injury_chance_pct, base_fx or {})
-            if rng.random() * 100 < injury_pct * (2 if tired else 1):
+            if rng.random() * 100 < injury_pct * (2 if tired else 1) * injury_mult:
                 entry["injured_until"] = round_index + 1 + rng.randint(1, 2)
                 report["injured"].append(name)
             # Discipline: a straight red, or the Nth yellow, = one round out.
@@ -2313,6 +2486,54 @@ def _after_match(
     return report
 
 
+def _shift_morale(state: dict, team: int, delta: int, reason: str, round_index: int, tuning: dict) -> None:
+    before = morale.value_of(state, team, tuning)
+    after = morale.clamp(before + delta)
+    state["morale"]["teams"][str(team)] = after
+    entries = state["morale"].setdefault("log", {}).setdefault(str(team), [])
+    entries.append({"round": round_index, "before": before, "after": after, "reasons": [reason]})
+    del entries[:-8]
+
+
+def _club_after_round(state: dict, season: CareerSeason, round_index: int, results: list, reports: dict, humans: dict,
+                      profiles: dict, played: dict, cards_cache: dict, base_fx: dict, config, tuning: dict,
+                      morale_on: bool) -> None:
+    """The club around the match (career_story_service) for every human team."""
+    table = standings(state)
+    before = standings({**state, "results": state["results"][:-1]})
+    before_leader = before[0]["team_index"] if before and round_index else None
+    top_before = next(iter(commentary.top_scorers(state, upto=round_index, limit=1)), {}).get("name")
+    morale_tuning = morale.tuning_of(getattr(config, "career_tactics_tuning", None))
+    for team_index, part in humans.items():
+        report = reports.get(str(team_index))
+        if report is None:
+            continue
+        match = next(m for m in results if team_index in (m["home"], m["away"]))
+        is_home = match["home"] == team_index
+        own, opp = (match["hs"], match["as"]) if is_home else (match["as"], match["hs"])
+        opponent = state["teams"][match["away"] if is_home else match["home"]]
+        cards = {c.id: c for c in cards_cache.get(part.user_id, [])}
+        squad = _squad_ids(part, cards)
+        names = {cid: c.player.display_name for cid, c in cards.items()}
+        real = {cid: c for cid, c in cards.items() if not getattr(c, "is_my_player", False)}
+        delta = story.after_round(
+            state, team=team_index, round_index=round_index, match=match, own=own, opp=opp, is_home=is_home,
+            opponent=opponent, results=results, report=report, played_ids=played.get(team_index, set()),
+            fit_ids={cid for cid in squad if cid in real and _usable(real[cid]) and not _is_out(part, cid, round_index + 1)},
+            squad_ids=squad, names=names,
+            traits={cid: morale.trait_of(c.player) for cid, c in real.items()} if morale_on else {},
+            profile=profiles.get(team_index), fx=base_fx.get(team_index), tuning=tuning, standings=table,
+            before_leader=before_leader, top_before=top_before, moments_on=morale_on,
+        )
+        if delta and morale_on:
+            _shift_morale(state, team_index, delta, "Слово тренера", round_index, morale_tuning)
+        if team_index in profiles:
+            story.record_legends(
+                profiles[team_index], season.id, {cid: names.get(cid, "Игрок") for cid in played.get(team_index, set())},
+                match.get("events"), "a" if is_home else "b", own, opp, opponent["name"],
+            )
+
+
 def _report_line(report: dict) -> str:
     parts = []
     if report["red"]:
@@ -2321,7 +2542,12 @@ def _report_line(report: dict) -> str:
         parts.append("перебор жёлтых: " + ", ".join(report["suspended"]))
     if report["injured"]:
         parts.append("травма: " + ", ".join(report["injured"]))
-    return ("\n" + "; ".join(parts).capitalize()) if parts else ""
+    line = ("\n" + "; ".join(parts).capitalize()) if parts else ""
+    if report.get("auto_subs"):
+        line += "\nАвтозамена в старте: " + ", ".join(report["auto_subs"])
+    if report.get("training"):
+        line += "\n" + "; ".join(report["training"])
+    return line
 
 
 async def _finish(db: AsyncSession, season: CareerSeason, config) -> None:
@@ -2381,6 +2607,12 @@ async def _finish(db: AsyncSession, season: CareerSeason, config) -> None:
                 else:
                     rep += int((config.career_ambition_rep_fail or [0, 0, 0])[i])
                     move += f"\nЗадача «{target['label']}» провалена"
+                board_rep, board_text = story.board_verdict(
+                    profile, objective_met, part.next_division > part.division,
+                    story.tuning_of(getattr(config, "career_tactics_tuning", None)),
+                )
+                rep += board_rep
+                move += board_text
             if morale.is_on(season.state):
                 coach_xp = morale.add_season_xp(
                     profile, place, morale.coach_tuning_of(getattr(config, "career_tactics_tuning", None)))
@@ -2416,6 +2648,8 @@ async def _finish(db: AsyncSession, season: CareerSeason, config) -> None:
                 profile, table, season.state.get("teams") or [], season.division, part.next_division,
                 lambda division, place: division_after(division, place, config),
             )
+            story.keep_rosters(profile, season.state.get("teams") or [])
+            story.set_nemesis(profile, season.state, part.team_index)
             renewing.append(part)
         await _create_next_season(db, renewing, season, config, season.finished_at)
 
@@ -2442,7 +2676,9 @@ async def resolve_due(db: AsyncSession, season_id: int, now: Optional[datetime] 
             if ((season.state or {}).get("live") or {}).get("round") != index:
                 await _play_round(db, season, index, config, live=True)
             break
+        last_note = (await db.execute(select(func.max(Notification.id)))).scalar_one() or 0
         await _play_round(db, season, index, config)
+        await _hold_news_on_air(db, season, index, config, now, last_note)
         played += 1
     await db.commit()
     return played
@@ -2460,6 +2696,39 @@ def _second_half_at(season: CareerSeason, round_index: int, config) -> Optional[
     if at is None or not _live_applies(season, config):
         return None
     return at + timedelta(minutes=int(config.career_halftime_minutes))
+
+
+async def _hold_news_on_air(
+    db: AsyncSession, season: CareerSeason, round_index: int, config, now: datetime, last_note: int,
+) -> None:
+    """The second half has just kicked off and the result is known already:
+    what the round sent out (score, cup, season end) reaches the coaches when
+    the broadcast is over, not with its first minute."""
+    at = _second_half_at(season, round_index, config)
+    if at is None or not (at <= now < at + SECOND_HALF_ON_AIR):
+        return
+    await db.flush()
+    await db.execute(
+        update(Notification)
+        .where(Notification.id > last_note, Notification.related_object_type == "career_season",
+               Notification.user_id.in_([p.user_id for p in season.participants]))
+        .values(deliver_after=at + SECOND_HALF_ON_AIR)
+    )
+
+
+def _hide_round_on_air(out: dict, state: dict, round_index: int) -> None:
+    """Season view while the second half of `round_index` is on air: as if
+    the round isn't over yet, so the table, the calendar and the after-match
+    screen don't give the score away."""
+    for match in out["rounds"][round_index]["matches"]:
+        match.update({"hs": None, "as": None, "has_events": False})
+    out["rounds"][round_index]["report"] = None
+    out["table"] = standings({**state, "results": (state.get("results") or [])[:round_index]})
+    out["top_scorers"] = commentary.top_scorers(state, upto=round_index)
+    out["news"] = story.news_out(state, out["my_team_index"], upto=round_index)
+    out.update(moment=None, legends=None)
+    if out["status"] == "finished":  # the last round: no season summary yet
+        out.update({"status": "active", "final_place": None, "next_division": None, "summary": None})
 
 
 def _second_half_out(season: CareerSeason, me: CareerParticipant, config) -> Optional[dict]:
@@ -2515,10 +2784,9 @@ async def _reminder_notes(db: AsyncSession, season: CareerSeason, part: CareerPa
     holes = [w for w in _squad_warnings(part, by_id, index, xi) if w["level"] == "critical"]
     if holes:
         notes.append(f"⚠️ Дыры в составе: {len(holes)} — кто-то сыграет не по амплуа.")
-    out_xi = [by_id[cid].player.display_name for cid in (part.lineup or {}).values()
-              if cid in by_id and _is_out(part, cid, index)]
-    if out_xi:
-        notes.append(f"🚑 Не сыграют: {', '.join(out_xi[:3])} — замени в составе.")
+    subs = _auto_subs(part, xi, by_id, index)
+    if subs:
+        notes.append(f"🚑 Не сыграют, выйдет замена: {', '.join(subs[:3])}. Поменять можно в составе.")
     cup = state.get("cup") or {}
     if cup and index in CUP_AFTER_ROUNDS and cup.get("winner") is None:
         k = CUP_AFTER_ROUNDS.index(index)
@@ -2690,7 +2958,13 @@ async def resolve_all_due(db: AsyncSession, now: Optional[datetime] = None) -> i
     )).scalars().all()
     total = 0
     for season_id in ids:
-        total += await resolve_due(db, season_id, now)
+        # One broken season must not stop the others: its round stays due
+        # and is tried again at the next fire.
+        try:
+            total += await resolve_due(db, season_id, now)
+        except Exception:  # noqa: BLE001
+            await db.rollback()
+            logger.exception("Career season %s failed to resolve", season_id)
     return total
 
 
@@ -2707,6 +2981,8 @@ async def get_view(db: AsyncSession, user: User) -> dict:
         .order_by(CareerParticipant.id.desc()).limit(1)
     )).scalar_one_or_none()
     config = await get_config(db)
+    if part is not None:
+        part = await _last_round_on_air(db, part, config) or part
     profile = await get_profile(db, user.id, config)
     profile.last_active_at = datetime.now(timezone.utc)
     await db.commit()
@@ -2729,6 +3005,22 @@ async def get_view(db: AsyncSession, user: User) -> dict:
                                          ensure_aware(season.finished_at) < datetime.now(timezone.utc) - timedelta(days=3)):
         return {**base, "season": None}
     return {**base, "season": await _season_out(db, season, part)}
+
+
+async def _last_round_on_air(db: AsyncSession, part: CareerParticipant, config) -> Optional[CareerParticipant]:
+    """The next season is created the moment the last round is played, while
+    that round's second half is still on air: the screen stays on the old one."""
+    season = await db.get(CareerSeason, part.season_id)
+    prev_id = ((season.state or {}).get("offseason") or {}).get("prev_season_id")
+    prev = await db.get(CareerSeason, prev_id) if prev_id else None
+    if prev is None:
+        return None
+    at = _second_half_at(prev, ROUNDS - 1, config)
+    if at is None or not (at <= datetime.now(timezone.utc) < at + SECOND_HALF_ON_AIR):
+        return None
+    return (await db.execute(
+        select(CareerParticipant).where(CareerParticipant.season_id == prev.id, CareerParticipant.user_id == part.user_id)
+    )).scalar_one_or_none()
 
 
 async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticipant) -> dict:
@@ -2765,9 +3057,12 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
         "tactics_version": _tactics_version(state),
         "scouting": None, "familiarity": None, "match_plan": me.match_plan, "plan_limits": {},
         "ambition": me.ambition, "ambitions": [], "training": me.training, "trainings": training_options(morale.is_on(state)),
+        "training_plan": None, "training_program": None,
         "cup": None, "offseason": None, "summary": None,
         "set_pieces": {**tactics.DEFAULT_SET_PIECES, **(me.set_pieces or {})}, "squad_warnings": [],
         "roles": me.roles or {}, "live": None, "plan_hints": [],
+        "top_scorers": commentary.top_scorers(state),
+        "news": [], "moment": None, "fans": None, "legends": None, "hot_seat": None,
     }
     if season.division is not None:
         config = await get_config(db)
@@ -2775,6 +3070,20 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
         out["ambitions"] = ambition_options(season.division, config)
         out["cup"] = _cup_out(state, me, config)
         out["offseason"] = await _offseason_out(db, season, me, config)
+        if me.status == "accepted" and out["tactics_version"] >= tactics.TACTICS_VERSION:
+            out["training_plan"] = training_plan.plan_out(
+                me.training, me.training_extra, me.training_intensity, tactics.tuning_of(config)["training"], me.base_effects,
+                morale.tuning_of(getattr(config, "career_tactics_tuning", None))["team_building"],
+            )
+            out["training_program"] = training_plan.program_out(me.training_program, tactics.tuning_of(config)["training"])
+            profile = await get_profile(db, me.user_id, config)
+            story_tuning = story.tuning_of(getattr(config, "career_tactics_tuning", None))
+            out.update(
+                news=story.news_out(state, me.team_index), legends=story.legends_out(profile),
+                fans=story.fans_out(state, me.team_index, profile, me.base_effects, story_tuning),
+                hot_seat=story.hot_seat_out(profile),
+                moment=story.moment_out(state, me.team_index, season.rounds_played) if season.status == "active" else None,
+            )
         if season.status == "finished":
             cards_now = {c.id: c for c in await _career_cards(db, me.user_id)}
             out["summary"] = _season_summary(state, me, {cid: c.player.display_name for cid, c in cards_now.items()})
@@ -2818,12 +3127,18 @@ async def _season_out(db: AsyncSession, season: CareerSeason, me: CareerParticip
             me, by_id, next_round, [c for c in cards if _usable(c)], fill_any_position=bool(out["tactics_version"]),
         )
         out["lineup"] = {slot.code: card.id for card, slot in xi}
+        if out["scouting"] and xi:
+            out["scouting"]["compare"] = _compare(state, me, xi, out["scouting"])
         out["squad_warnings"] = _squad_warnings(me, by_id, next_round, xi)
         if out["tactics_version"] >= tactics.TACTICS_VERSION and season.status == "active":
             config = await get_config(db)
             out["live"] = _live_out(season, me, by_id, config)
             out["second_half"] = None if out["live"] else _second_half_out(season, me, config)
             out["plan_hints"] = _plan_hints(me, xi, config, out["scouting"])
+        elif out["tactics_version"] >= tactics.TACTICS_VERSION and season.status == "finished":
+            out["second_half"] = _second_half_out(season, me, await get_config(db))
+        if out.get("second_half"):
+            _hide_round_on_air(out, state, out["second_half"]["round"])
         # Chemistry of the XI that would play the next round, under the
         # season's frozen rules (tactics seasons only).
         rules = chemistry_service.rules_from_dict(state.get("chemistry_rules")) if out["tactics_version"] else None
@@ -2983,6 +3298,7 @@ def _scouting(season: CareerSeason, me: CareerParticipant, config, profile: Opti
         threat = {"preset": code, "tactic": tactics.PRESETS[code]}
     return {
         "head_to_head": league_service.head_to_head(profile, team.get("club_id")) if is_bot else None,
+        "rivalry": story.rivalry(profile, team.get("club_id"), team["name"]) if is_bot else None,
         "round_index": round_index, "opponent_index": opp_index, "opponent_name": team["name"], "is_bot": is_bot,
         "strength": round(sum(p["rating"] for p in team["players"]) / len(team["players"])) if team.get("players") else None,
         "formation": seen.get("formation"), "mentality": seen.get("mentality"),
@@ -2994,6 +3310,20 @@ def _scouting(season: CareerSeason, me: CareerParticipant, config, profile: Opti
         "adaptive": adaptive, "my_last_tactic": my_last if adaptive else None, "threat": threat,
         "star": star, "marking": marking, "marks_you": v1 and is_bot and season.difficulty == "legend",
     }
+
+
+def _compare(state: dict, me: CareerParticipant, xi: list, scouting: dict) -> dict:
+    """My XI next to the opponent: strength, form and the duel that decides
+    the match, their best player against the one of mine who meets him."""
+    star, mine = scouting.get("star"), None
+    if star:
+        wanted = "FWD" if star["position"] in POSITIONS_DEF else "DEF"
+        line = [c for c, slot in xi if slot.category == wanted] or [c for c, slot in xi if slot.category != "GK"]
+        if line:
+            best = max(line, key=lambda c: (c.player.rating, -c.id))
+            mine = {"name": best.player.display_name, "rating": best.player.rating, "position": best.player.position.value}
+    return {"my_strength": round(sum(c.player.rating for c, _ in xi) / len(xi)),
+            "my_form": _team_form(state, me.team_index), "duel_mine": mine}
 
 
 def matchup_preview(season: CareerSeason, me: CareerParticipant, tactic: dict, config) -> Optional[dict]:
@@ -3186,7 +3516,8 @@ async def match_events(db: AsyncSession, user: User, season_id: int, round_index
     my_side = "a" if m["home"] == me.team_index else "b" if m["away"] == me.team_index else None
     return {
         "home_name": teams[m["home"]]["name"], "away_name": teams[m["away"]]["name"],
-        "home_score": m["hs"], "away_score": m["as"], "events": m.get("events") or [],
+        "home_score": m["hs"], "away_score": m["as"], "events": commentary.enrich(m.get("events")),
+        "story": commentary.story(m.get("events"), teams[m["home"]]["name"], teams[m["away"]]["name"], m["hs"], m["as"]),
         # Only the viewer's own analysis (their plan/instructions stay private).
         "analysis": (m.get("analysis") or {}).get(str(me.team_index)) if my_side else None,
         # «Ключевые дуэли»: the flank duels my players were in (duel_service).
@@ -3241,7 +3572,7 @@ def _replay_out(home_name: str, away_name: str, hs: int, as_: int, events, lineu
         raise NotFoundError("Для этого матча нет записи")
     return {
         "home_name": home_name, "away_name": away_name,
-        "home_score": hs, "away_score": as_, "events": events, "my_side": my_side,
+        "home_score": hs, "away_score": as_, "events": commentary.enrich(events), "my_side": my_side,
         "live": halves == 1, "second_half_at": second_half_at,
         "replay": career_replay.build_replay(seed, events, lineups, halves),
     }

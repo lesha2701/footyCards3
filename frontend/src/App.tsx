@@ -7,12 +7,16 @@ import AdminPaySheet from "@/components/common/AdminPaySheet";
 import LoadingScreen from "@/components/common/LoadingScreen";
 import ErrorScreen from "@/components/common/ErrorScreen";
 import NewbieTaskWatcher from "@/components/newbie/NewbieTaskWatcher";
+import ComebackGiftPopup from "@/components/common/ComebackGiftPopup";
 import StreakRewardPopup from "@/components/common/StreakRewardPopup";
 import NewbieWelcome from "@/components/newbie/NewbieWelcome";
+import NewbieGiftPopup from "@/components/newbie/NewbieGiftPopup";
+import NewbieNextPage from "@/pages/NewbieNextPage";
 import { createSession } from "@/api/auth";
 import { joinByInvite } from "@/api/clubs";
 import { useAuthStore } from "@/store/authStore";
 import { useUiStore } from "@/store/uiStore";
+import { startLink, takeStartPath } from "@/lib/startLink";
 import { getTelegramWebApp, initTelegramApp } from "@/lib/telegram";
 import { ApiRequestError } from "@/lib/api";
 import { hasSeenOnboarding, markOnboardingSeen } from "@/lib/onboarding";
@@ -42,6 +46,7 @@ const AdminLeaguesPage = lazy(() => import("@/admin/pages/AdminLeaguesPage"));
 const AdminGiftsPage = lazy(() => import("@/admin/pages/AdminGiftsPage"));
 const AdminLifestylePage = lazy(() => import("@/admin/pages/AdminLifestylePage"));
 const AdminMusesPage = lazy(() => import("@/admin/pages/AdminMusesPage"));
+const AdminResidentsPage = lazy(() => import("@/admin/pages/AdminResidentsPage"));
 const AdminDailyRewardsPage = lazy(() => import("@/admin/pages/AdminDailyRewardsPage"));
 const AdminWheelPage = lazy(() => import("@/admin/pages/AdminWheelPage"));
 const AdminGamesPage = lazy(() => import("@/admin/pages/AdminGamesPage"));
@@ -74,6 +79,8 @@ const PlayPage = lazy(() => import("@/pages/PlayPage"));
 const MemoryGamePage = lazy(() => import("@/pages/MemoryGamePage"));
 const ArenaPage = lazy(() => import("@/pages/ArenaPage"));
 const AcademyPage = lazy(() => import("@/pages/AcademyPage"));
+const TownPage = lazy(() => import("@/pages/TownPage"));
+const TownResidentsPage = lazy(() => import("@/pages/TownResidentsPage"));
 const ClubBasePage = lazy(() => import("@/pages/ClubBasePage"));
 const TacticoMatchesPage = lazy(() => import("@/pages/TacticoMatchesPage"));
 const TacticoMatchPage = lazy(() => import("@/pages/TacticoMatchPage"));
@@ -206,7 +213,7 @@ export default function App() {
     let cancelled = false;
     const referralCode = new URLSearchParams(window.location.search).get("ref") ?? undefined;
     setError(null);
-    startSession((timeoutMs) => createSession(referralCode, timeoutMs))
+    startSession((timeoutMs) => createSession(referralCode, timeoutMs, startLink().source))
       .then((res) => {
         if (cancelled) return;
         setUser(res.user);
@@ -238,6 +245,14 @@ export default function App() {
       });
   }, [isReady, user, navigate]);
 
+  // An ad link: straight to its game. A new player gets there through the
+  // first pack (NewbieWelcome): a kick needs a card.
+  useEffect(() => {
+    if (!isReady || !user || !onboardingSeen) return;
+    const target = takeStartPath();
+    if (target) navigate(target, { replace: true });
+  }, [isReady, user, onboardingSeen, navigate]);
+
   if (error) return <ErrorScreen message={error} onRetry={() => setAttempt((n) => n + 1)} />;
   if (!isReady) return <LoadingScreen />;
 
@@ -258,6 +273,8 @@ export default function App() {
     <NewbieTaskWatcher />
     <AdminPaySheet />
     {!window.location.pathname.startsWith("/admin") && <StreakRewardPopup />}
+    {!window.location.pathname.startsWith("/admin") && <ComebackGiftPopup />}
+    {!window.location.pathname.startsWith("/admin") && <NewbieGiftPopup />}
     <Routes>
       <Route path="/admin" element={<AdminGuard><AdminLayout /></AdminGuard>}>
         <Route index element={<AdminDashboardPage />} />
@@ -278,6 +295,7 @@ export default function App() {
         <Route path="gifts" element={<AdminGiftsPage />} />
         <Route path="lifestyle" element={<AdminLifestylePage />} />
         <Route path="muses" element={<AdminMusesPage />} />
+        <Route path="residents" element={<AdminResidentsPage />} />
         <Route path="wheel" element={<AdminWheelPage />} />
         <Route path="halloween" element={<AdminHalloweenPage />} />
         <Route path="fan-battle" element={<AdminFanBattlePage />} />
@@ -302,6 +320,7 @@ export default function App() {
       </Route>
 
       <Route path="/packs/:packId/open" element={<PackOpenPage />} />
+      <Route path="/newbie/next" element={<NewbieNextPage />} />
 
       <Route element={<AppLayout />}>
         <Route path="/" element={<HomePage />} />
@@ -311,6 +330,9 @@ export default function App() {
         <Route path="/play/arena" element={<ArenaPage />} />
         <Route path="/academy" element={<AcademyPage />} />
         <Route path="/base" element={<ClubBasePage />} />
+        <Route path="/town" element={<TownPage />} />
+        <Route path="/town/residents" element={<TownResidentsPage />} />
+        <Route path="/town/:district" element={<TownPage />} />
         <Route path="/play/tactico" element={<TacticoMatchesPage />} />
         <Route path="/play/career" element={<CareerPage />} />
         <Route path="/play/career/seasons/:seasonId/rounds/:round/matches/:match" element={<CareerMatchPage />} />

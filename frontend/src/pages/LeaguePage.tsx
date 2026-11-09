@@ -100,7 +100,12 @@ export default function LeaguePage() {
               <p className="font-display text-lg font-bold text-ink-chalk">
                 {status.current_league ? status.current_league.name : "Пока вне лиги"}
               </p>
-              <p className="text-xs text-ink-mist">Суммарный рейтинг: {status.total_rating}</p>
+              <p className="text-xs text-ink-mist">Очки лиги: {status.total_rating}</p>
+              {!!status.league_points && (
+                <p className="text-caption text-ink-mist-dim">
+                  {status.league_points} за прошлые недели + {status.total_rating - status.league_points} за эту
+                </p>
+              )}
               {status.current_league_percent !== null && (
                 <p className="text-caption text-ink-mist-dim">{status.current_league_percent}% игроков в этой лиге</p>
               )}

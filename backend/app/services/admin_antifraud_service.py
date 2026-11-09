@@ -177,3 +177,85 @@ async def ban_users(db: AsyncSession, user_ids: list[int]) -> list[int]:
         )
     ).scalars().all()
     return list(banned)
+
+
+# --- Bots: accounts that play around the clock ------------------------------------------------
+
+BOT_LIST = 100
+
+
+async def bot_suspects(db: AsyncSession, days: int = 7, min_games: int = 150) -> list[dict]:
+    """Accounts whose games (mini-games, Card Arena, Тактико) over the last
+    `days` show no real sleep: active many hours a day, short longest break.
+    Sorted by «days without sleep» (a day with 18+ active hours and no 4h
+    break), then by active hours a day. For review — nothing is done here."""
+    from collections import defaultdict
+
+    from app.core.timeutil import app_timezone, ensure_aware
+    from app.models.game import GameSession
+    from app.models.match import Match
+    from app.models.tactico import TacticoMatch
+
+    since = _since(days)
+    sources = ((GameSession.user_id, GameSession.created_at), (Match.user_id, Match.created_at),
+               (TacticoMatch.user_id, TacticoMatch.created_at))
+    counts: dict[int, int] = defaultdict(int)
+    for user_col, ts_col in sources:
+        for uid, n in (await db.execute(
+            select(user_col, func.count()).where(ts_col >= since).group_by(user_col)
+        )).all():
+            counts[uid] += int(n)
+    heavy = sorted((uid for uid, n in counts.items() if n >= min_games), key=lambda u: -counts[u])[:BOT_LIST * 3]
+    if not heavy:
+        return []
+
+    times: dict[int, list] = defaultdict(list)
+    for user_col, ts_col in sources:
+        for uid, ts in (await db.execute(select(user_col, ts_col).where(ts_col >= since, user_col.in_(heavy)))).all():
+            times[uid].append(ensure_aware(ts).astimezone(app_timezone()))
+
+    users = {u.id: u for u in (await db.execute(select(User).where(User.id.in_(heavy)))).scalars().all()}
+    paid = await _stars_paid(db, heavy)
+    rows = []
+    for uid in heavy:
+        stamps = sorted(times.get(uid, []))
+        user = users.get(uid)
+        if not stamps or user is None or user.is_admin:
+            continue
+        hours = {s.replace(minute=0, second=0, microsecond=0) for s in stamps}
+        per_day: dict = defaultdict(list)
+        for s in stamps:
+            per_day[s.date()].append(s)
+        sleepless = 0
+        for day_stamps in per_day.values():
+            gaps = [(b - a).total_seconds() for a, b in zip(day_stamps, day_stamps[1:])]
+            if len({s.hour for s in day_stamps}) >= 18 and (not gaps or max(gaps) < 4 * 3600):
+                sleepless += 1
+        gaps_all = [(b - a).total_seconds() for a, b in zip(stamps, stamps[1:])]
+        rows.append({
+            "id": uid, "username": user.username, "registered": user.created_at,
+            "games": len(stamps),
+            "active_hours_per_day": round(len(hours) / days, 1),
+            "days_without_sleep": sleepless,
+            "longest_break_hours": round(max(gaps_all) / 3600, 1) if gaps_all else 0,
+            "median_seconds_between": int(sorted(gaps_all)[len(gaps_all) // 2]) if gaps_all else 0,
+            "arena_points": user.arena_points, "tactics_rating": user.tactics_rating, "balance": user.balance,
+            "stars_paid": paid.get(uid, 0),
+            "rewards_blocked": user.game_rewards_blocked_flag,
+            "resting": user.game_rewards_blocked and not user.game_rewards_blocked_flag,
+        })
+    rows.sort(key=lambda r: (-r["days_without_sleep"], -r["active_hours_per_day"]))
+    return rows[:BOT_LIST]
+
+
+async def set_rewards_blocked(db: AsyncSession, user_ids: list[int], blocked: bool) -> list[int]:
+    """«Без наград за игры» for many accounts at once (admins skipped). The caller commits."""
+    ids = list(dict.fromkeys(user_ids))[:MAX_BAN_BATCH]
+    if not ids:
+        return []
+    targets = list((await db.execute(
+        select(User.id).where(User.id.in_(ids), User.is_admin.is_(False))
+    )).scalars().all())
+    if targets:
+        await db.execute(update(User).where(User.id.in_(targets)).values(game_rewards_blocked=blocked))
+    return targets

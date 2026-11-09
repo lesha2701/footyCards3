@@ -122,6 +122,7 @@ export function frameForEvent(event: MatchEvent, index: number, previous: PitchF
       return { kind: "foul", ball: at(72), from: null, label, tone: "neutral", goalSide: null };
     }
     case "pass_failed":
+    case "dribble_lost":
       return { kind: "pass_failed", ball: at(62), from: null, label: "Потеря", tone: defending, goalSide: null };
     case "corner":
       return { kind: "corner", ball: at(100, index % 2 ? 1 : PITCH_H - 1), from: null, label: "Угловой", tone: side, goalSide: null };

@@ -14,6 +14,8 @@ from app.schemas.career import (
     CareerPlanIn,
     CareerRolesIn,
     CareerMarkingIn,
+    CareerMomentIn,
+    CareerProgramIn,
     CareerSpeechIn,
     CareerHalftimeIn,
     CareerTacticPreviewIn,
@@ -94,6 +96,20 @@ async def set_marking(payload: CareerMarkingIn, db: AsyncSession = Depends(get_d
     return await _view(db, user)
 
 
+@router.put("/program", response_model=CareerViewOut)
+async def set_program(payload: CareerProgramIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """The individual training programme: start it for a player or cancel it."""
+    await career_service.set_program(db, user, payload.card_id, payload.round_index)
+    return await career_service.get_view(db, user)
+
+
+@router.put("/moment", response_model=CareerViewOut)
+async def answer_moment(payload: CareerMomentIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """The coach's word after a round: a press question or a player's request."""
+    await career_service.answer_moment(db, user, payload.answer, payload.round_index)
+    return await career_service.get_view(db, user)
+
+
 @router.put("/speech", response_model=CareerViewOut)
 async def set_speech(payload: CareerSpeechIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     """Team morale: the pre-match speech for the next round."""
@@ -126,7 +142,8 @@ async def set_ambition(payload: CareerAmbitionIn, db: AsyncSession = Depends(get
 @router.put("/training", response_model=CareerViewOut)
 async def set_training(payload: CareerTrainingIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     """Training focus before the next round (kept until changed)."""
-    await career_service.set_training(db, user, payload.training, payload.round_index)
+    await career_service.set_training(db, user, payload.training, payload.round_index,
+                                      payload.model_dump(include={"extra", "intensity"}, exclude_unset=True))
     return await _view(db, user)
 
 

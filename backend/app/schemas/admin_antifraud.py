@@ -59,3 +59,25 @@ class AntifraudBanIn(BaseModel):
 class AntifraudBanOut(BaseModel):
     banned: int
     user_ids: List[int]
+
+
+class BotSuspectOut(BaseModel):
+    id: int
+    username: Optional[str] = None
+    registered: Optional[datetime] = None
+    games: int
+    active_hours_per_day: float
+    days_without_sleep: int
+    longest_break_hours: float
+    median_seconds_between: int
+    arena_points: int
+    tactics_rating: int
+    balance: int
+    stars_paid: int = 0
+    rewards_blocked: bool = False
+    resting: bool = False
+
+
+class RewardsBlockIn(BaseModel):
+    user_ids: list[int] = Field(min_length=1, max_length=5000)
+    blocked: bool = True

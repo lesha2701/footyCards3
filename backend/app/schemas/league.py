@@ -72,6 +72,8 @@ class LeagueRewardClaimOut(BaseModel):
 
 class LeagueStatusOut(BaseModel):
     total_rating: int
+    # Banked from the past weeks (the three ratings below are this week's).
+    league_points: int = 0
     arena_rating: int
     tactics_rating: int
     penalty_rating: int

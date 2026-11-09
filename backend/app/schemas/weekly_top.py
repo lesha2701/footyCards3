@@ -57,3 +57,5 @@ class WeeklyTopInfoOut(BaseModel):
     metrics: list[str]
     # Values a place must beat to count (ratings start above zero).
     starting_values: dict[str, int] = {}
+    # Game-rating boards that start over every Monday after the payout.
+    resetting: list[str] = []

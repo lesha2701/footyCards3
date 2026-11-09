@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 
+import { ClubBackButton } from "@/components/clubs/ClubBackButton";
 import { createClubDonationInvoice, fetchClubTreasury } from "@/api/clubFeatures";
 import { SponsorBadge } from "@/components/clubs/SponsorBadge";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconCheck, IconChevronLeft, IconCoin, IconStar, IconTrophy } from "@/components/icons";
+import { IconCheck, IconCoin, IconStar, IconTrophy } from "@/components/icons";
 import { formatGameError } from "@/lib/errors";
 import { payShopWithStars } from "@/lib/shopStars";
 import { hapticNotify } from "@/lib/telegram";
@@ -15,7 +15,6 @@ const name = (p: { username: string | null; first_name: string | null; user_id: 
 
 /** «Казна за Stars»: пополнить бюджет клуба звёздами, «Доска меценатов». */
 export default function ClubTreasuryPage() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: treasury, isLoading } = useQuery({ queryKey: ["clubs", "treasury"], queryFn: fetchClubTreasury });
   const [error, setError] = useState<string | null>(null);
@@ -49,9 +48,7 @@ export default function ClubTreasuryPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
-        <button onClick={() => navigate("/clubs")} className="rounded-full bg-bg-surface p-2 active:scale-95">
-          <IconChevronLeft size={18} className="text-ink-chalk" />
-        </button>
+        <ClubBackButton />
         <h1 className="font-display text-xl font-bold text-ink-chalk">Казна клуба</h1>
       </div>
 

@@ -66,6 +66,11 @@ CLIPS = {
     # The mocap keeper never goes to ground: a leap to his left, a scoop.
     'gk_save_high': ('rk:15_Goalkeeper_Save_01:277:397', False, {'turn': -20}),
     'gk_save_low': ('rk:17_Goalkeeper_Save_03:361:535', False, {}),
+    # The real slide: feet first on his hip, the leading foot 0.93 m ahead, a hand
+    # on the grass, and up from it. (`soccer tackle`, the one-on-one's slide_*, is
+    # a dive on to his front.)
+    'slide_tackle_r': ('soccer tackle (2)', False, {}),
+    'slide_tackle_l': ('soccer tackle (2)', True, {}),
     # Taken off his feet, then up: one clip of the pack cut in two, so the
     # second starts where the first ends (on his side).
     'fall_side': ('soccer tackle (3)', False, {'frames': (1, 31)}),
@@ -501,7 +506,7 @@ def on_field(pb):
 
 
 # Frames of ours where a foot is on the ball: where it is then.
-ON_BALL = {'trap_r': 10, 'trap_l': 10, 'tackle_r': 9, 'tackle_l': 9, 'stepover_r': 8, 'dragback': 8, 'ballroll_r': 8}
+ON_BALL = {'trap_r': 10, 'trap_l': 10, 'tackle_r': 9, 'tackle_l': 9, 'slide_tackle_r': 19, 'stepover_r': 8, 'dragback': 8, 'ballroll_r': 8}
 
 
 def report(clip):

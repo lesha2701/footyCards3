@@ -1,6 +1,7 @@
 import json
 import math
 import random
+import zlib
 from types import SimpleNamespace
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -14,33 +15,43 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.core.timeutil import ensure_aware
-from app.models.enums import BingoGoalType, MatchDifficulty, MatchResult, MatchStatus, TransactionType
+from app.models.card import UserCard
+from app.models.enums import BingoGoalType, MatchDifficulty, MatchResult, MatchStatus, NotificationType, TransactionType
 from app.models.game_config import GameConfig
 from app.models.match import Match, MatchEvent
 from app.models.user import User
 from app.schemas.match import (
+    ArenaDefenseItemOut,
+    ArenaKeyDuelOut,
     ArenaDivisionOut,
     ArenaLeaderboardEntry,
     ArenaLineCompareOut,
     ArenaPreviewOut,
     ArenaStatsOut,
     MatchActionRequest,
+    MatchDuelActorOut,
+    MatchHistoryItemOut,
     MatchOut,
     StartMatchRequest,
 )
 from app.schemas.lineup import LineupOut
 from app.services import (
+    anti_bot_service,
+    arena_cup_service,
     arena_ladder_service,
+    arena_moments,
     arena_tactics,
     bingo_service,
     chemistry_service,
+    free_kick_3d_engine as kick_engine,
     league_service,
+    notification_service,
     path_match_service,
     task_service,
 )
 from app.services.card_skill_effects import SNAPSHOT_VERSION, effect_for_card, effect_of, skill_roll
 from app.services.game_config_service import get_config
-from app.services.lineup_service import get_active_lineup, split_strength
+from app.services.lineup_service import get_active_lineup
 from app.services.match_situations import (
     ATTACK_SITUATIONS_BY_ID,
     ATTACK_SITUATIONS_BY_SHOT_TYPE,
@@ -147,14 +158,7 @@ def _pick_actor(
         # combo (e.g. a tactic with no natural CAM); any outfield player can
         # still stand in rather than the moment failing to generate.
         pool = [s.card for s in lineup.slots if s.category != "GK" and s.card and s.card.id not in exclude_ids]
-    card = random.choice(pool)
-    return {
-        "user_card_id": card.id,
-        "player_id": card.player.id,
-        "name": card.player.display_name,
-        "rating": card.player.rating,
-        "position": card.player.position.value,
-    }
+    return arena_moments.card_actor(random.choice(pool))
 
 
 # Each event type has several (mine, opponent) phrasing pairs — a random one
@@ -203,6 +207,10 @@ _EVENT_DESCRIPTIONS: dict[str, list[tuple[str, str]]] = {
         ("🚫 Офсайд у твоей команды", "🚫 Офсайд у {them}"),
         ("🚫 Флаг поднят — офсайд у твоей команды", "🚫 Флаг поднят — офсайд у {them}"),
     ],
+    "dribble_lost": [
+        ("🛡️ Защитник {them} выигрывает дуэль — обводка не прошла", "🛡️ Твой защитник выигрывает дуэль"),
+        ("🛡️ Обводка сорвалась: {them} забирает мяч", "🛡️ Соперник теряет мяч в обводке"),
+    ],
     "possession": [
         ("⚽ Мяч контролирует твоя команда", "⚽ Мяч контролирует {them}"),
         ("⚽ Твоя команда уверенно держит мяч", "⚽ {them} уверенно держит мяч"),
@@ -244,7 +252,34 @@ def _describe_event(event_type: str, team: str, opponent_name: str) -> str:
     return text.format(them=opponent_name)
 
 
-def _build_shot_moment(minute: int, team: str, shot_type: str, lineup: LineupOut, opponent_name: str) -> dict:
+def _decorate_moment(moment: dict, situation, state: dict, opponent_name: str) -> None:
+    """Live layer: who duels whom in this moment, and the choices with what
+    each one risks — only ratings and honest notes, never the odds."""
+    ratings = state["ratings"]
+    squads = state["squads"]
+    in_box = moment["shot_type"] == "in_box"
+    tags = tuple(situation.tags)
+    moment["tags"] = list(tags)
+    if moment["team"] == "user":
+        keeper = arena_moments.line_actor(squads["opponent"], "GK", ratings["opponent_gk"], "Их вратарь")
+        defender = arena_moments.line_actor(squads["opponent"], "DEF", ratings["opponent_def"], "Их защитник")
+        moment.update(
+            bias=situation.bias, actions=["shoot", "pass", "dribble"],
+            options=arena_moments.attack_options(moment, in_box, "one_on_one" in tags, keeper, defender),
+        )
+    else:
+        attacker = arena_moments.line_actor(squads["opponent"], "FWD", ratings["opponent_fwd"], "Их нападающий")
+        moment["attacker"] = attacker
+        if attacker["image_path"] or squads["opponent"]:
+            moment["description"] = moment["description"].replace(opponent_name, f"{attacker['name']} ({opponent_name})", 1)
+        moment["options"] = arena_moments.defense_options(
+            moment, tags, in_box, attacker, arena_moments.keeper_of(squads["user"]), ratings["user_gk"],
+        )
+
+
+def _build_shot_moment(
+    minute: int, team: str, shot_type: str, lineup: LineupOut, opponent_name: str, state: Optional[dict] = None,
+) -> dict:
     moment = {"minute": minute, "kind": "shot", "team": team, "shot_type": shot_type}
 
     if shot_type == "empty_net":
@@ -255,6 +290,10 @@ def _build_shot_moment(minute: int, team: str, shot_type: str, lineup: LineupOut
             )
         else:
             moment.update(situation_kind="breakaway_opponent", situation_id=None, actors={}, description="", actions=[])
+            if state is not None:
+                moment["attacker"] = arena_moments.line_actor(
+                    state["squads"]["opponent"], "FWD", state["ratings"]["opponent_fwd"], "Их нападающий",
+                )
         return moment
 
     if team == "user":
@@ -278,12 +317,14 @@ def _build_shot_moment(minute: int, team: str, shot_type: str, lineup: LineupOut
             situation_kind="defense", situation_id=situation.id, actors={"defender": defender},
             description=description, actions=["tackle", "block", "keeper"],
         )
+    if state is not None:
+        _decorate_moment(moment, situation, state, opponent_name)
     return moment
 
 
 def _generate_moment_queue(
     user_attack: int, opponent_attack: int, config: GameConfig, lineup: LineupOut, opponent_name: str,
-    balance: Optional[dict] = None,
+    balance: Optional[dict] = None, state: Optional[dict] = None, minutes: Optional[list[int]] = None,
 ) -> list[dict]:
     """Decides *what* happens and *when* — minute, kind (flavor/shot), team,
     and (for shots) the full situation/actors/description. Outcome rolls are
@@ -299,10 +340,10 @@ def _generate_moment_queue(
         total_attack = user_attack + opponent_attack
         user_attack_prob = user_attack / total_attack if total_attack else 0.5
 
-    num_chances = random.randint(14, 22)
-    minutes = sorted(random.sample(range(1, 90), num_chances))
+    if minutes is None:
+        minutes = sorted(random.sample(range(1, 90), random.randint(14, 22)))
 
-    kinds = [t for t, _ in _FLAVOR_WEIGHTS] + ["shot_chance"]
+    kinds =[t for t, _ in _FLAVOR_WEIGHTS] + ["shot_chance"]
     flavor_weights = [w for _, w in _FLAVOR_WEIGHTS]
     team_weights = {
         team: flavor_weights + [int(balance[f"{team}_shot_weight"]) if balance is not None else _SHOT_CHANCE_WEIGHT]
@@ -321,17 +362,131 @@ def _generate_moment_queue(
         kind = random.choices(kinds, weights=team_weights[team], k=1)[0]
         if kind == "shot_chance":
             shot_type = random.choices(list(SHOT_TYPES), weights=shot_weights, k=1)[0]
-            moments.append(_build_shot_moment(minute, team, shot_type, lineup, opponent_name))
+            moments.append(_build_shot_moment(minute, team, shot_type, lineup, opponent_name, state))
         else:
             moments.append({"minute": minute, "kind": "flavor", "event_type": kind, "team": team})
     return moments
 
 
+def start_live(state: dict, config: GameConfig, lineup: LineupOut, opponent_name: str, opponent_lineup=None) -> None:
+    """Card Arena's match: the first half now, the second one at the break,
+    with the balance the half-time decision leaves behind. The squads are
+    frozen here so that second half still has the kickoff's players."""
+    state["squads"] = {
+        "user": arena_moments.snapshot_lineup(lineup),
+        "opponent": arena_moments.snapshot_lineup(opponent_lineup),
+    }
+    state["live"] = {"seconds": int(config.arena_moment_seconds)}
+    total = random.randint(14, 22)
+    first = total // 2
+    state["second_half_chances"] = total - first
+    state["moments"] = _generate_moment_queue(
+        0, 0, config, lineup, opponent_name, balance=state["balance"], state=state,
+        minutes=sorted(random.sample(range(1, 45), first)),
+    ) + [{
+        "minute": 45, "kind": "halftime", "team": "user", "shot_type": "halftime",
+        "description": "Перерыв. Стиль соперника уже виден — можно сменить свой на второй тайм.",
+        "actions": ["keep_style", "change_style"],
+    }]
+    state["next_index"] = 0
+
+
 def _is_interactive(moment: dict) -> bool:
+    if moment["kind"] != "shot":
+        return True
     # The only non-interactive shot is the opponent's empty-net chance
     # against the user's own goal — there's no meaningful goalkeeper choice
     # against an empty net, so it just auto-resolves via miss-chance alone.
     return moment["team"] == "user" or moment["shot_type"] != "empty_net"
+
+
+def _penalty_moment(state: dict, team: str, taker: dict, rating: int) -> None:
+    """Queues a penalty right after the current moment: the 3D scene plays
+    it from this seed, the server replays the swipe (kick_engine)."""
+    state["moments"].insert(state["next_index"] + 1, {
+        "minute": state["moments"][state["next_index"]]["minute"], "kind": "penalty", "team": team,
+        "shot_type": "penalty", "seed": random.getrandbits(31), "rating": rating, "taker": taker,
+        "description": "Пенальти! Свайпни от мяча к воротам" if team == "user" else "Пенальти в твои ворота! Угадай угол",
+        "actions": ["kick"] if team == "user" else ["dive"],
+    })
+
+
+def _resolve_penalty(moment: dict, action: str, state: dict, config: GameConfig, opponent_name: str, payload) -> tuple[dict, Optional[str]]:
+    seed, rating = int(moment["seed"]), int(moment["rating"])
+    tuning = arena_moments.tuning(config)
+    if moment["team"] == "user":
+        if action == "kick" and payload is not None and payload.swipe is not None:
+            swipe = payload.swipe
+            outcome = kick_engine.simulate_shot(
+                kick_engine.create_penalty_setup(seed, rating),
+                kick_engine.Swipe(swipe.dx, swipe.dy, swipe.curve, swipe.duration_ms),
+            ).outcome
+        else:
+            outcome = "goal" if random.random() < float(tuning["penalty_auto_goal"]) else "save"
+    elif action == "dive":
+        dive = payload.dive if payload is not None else None
+        _, bot_swipe = kick_engine.penalty_bot_shot(seed)
+        outcome = kick_engine.simulate_shot(
+            kick_engine.player_keeper_setup(seed, kick_engine.Dive(dive.x, dive.y, dive.reaction_ms) if dive else None),
+            bot_swipe,
+        ).outcome
+    else:
+        outcome = "save" if random.random() > float(tuning["penalty_auto_goal"]) else "goal"
+    event_type = outcome if outcome in ("goal", "save") else "shot"
+    taker = moment.get("taker") or {}
+    event = {
+        "minute": moment["minute"], "event_type": event_type, "team": moment["team"],
+        "description": "Пенальти! " + _describe_event(event_type, moment["team"], opponent_name),
+        "payload": {
+            "shot_type": "penalty", "is_penalty": True, "action": action, "shooter": taker.get("name"),
+            "shooter_id": taker.get("user_card_id"),
+        },
+    }
+    return event, moment["team"] if event_type == "goal" else None
+
+
+def _resolve_halftime(moment: dict, action: str, state: dict, config: GameConfig, opponent_name: str, payload) -> tuple[dict, Optional[str]]:
+    balance = state["balance"]
+    style = arena_tactics.resolve_style(payload.style) if action == "change_style" and payload is not None else None
+    if style == balance["user_style"]:
+        style = None
+    if style:
+        kick = state["kick"]
+        state["balance"] = arena_tactics.compute_balance(
+            kick["user_strength"], style, kick["opponent_strength"], balance["opponent_style"], config,
+            user_formation=balance.get("user_formation"), opponent_formation=balance.get("opponent_formation"),
+        )
+        state["halftime_style"] = style
+    minutes = sorted(random.sample([m for m in range(46, 90) if m != 80], state["second_half_chances"]))
+    second = _generate_moment_queue(
+        0, 0, config, arena_moments.restore_lineup(state["squads"]["user"]), opponent_name,
+        balance=state["balance"], state=state, minutes=minutes,
+    )
+    second.append({
+        "minute": 80, "kind": "late_call", "team": "user", "shot_type": "late_call",
+        "description": "Ты проигрываешь, 10 минут до конца. Все вперёд? Больше шансов у обеих команд",
+        "actions": ["all_in", "hold"],
+    })
+    state["moments"].extend(sorted(second, key=lambda m: m["minute"]))
+    text = f"Перерыв. Переходим на стиль «{arena_tactics.STYLE_LABELS[style]}»" if style else "Перерыв. Стиль без изменений"
+    event = {"minute": 45, "event_type": "halftime", "team": "user", "description": text, "payload": {"style": style}}
+    return event, None
+
+
+def _resolve_late_call(moment: dict, action: str, state: dict, config: GameConfig, opponent_name: str) -> tuple[dict, Optional[str]]:
+    if action != "all_in":
+        return {"minute": moment["minute"], "event_type": "possession", "team": "user",
+                "description": "Держим строй и играем спокойно", "payload": None}, None
+    state["all_in"] = True
+    lineup = arena_moments.restore_lineup(state["squads"]["user"])
+    index = state["next_index"]
+    extra = [
+        _build_shot_moment(minute, team, "in_box", lineup, opponent_name, state)
+        for minute, team in zip(random.sample(range(81, 90), 3), ("user", "user", "opponent"))
+    ]
+    state["moments"] = state["moments"][: index + 1] + sorted(state["moments"][index + 1:] + extra, key=lambda m: m["minute"])
+    return {"minute": moment["minute"], "event_type": "possession", "team": "user",
+            "description": "🔥 Все вперёд! Защитники подключаются к атаке", "payload": {"all_in": True}}, None
 
 
 def _apply_card(state: dict, user_card_id: int, is_red: bool) -> str:
@@ -537,6 +692,51 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
         }
         return event, "user" if outcome == "goal" else None
 
+    live = bool(state.get("live"))
+    tuning = arena_moments.tuning(config)
+    if action == "dribble":
+        rating = path_match_service.arena_actor_rating(state, shooter, minute, "shooter", notes, one_on_one=one_on_one)
+        duel = rating + edge - (ratings["opponent_def"] - edge)
+        fail_chance = float(tuning["dribble_fail_base"]) - duel * float(tuning["dribble_fail_per_point"])
+        if random.random() < max(0.12, min(0.85, fail_chance)):
+            if shot_type == "in_box" and random.randrange(100) < int(tuning["dribble_penalty_pct"]):
+                _penalty_moment(state, "user", shooter, _clamp_rating(rating))
+                return {
+                    "minute": minute, "event_type": "foul_stopped", "team": "user",
+                    "description": f"🟨 {shooter['name']} сбит в штрафной! Судья показывает на точку",
+                    "payload": {"shot_type": shot_type, "action": action, "penalty_won": True},
+                }, None
+            return {
+                "minute": minute, "event_type": "dribble_lost", "team": "user",
+                "description": _describe_event("dribble_lost", "user", opponent_name),
+                "payload": {"shot_type": shot_type, "action": action, "dribbler": shooter["name"]},
+            }, None
+        missed, shot_notes = skill_roll(
+            _equipment_adjusted(
+                state, shooter,
+                _lerp_chance(
+                    _clamp_rating(rating + edge), float(config.match_receiver_shot_miss_chance_min),
+                    float(config.match_receiver_shot_miss_chance_max),
+                ),
+                situation, own="shot_pp", notes=equipment_notes,
+            ),
+            [(_card_effect(state, shooter, "sniper"), -1, shooter["name"])],
+        )
+        notes.extend(shot_notes)
+        outcome, extra = _resolve_shot_continuation(
+            missed, "in_box", config, blocker_rating=None,
+            keeper_rating=ratings["opponent_gk"] - edge - int(tuning["dribble_keeper_drop"]),
+            keeper_effect=_keeper_effects(state, "opponent", True), notes=notes,
+        )
+        event_payload = _with_equipment_notes(_with_skill_notes({
+            "shot_type": shot_type, "action": action, "shooter": shooter["name"],
+            "shooter_id": shooter.get("user_card_id"), **extra,
+        }, notes), equipment_notes)
+        return {
+            "minute": minute, "event_type": outcome, "team": "user",
+            "description": _describe_event(outcome, "user", opponent_name), "payload": event_payload,
+        }, "user" if outcome == "goal" else None
+
     # action == "pass"
     passer_rating = path_match_service.arena_actor_rating(state, shooter, minute, "passer", notes)
     eff_passer_rating = _clamp_rating(passer_rating - situation.bias + edge)
@@ -578,9 +778,14 @@ def _resolve_attack(moment: dict, action: str, state: dict, config: GameConfig, 
         [(_card_effect(state, pass_target, "sniper"), -1, pass_target["name"])],
     )
     notes.extend(shot_notes)
+    # Live layer: the ball went round the wall of legs — no block, and the
+    # keeper is caught moving, the more so where the situation calls for it.
+    keeper_drop = (
+        round(float(tuning["pass_keeper_drop"]) - float(situation.bias) * float(tuning["pass_bias_weight"])) if live else 0
+    )
     outcome, extra = _resolve_shot_continuation(
-        missed, shot_type, config, blocker_rating=ratings["opponent_def"] - edge,
-        keeper_rating=ratings["opponent_gk"] - edge,
+        missed, shot_type, config, blocker_rating=None if live else ratings["opponent_def"] - edge,
+        keeper_rating=ratings["opponent_gk"] - edge - keeper_drop,
         keeper_effect=_keeper_effects(state, "opponent", "one_on_one" in situation.tags), notes=notes,
     )
     payload = _with_equipment_notes(_with_skill_notes(
@@ -608,10 +813,69 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
     last_line = _card_effect(state, defender, "last_line") if "breakaway" in situation.tags else None
     equipment_notes: list = []
     save_pp, save_player = _user_save_pp(state)
+    live = bool(state.get("live"))
+    tuning = arena_moments.tuning(config)
+    in_box = "box" in situation.tags
+    their_fwd = ratings["opponent_fwd"] - edge
     if action in ("tackle", "block"):
         # The defender plays this roll himself (not the keeper's «keeper» action).
         defender_rating = path_match_service.arena_actor_rating(state, defender, minute, "defender", talent_notes) + edge
+
+    def shot_on_keeper(equipment: list) -> tuple[dict, Optional[str]]:
+        """Nobody stopped him: the strike against the user's keeper."""
+        missed = random.random() < _lerp_chance(
+            their_fwd, float(config.match_shot_miss_chance_min), float(config.match_shot_miss_chance_max)
+        )
+        notes: list = []
+        keeper_notes: list = []
+        keeper_rating = ratings["user_gk"] + edge + path_match_service.arena_keeper_bonus(
+            state, minute, keeper_notes, one_on_one=one_on_one,
+        )
+        outcome, extra = _resolve_shot_continuation(
+            missed, shot_type, config, blocker_rating=None, keeper_rating=keeper_rating,
+            keeper_effect=_keeper_effects(state, "user", "one_on_one" in situation.tags), notes=notes,
+            save_pp=save_pp, save_player=save_player, equipment_notes=equipment,
+        )
+        if outcome in ("save", "goal"):  # the keeper's talent only counts if he had a save to make
+            talent_notes.extend(keeper_notes)
+        event = {
+            "minute": moment["minute"], "event_type": outcome, "team": "opponent",
+            "description": _describe_event(outcome, "opponent", opponent_name),
+            "payload": _with_equipment_notes(_with_talent_notes(
+                _with_skill_notes({"shot_type": shot_type, "action": action, "defender": defender["name"], **extra}, notes),
+                talent_notes,
+            ), equipment),
+        }
+        return event, "opponent" if outcome == "goal" else None
+
+    if live and action == "keeper":
+        tags = situation.tags
+        claim = float(tuning["rush_base"]) + (ratings["user_gk"] + edge - their_fwd) * float(tuning["rush_per_point"])
+        claim += float(tuning["rush_one_on_one"]) if one_on_one or "breakaway" in tags else 0
+        claim += float(tuning["rush_aerial"]) if "aerial" in tags else 0
+        claim += float(tuning["rush_long_range"]) if shot_type == "long_range" else 0
+        if random.random() < max(0.1, min(0.92, claim)):
+            return {
+                "minute": minute, "event_type": "save", "team": "opponent",
+                "description": "🧤 Твой вратарь выходит и забирает мяч!",
+                "payload": {"shot_type": shot_type, "action": action, "rush": True},
+            }, None
+        scored = random.random() < float(tuning["rush_fail_goal"])
+        outcome = "goal" if scored else "shot"
+        return {
+            "minute": minute, "event_type": outcome, "team": "opponent",
+            "description": ("Вратарь не успел, ворота пустые! " if scored else "Вратарь не успел, но мяч мимо! ")
+            + _describe_event(outcome, "opponent", opponent_name),
+            "payload": {"shot_type": shot_type, "action": action, "rush": True},
+        }, "opponent" if scored else None
+
     if action == "tackle":
+        if live:
+            beaten = float(tuning["tackle_beaten_base"]) - (defender_rating - their_fwd) * float(tuning["tackle_beaten_per_point"])
+            if "aerial" in situation.tags:
+                beaten += float(tuning["tackle_aerial_extra"])
+            if random.random() < max(0.08, min(0.8, beaten)):
+                return shot_on_keeper(equipment_notes)
         foul, tackle_notes = skill_roll(
             _equipment_adjusted(
                 state, defender,
@@ -637,6 +901,23 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
         card = _apply_card(state, defender["user_card_id"], is_red)
         if card == "red":
             _apply_red_card_debuff(state, config)
+
+        if live and in_box:
+            taker = moment.get("attacker") or {"name": opponent_name, "rating": ratings["opponent_fwd"]}
+            _penalty_moment(state, "opponent", taker, _clamp_rating(their_fwd))
+            prefix = "🟥 Красная карточка, пенальти! " if card == "red" else "🟨 Жёлтая карточка, пенальти! "
+            return {
+                "minute": minute, "event_type": "foul_stopped", "team": "opponent",
+                "description": prefix + "Судья показывает на точку",
+                "payload": {"shot_type": shot_type, "action": action, "defender": defender["name"], "card": card, "is_penalty": True},
+            }, None
+        if live and random.randrange(100) < int(tuning["free_kick_goal_pct"]):
+            prefix = "🟥 Красная карточка! " if card == "red" else "🟨 Жёлтая карточка. "
+            return {
+                "minute": minute, "event_type": "goal", "team": "opponent",
+                "description": prefix + "Штрафной в девятку! " + _describe_event("goal", "opponent", opponent_name),
+                "payload": {"shot_type": shot_type, "action": action, "defender": defender["name"], "card": card, "free_kick": True},
+            }, "opponent"
 
         if "box" in situation.tags:
             keeper_bonus = path_match_service.arena_keeper_bonus(state, minute, talent_notes, penalty=True)
@@ -676,12 +957,14 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
         # On a cross / corner ("aerial" situations) the block IS the defender's
         # aerial duel — the defender's own aerial_master lowers the fail chance.
         aerial = _card_effect(state, defender, "aerial_master") if "aerial" in situation.tags else None
+        block_fail = _lerp_chance(defender_rating, float(config.match_block_fail_chance_min), float(config.match_block_fail_chance_max))
+        if live:
+            block_fail += float(tuning["block_fail_extra"])
+            block_fail += float(tuning["block_one_on_one_extra"]) if one_on_one or "breakaway" in situation.tags else 0
+            block_fail += float(tuning["block_long_range_extra"]) if shot_type == "long_range" else 0
+            block_fail = max(0.05, min(0.9, block_fail))
         fail, block_notes = skill_roll(
-            _equipment_adjusted(
-                state, defender,
-                _lerp_chance(defender_rating, float(config.match_block_fail_chance_min), float(config.match_block_fail_chance_max)),
-                _NO_TAGS, own="tackle_pp", notes=equipment_notes,
-            ),
+            _equipment_adjusted(state, defender, block_fail, _NO_TAGS, own="tackle_pp", notes=equipment_notes),
             # A defender has one skill: aerial_master on crosses, last_line
             # when he's the last man against a breakaway.
             [(aerial, -1, defender["name"]), (last_line, -1, defender["name"])],
@@ -696,59 +979,21 @@ def _resolve_defense(moment: dict, action: str, state: dict, config: GameConfig,
                 ), talent_notes), equipment_notes),
             }
             return event, None
-        missed = random.random() < _lerp_chance(
-            ratings["opponent_fwd"] - edge, float(config.match_shot_miss_chance_min), float(config.match_shot_miss_chance_max)
-        )
-        notes: list = []
-        keeper_notes: list = []
-        keeper_rating = ratings["user_gk"] + edge + path_match_service.arena_keeper_bonus(
-            state, minute, keeper_notes, one_on_one=one_on_one,
-        )
-        outcome, extra = _resolve_shot_continuation(
-            missed, shot_type, config, blocker_rating=None, keeper_rating=keeper_rating,
-            keeper_effect=_keeper_effects(state, "user", "one_on_one" in situation.tags), notes=notes,
-            save_pp=save_pp, save_player=save_player, equipment_notes=equipment_notes,
-        )
-        if outcome in ("save", "goal"):  # the keeper's talent only counts if he had a save to make
-            talent_notes.extend(keeper_notes)
-        event = {
-            "minute": moment["minute"], "event_type": outcome, "team": "opponent",
-            "description": _describe_event(outcome, "opponent", opponent_name),
-            "payload": _with_equipment_notes(_with_talent_notes(
-                _with_skill_notes({"shot_type": shot_type, "action": action, "defender": defender["name"], **extra}, notes),
-                talent_notes,
-            ), equipment_notes),
-        }
-        return event, "opponent" if outcome == "goal" else None
+        return shot_on_keeper(equipment_notes)
 
-    # action == "keeper"
-    missed = random.random() < _lerp_chance(
-        ratings["opponent_fwd"] - edge, float(config.match_shot_miss_chance_min), float(config.match_shot_miss_chance_max)
-    )
-    notes = []
-    keeper_notes: list = []
-    keeper_rating = ratings["user_gk"] + edge + path_match_service.arena_keeper_bonus(
-        state, minute, keeper_notes, one_on_one=one_on_one,
-    )
-    outcome, extra = _resolve_shot_continuation(
-        missed, shot_type, config, blocker_rating=None, keeper_rating=keeper_rating,
-        keeper_effect=_keeper_effects(state, "user", "one_on_one" in situation.tags), notes=notes,
-        save_pp=save_pp, save_player=save_player, equipment_notes=equipment_notes,
-    )
-    if outcome in ("save", "goal"):  # the keeper's talent only counts if he had a save to make
-        talent_notes.extend(keeper_notes)
-    event = {
-        "minute": moment["minute"], "event_type": outcome, "team": "opponent",
-        "description": _describe_event(outcome, "opponent", opponent_name),
-        "payload": _with_equipment_notes(_with_talent_notes(
-            _with_skill_notes({"shot_type": shot_type, "action": action, "defender": defender["name"], **extra}, notes),
-            talent_notes,
-        ), equipment_notes),
-    }
-    return event, "opponent" if outcome == "goal" else None
+    # action == "keeper" (a match from before the live layer)
+    return shot_on_keeper(equipment_notes)
 
 
-def _resolve_action(moment: dict, action: str, state: dict, config: GameConfig, opponent_name: str) -> tuple[dict, Optional[str]]:
+def _resolve_action(
+    moment: dict, action: str, state: dict, config: GameConfig, opponent_name: str, payload=None,
+) -> tuple[dict, Optional[str]]:
+    if moment["kind"] == "halftime":
+        return _resolve_halftime(moment, action, state, config, opponent_name, payload)
+    if moment["kind"] == "late_call":
+        return _resolve_late_call(moment, action, state, config, opponent_name)
+    if moment["kind"] == "penalty":
+        return _resolve_penalty(moment, action, state, config, opponent_name, payload)
     situation_kind = moment["situation_kind"]
     if situation_kind.startswith("breakaway"):
         return _resolve_breakaway(moment, state["ratings"], config, opponent_name, _edge(state))
@@ -778,6 +1023,9 @@ def _advance(state: dict, config: GameConfig, opponent_name: str) -> list[dict]:
             )
             i += 1
             continue
+        if moment["kind"] == "late_call" and state["user_score"] >= state["opponent_score"]:
+            i += 1  # the all-in question only comes up when behind
+            continue
         if _is_interactive(moment):
             break
         event, scored_by = _resolve_breakaway(moment, state["ratings"], config, opponent_name, _edge(state))
@@ -785,9 +1033,29 @@ def _advance(state: dict, config: GameConfig, opponent_name: str) -> list[dict]:
         if scored_by:
             state[f"{scored_by}_score"] += 1
             _fit_goal_to_score(event, scored_by, state)
+            if state.get("live"):
+                arena_moments.finish_goal(event, scored_by, state, moment)
         i += 1
     state["next_index"] = i
     return events
+
+
+def _touch(state: dict, config: GameConfig, shown_events: int) -> None:
+    """Live layer: when this match was last alive and until when the pending
+    moment waits — its clock starts after the events before it are shown."""
+    if not state.get("live"):
+        return
+    now = datetime.now(timezone.utc)
+    state["touched_at"] = now.isoformat()
+    grace = shown_events * 3 + int(config.arena_moment_seconds) + 8
+    state["deadline_at"] = (now + timedelta(seconds=grace)).isoformat()
+
+
+def _past_deadline(state: dict, moment: dict) -> bool:
+    deadline = state.get("deadline_at")
+    if not deadline or moment["kind"] == "penalty":
+        return False
+    return datetime.now(timezone.utc) > datetime.fromisoformat(deadline)
 
 
 def _add_events(db: AsyncSession, match: Match, events: list[dict]) -> None:
@@ -839,7 +1107,8 @@ async def _finalize_match(
     else:
         result = MatchResult.draw
 
-    rating_delta = {MatchResult.win: 3, MatchResult.loss: -1, MatchResult.draw: 1}[result]
+    cup = state.get("cup")
+    rating_delta = 0 if cup else {MatchResult.win: 3, MatchResult.loss: -1, MatchResult.draw: 1}[result]
     if result == MatchResult.win:
         locked_user.matches_won += 1
         if opponent_score == 0:
@@ -851,6 +1120,10 @@ async def _finalize_match(
         locked_user.matches_lost += 1
     else:
         locked_user.matches_drawn += 1
+    # Daily ranked limit / resting (anti_bot_service): played, paid, not ranked.
+    ranked = anti_bot_service.take_ranked_slot(locked_user, config, "arena")
+    if not ranked:
+        rating_delta = 0
     locked_user.arena_rating = max(0, locked_user.arena_rating + rating_delta)
 
     difficulty_multiplier = {
@@ -866,7 +1139,8 @@ async def _finalize_match(
     division_pct = arena_ladder_service.coin_pct(
         arena_ladder_service.division_of(locked_user.arena_points, config), config,
     )
-    reward = 0 if locked_user.game_rewards_blocked else round(
+    # A cup round pays its own coins (arena_cup_service.settle below).
+    reward = 0 if locked_user.game_rewards_blocked or cup else round(
         reward_base[result] * difficulty_multiplier[match.difficulty] * division_pct / 100 + user_score * 5
     )
     # «Экипировка»: coin talismans of the lineup, frozen at kickoff, on a win only.
@@ -893,14 +1167,45 @@ async def _finalize_match(
             db, locked_user.id, match, state, result.value, rewarded=reward > 0, config=config,
         )
 
-    # Divisions: a forfeit moves the ladder like any loss.
-    state["ladder"] = await arena_ladder_service.apply_result(
-        db, locked_user, int(state.get("opponent_points", locked_user.arena_points)), result, config,
-    )
+    # A match goal pays on top, in the same transaction.
+    goal = state.get("goal")
+    if goal and forced_result is None and reward > 0:
+        goal["done"] = arena_moments.goal_done(goal["code"], user_score, opponent_score, state)
+        if goal["done"] and goal["bonus"] > 0:
+            await credit_coins(
+                db, locked_user, goal["bonus"], TransactionType.arena_goal_bonus,
+                f"Цель матча: {goal['text']}", related_object_type="match", related_object_id=match.id,
+            )
+            match.reward_coins += goal["bonus"]
+
+    if cup:
+        won = result == MatchResult.win
+        if result == MatchResult.draw and forced_result is None:
+            # A cup tie has a winner: the shootout leans to the stronger side.
+            ratio = match.user_team_strength / max(1, match.opponent_team_strength)
+            won = random.random() < max(0.2, min(0.8, 0.5 + (ratio - 1)))
+            state["cup_shootout"] = won
+        state["cup_result"] = await arena_cup_service.settle(db, locked_user, cup, won, config)
+        match.reward_coins += state["cup_result"]["coins"]
+        state["ladder"] = None
+    else:
+        # Divisions: a forfeit moves the ladder like any loss.
+        state["ladder"] = await arena_ladder_service.apply_result(
+            db, locked_user, int(state.get("opponent_points", locked_user.arena_points)), result, config, ranked=ranked,
+        )
+        state["ladder"]["ranked"] = ranked
     events = (await db.execute(select(MatchEvent).where(MatchEvent.match_id == match.id))).scalars().all()
+    await _settle_card_stats(db, locked_user, state, list(events), forced_result is not None)
     state["report"] = build_report(match, state, list(events), result, forfeited=forced_result is not None)
+    # «+0» needs a reason on the result screen: rewards paused, or today's
+    # ranked matches used up (still paid, not rated).
+    if isinstance(state["report"], dict):
+        state["report"]["paused"] = anti_bot_service.paused(locked_user)
+        state["report"]["ranked"] = ranked
     match.server_state = state
     flag_modified(match, "server_state")
+    if forced_result is None and result == MatchResult.win and match.opponent_user_id and not cup:
+        await _notify_defender(db, match)
 
     await league_service.sync_league_rewards_for_user(db, locked_user)
     await db.commit()
@@ -909,7 +1214,51 @@ async def _finalize_match(
     await bingo_service.increment_goal(db, BingoGoalType.arena_matches_played, 1)
 
 
-_USER_CHANCE_EVENTS = {"goal", "shot", "save", "blocked", "pass_failed"}
+async def _settle_card_stats(db: AsyncSession, locked_user: User, state: dict, events: list, forfeited: bool) -> None:
+    """The man of the match, and what each copy did goes on the card."""
+    if forfeited or not state.get("live"):
+        return
+    summary = arena_moments.man_of_the_match(state, events)
+    if summary is None:
+        return
+    state["mvp"] = summary["player"]
+    mvp_id = (summary["player"] or {}).get("user_card_id")
+    ids = set(summary["goals"]) | set(summary["assists"]) | ({mvp_id} if mvp_id else set())
+    if not ids:
+        return
+    cards = (await db.execute(
+        select(UserCard).where(UserCard.id.in_(ids), UserCard.owner_id == locked_user.id)
+    )).scalars().all()
+    for card in cards:
+        card.arena_goals += summary["goals"].get(card.id, 0)
+        card.arena_assists += summary["assists"].get(card.id, 0)
+        card.arena_mvps += 1 if card.id == mvp_id else 0
+        db.add(card)
+
+
+async def _notify_defender(db: AsyncSession, match: Match) -> None:
+    """Someone beat your squad: at most one notice a day, the log has the rest."""
+    defender = await db.get(User, match.opponent_user_id)
+    if defender is None:
+        return
+    now = datetime.now(timezone.utc)
+    last = defender.arena_defense_notified_at
+    if last is not None and now - ensure_aware(last) < timedelta(hours=24):
+        return
+    defender.arena_defense_notified_at = now
+    db.add(defender)
+    await notification_service.notify(
+        db, defender.id, NotificationType.arena_defense, "⚔️ Твой состав атаковали",
+        "Загляни в Card Arena: там журнал защиты и кнопка «Реванш».",
+        related_object_type="match", related_object_id=match.id,
+    )
+
+
+def _shots(count: int) -> str:
+    return f"{count} удара" if count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14) else f"{count} ударов"
+
+
+_USER_CHANCE_EVENTS = {"goal", "shot", "save", "blocked", "pass_failed", "dribble_lost"}
 _OPPONENT_CHANCE_EVENTS = {"goal", "shot", "save", "blocked", "tackle_won", "foul_stopped"}
 
 
@@ -1005,15 +1354,24 @@ def build_report(match: Match, state: dict, events: list, result: MatchResult, f
     if not forfeited:
         reasons.append(f"Моменты: у вас {user_chances}, у соперника {opponent_chances}; реализовано {user_score} и {opponent_score}.")
         if result != MatchResult.win and opponent_keeper_saves >= 3:
-            reasons.append(f"Вратарь соперника отразил {opponent_keeper_saves} ударов.")
+            reasons.append(f"Вратарь соперника отразил {_shots(opponent_keeper_saves)}.")
         if result != MatchResult.loss and user_keeper_saves >= 3:
-            reasons.append(f"Ваш вратарь отразил {user_keeper_saves} ударов.")
+            reasons.append(f"Ваш вратарь отразил {_shots(user_keeper_saves)}.")
         if result != MatchResult.win and user_chances >= opponent_chances + 2 and user_score <= opponent_score:
             reasons.append("Вы создали больше моментов, но не реализовали их — в следующий раз чаще выбирайте лучшее действие.")
         if red_card:
             reasons.append("Красная карточка ослабила вашу оборону.")
+        if state.get("halftime_style"):
+            reasons.append(f"В перерыве вы перешли на стиль «{arena_tactics.STYLE_LABELS[state['halftime_style']]}».")
+        if state.get("all_in"):
+            reasons.append("В концовке вы пошли «Все вперёд».")
+        if state.get("cup_shootout") is not None:
+            reasons.append("Ничья в кубке: " + ("серия пенальти за вами." if state["cup_shootout"] else "серию пенальти выиграл соперник."))
 
     return {
+        "mvp": state.get("mvp"),
+        "goal": state.get("goal"),
+        "cup": state.get("cup_result"),
         "verdict": verdict,
         "reasons": reasons,
         "chances": chances,
@@ -1186,6 +1544,59 @@ async def _resolve_opponent(db: AsyncSession, pending: dict, user_strength: int,
     )
 
 
+# Who stands in the way of your star: his line's opposite on the pitch.
+_DUEL_OPPOSITE = {"FWD": ("DEF", "Их защитник"), "MID": ("MID", "Их полузащитник"), "DEF": ("FWD", "Их нападающий")}
+
+
+def _best_on_line(lineup: LineupOut, categories: tuple[str, ...]):
+    slots = [s for s in lineup.slots if s.card is not None and s.category in categories]
+    return max(slots, key=lambda s: s.card.player.rating, default=None)
+
+
+def _duel_actor(slot) -> MatchDuelActorOut:
+    player = slot.card.player
+    return MatchDuelActorOut(
+        name=player.display_name, rating=player.rating, position=getattr(player.position, "value", player.position),
+        image_path=player.image_path, rarity=getattr(player.rarity, "value", player.rarity),
+    )
+
+
+async def _bot_duel_face(db: AsyncSession, opponent: _ArenaOpponent, category: str, label: str) -> MatchDuelActorOut:
+    """A bot has a line, not a card: it gets the face of a catalog player of
+    that line, the same one for this opponent; the rating stays the line's."""
+    from app.models.player import Player
+    from app.services.lineup_service import CATEGORY_POSITIONS
+
+    rating = opponent.lines[category]
+    faces = (await db.execute(
+        select(Player)
+        .where(Player.is_active.is_(True), Player.position.in_(CATEGORY_POSITIONS[category]), Player.path_talent_code.is_(None))
+        .order_by(func.abs(Player.rating - rating), Player.id)
+        .limit(6)
+    )).scalars().all()
+    if not faces:
+        return MatchDuelActorOut(name=label, rating=rating, position=category)
+    face = faces[zlib.crc32(opponent.name.encode()) % len(faces)]
+    return MatchDuelActorOut(
+        name=face.display_name, rating=rating, position=getattr(face.position, "value", face.position),
+        image_path=face.image_path, rarity=getattr(face.rarity, "value", face.rarity),
+    )
+
+
+async def _key_duel(db: AsyncSession, lineup: LineupOut, opponent: _ArenaOpponent) -> Optional[ArenaKeyDuelOut]:
+    """The duel the preview shows: nothing rolled, your strongest outfield
+    card against the strongest of the line facing him."""
+    star = _best_on_line(lineup, tuple(_DUEL_OPPOSITE))
+    if star is None:
+        return None
+    category, label = _DUEL_OPPOSITE[star.category]
+    rival = _best_on_line(opponent.lineup, (category,)) if opponent.lineup is not None else None
+    return ArenaKeyDuelOut(
+        me=_duel_actor(star),
+        vs=_duel_actor(rival) if rival is not None else await _bot_duel_face(db, opponent, category, label),
+    )
+
+
 async def _pending_opponent(db: AsyncSession, locked_user: User, config: GameConfig) -> dict:
     if not locked_user.arena_pending_opponent:
         from app.services import newbie_service
@@ -1194,8 +1605,83 @@ async def _pending_opponent(db: AsyncSession, locked_user: User, config: GameCon
             await newbie_service.first_arena_opponent(db, locked_user, config)
             or await arena_ladder_service.find_opponent(db, locked_user, config)
         )
-        db.add(locked_user)
-    return dict(locked_user.arena_pending_opponent)
+    pending = dict(locked_user.arena_pending_opponent)
+    if "goal" not in pending:
+        # Fixed with the opponent, so a look at the preview can't re-roll them.
+        pending["goal"] = arena_moments.pick_goal()
+        pending["hint_true"] = random.randrange(100) < int(config.arena_hint_accuracy_pct)
+        pending["hint_alt"] = random.randrange(3)
+        locked_user.arena_pending_opponent = pending
+        flag_modified(locked_user, "arena_pending_opponent")
+    db.add(locked_user)
+    return pending
+
+
+def _style_hint(pending: dict, style: str) -> str:
+    """What the scouts say: usually true, not always."""
+    if pending.get("hint_true", True):
+        return style
+    others = [s for s in arena_tactics.STYLES if s != style]
+    return others[int(pending.get("hint_alt", 0)) % len(others)]
+
+
+async def _head_to_head(db: AsyncSession, user_id: int, opponent_id: Optional[int]) -> Optional[dict[str, int]]:
+    if opponent_id is None:
+        return None
+    rows = await db.execute(
+        select(Match.result, func.count(Match.id))
+        .where(Match.user_id == user_id, Match.opponent_user_id == opponent_id, Match.status == MatchStatus.finished)
+        .group_by(Match.result)
+    )
+    counts = {result.value: int(count) for result, count in rows.all() if result is not None}
+    return {"win": counts.get("win", 0), "draw": counts.get("draw", 0), "loss": counts.get("loss", 0)} if counts else None
+
+
+async def _active_match(db: AsyncSession, user_id: int) -> Optional[Match]:
+    return await db.scalar(
+        select(Match).where(Match.user_id == user_id, Match.status == MatchStatus.in_progress)
+        .order_by(Match.created_at.desc()).limit(1)
+    )
+
+
+async def _close_abandoned(db: AsyncSession, user: User, config: GameConfig) -> None:
+    """A match nobody came back to is a loss: there is no way out of a bad
+    scoreline by closing the app, or by going offline first."""
+    match = await _active_match(db, user.id)
+    if match is None:
+        return
+    state = dict(match.server_state or {})
+    touched = state.get("touched_at")
+    last = datetime.fromisoformat(touched) if touched else ensure_aware(match.created_at)
+    if datetime.now(timezone.utc) - last < timedelta(minutes=int(config.arena_abandon_minutes)):
+        return
+    match = await _lock_match(db, user.id, match.id)
+    await _finalize_match(db, user, match, dict(match.server_state or {}), config, forced_result=MatchResult.loss)
+
+
+async def _resumed(db: AsyncSession, match: Match) -> MatchOut:
+    await db.refresh(match, attribute_names=["events"])
+    out = MatchOut.model_validate(match)
+    out.resumed = True
+    return out
+
+
+async def active_match(db: AsyncSession, user: User) -> Optional[MatchOut]:
+    """The match still running, so a closed or crashed app can go back to it."""
+    config = await get_config(db)
+    await _close_abandoned(db, user, config)
+    match = await _active_match(db, user.id)
+    if match is None:
+        return None
+    state = dict(match.server_state or {})
+    if state.get("live"):
+        # Back from a crash: the clock restarts, a long-gone answer can't count.
+        now = datetime.now(timezone.utc)
+        state["deadline_at"] = (now + timedelta(seconds=int(config.arena_moment_seconds) + 8)).isoformat()
+        match.server_state = state
+        flag_modified(match, "server_state")
+        await db.commit()
+    return await _resumed(db, match)
 
 
 async def preview_opponent(db: AsyncSession, user: User) -> ArenaPreviewOut:
@@ -1219,6 +1705,11 @@ async def preview_opponent(db: AsyncSession, user: User) -> ArenaPreviewOut:
         user_formation=lineup.formation, opponent_formation=opponent.formation,
     )
     division = arena_ladder_service.division_info(locked_user, config)
+    # The hidden style must not leak through the chances: they're for even styles.
+    neutral = arena_tactics.compute_balance(
+        user_strength, lineup.tactic, opponent.strength, lineup.tactic, config,
+        user_formation=lineup.formation, opponent_formation=opponent.formation,
+    )
     return ArenaPreviewOut(
         opponent_name=opponent.name,
         opponent_avatar_url=opponent.avatar_url,
@@ -1226,19 +1717,21 @@ async def preview_opponent(db: AsyncSession, user: User) -> ArenaPreviewOut:
         opponent_points=opponent.points,
         opponent_division=arena_ladder_service.division_of(opponent.points, config),
         opponent_strength=opponent.strength,
-        opponent_style=opponent.style,
+        opponent_style_hint=_style_hint(pending, opponent.style),
         opponent_formation=opponent.formation,
         user_strength=user_strength,
         user_style=balance["user_style"],
         user_formation=lineup.formation,
-        matchup=balance["matchup"],
-        matchup_bonus_pct=balance["matchup_bonus_pct"],
-        matchup_text=arena_tactics.matchup_text(balance["user_style"], opponent.style),
+        head_to_head=await _head_to_head(db, user.id, opponent.user.id if opponent.user is not None else None),
+        goal_text=arena_moments.MATCH_GOALS.get(pending.get("goal", "")),
+        goal_bonus_coins=int(config.arena_goal_bonus_coins),
+        revenge=bool(pending.get("revenge")),
         lines=[
             ArenaLineCompareOut(key=key, label=label, user=user_lines[key], opponent=opponent.lines[key])
             for key, label in _LINES
         ],
-        chances=win_chances(balance["strength_ratio"]),
+        key_duel=await _key_duel(db, lineup, opponent),
+        chances=win_chances(neutral["strength_ratio"]),
         points_at_stake=arena_ladder_service.points_preview(locked_user.arena_points, opponent.points, config),
         division=ArenaDivisionOut(**division),
         opponent_malus=opponent_malus,
@@ -1253,23 +1746,34 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
     if not lineup.is_complete:
         raise ConflictError("Complete your starting XI before playing a match")
 
+    await _close_abandoned(db, user, config)
+    running = await _active_match(db, user.id)
+    if running is not None:
+        # A second kickoff while one is running goes back to that one.
+        return await _resumed(db, running)
+
     locked_user = await lock_user_for_update(db, user.id)
-    await _ensure_hourly_reset(db, locked_user)
-    if locked_user.match_hourly_attempts >= config.hourly_game_limit:
-        remaining = timedelta(hours=1) - (datetime.now(timezone.utc) - ensure_aware(locked_user.match_hour_started_at))
-        raise ConflictError(
-            "Hourly play limit reached for this game",
-            details={
-                "hourly_limit": config.hourly_game_limit,
-                "retry_after_seconds": max(0, int(remaining.total_seconds())),
-            },
-        )
-    locked_user.match_hourly_attempts += 1
+    is_cup = payload.mode == "cup"
+    if not is_cup:
+        await _ensure_hourly_reset(db, locked_user)
+        if locked_user.match_hourly_attempts >= config.hourly_game_limit:
+            remaining = timedelta(hours=1) - (datetime.now(timezone.utc) - ensure_aware(locked_user.match_hour_started_at))
+            raise ConflictError(
+                "Hourly play limit reached for this game",
+                details={
+                    "hourly_limit": config.hourly_game_limit,
+                    "retry_after_seconds": max(0, int(remaining.total_seconds())),
+                },
+            )
+        locked_user.match_hourly_attempts += 1
 
     # The opponent shown in the preview (or found now for a client that
-    # skipped it); used up by this kickoff.
-    pending = await _pending_opponent(db, locked_user, config)
-    locked_user.arena_pending_opponent = None
+    # skipped it); used up by this kickoff. A cup round has its own.
+    if is_cup:
+        pending = await arena_cup_service.begin_round(db, locked_user, config)
+    else:
+        pending = await _pending_opponent(db, locked_user, config)
+        locked_user.arena_pending_opponent = None
     locked_user.arena_last_strength = lineup.team_strength
     db.add(locked_user)
 
@@ -1299,11 +1803,7 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
         user_strength, lineup.tactic, opponent_strength, opponent.style, config,
         user_formation=lineup.formation, opponent_formation=opponent.formation,
     )
-    user_attack, _user_defense = split_strength(user_strength, balance["user_style"])
-    opponent_attack, _opponent_defense = split_strength(opponent_strength, balance["opponent_style"])
-
     state = {
-        "moments": _generate_moment_queue(user_attack, opponent_attack, config, lineup, opponent.name, balance=balance),
         "next_index": 0,
         "user_score": 0,
         "opponent_score": 0,
@@ -1329,8 +1829,15 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
         "chances": win_chances(balance["strength_ratio"]),
         "lines": {"user": user_lines, "opponent": opponent.lines},
         "opponent_points": opponent.points,
+        "kick": {"user_strength": user_strength, "opponent_strength": opponent_strength},
+        "cup": pending.get("cup"),
+        "goal": {
+            "code": pending["goal"], "text": arena_moments.MATCH_GOALS[pending["goal"]],
+            "bonus": int(config.arena_goal_bonus_coins), "done": False,
+        } if pending.get("goal") else None,
         **(kickoff.state() if kickoff is not None else {}),
     }
+    start_live(state, config, lineup, opponent.name, opponent_lineup)
 
     match = Match(
         user_id=locked_user.id,
@@ -1350,6 +1857,7 @@ async def start_match(db: AsyncSession, user: User, payload: StartMatchRequest) 
     await db.flush()
 
     events = _advance(state, config, match.opponent_name)
+    _touch(state, config, len(events))
     match.server_state = state
     # `state` is the same dict object already assigned to `match.server_state`
     # above (and already flushed once) — in-place mutation of it by `_advance`
@@ -1385,26 +1893,34 @@ async def resolve_action(db: AsyncSession, user: User, match_id: int, payload: M
     state = dict(match.server_state)
     moments = state["moments"]
     i = state["next_index"]
-    if i >= len(moments) or moments[i]["kind"] != "shot" or not _is_interactive(moments[i]):
+    if i >= len(moments) or moments[i]["kind"] == "flavor" or not _is_interactive(moments[i]):
         raise ConflictError("No pending action for this match")
     pending = moments[i]
 
     if payload.expected_seq is not None and payload.expected_seq != i:
         raise ConflictError("Stale action request; the pending moment has already moved on")
 
-    if payload.action not in pending["actions"]:
+    # A moment's clock is the server's: an answer after it is an auto-pick.
+    action = payload.action
+    live = bool(state.get("live"))
+    if live and (action == "auto" or _past_deadline(state, pending)):
+        action = arena_moments.auto_action(pending, state, config)
+    elif action not in pending["actions"]:
         raise ConflictError(f"Action '{payload.action}' is not available for this moment")
 
-    event, scored_by = _resolve_action(pending, payload.action, state, config, match.opponent_name)
+    event, scored_by = _resolve_action(pending, action, state, config, match.opponent_name, payload)
     if scored_by == "user":
         event_payload = event.get("payload") or {}
         path_match_service.arena_track_goal(state, event_payload.get("shooter_id"), event_payload.get("assist_id"))
     if scored_by:
         state[f"{scored_by}_score"] += 1
         _fit_goal_to_score(event, scored_by, state)
+        if live:
+            arena_moments.finish_goal(event, scored_by, state, pending)
     state["next_index"] = i + 1
 
     new_events = [event] + _advance(state, config, match.opponent_name)
+    _touch(state, config, len(new_events))
 
     match.server_state = state
     flag_modified(match, "server_state")
@@ -1456,9 +1972,94 @@ async def match_history(db: AsyncSession, user: User, limit: int = 20) -> list[M
     return [MatchOut.model_validate(m) for m in matches]
 
 
+async def recent_matches(db: AsyncSession, user: User, limit: int = 5) -> list[MatchHistoryItemOut]:
+    result = await db.execute(
+        select(Match).where(Match.user_id == user.id, Match.status == MatchStatus.finished)
+        .order_by(Match.created_at.desc()).limit(limit)
+    )
+    return [MatchHistoryItemOut.model_validate(m) for m in result.scalars().all()]
+
+
+async def defense_log(db: AsyncSession, user: User, days: int = 7, limit: int = 15) -> list[ArenaDefenseItemOut]:
+    """Who played against your squad lately, from your side of the score."""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    rows = await db.execute(
+        select(Match, User).join(User, User.id == Match.user_id)
+        .where(Match.opponent_user_id == user.id, Match.status == MatchStatus.finished, Match.created_at >= since)
+        .order_by(Match.created_at.desc()).limit(limit)
+    )
+    mine = {MatchResult.win: MatchResult.loss, MatchResult.loss: MatchResult.win, MatchResult.draw: MatchResult.draw}
+    return [
+        ArenaDefenseItemOut(
+            match_id=match.id, attacker_name=attacker.full_display_name(), attacker_avatar_url=attacker.avatar_url,
+            result=mine[match.result], my_score=match.opponent_score, their_score=match.user_score,
+            created_at=match.created_at,
+            can_revenge=match.result == MatchResult.win and not (match.server_state or {}).get("revenged"),
+        )
+        for match, attacker in rows.all()
+    ]
+
+
+async def _defense_unread(db: AsyncSession, user: User) -> int:
+    since = user.arena_defense_seen_at or datetime.now(timezone.utc) - timedelta(days=7)
+    return int(await db.scalar(
+        select(func.count(Match.id)).where(
+            Match.opponent_user_id == user.id, Match.status == MatchStatus.finished, Match.created_at > since,
+        )
+    ) or 0)
+
+
+async def mark_defense_seen(db: AsyncSession, user: User) -> None:
+    locked_user = await lock_user_for_update(db, user.id)
+    locked_user.arena_defense_seen_at = datetime.now(timezone.utc)
+    db.add(locked_user)
+    await db.commit()
+
+
+async def take_revenge(db: AsyncSession, user: User, match_id: int) -> ArenaPreviewOut:
+    """Whoever beat your squad becomes your next opponent, once per defeat."""
+    config = await get_config(db)
+    source = await db.scalar(select(Match).where(Match.id == match_id).with_for_update())
+    if source is None or source.opponent_user_id != user.id or source.status != MatchStatus.finished:
+        raise NotFoundError("Match not found")
+    state = dict(source.server_state or {})
+    if source.result != MatchResult.win or state.get("revenged"):
+        raise ConflictError("Реванш за этот матч уже недоступен")
+    attacker = await db.get(User, source.user_id)
+    if attacker is None or attacker.is_banned:
+        raise ConflictError("Этот игрок больше не играет")
+    locked_user = await lock_user_for_update(db, user.id)
+    pending = await arena_ladder_service.find_opponent(db, locked_user, config)
+    pending.update(
+        user_id=attacker.id, name=attacker.full_display_name(), avatar_url=attacker.avatar_url,
+        points=attacker.arena_points, revenge=True,
+    )
+    locked_user.arena_pending_opponent = pending
+    db.add(locked_user)
+    state["revenged"] = True
+    source.server_state = state
+    flag_modified(source, "server_state")
+    await db.commit()
+    return await preview_opponent(db, user)
+
+
 async def arena_stats(db: AsyncSession, user: User) -> ArenaStatsOut:
     config = await get_config(db)
+    await _close_abandoned(db, user, config)
+    await db.refresh(user)
+    limit = int(config.hourly_game_limit)
+    used, retry_after = user.match_hourly_attempts, 0
+    started = user.match_hour_started_at
+    if started is None or datetime.now(timezone.utc) - ensure_aware(started) >= timedelta(hours=1):
+        used = 0
+    elif used >= limit:
+        retry_after = max(0, int((timedelta(hours=1) - (datetime.now(timezone.utc) - ensure_aware(started))).total_seconds()))
     return ArenaStatsOut(
+        hourly_limit=limit,
+        hourly_left=max(0, limit - used),
+        retry_after_seconds=retry_after,
+        defense_unread=await _defense_unread(db, user),
+        cup=await arena_cup_service.status(db, user, config),
         matches_won=user.matches_won,
         matches_drawn=user.matches_drawn,
         matches_lost=user.matches_lost,

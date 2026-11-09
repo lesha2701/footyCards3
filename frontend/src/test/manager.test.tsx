@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -19,6 +19,8 @@ const signManagerNpc = vi.fn();
 const buyManagerCosmetic = vi.fn();
 const buyManagerMerch = vi.fn();
 const updateManagerClub = vi.fn();
+const renewManagerContract = vi.fn();
+const extendManagerNpc = vi.fn();
 vi.mock("@/api/manager", async (orig) => ({
   ...(await orig<typeof import("@/api/manager")>()),
   fetchManager: () => fetchManager(),
@@ -42,6 +44,8 @@ vi.mock("@/api/manager", async (orig) => ({
   buyManagerCosmetic: (...args: unknown[]) => buyManagerCosmetic(...args),
   buyManagerMerch: (...args: unknown[]) => buyManagerMerch(...args),
   updateManagerClub: (...args: unknown[]) => updateManagerClub(...args),
+  renewManagerContract: (...args: unknown[]) => renewManagerContract(...args),
+  extendManagerNpc: (...args: unknown[]) => extendManagerNpc(...args),
 }));
 
 const LOOK = {
@@ -141,7 +145,8 @@ describe("eur", () => {
 describe("ManagerPage", () => {
   beforeEach(() => {
     [fetchManager, fetchManagerMarket, fetchManagerCatalog, fetchManagerPopular, fetchManagerClubCard, foundManagerClub, offerManagerContract,
-      respondManagerOffer, signManagerNpc, buyManagerCosmetic, buyManagerMerch, updateManagerClub].forEach((f) => f.mockReset());
+      respondManagerOffer, signManagerNpc, buyManagerCosmetic, buyManagerMerch, updateManagerClub, renewManagerContract, extendManagerNpc]
+      .forEach((f) => f.mockReset());
     fetchManagerPopular.mockResolvedValue({ clubs: [] });
   });
 
@@ -250,6 +255,40 @@ describe("ManagerPage", () => {
     expect(screen.getByTestId("manager-style")).toHaveTextContent("Менеджер Pro");
     fireEvent.click(screen.getByRole("button", { name: /1500/ }));
     await waitFor(() => expect(buyManagerCosmetic).toHaveBeenCalledWith("symbol_lion"));
+  });
+
+  it("offers its player a new contract and extends a loan that ends", async () => {
+    const npc = {
+      id: 31, player_id: 77, name: "Очень Длинное Имя Арендованного Вратаря", position: "GK", rating: 66, kind: "loan" as const, auto: true,
+      seasons_left: 0, wage: 200_000, goals: 0, value: 2_000_000, sell_back: 1_000_000, loan_fee: 400_000,
+    };
+    const view = { ...base, club: { ...club, npcs: [npc] } };
+    fetchManager.mockResolvedValue(view);
+    renewManagerContract.mockResolvedValue(view);
+    extendManagerNpc.mockResolvedValue(view);
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /Новый контракт/ }));
+    // Not shorter than the 2 seasons left.
+    expect(within(screen.getByTestId("renew-form")).getByRole("button", { name: "1 сезон" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Предложить новый контракт" }));
+    await waitFor(() => expect(renewManagerContract).toHaveBeenCalledWith(5, 600, 3));
+    // The position stays visible next to a long name.
+    expect(screen.getByText("Очень Длинное Имя Арендованного Вратаря")).toHaveClass("truncate");
+    fireEvent.click(screen.getByRole("button", { name: "Продлить" }));
+    fireEvent.click(screen.getByRole("button", { name: /Продлить аренду · €400 тыс/ }));
+    await waitFor(() => expect(extendManagerNpc).toHaveBeenCalledWith(31, 1));
+  });
+
+  it("answers its club's new contract as a player", async () => {
+    const offer: ManagerContract = { ...contract, id: 8, kind: "renew", status: "offered", player_agreed: false, seasons_total: 3, seasons_left: 3 };
+    fetchManager.mockResolvedValue({ ...base, offers: [offer] });
+    respondManagerOffer.mockResolvedValue({ ...base });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /Я игрок/ }));
+    expect(screen.getByText(/новый контракт с твоим клубом/)).toBeInTheDocument();
+    expect(screen.queryByText(/ждём ответ твоего клуба/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Согласен" }));
+    await waitFor(() => expect(respondManagerOffer).toHaveBeenCalledWith(8, true));
   });
 
   it("shows my value with the trend and accepts an incoming offer as a player", async () => {

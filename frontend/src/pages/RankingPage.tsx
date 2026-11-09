@@ -62,7 +62,7 @@ export default function RankingPage() {
         Рейтинг
       </h1>
 
-      {weekly?.enabled && <WeeklyTopBanner info={weekly} pays={pays} />}
+      {weekly?.enabled && <WeeklyTopBanner info={weekly} pays={pays} resets={!!weekly.resetting?.includes(metric)} />}
 
       {/* Wrapped, not a sideways-scrolling row: every board stays reachable. */}
       <div className="flex flex-wrap gap-1.5">
@@ -118,7 +118,7 @@ function timeLeft(endsAt: string): string {
 }
 
 /** «Топ недели»: what the places pay and when the week closes. */
-function WeeklyTopBanner({ info, pays }: { info: WeeklyTopInfo; pays: boolean }) {
+function WeeklyTopBanner({ info, pays, resets }: { info: WeeklyTopInfo; pays: boolean; resets: boolean }) {
   const [open, setOpen] = useState(false);
   const shown = open ? info.places : info.places.slice(0, 3);
   return (
@@ -133,6 +133,7 @@ function WeeklyTopBanner({ info, pays }: { info: WeeklyTopInfo; pays: boolean })
         {pays
           ? "Эта номинация награждается: в понедельник лучшие получат награду своего места."
           : "Эта таблица в недельных наградах не участвует."}
+        {resets && " После раздачи наград рейтинг обнуляется — каждая неделя начинается с чистого листа."}
       </p>
       <div className="mt-2 flex flex-col gap-1">
         {shown.map((p) => (

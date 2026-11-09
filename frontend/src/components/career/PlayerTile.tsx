@@ -46,14 +46,16 @@ export function FormTriangle({ form }: { form: number }) {
  * only the rating and position on it; everything else stands around it — the
  * chemistry flask and icons (`side`) to the right, the battery under it. The
  * name opens on tap. `anchor` marks the square for the chemistry lines. */
-export function PitchTile({ info, entry, chemistry, side, offPosition = false, anchor }: {
+export function PitchTile({ info, entry, chemistry, side, offPosition = false, anchor, frame }: {
   info: PlayerInfo; entry?: CareerSquadCard; chemistry?: ReactNode; side?: ReactNode; offPosition?: boolean; anchor?: string;
+  /** Replaces the rarity frame (the green one of an «Академия» card). */
+  frame?: string;
 }) {
   return (
     <div className="grid w-fit grid-cols-[auto_18px] gap-x-0.5 gap-y-[3px]">
       <div
         data-chem-slot={anchor}
-        className={`relative aspect-square w-[40px] rounded-[9px] bg-gradient-to-b p-[1.5px] min-[400px]:w-[44px] ${RARITY_GRADIENTS[info.rarity]} ${RARITY_GLOW_STATIC[info.rarity]}`}
+        className={`relative aspect-square w-[40px] rounded-[9px] bg-gradient-to-b p-[1.5px] min-[400px]:w-[44px] ${frame ?? `${RARITY_GRADIENTS[info.rarity]} ${RARITY_GLOW_STATIC[info.rarity]}`}`}
       >
         <div className="relative h-full w-full overflow-hidden rounded-[8px] bg-bg-surface">
           <img decoding="async" src={info.image} alt="" className="h-full w-full object-cover object-top" loading="lazy" />

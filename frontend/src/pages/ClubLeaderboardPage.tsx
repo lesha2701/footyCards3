@@ -1,12 +1,12 @@
+import { ClubBackButton } from "@/components/clubs/ClubBackButton";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 
 import { fetchClubLeaderboard } from "@/api/leaderboard";
 import { ClubLogo } from "@/components/clubs/ClubLogo";
 import EmptyState from "@/components/common/EmptyState";
-import { IconChevronLeft, IconStar, IconTrophy, type IconProps } from "@/components/icons";
+import { IconStar, IconTrophy, type IconProps } from "@/components/icons";
 import type { ClubRankingEntry, ClubRankingMetric } from "@/types";
 
 const METRICS: { value: ClubRankingMetric; label: string; Icon: (props: IconProps) => JSX.Element }[] = [
@@ -15,7 +15,6 @@ const METRICS: { value: ClubRankingMetric; label: string; Icon: (props: IconProp
 ];
 
 export default function ClubLeaderboardPage() {
-  const navigate = useNavigate();
   const [metric, setMetric] = useState<ClubRankingMetric>("cups");
   const { data, isLoading } = useQuery({ queryKey: ["clubs", "leaderboard", metric], queryFn: () => fetchClubLeaderboard(metric) });
 
@@ -24,9 +23,7 @@ export default function ClubLeaderboardPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
-        <button onClick={() => navigate("/clubs")} className="rounded-full bg-bg-surface p-2 active:scale-95">
-          <IconChevronLeft size={18} className="text-ink-chalk" />
-        </button>
+        <ClubBackButton />
         <h1 className="flex items-center gap-2 font-display text-xl font-bold text-ink-chalk">
           <IconTrophy size={20} className="text-accent-lime" />
           Рейтинг клубов

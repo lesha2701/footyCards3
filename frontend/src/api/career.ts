@@ -35,6 +35,12 @@ export interface CareerRoundReport {
   injured: string[];
   form_up: string[];
   form_down: string[];
+  /** «Иванов → Петров»: saved starters who couldn't play and their stand-ins. */
+  auto_subs?: string[];
+  /** What the training plan gave in this match. */
+  training?: string[];
+  /** Spectators at a home match. */
+  attendance?: number;
   /** Coins for the match (result + home matchday) and my place after the
    * round; missing for rounds played before they were recorded. */
   coins?: number | null;
@@ -331,7 +337,9 @@ export interface CareerScouting {
   matchup: MatchupReport | null;
   win_pct: number | null;
   /** Past meetings with this club (living league). */
-  head_to_head?: { w: number; d: number; l: number; meetings: number } | null;
+  head_to_head?: { w: number; d: number; l: number; meetings: number; scores?: string[] } | null;
+  /** The club behind last season's worst defeat, or the coach's main rival. */
+  rivalry?: { kind: "nemesis" | "derby"; text: string } | null;
   /** Pro/legend bot: may answer my last PLAYED tactic — and with what. */
   adaptive: boolean;
   my_last_tactic: Tactic | null;
@@ -341,6 +349,12 @@ export interface CareerScouting {
   marking?: { round: number; marker: number; target: number; target_name: string } | null;
   /** A «Легенда» bot man-marks my own best player. */
   marks_you?: boolean;
+  /** My XI next to theirs; `duel_mine` is who meets their `star`. */
+  compare?: {
+    my_strength: number;
+    my_form: string[];
+    duel_mine: { name: string; rating: number; position: string } | null;
+  } | null;
 }
 
 export interface CareerFamiliarity {
@@ -423,6 +437,21 @@ export interface CareerSeason {
   ambitions?: CareerAmbition[];
   training?: string | null;
   trainings?: { code: string; label: string; hint: string }[];
+  training_plan?: {
+    extra: string | null;
+    intensity: string;
+    second_pct: number;
+    intensities: { code: string; label: string }[];
+    lines: string[];
+  } | null;
+  training_program?: {
+    active: { card_id: number; name: string; played: number } | null;
+    done: { card_id: number; name: string; bonus: number }[];
+    rounds: number;
+    bonus: number;
+    fatigue: number;
+    limit: number;
+  } | null;
   cup?: CareerCup | null;
   offseason?: CareerOffseason | null;
   summary?: CareerSeasonSummary | null;
@@ -433,6 +462,22 @@ export interface CareerSeason {
   live?: CareerLive | null;
   /** My match whose second half is on air right now (watch it live). */
   second_half?: { round: number; match_index: number; second_half_at: string } | null;
+  /** League scorers, bots' players too. */
+  top_scorers?: { name: string; team_index: number; team: string; goals: number }[];
+  /** The club around the matches. */
+  news?: { round: number; icon: string; text: string; tone: string }[];
+  moment?: {
+    kind: "press" | "player";
+    text: string;
+    answers: { code: string; text: string; morale: number; fans: number }[];
+  } | null;
+  fans?: { mood: number; label: string; attendance: number; capacity: number; income_pct: number } | null;
+  legends?: {
+    players: { name: string; apps: number; goals: number; assists: number; seasons: number }[];
+    biggest_win: { score: string; opponent: string } | null;
+    best_streak: number;
+  } | null;
+  hot_seat?: { level: number; text: string } | null;
   /** What the coach could still add to the match plan. */
   plan_hints?: { code: string; text: string }[];
   morale?: CareerMorale | null;
@@ -554,8 +599,15 @@ export async function setCareerAmbition(ambition: string): Promise<CareerView> {
   return data;
 }
 
-export async function setCareerTraining(training: string | null, roundIndex?: number): Promise<CareerView> {
-  const { data } = await api.put<CareerView>("/career/training", { training, round_index: roundIndex ?? null });
+export async function setCareerProgram(cardId: number | null, roundIndex?: number): Promise<CareerView> {
+  const { data } = await api.put<CareerView>("/career/program", { card_id: cardId, round_index: roundIndex ?? null });
+  return data;
+}
+
+export async function setCareerTraining(
+  training: string | null, roundIndex?: number, plan: { extra?: string | null; intensity?: string } = {},
+): Promise<CareerView> {
+  const { data } = await api.put<CareerView>("/career/training", { training, ...plan, round_index: roundIndex ?? null });
   return data;
 }
 
@@ -679,6 +731,11 @@ export async function setCareerMarking(markerCardId: number | null, roundIndex?:
   return data;
 }
 
+export async function answerCareerMoment(answer: string, roundIndex?: number): Promise<CareerView> {
+  const { data } = await api.put<CareerView>("/career/moment", { answer, round_index: roundIndex });
+  return data;
+}
+
 export async function setCareerSpeech(speech: string | null, roundIndex?: number): Promise<CareerView> {
   const { data } = await api.put<CareerView>("/career/speech", { speech, round_index: roundIndex });
   return data;
@@ -717,6 +774,8 @@ export interface CareerMatchEvents {
   duel_stories?: string[] | null;
   /** Team morale before / after the match: what moved it in the match and after. */
   morale?: { before: number; after: number; match: string[]; reasons: string[] } | null;
+  /** The match in two phrases. */
+  story?: string[];
   /** My engine side: "a" = home, "b" = away. */
   my_side?: "a" | "b" | null;
   /** Cup tie level after 90': shootout score and kicks. */

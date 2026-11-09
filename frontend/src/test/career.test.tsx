@@ -178,6 +178,7 @@ describe("CareerPage", () => {
     expect(within(screen.getByRole("radiogroup", { name: "Линия обороны и прессинга" })).getByRole("radio", { name: "Низкий блок" }))
       .toHaveAttribute("aria-checked", "true");
 
+    fireEvent.click(screen.getByRole("button", { name: /План на матч/ }));
     fireEvent.click(screen.getByRole("button", { name: "+ Указание" }));
     fireEvent.change(within(screen.getByLabelText("Указание 1")).getByLabelText("Линия обороны и прессинга"), { target: { value: "high" } });
     fireEvent.click(screen.getByRole("button", { name: "Сохранить план" }));
@@ -196,7 +197,7 @@ describe("CareerPage", () => {
     expect(screen.getByText(/тур 2 из 14/)).toBeInTheDocument();
     // Three sections; the table is in «Календарь», the coach in «Профиль».
     expect(screen.getByRole("tab", { name: "Подготовка" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByText("1 место")).toBeInTheDocument();
+    expect(screen.getByText(/1 место/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Календарь" }));
     // «Календарь»: table, rounds and (with a cup) the cup, one at a time.
     expect(screen.getByRole("tab", { name: "Таблица" })).toHaveAttribute("aria-selected", "true");

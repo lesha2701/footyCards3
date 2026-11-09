@@ -104,6 +104,9 @@ export default function AdminGamesPage() {
   const listField = (
     key:
       | "career_place_rewards"
+      | "arena_cup_weekdays"
+      | "arena_cup_round_rewards"
+      | "arena_cup_round_strength_pct"
       | "career_difficulty_reward_pct"
       | "career_difficulty_rating_offset"
       | "career_bot_counter_chance_pct"
@@ -201,7 +204,11 @@ export default function AdminGamesPage() {
       | "matchmaking_enabled"
       | "wheel_enabled"
       | "trades_enabled"
+      | "arena_cup_enabled"
       | "trade_coins_enabled"
+      | "anti_bot_enabled"
+      | "presence_check_enabled"
+      | "weekly_rating_reset_enabled"
       | "trade_cards_both_sides"
       | "club_war_enabled"
       | "blackjack_enabled"
@@ -213,6 +220,7 @@ export default function AdminGamesPage() {
       | "diamond_rating_cap_enabled"
       | "bot_daily_digest_enabled"
       | "bot_comeback_enabled"
+      | "comeback_gift_enabled"
       | "shop_daily_offer_enabled"
       | "club_league_enabled"
       | "career_enabled"
@@ -505,6 +513,8 @@ export default function AdminGamesPage() {
           {field("club_league_points_game", "Очки за игру / матч")}
           {field("club_league_points_pack", "Очки за покупку пака")}
           {field("club_league_points_task", "Очки за задание")}
+          {field("club_league_lost_game_pct", "Проигранная игра, % от очков")}
+          {field("club_league_min_game_seconds", "Мини-игра проиграна быстрее — не считается, сек")}
           {listField("club_league_rewards", "Награды за места, монеты в бюджет клуба")}
           {listField("club_league_division_reward_pct", "Множитель наград по лигам Бронза, Серебро, Золото, %")}
           {field("club_league_season_weeks", "Сезон, недель")}
@@ -530,7 +540,11 @@ export default function AdminGamesPage() {
           {field("club_war_win_budget", "Победа: в бюджет клуба")}
           {field("club_war_draw_budget", "Ничья: в бюджет клуба")}
           {field("club_war_loss_budget", "Поражение: в бюджет клуба")}
-          {field("club_war_win_member_coins", "Победа: монет каждому участнику")}
+          {field("club_war_win_member_coins", "Победа: монет участнику")}
+          {field("club_war_min_points", "Минимум очков для личной награды")}
+          {field("club_reward_min_tenure_hours", "Стаж для наград войн, заданий и рейдов, ч")}
+          {field("club_rejoin_cooldown_hours", "Пауза после выхода из клуба, ч")}
+          {field("club_captain_absent_days", "Передать капитанство после отсутствия, дней (0 — выкл.)")}
           {field("club_ring_win_points", "«Клубный ринг»: очков за победу в «Мордобое»")}
           {field("club_ring_member_cap", "«Клубный ринг»: максимум очков с игрока")}
         </div>
@@ -899,7 +913,6 @@ export default function AdminGamesPage() {
           {field("manager_parachute_pct", "Компенсация за вылет, % разницы грантов")}
           {field("manager_match_xp", "Опыт «Моему игроку» за матч")}
           {field("manager_freshness_cost", "Свежесть «Моего игрока» за матч (0 = не устаёт)")}
-          {field("manager_merch_cap_eur", "Мерч: € одному клубу за сезон, максимум")}
           {field("manager_pro_stars", "«Менеджер Pro»: цена, звёзды (0 = не продаётся)")}
           {field("manager_pro_days", "«Менеджер Pro»: дней")}
           {listField("manager_value_ratings", "Шкала стоимости: рейтинги")}
@@ -912,7 +925,7 @@ export default function AdminGamesPage() {
           {listField("manager_place_budget", "€ в бюджет за 1–3 места (× % дивизиона)")}
           {jsonField("manager_slots", "Время туров (местное), по порядку")}
           {jsonField("manager_cosmetics", "Магазин стиля клуба: kind = shape | symbol | rim | fx | kit | frame | theme | stadium_name | stands (трибуны) | poster (постер чемпиона); coins / stars 0 = не продаётся за них, оба 0 = бесплатно")}
-          {jsonField("manager_merch", "Мерч для болельщиков: coins сгорают, eur идут в бюджет клуба")}
+          {jsonField("manager_merch", "Мерч для болельщиков: coins сгорают; доход клуба — в «Кабинете президента» (% гранта за 1000 монет), eur не используется")}
           <ManagerFinanceFields value={form.manager_finance} onChange={(next) => setForm({ ...form, manager_finance: next })} />
         </div>
       </section>
@@ -958,6 +971,27 @@ export default function AdminGamesPage() {
           {toggle("bot_comeback_enabled", "Включено")}
           {field("bot_comeback_days", "Через сколько дней без захода")}
           {field("bot_comeback_hour", "Час отправки (0–23)")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Подарок за возвращение</p>
+        <p className="mb-3 text-sm text-ink-mist">
+          Игрок, которого не было дольше порога, получает подарок при входе. Бот заранее пишет о нём вечером.
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {toggle("comeback_gift_enabled", "Включено")}
+          {field("comeback_gift_days", "Дней без захода")}
+          {field("comeback_gift_cooldown_days", "Не чаще, чем раз в дней")}
+          {field("comeback_gift_coins", "Монеты")}
+          <label className="col-span-2 block text-sm">
+            <span className="mb-1 block text-ink-mist">Пак (slug, пусто — без пака)</span>
+            <input
+              value={form.comeback_gift_pack_slug ?? ""}
+              onChange={(e) => setForm({ ...form, comeback_gift_pack_slug: e.target.value })}
+              className="w-full rounded-xl bg-bg-base px-3 py-2 text-ink-chalk"
+            />
+          </label>
         </div>
       </section>
 
@@ -1031,6 +1065,33 @@ export default function AdminGamesPage() {
           {field("stake_max_coins", "Макс. ставка с каждой стороны")}
           {field("stake_pair_daily_limit", "Матчей на ставку с одним игроком в день")}
           {field("stake_daily_profit_cap", "Лимит выигрыша на ставках в день")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-3 font-display text-base font-bold">Защита от ботов</p>
+        <p className="mb-3 text-xs text-slate-500">
+          «Усталость»: если игрок играет дольше N часов без перерыва (перерыв — пауза не меньше «отдыха»), игры
+          перестают приносить монеты и рейтинг, пока он не отдохнёт. Человек, который спит, этого не замечает; скрипт,
+          играющий круглосуточно, — теряет всё. Рейтинговых матчей в день — сколько матчей Card Arena и Тактико в сутки
+          двигают очки и рейтинг (дальше матчи играются и награждаются, но не в рейтинг; 0 — без лимита).
+          Подозреваемых смотри в «Антифрод» → «Похоже на ботов».
+        </p>
+        <div className="mb-3">{toggle("anti_bot_enabled", "Включить «усталость»")}</div>
+        <div className="grid grid-cols-2 gap-3">
+          {field("anti_bot_max_streak_hours", "Часов игры без перерыва до «усталости»")}
+          {field("anti_bot_rest_hours", "Нужный отдых, часов")}
+          {field("ranked_daily_limit", "Рейтинговых матчей в день на режим (Арена, Тактико, Мордобой, Стратего, Контратака, Пенальти)")}
+        </div>
+        <p className="mb-2 mt-4 text-xs text-slate-500">
+          «Ты здесь?»: после каждых N минут непрерывной игры игрок нажимает число с картинки. Пока не ответит, игры не
+          приносят монеты и рейтинг. После стольких ошибок подряд награды встают на паузу.
+        </p>
+        <div className="mb-3">{toggle("presence_check_enabled", "Включить проверку «Ты здесь?»")}</div>
+        <div className="grid grid-cols-2 gap-3">
+          {field("presence_check_minutes", "Каждые N минут игры")}
+          {field("presence_check_max_wrong", "Ошибок подряд до паузы")}
+          {field("presence_check_lock_minutes", "Пауза наград после ошибок, мин")}
         </div>
       </section>
 
@@ -1273,6 +1334,15 @@ export default function AdminGamesPage() {
           {field("arena_edge_rating_per_10pct", "Очков рейтинга в каждом розыгрыше за +10% силы")}
           {field("arena_edge_rating_max", "Максимум этих очков")}
           {field("arena_formation_effect_pct", "Влияние схемы на атаку/защиту, % (100 — 3-4-3 даёт +4%/−4%, 0 — выкл.)")}
+          {field("arena_moment_seconds", "Секунд на решение в эпизоде")}
+          {field("arena_auto_best_pct", "Как часто авто-выбор (пропуск, таймер) разумный, %")}
+          {field("arena_abandon_minutes", "Через сколько минут брошенный матч закрывается поражением")}
+          {field("arena_hint_accuracy_pct", "Как часто подсказка о стиле соперника верна, %")}
+          {field("arena_goal_bonus_coins", "Бонус за цель матча, монет")}
+          {toggle("arena_cup_enabled", "Кубок выходных включён")}
+          {listField("arena_cup_weekdays", "Кубок: дни недели (0 — понедельник, 5 — суббота)")}
+          {listField("arena_cup_round_rewards", "Кубок: монеты за раунды")}
+          {listField("arena_cup_round_strength_pct", "Кубок: сила соперника по раундам, % от твоей")}
         </div>
       </section>
 
@@ -1465,6 +1535,13 @@ export default function AdminGamesPage() {
           значения. «Игр / звёзд / рефералов за неделю» считаются за прошедшую неделю.
         </p>
         <div className="mb-3">{toggle("weekly_top_enabled", "Награды топа недели включены")}</div>
+        <div className="mb-3">
+          {toggle("weekly_rating_reset_enabled", "Обнулять рейтинги игр каждый понедельник (после раздачи наград; очки Лиги переходят в копилку и копятся дальше)")}
+          <p className="mt-1 text-xs text-ink-mist">
+            Арена, Тактико, Пенальти, Стратего, Мордобой — в 0, Контратака — в 1000. Дивизионы Арены и полученные
+            награды лиг не трогаются.
+          </p>
+        </div>
         <div className="mb-3 grid grid-cols-2 gap-3">{field("weekly_top_size", "Сколько мест награждать")}</div>
         <p className="mb-1 text-xs text-slate-400">Рейтинги с наградами (ничего не отмечено — все)</p>
         <div className="mb-3 grid grid-cols-2 gap-1 sm:grid-cols-3">

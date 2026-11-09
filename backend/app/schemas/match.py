@@ -4,6 +4,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict
 
 from app.models.enums import MatchDifficulty, MatchResult, MatchStatus
+from app.schemas.game import FreeKick3DShotRequest, Penalty3DDive
 
 
 class MatchEventOut(BaseModel):
@@ -22,16 +23,42 @@ class MatchActorOut(BaseModel):
     name: str
     rating: int
     position: str
+    image_path: Optional[str] = None
+    rarity: Optional[str] = None
+
+
+class MatchDuelActorOut(BaseModel):
+    name: str
+    rating: int
+    position: str
+    image_path: Optional[str] = None
+    rarity: Optional[str] = None
+
+
+class MatchOptionOut(BaseModel):
+    """One choice of a moment: who plays it, against whom and what it risks."""
+    action: str
+    me: MatchDuelActorOut
+    vs: MatchDuelActorOut
+    risk: Literal["low", "mid", "high"]
+    note: str
 
 
 class MatchPendingMomentOut(BaseModel):
     seq: int
     team: str
-    kind: Literal["attack", "defense", "breakaway"]
+    kind: Literal["attack", "defense", "breakaway", "halftime", "late_call", "penalty"]
     shot_type: str
     description: str
-    actions: list[Literal["shoot", "pass", "tackle", "block", "keeper", "strike"]]
+    actions: list[str]
     actors: dict[str, MatchActorOut]
+    options: list[MatchOptionOut] = []
+    # Seconds on the moment's clock (None: no clock, e.g. a penalty scene).
+    seconds: Optional[int] = None
+    # Penalty scene: the shared seed, the taker's rating, the taker.
+    seed: Optional[int] = None
+    rating: Optional[int] = None
+    taker: Optional[MatchDuelActorOut] = None
 
 
 class MatchOut(BaseModel):
@@ -60,15 +87,40 @@ class MatchOut(BaseModel):
     arena: Optional[dict] = None
     ladder: Optional[dict] = None
     report: Optional[dict] = None
+    # This match was already running: show it as it stands, don't replay it.
+    resumed: bool = False
+
+
+class MatchHistoryItemOut(BaseModel):
+    """A row of the history; the events load when the row is opened."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    opponent_name: str
+    user_score: int
+    opponent_score: int
+    result: Optional[MatchResult] = None
+    reward_coins: int
+    created_at: datetime
+    ladder: Optional[dict] = None
 
 
 class StartMatchRequest(BaseModel):
     difficulty: MatchDifficulty = MatchDifficulty.medium
+    mode: Literal["ladder", "cup"] = "ladder"
 
 
 class MatchActionRequest(BaseModel):
-    action: Literal["shoot", "pass", "tackle", "block", "keeper", "strike"]
+    # "auto": the clock ran out or the player skips — the server picks.
+    action: Literal[
+        "shoot", "pass", "dribble", "tackle", "block", "keeper", "strike",
+        "keep_style", "change_style", "all_in", "hold", "kick", "dive", "auto",
+    ]
     expected_seq: Optional[int] = None
+    # change_style: the new style; kick / dive: the swipe of the 3D scene.
+    style: Optional[str] = None
+    swipe: Optional[FreeKick3DShotRequest] = None
+    dive: Optional[Penalty3DDive] = None
 
 
 class ArenaDivisionOut(BaseModel):
@@ -90,6 +142,25 @@ class ArenaStatsOut(BaseModel):
     # Place by arena points (None before the first division match).
     arena_rank: Optional[int] = None
     division: Optional[ArenaDivisionOut] = None
+    # Matches left this hour; 0 + retry_after_seconds = the wait.
+    hourly_limit: int = 0
+    hourly_left: int = 0
+    retry_after_seconds: int = 0
+    # Attacks on your squad you haven't read yet.
+    defense_unread: int = 0
+    cup: Optional[dict] = None
+
+
+class ArenaDefenseItemOut(BaseModel):
+    """Someone played against your squad: the result is from your side."""
+    match_id: int
+    attacker_name: str
+    attacker_avatar_url: Optional[str] = None
+    result: MatchResult
+    my_score: int
+    their_score: int
+    created_at: datetime
+    can_revenge: bool
 
 
 class ArenaLineCompareOut(BaseModel):
@@ -99,6 +170,12 @@ class ArenaLineCompareOut(BaseModel):
     opponent: int
 
 
+class ArenaKeyDuelOut(BaseModel):
+    """Your best outfield card and whoever faces him; a bot has a line, not a card."""
+    me: MatchDuelActorOut
+    vs: MatchDuelActorOut
+
+
 class ArenaPreviewOut(BaseModel):
     opponent_name: str
     opponent_avatar_url: Optional[str] = None
@@ -106,15 +183,20 @@ class ArenaPreviewOut(BaseModel):
     opponent_points: int
     opponent_division: int
     opponent_strength: int
-    opponent_style: str
+    # A tendency, not a fact: the real style is revealed at kickoff.
+    opponent_style_hint: str
     opponent_formation: str = "4-3-3"
     user_strength: int
     user_style: str
     user_formation: str = "4-3-3"
-    matchup: Literal["win", "loss", "neutral"]
-    matchup_bonus_pct: int
-    matchup_text: str
+    # W/D/L of your matches against this opponent; None: first meeting.
+    head_to_head: Optional[dict[str, int]] = None
+    # This match's goal (shown before kickoff, paid at the whistle).
+    goal_text: Optional[str] = None
+    goal_bonus_coins: int = 0
+    revenge: bool = False
     lines: list[ArenaLineCompareOut]
+    key_duel: Optional[ArenaKeyDuelOut] = None
     # ≈ % for an average player (scripts/simulate_arena_balance.py).
     chances: dict[str, int]
     # Arena points for a win / draw / loss.

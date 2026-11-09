@@ -38,7 +38,18 @@ function parseList(value: string): number[] {
 }
 
 type Form = Pick<GameConfig, "club_base_enabled" | "club_base_buildings" | "club_base_caps" | "club_base_stars_per_hour"
-  | "club_base_income_max_days" | "club_base_cosmetics">;
+  | "club_base_income_max_days" | "club_base_cosmetics"
+  | "town_enabled" | "town_districts" | "town_price_growth_pct" | "town_income_max_hours"
+  | "town_unlock_coins" | "town_rename_stars" | "town_hotel_price" | "town_hotel_rent_per_100_cards"
+  | "town_hotel_max_cards" | "town_decor">;
+
+const TOWN_DECOR: Record<string, string> = {
+  park: "⛲ Парк с фонтаном", pier: "🎡 Пирс с колесом обозрения", island: "🏆 Остров легенды",
+};
+
+const TOWN_DISTRICTS: Record<string, string> = {
+  favela: "🎨 Фавелы", center: "🏛️ Центр", mountains: "🏔️ Горы", beach: "🏖️ Пляж", business: "🏙️ Бизнес-район",
+};
 
 // Kind -> values that can be sold (the first value of each kind is the free default).
 const COSMETIC_VALUES: Record<AdminStadiumCosmetic["kind"], string[]> = {
@@ -72,6 +83,16 @@ export default function AdminClubBasePage() {
       club_base_stars_per_hour: config.club_base_stars_per_hour,
       club_base_income_max_days: config.club_base_income_max_days,
       club_base_cosmetics: config.club_base_cosmetics ?? [],
+      town_enabled: config.town_enabled,
+      town_districts: config.town_districts ?? {},
+      town_price_growth_pct: config.town_price_growth_pct,
+      town_income_max_hours: config.town_income_max_hours,
+      town_unlock_coins: config.town_unlock_coins,
+      town_rename_stars: config.town_rename_stars,
+      town_hotel_price: config.town_hotel_price,
+      town_hotel_rent_per_100_cards: config.town_hotel_rent_per_100_cards,
+      town_hotel_max_cards: config.town_hotel_max_cards,
+      town_decor: config.town_decor ?? {},
     });
   }, [config]);
 
@@ -99,7 +120,7 @@ export default function AdminClubBasePage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="font-display text-xl font-bold">Клубная база</h1>
+      <h1 className="font-display text-xl font-bold">Клубная база и Город</h1>
       {message && <p className="rounded-lg bg-white/5 px-3 py-2 text-sm">{message}</p>}
 
       <section className="rounded-xl bg-bg-surface p-4">
@@ -156,6 +177,116 @@ export default function AdminClubBasePage() {
               </label>
             ))}
           </div>
+        </div>
+        <button type="button" disabled={save.isPending} onClick={() => save.mutate()}
+                className="mt-3 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-black disabled:opacity-50">
+          Сохранить настройки
+        </button>
+      </section>
+
+      <section className="rounded-xl bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Город</p>
+        <p className="mb-3 text-xs text-slate-400">
+          Дом покупается один раз и приносит ренту своего района каждый день. Каждый уже купленный дом поднимает цену
+          следующего на «рост цены»; несобранная рента перестаёт копиться через указанное число часов.
+          Город открывается за звёзды (0 — открыт всем), название покупается за звёзды. Отель платит за каждые
+          100 карт, которые у игрока сейчас: продал карты — рента меньше.
+        </p>
+        <label className="mb-3 flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={form.town_enabled} onChange={(e) => setForm({ ...form, town_enabled: e.target.checked })} />
+          Город включён
+        </label>
+        <div className="mb-3 flex flex-wrap gap-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-slate-400">Рост цены за дом, %</span>
+            <input type="number" min={0} max={100} value={form.town_price_growth_pct}
+                   onChange={(e) => setForm({ ...form, town_price_growth_pct: Number(e.target.value) })}
+                   className="w-32 rounded-lg bg-bg-base px-3 py-2 outline-none" />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-slate-400">Рента копится, часов</span>
+            <input type="number" min={1} max={168} value={form.town_income_max_hours}
+                   onChange={(e) => setForm({ ...form, town_income_max_hours: Number(e.target.value) })}
+                   className="w-32 rounded-lg bg-bg-base px-3 py-2 outline-none" />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-slate-400">Открыть город, монет (0 — бесплатно)</span>
+            <input type="number" min={0} max={10000000} value={form.town_unlock_coins}
+                   onChange={(e) => setForm({ ...form, town_unlock_coins: Number(e.target.value) })}
+                   className="w-32 rounded-lg bg-bg-base px-3 py-2 outline-none" />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-slate-400">Переименование, ⭐ (0 — не продаётся)</span>
+            <input type="number" min={0} max={10000} value={form.town_rename_stars}
+                   onChange={(e) => setForm({ ...form, town_rename_stars: Number(e.target.value) })}
+                   className="w-32 rounded-lg bg-bg-base px-3 py-2 outline-none" />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-slate-400">Отель, монет</span>
+            <input type="number" min={0} max={10000000} value={form.town_hotel_price}
+                   onChange={(e) => setForm({ ...form, town_hotel_price: Number(e.target.value) })}
+                   className="w-32 rounded-lg bg-bg-base px-3 py-2 outline-none" />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-slate-400">Отель: рента за 100 карт в день</span>
+            <input type="number" min={0} max={100000} value={form.town_hotel_rent_per_100_cards}
+                   onChange={(e) => setForm({ ...form, town_hotel_rent_per_100_cards: Number(e.target.value) })}
+                   className="w-32 rounded-lg bg-bg-base px-3 py-2 outline-none" />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-slate-400">Отель: карт максимум</span>
+            <input type="number" min={0} max={100000} value={form.town_hotel_max_cards}
+                   onChange={(e) => setForm({ ...form, town_hotel_max_cards: Number(e.target.value) })}
+                   className="w-32 rounded-lg bg-bg-base px-3 py-2 outline-none" />
+          </label>
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {Object.entries(TOWN_DISTRICTS).map(([code, name]) => {
+            const row = form.town_districts[code] ?? { price: 0, rent: 0 };
+            const set = (key: "price" | "rent", value: number) =>
+              setForm({ ...form, town_districts: { ...form.town_districts, [code]: { ...row, [key]: value } } });
+            return (
+              <div key={code} className="rounded-lg bg-white/5 p-2 text-xs">
+                <p className="mb-1 font-semibold">{name}</p>
+                <label className="mb-1 flex items-center justify-between gap-2">
+                  <span className="text-slate-400">Цена первого дома</span>
+                  <input type="number" min={0} value={row.price} onChange={(e) => set("price", Number(e.target.value))}
+                         className="w-24 rounded bg-bg-base px-2 py-1 outline-none" />
+                </label>
+                <label className="flex items-center justify-between gap-2">
+                  <span className="text-slate-400">Рента в день</span>
+                  <input type="number" min={0} value={row.rent} onChange={(e) => set("rent", Number(e.target.value))}
+                         className="w-24 rounded bg-bg-base px-2 py-1 outline-none" />
+                </label>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-3 text-xs text-slate-400">
+          Закрытые места на карте: затемнены с замком, покупаются один раз и дают +% к ренте всех домов.
+          Все открыты — над стадионом фейерверк.
+        </p>
+        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {Object.entries(TOWN_DECOR).map(([code, name]) => {
+            const row = form.town_decor[code] ?? { price: 0, rent_pct: 0 };
+            const set = (key: "price" | "rent_pct", value: number) =>
+              setForm({ ...form, town_decor: { ...form.town_decor, [code]: { ...row, [key]: value } } });
+            return (
+              <div key={code} className="rounded-lg bg-white/5 p-2 text-xs">
+                <p className="mb-1 font-semibold">{name}</p>
+                <label className="mb-1 flex items-center justify-between gap-2">
+                  <span className="text-slate-400">Цена, монет</span>
+                  <input type="number" min={0} value={row.price} onChange={(e) => set("price", Number(e.target.value))}
+                         className="w-24 rounded bg-bg-base px-2 py-1 outline-none" />
+                </label>
+                <label className="flex items-center justify-between gap-2">
+                  <span className="text-slate-400">+% к ренте домов</span>
+                  <input type="number" min={0} value={row.rent_pct} onChange={(e) => set("rent_pct", Number(e.target.value))}
+                         className="w-24 rounded bg-bg-base px-2 py-1 outline-none" />
+                </label>
+              </div>
+            );
+          })}
         </div>
         <button type="button" disabled={save.isPending} onClick={() => save.mutate()}
                 className="mt-3 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-black disabled:opacity-50">

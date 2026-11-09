@@ -244,6 +244,47 @@ async def auto_arena_lineup(db: AsyncSession, user: User, template_index: int):
     return await lineup_service.set_lineup(db, user, payload, template_index)
 
 
+async def fill_arena_gaps(db: AsyncSession, user: User, template_index: int):
+    """Closes the slots a formation change left empty with the best fitting
+    owned cards; whoever stayed on the pitch stays where he is. A line that
+    grew can't take the players of a line that shrank (a forward never plays
+    midfield), so the gaps come from the collection. No fitting card leaves
+    the slot empty, as before."""
+    from app.schemas.lineup import LineupSetRequest, LineupSlotIn
+    from app.services import lineup_service
+    from app.services.game_config_service import get_config
+
+    current = await lineup_service.get_active_lineup(db, user, template_index)
+    kept_ids = {s.slot_code: s.card.id for s in current.slots if s.card}
+    empty = {s.slot_code for s in current.slots if not s.card}
+    if not empty:
+        return current
+
+    config = await get_config(db)
+    cards = await owned_cards(db, user.id, include=list(kept_ids.values()))
+    kept = [c for c in cards if c.id in kept_ids.values()]
+    persons = {card_person(c) for c in kept}
+    slots = [
+        SlotSpec(s.code, s.category, s.ideal_position)
+        for s in lineup_service.arena_slots(current.formation) if s.code in empty
+    ]
+    chosen = pick_cards(
+        slots, [c for c in cards if c.id not in kept_ids.values() and card_person(c) not in persons], "arena",
+        max_diamonds=max(0, config.match_max_diamond_cards - sum(_is_diamond(c) for c in kept)),
+        max_path=max(0, config.match_max_path_cards - sum(_is_path(c) for c in kept)),
+    )
+    if not chosen:
+        return current
+    picks = {**kept_ids, **{code: c.id for code, c in chosen.items()}}
+    payload = LineupSetRequest(slots=[LineupSlotIn(slot_code=code, user_card_id=card_id) for code, card_id in picks.items()])
+    try:
+        return await lineup_service.set_lineup(db, user, payload, template_index)
+    except ConflictError:
+        # A kept card got locked in a trade, say: set_lineup refuses before
+        # writing anything, and the formation has already changed.
+        return current
+
+
 async def auto_personal_squad(db: AsyncSession, user: User, template_index: int, copy_from_arena: bool = False):
     from app.schemas.personal_squad import PersonalSquadSetRequest, PersonalSquadSlotIn
     from app.services import lineup_service, personal_squad_service

@@ -312,6 +312,15 @@ class GameConfigOut(BaseModel):
     arena_edge_rating_per_10pct: float = 2.0
     arena_edge_rating_max: int = 12
     arena_formation_effect_pct: int = 100
+    arena_moment_seconds: int = 8
+    arena_auto_best_pct: int = 60
+    arena_abandon_minutes: int = 20
+    arena_hint_accuracy_pct: int = 70
+    arena_goal_bonus_coins: int = 15
+    arena_cup_enabled: bool = True
+    arena_cup_weekdays: list[int] = [5, 6]
+    arena_cup_round_rewards: list[int] = [100, 200, 400, 800]
+    arena_cup_round_strength_pct: list[int] = [95, 100, 106, 112]
     arena_points_k: int = 40
     arena_points_scale: int = 400
     arena_shield_matches: int = 3
@@ -360,6 +369,11 @@ class GameConfigOut(BaseModel):
     bot_comeback_enabled: bool = True
     bot_comeback_days: int = 3
     bot_comeback_hour: int = 19
+    comeback_gift_enabled: bool = True
+    comeback_gift_days: int = 7
+    comeback_gift_cooldown_days: int = 30
+    comeback_gift_coins: int = 3000
+    comeback_gift_pack_slug: str = "elite"
     shop_daily_offer_enabled: bool = False
     shop_daily_offer_discount_pct: int = 25
     shop_daily_offer_pack_id: Optional[int] = None
@@ -367,6 +381,8 @@ class GameConfigOut(BaseModel):
     club_league_points_game: int = 2
     club_league_points_pack: int = 5
     club_league_points_task: int = 3
+    club_league_lost_game_pct: int = 50
+    club_league_min_game_seconds: int = 20
     club_league_member_weekly_cap: int = 200
     club_league_rewards: list[int] = []
     career_enabled: bool = True
@@ -806,6 +822,21 @@ class GameConfigOut(BaseModel):
     club_base_income_max_days: int = 3
     club_base_art: dict = {}
     club_base_cosmetics: list[dict] = []
+    town_enabled: bool = True
+    town_districts: dict = {}
+    town_price_growth_pct: int = 4
+    town_income_max_hours: int = 24
+    town_unlock_coins: int = 5000
+    town_rename_stars: int = 99
+    town_hotel_price: int = 5000
+    town_hotel_rent_per_100_cards: int = 30
+    town_hotel_max_cards: int = 1000
+    town_residents_enabled: bool = True
+    town_resident_rent: int = 1
+    town_resident_spare_coins: dict = {}
+    town_resident_bonus_max_pct: int = 100
+    town_resident_max_daily_coins: int = 500
+    town_decor: dict = {}
     calendar_catchup_coins: int = 150
     calendar_catchup_stars: int = 10
     calendar_catchup_max_per_month: int = 5
@@ -878,6 +909,10 @@ class GameConfigOut(BaseModel):
     club_war_draw_budget: int = 1500
     club_war_loss_budget: int = 500
     club_war_win_member_coins: int = 200
+    club_war_min_points: int = 10
+    club_reward_min_tenure_hours: int = 24
+    club_rejoin_cooldown_hours: int = 24
+    club_captain_absent_days: int = 14
     weekly_cup_enabled: bool = True
     weekly_cup_games: list[str] = []
     weekly_cup_best_of: int = 5
@@ -911,6 +946,15 @@ class GameConfigOut(BaseModel):
     stake_max_coins: int = 500
     stake_pair_daily_limit: int = 2
     stake_daily_profit_cap: int = 2000
+    anti_bot_enabled: bool = True
+    anti_bot_max_streak_hours: int = 20
+    anti_bot_rest_hours: int = 4
+    ranked_daily_limit: int = 30
+    presence_check_enabled: bool = True
+    weekly_rating_reset_enabled: bool = True
+    presence_check_minutes: int = 60
+    presence_check_max_wrong: int = 3
+    presence_check_lock_minutes: int = 60
     trade_verified_min_age_days: int = 3
     trade_verified_min_active_days: int = 0
     trade_verified_min_stars: int = 49
@@ -1099,6 +1143,15 @@ class GameConfigUpdate(BaseModel):
     arena_edge_rating_per_10pct: Optional[float] = Field(default=None, ge=0, le=10)
     arena_edge_rating_max: Optional[int] = Field(default=None, ge=0, le=40)
     arena_formation_effect_pct: Optional[int] = Field(default=None, ge=0, le=300)
+    arena_moment_seconds: Optional[int] = Field(default=None, ge=3, le=60)
+    arena_auto_best_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    arena_abandon_minutes: Optional[int] = Field(default=None, ge=2, le=1440)
+    arena_hint_accuracy_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    arena_goal_bonus_coins: Optional[int] = Field(default=None, ge=0, le=100000)
+    arena_cup_enabled: Optional[bool] = None
+    arena_cup_weekdays: Optional[list[int]] = None
+    arena_cup_round_rewards: Optional[list[int]] = None
+    arena_cup_round_strength_pct: Optional[list[int]] = None
     arena_points_k: Optional[int] = Field(default=None, ge=1, le=200)
     arena_points_scale: Optional[int] = Field(default=None, ge=50, le=2000)
     arena_shield_matches: Optional[int] = Field(default=None, ge=0, le=20)
@@ -1179,6 +1232,11 @@ class GameConfigUpdate(BaseModel):
     bot_comeback_enabled: Optional[bool] = None
     bot_comeback_days: Optional[int] = Field(default=None, ge=1, le=30)
     bot_comeback_hour: Optional[int] = Field(default=None, ge=0, le=23)
+    comeback_gift_enabled: Optional[bool] = None
+    comeback_gift_days: Optional[int] = Field(default=None, ge=1, le=90)
+    comeback_gift_cooldown_days: Optional[int] = Field(default=None, ge=1, le=365)
+    comeback_gift_coins: Optional[int] = Field(default=None, ge=0, le=100000)
+    comeback_gift_pack_slug: Optional[str] = Field(default=None, max_length=100)
     shop_daily_offer_enabled: Optional[bool] = None
     shop_daily_offer_discount_pct: Optional[int] = Field(default=None, ge=1, le=90)
     # 0 = rotate through active coin packs by date (stored as NULL).
@@ -1187,6 +1245,8 @@ class GameConfigUpdate(BaseModel):
     club_league_points_game: Optional[int] = Field(default=None, ge=0, le=1000)
     club_league_points_pack: Optional[int] = Field(default=None, ge=0, le=1000)
     club_league_points_task: Optional[int] = Field(default=None, ge=0, le=1000)
+    club_league_lost_game_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    club_league_min_game_seconds: Optional[int] = Field(default=None, ge=0, le=3600)
     club_league_member_weekly_cap: Optional[int] = Field(default=None, ge=1)
     # Club budget coins by weekly place (index 0 = 1st); places past the list get nothing.
     club_league_rewards: Optional[list[Annotated[int, Field(ge=0)]]] = Field(default=None, min_length=1, max_length=50)
@@ -1621,6 +1681,21 @@ class GameConfigUpdate(BaseModel):
     club_base_stars_per_hour: Optional[int] = Field(default=None, ge=1, le=100)
     club_base_income_max_days: Optional[int] = Field(default=None, ge=1, le=30)
     club_base_cosmetics: Optional[list[dict]] = Field(default=None, max_length=100)
+    town_enabled: Optional[bool] = None
+    town_districts: Optional[dict[str, dict[str, int]]] = None
+    town_price_growth_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    town_income_max_hours: Optional[int] = Field(default=None, ge=1, le=168)
+    town_unlock_coins: Optional[int] = Field(default=None, ge=0, le=10_000_000)
+    town_rename_stars: Optional[int] = Field(default=None, ge=0, le=10000)
+    town_hotel_price: Optional[int] = Field(default=None, ge=0, le=10_000_000)
+    town_hotel_rent_per_100_cards: Optional[int] = Field(default=None, ge=0, le=100_000)
+    town_hotel_max_cards: Optional[int] = Field(default=None, ge=0, le=100_000)
+    town_residents_enabled: Optional[bool] = None
+    town_resident_rent: Optional[int] = Field(default=None, ge=0, le=10_000)
+    town_resident_spare_coins: Optional[dict[str, int]] = None
+    town_resident_bonus_max_pct: Optional[int] = Field(default=None, ge=0, le=1000)
+    town_resident_max_daily_coins: Optional[int] = Field(default=None, ge=0, le=1_000_000)
+    town_decor: Optional[dict[str, dict[str, int]]] = None
     trade_send_min_account_age_days: Optional[int] = Field(default=None, ge=0, le=365)
     trade_send_min_active_days: Optional[int] = Field(default=None, ge=0, le=365)
     trade_daily_coins_receive_cap: Optional[int] = Field(default=None, ge=0)
@@ -1636,6 +1711,15 @@ class GameConfigUpdate(BaseModel):
     stake_max_coins: Optional[int] = Field(default=None, ge=0, le=1_000_000)
     stake_pair_daily_limit: Optional[int] = Field(default=None, ge=0, le=100)
     stake_daily_profit_cap: Optional[int] = Field(default=None, ge=0)
+    anti_bot_enabled: Optional[bool] = None
+    anti_bot_max_streak_hours: Optional[int] = Field(default=None, ge=4, le=72)
+    anti_bot_rest_hours: Optional[int] = Field(default=None, ge=1, le=24)
+    ranked_daily_limit: Optional[int] = Field(default=None, ge=0, le=1000)
+    presence_check_enabled: Optional[bool] = None
+    weekly_rating_reset_enabled: Optional[bool] = None
+    presence_check_minutes: Optional[int] = Field(default=None, ge=5, le=1440)
+    presence_check_max_wrong: Optional[int] = Field(default=None, ge=1, le=20)
+    presence_check_lock_minutes: Optional[int] = Field(default=None, ge=1, le=1440)
     trade_verified_min_age_days: Optional[int] = Field(default=None, ge=0, le=365)
     trade_verified_min_active_days: Optional[int] = Field(default=None, ge=0, le=365)
     trade_verified_min_stars: Optional[int] = Field(default=None, ge=0, le=100_000)
@@ -1750,6 +1834,10 @@ class GameConfigUpdate(BaseModel):
     club_war_draw_budget: Optional[int] = Field(default=None, ge=0, le=10000000)
     club_war_loss_budget: Optional[int] = Field(default=None, ge=0, le=10000000)
     club_war_win_member_coins: Optional[int] = Field(default=None, ge=0, le=10000000)
+    club_war_min_points: Optional[int] = Field(default=None, ge=0, le=100000)
+    club_reward_min_tenure_hours: Optional[int] = Field(default=None, ge=0, le=720)
+    club_rejoin_cooldown_hours: Optional[int] = Field(default=None, ge=0, le=720)
+    club_captain_absent_days: Optional[int] = Field(default=None, ge=0, le=365)
     weekly_cup_enabled: Optional[bool] = None
     weekly_cup_games: Optional[list[Literal["penalty", "free_kick", "memory", "saboteur", "pairs"]]] = Field(
         default=None, min_length=1, max_length=10,

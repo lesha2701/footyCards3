@@ -31,7 +31,8 @@ export default function NewbieCard() {
       queryClient.invalidateQueries({ queryKey: ["newbie"] });
       queryClient.invalidateQueries({ queryKey: ["collection"] });
       queryClient.invalidateQueries({ queryKey: ["lineup"] });
-      navigate(`/packs/${data.pack.id}/open`, { state: { result: data, returnTo: "/" } });
+      // After a pack of the path: the next step's screen (it goes home when none is left).
+      navigate(`/packs/${data.pack.id}/open`, { state: { result: data, returnTo: "/newbie/next" } });
     },
   });
   const claim = useMutation({

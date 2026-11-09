@@ -10,7 +10,7 @@ import { crowdChant, crowdHush, crowdTension, playFreeKickSfx } from "@/lib/free
 import { swipeFromPoints, type SwipePoint } from "@/lib/freeKick3d/swipe";
 import {
   GOAL_HALF_WIDTH, KEEPER_MAX_HAND_Y, createPenaltySetup, createSetup, penaltyBotShot, playerKeeperSetup, quantizeSwipe, simulateShot, swipeToKick,
-  type QuantizedDive,
+  type QuantizedDive, type QuantizedSwipe,
 } from "@/lib/freeKick3d/trajectory";
 import type { SceneKick, SceneOutcome } from "@/lib/match3d/core";
 import { audio } from "@/lib/sound";
@@ -49,8 +49,11 @@ type Props = {
   toBox: (x: number, y: number) => { x: number; y: number };
   height: number;
   /** null: the scene couldn't run, the match plays the kick itself. */
-  onDone: (outcome: SceneOutcome | null) => void;
+  onDone: (outcome: SceneOutcome | null, input?: SceneInput) => void;
 };
+
+/** What the player did, for a server that replays the kick. */
+export type SceneInput = { swipe?: QuantizedSwipe; dive?: QuantizedDive | null };
 
 export default function SetPieceScene({ kick, toBox, height, onDone }: Props) {
   const keeping = kick.kind === "keep";
@@ -68,6 +71,7 @@ export default function SetPieceScene({ kick, toBox, height, onDone }: Props) {
   const diveFrom = useRef<number | null>(null);
   const fpsRef = useRef<HTMLSpanElement | null>(null);
   const shotClock = useRef(-1);
+  const input = useRef<SceneInput>({});
   const onReady = useCallback(() => setReady(true), []);
   const onDecided = useCallback(() => setShown(true), []);
   const failed = useCallback(() => onDone(null), [onDone]);
@@ -96,7 +100,7 @@ export default function SetPieceScene({ kick, toBox, height, onDone }: Props) {
     const good = keeping ? outcome !== "goal" : outcome === "goal";
     hapticNotify(good ? "success" : "error");
     playFreeKickSfx(good ? "roar" : "groan");
-    const timer = window.setTimeout(() => onDone(outcome), OUTCOME_MS);
+    const timer = window.setTimeout(() => onDone(outcome, input.current), OUTCOME_MS);
     return () => window.clearTimeout(timer);
   }, [outcome, keeping, onDone]);
 
@@ -127,6 +131,7 @@ export default function SetPieceScene({ kick, toBox, height, onDone }: Props) {
       const d = { ...diveTarget(dx, dy), reactionMs: Math.round((diveFrom.current ?? shotClock.current) * 1000) };
       haptic("medium");
       setDive(d);
+      input.current = { dive: d };
       const s1 = playerKeeperSetup(kick.seed, d);
       const k = swipeToKick(s1, penaltyBotShot(kick.seed).swipe);
       // Same shot id: the clock keeps running, only the keeper changes.
@@ -149,6 +154,7 @@ export default function SetPieceScene({ kick, toBox, height, onDone }: Props) {
     const q = swipe ? quantizeSwipe(swipe) : null;
     if (!q || q.dy >= 0) return;
     const k = swipeToKick(setup, q);
+    input.current = { swipe: q };
     haptic("medium");
     audio(); // resume the audio context inside the gesture (mobile autoplay rules)
     crowdTension(true);

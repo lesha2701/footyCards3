@@ -1,14 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useRef, useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import { ClubLogo } from "@/components/clubs/ClubLogo";
+import { ClubNow, ClubSection, ClubTabs, ClubTile } from "@/components/clubs/ClubNow";
+import { ClubToday } from "@/components/clubs/ClubToday";
 import { ClubPreviewPopup } from "@/components/clubs/ClubPreviewPopup";
+import { ClubSheet } from "@/components/clubs/ClubSheet";
 import { SponsorBadge } from "@/components/clubs/SponsorBadge";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { IconBrain, IconChart, IconChat, IconChevronRight, IconClock, IconCoin, IconFlagCheckered, IconGift, IconGlobe, IconGoal, IconLock, IconPlus, IconShirt, IconShop, IconStar, IconSwap, IconTarget, IconTrophy, IconUsers } from "@/components/icons";
+import { IconBrain, IconChart, IconChat, IconChevronRight, IconClock, IconCoin, IconFire, IconFlagCheckered, IconGift, IconGlobe, IconGoal, IconLock, IconPlus, IconShirt, IconShop, IconStar, IconSwap, IconSwords, IconTarget, IconTrophy, IconUsers } from "@/components/icons";
 import {
   acceptJoinRequest,
   applyToTournament,
@@ -30,11 +33,14 @@ import {
   updateClubType,
   type ClubListFilters,
 } from "@/api/clubs";
+import { fetchClubWar } from "@/api/clubFeatures";
 import { fetchMyProfile } from "@/api/profile";
 import { ApiRequestError } from "@/lib/api";
 import { formatCountdown } from "@/lib/format";
 import { hapticNotify, shareToTelegram } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
+import { useOpenClubSheet } from "@/lib/clubSheet";
+import { CLUB_SHEETS, CLUB_TABS, type ClubSheetKey, type ClubTab } from "@/lib/clubTabs";
 import { ASSIGNABLE_CLUB_ROLES, CLUB_ROLE_LABELS, isClubManager } from "@/lib/clubRoles";
 import type { Club, ClubRole } from "@/types";
 
@@ -198,6 +204,7 @@ function ClubHome({ club }: { club: Club }) {
     retry: false,
   });
   const { data: league } = useQuery({ queryKey: ["clubs", "league"], queryFn: fetchClubLeague });
+  const { data: war } = useQuery({ queryKey: ["clubs", "war"], queryFn: fetchClubWar });
   const [applyError, setApplyError] = useState<string | null>(null);
   const applyMutation = useMutation({
     mutationFn: applyToTournament,
@@ -245,369 +252,195 @@ function ClubHome({ club }: { club: Club }) {
 
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
+  // In the URL: coming back from a section returns to the same tab.
+  const [params, setParams] = useSearchParams();
+  const location = useLocation();
+  const tabParam = params.get("tab") as ClubTab | null;
+  const tab: ClubTab = tabParam && CLUB_TABS.includes(tabParam) ? tabParam : "now";
+  const setTab = (next: ClubTab) => setParams(next === "now" ? {} : { tab: next }, { replace: true });
+  const pendingRequests = club.club_type === "closed" ? joinRequests?.length ?? 0 : 0;
+  const swipeFrom = useRef<{ x: number; y: number } | null>(null);
+  const openSheet = useOpenClubSheet();
+  // A sheet opened by a direct link has nothing behind it in the history.
+  const closeSheet = () => {
+    if (location.key !== "default") { navigate(-1); return; }
+    setParams(tab === "now" ? {} : { tab }, { replace: true });
+  };
+  const sheetParam = params.get("sheet");
+  const sheet = sheetParam === "trophies" || (CLUB_SHEETS as readonly string[]).includes(sheetParam ?? "")
+    ? (sheetParam as ClubSheetKey | "trophies")
+    : null;
+
   return (
-    <div className="flex flex-col gap-4">
-      <div className="rounded-2xl bg-bg-surface p-4">
+    <div
+      className="flex flex-col gap-4"
+      onTouchStart={(e) => { swipeFrom.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }}
+      onTouchEnd={(e) => {
+        const from = swipeFrom.current;
+        swipeFrom.current = null;
+        if (!from) return;
+        const dx = e.changedTouches[0].clientX - from.x;
+        const dy = e.changedTouches[0].clientY - from.y;
+        if (Math.abs(dx) <= 60 || Math.abs(dx) <= 2 * Math.abs(dy)) return;
+        const next = CLUB_TABS[CLUB_TABS.indexOf(tab) + (dx < 0 ? 1 : -1)];
+        if (next) setTab(next);
+      }}
+    >
+      <section
+        className="overflow-hidden rounded-3xl bg-bg-surface"
+        style={{ backgroundImage: `linear-gradient(135deg, color-mix(in srgb, ${club.logo_color} 26%, transparent), transparent 72%)` }}
+      >
+        <div className="p-4">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate("/clubs/emblem")} className="shrink-0 active:scale-95" aria-label="Эмблема клуба">
-            <ClubLogo shape={club.logo_shape} color={club.logo_color} emblem={club.emblem} size={56} />
+            <ClubLogo shape={club.logo_shape} color={club.logo_color} emblem={club.emblem} size={64} />
           </button>
-          <div className="flex-1">
-            <h1 className="font-display text-xl font-bold text-ink-chalk">{club.name}</h1>
-            <p className="text-xs text-ink-mist-dim">{club.member_count}/11 участников · {CLUB_ROLE_LABELS[club.my_role ?? "member"]}</p>
-          </div>
-        </div>
-        <div className="mt-3 flex items-center gap-4 border-t border-white/5 pt-3 text-xs text-ink-mist">
-          <span className="flex items-center gap-1">
-            <IconClock size={13} />
-            С {new Date(club.founded_at).toLocaleDateString("ru-RU")}
-          </span>
-          <span className="flex items-center gap-1 font-mono font-bold text-accent-lime">
-            <IconTrophy size={13} />
-            {club.cups_count}
-          </span>
-          <span className="flex items-center gap-1 font-mono font-bold text-accent-cyan">
-            <IconStar size={13} />
-            {club.stars_count}
-          </span>
-        </div>
-        {club.description && <p className="mt-3 border-t border-white/5 pt-3 text-sm text-ink-mist">{club.description}</p>}
-        <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-3">
-          <span className="flex items-center gap-1.5 text-xs text-ink-mist">
-            {club.club_type === "open" ? <IconGlobe size={13} /> : <IconLock size={13} />}
-            {club.club_type === "open" ? "Открытый клуб" : "Закрытый клуб (по заявке)"}
-          </span>
-          {isCaptain && (
-            <button
-              onClick={() => clubTypeMutation.mutate(club.club_type === "open" ? "closed" : "open")}
-              disabled={clubTypeMutation.isPending}
-              className="rounded-lg bg-white/5 px-2 py-1 text-caption font-semibold text-ink-mist active:scale-95 disabled:opacity-40"
-            >
-              Сделать {club.club_type === "open" ? "закрытым" : "открытым"}
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between rounded-2xl bg-bg-surface p-3">
-        <div>
-          <p className="text-xs text-ink-mist-dim">Бюджет клуба</p>
-          <p className="flex items-center gap-1 font-mono text-lg font-bold text-accent-lime">
-            <IconCoin size={16} />
-            {club.budget}
-            {!!club.star_balance && (
-              <span className="ml-2 flex items-center gap-1 text-base text-amber-300">
-                <IconStar size={14} />
-                {club.star_balance}
-              </span>
-            )}
-          </p>
-          {club.personal_match_earnings != null && (
-            <p className="text-xs text-ink-mist-dim">
-              Твой заработок от матчей клуба: <span className="font-mono font-bold text-accent-lime">{club.personal_match_earnings}</span> <IconCoin size={12} className="inline align-[-2px] text-accent-lime" />
-            </p>
-          )}
-        </div>
-        {club.daily_reward_seconds_remaining !== null ? (
-          <div className="text-right text-xs text-ink-mist-dim">
-            <p>Награда получена</p>
-            <p className="flex items-center justify-end gap-1 font-semibold text-ink-mist">
-              <IconClock size={12} />
-              через {formatCountdown(club.daily_reward_seconds_remaining)}
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate font-display text-xl font-bold text-ink-chalk">{club.name}</h1>
+            <p className="text-xs text-ink-mist">{club.member_count}/11 · {CLUB_ROLE_LABELS[club.my_role ?? "member"]}</p>
+            <p className="mt-1 flex items-center gap-3 text-xs">
+              <span className="flex items-center gap-1 font-mono font-bold text-accent-lime"><IconTrophy size={13} /> {club.cups_count}</span>
+              <span className="flex items-center gap-1 font-mono font-bold text-accent-cyan"><IconStar size={13} /> {club.stars_count}</span>
+              <span className="flex items-center gap-1 text-ink-mist">{club.club_type === "open" ? <IconGlobe size={12} /> : <IconLock size={12} />}{club.club_type === "open" ? "открытый" : "по заявке"}</span>
             </p>
           </div>
-        ) : (
-          <button
-            onClick={() => claimMutation.mutate()}
-            disabled={claimMutation.isPending}
-            className="rounded-xl bg-floodlight px-4 py-2 text-xs font-bold text-bg-base active:scale-95 disabled:opacity-40"
-          >
-            Ежедневная награда
+        </div>
+        {club.description && <p className="mt-3 text-sm text-ink-mist">{club.description}</p>}
+        <div className="mt-3 border-t border-white/5 pt-3">
+          <button onClick={() => openSheet("treasury")} className="min-w-0 text-left active:scale-95">
+            <span className="block text-caption text-ink-mist">Бюджет клуба</span>
+            <span className="flex items-center gap-1 font-mono text-lg font-bold text-accent-lime">
+              <IconCoin size={16} />
+              {club.budget}
+              {!!club.star_balance && (
+                <span className="ml-2 flex items-center gap-1 text-base text-amber-500">
+                  <IconStar size={14} />
+                  {club.star_balance}
+                </span>
+              )}
+            </span>
           </button>
-        )}
-      </div>
+        </div>
+        </div>
+        <ClubTabs
+          tab={tab}
+          onChange={setTab}
+          badges={{ together: club.wall_unread ?? 0, treasury: club.rewards_unclaimed ?? 0, club: pendingRequests }}
+        />
+      </section>
       {claimError && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{claimError}</p>}
 
-      <button
-        onClick={() => navigate("/clubs/war")}
-        className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-red-500/15 to-bg-surface p-3 text-left active:scale-[0.99]"
-      >
-        <span className="text-lg">⚔️</span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold text-ink-chalk">Клубная война</span>
-          <span className="block text-caption text-ink-mist">Раз в неделю: 48 часов клуб против клуба</span>
-        </span>
-        <IconChevronRight size={16} className="shrink-0 text-ink-mist-dim" />
-      </button>
-
-      <button
-        onClick={() => navigate("/clubs/raid")}
-        className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-orange-500/15 to-bg-surface p-3 text-left active:scale-[0.99]"
-      >
-        <span className="text-lg">👹</span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold text-ink-chalk">Клубный рейд</span>
-          <span className="block text-caption text-ink-mist">Босс недели — бейте его вместе, урон суммируется</span>
-        </span>
-        <IconChevronRight size={16} className="shrink-0 text-ink-mist-dim" />
-      </button>
-
-      <button
-        onClick={() => navigate("/clubs/quests")}
-        className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
-      >
-        <IconTarget size={16} className="text-accent-lime" />
-        <span className="flex-1">Задания недели</span>
-        <IconChevronRight size={16} className="text-ink-mist-dim" />
-      </button>
-
-      <button
-        onClick={() => navigate("/clubs/shop")}
-        className={`flex items-center gap-2 rounded-2xl p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99] ${club.rewards_unclaimed ? "bg-gradient-to-r from-accent-lime/20 to-bg-surface" : "bg-bg-surface"}`}
-      >
-        <IconShop size={16} className="text-accent-lime" />
-        <span className="flex-1">Клубный магазин</span>
-        {!!club.rewards_unclaimed && (
-          <span className="rounded-full bg-accent-lime px-2 py-0.5 text-micro font-bold text-bg-base">🎁 {club.rewards_unclaimed}</span>
-        )}
-      </button>
-
-      <button
-        onClick={() => navigate("/clubs/wall")}
-        className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
-      >
-        <IconChat size={16} className="text-accent-lime" />
-        <span className="flex-1">Стена клуба</span>
-        {!!club.wall_unread && (
-          <span className="rounded-full bg-accent-lime px-2 py-0.5 text-micro font-bold text-bg-base">{club.wall_unread}</span>
-        )}
-      </button>
-
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          onClick={() => navigate("/clubs/treasury")}
-          className="flex items-center gap-2 rounded-2xl bg-gradient-to-br from-amber-400/15 to-bg-surface p-3 text-left active:scale-[0.99]"
-        >
-          <IconStar size={16} className="shrink-0 text-amber-300" />
-          <span className="min-w-0">
-            <span className="block text-sm font-semibold text-ink-chalk">Казна</span>
-            <span className="block text-caption text-ink-mist">Пополнить звёздами</span>
-          </span>
-        </button>
-        <button
-          onClick={() => navigate("/clubs/emblem")}
-          className="flex items-center gap-2 rounded-2xl bg-gradient-to-br from-accent-cyan/15 to-bg-surface p-3 text-left active:scale-[0.99]"
-        >
-          <IconShirt size={16} className="shrink-0 text-accent-cyan" />
-          <span className="min-w-0">
-            <span className="block text-sm font-semibold text-ink-chalk">Эмблема</span>
-            <span className="block text-caption text-ink-mist">{isCaptain ? "Конструктор" : "Посмотреть"}</span>
-          </span>
-        </button>
-      </div>
-
-      {(tournamentCurrent?.status === "active" || tournamentCurrent?.status === "completed") && tournamentCurrent.tournament_id && (
-        <button
-          onClick={() => navigate(`/clubs/tournament/${tournamentCurrent.tournament_id}`)}
-          className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
-        >
-          <IconFlagCheckered size={16} className="text-accent-lime" />
-          Турнир клуба
-          {tournamentCurrent.status === "active" && (
-            <span className="ml-auto flex items-center gap-1.5 rounded-full bg-accent-lime/10 px-2 py-1 text-micro font-bold text-accent-lime">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-lime" />
-              Идёт
-            </span>
-          )}
-        </button>
-      )}
-
-      {tournamentCurrent?.status === "active" && nextOpponent && (
-        <div className="rounded-2xl bg-bg-surface p-3">
-          <div className="mb-2 flex items-center gap-2 text-xs text-ink-mist">
-            <IconGoal size={14} className="text-accent-lime" />
-            Тур {nextOpponent.round_number} · Следующий соперник
-          </div>
-          <p className="mb-2 font-display text-sm font-bold text-ink-chalk">{nextOpponent.opponent_club_name}</p>
-          <div className="grid grid-cols-4 gap-2 text-center">
-            <div>
-              <p className="font-mono text-sm font-bold text-accent-cyan">{nextOpponent.attack}</p>
-              <p className="text-micro text-ink-mist-dim">Атака</p>
-            </div>
-            <div>
-              <p className="font-mono text-sm font-bold text-accent-cyan">{nextOpponent.midfield}</p>
-              <p className="text-micro text-ink-mist-dim">Полузащита</p>
-            </div>
-            <div>
-              <p className="font-mono text-sm font-bold text-accent-cyan">{nextOpponent.defence}</p>
-              <p className="text-micro text-ink-mist-dim">Защита</p>
-            </div>
-            <div>
-              <p className="font-mono text-sm font-bold text-accent-cyan">{nextOpponent.goalkeeping}</p>
-              <p className="text-micro text-ink-mist-dim">Вратарь</p>
-            </div>
-          </div>
-          {isManager && (
-            <div className="mt-3 flex gap-2">
-              <button
-                onClick={() => navigate("/clubs/squad")}
-                className="flex-1 rounded-xl bg-white/5 py-2 text-xs font-semibold text-ink-mist active:scale-95"
-              >
-                Изменить состав
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {tournamentCurrent?.status === "queued" && (
-        <div className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-sm text-ink-mist">
-          <IconFlagCheckered size={16} className="text-accent-lime" />
-          В очереди на турнир — место {tournamentCurrent.queue_position}
-        </div>
-      )}
-
-      {isManager && tournamentCurrent?.can_apply && (
-        <button
-          onClick={() => applyMutation.mutate()}
-          disabled={applyMutation.isPending}
-          className="relative flex items-center gap-4 overflow-hidden rounded-3xl bg-gradient-to-br from-accent-lime/25 via-accent-cyan/10 to-bg-surface p-5 text-left active:scale-[0.98] disabled:opacity-40"
-        >
-          <div className="pointer-events-none absolute -right-6 -top-8 h-28 w-28 rounded-full bg-accent-lime/25 blur-2xl" />
-          <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent-lime/20 text-accent-lime">
-            <IconTrophy size={22} />
-          </div>
-          <div className="relative min-w-0 flex-1">
-            <p className="font-display text-base font-bold text-ink-chalk">Клуб готов к турниру!</p>
-            <p className="mt-0.5 text-xs leading-snug text-ink-mist">
-              Можно подать заявку прямо сейчас — не упусти момент, пока в клубе достаточно участников
-            </p>
-          </div>
-          <IconChevronRight size={18} className="relative shrink-0 text-ink-mist-dim" />
-        </button>
-      )}
-      {isManager && !tournamentCurrent?.can_apply && tournamentCurrent?.cooldown_seconds_remaining != null && (
-        <div className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-xs text-ink-mist-dim">
-          <IconClock size={14} />
-          Новую заявку на турнир можно подать через {formatCountdown(tournamentCurrent.cooldown_seconds_remaining)}
-        </div>
-      )}
+      {tab === "now" && <>
+      <ClubToday club={club} onClaim={() => claimMutation.mutate()} claiming={claimMutation.isPending} />
+      <ClubNow
+        club={club}
+        war={war}
+        tournament={tournamentCurrent}
+        nextOpponent={nextOpponent}
+        isManager={isManager}
+        pendingRequests={pendingRequests}
+        onOpenRequests={() => setTab("club")}
+        onApply={() => applyMutation.mutate()}
+        applying={applyMutation.isPending}
+      />
       {applyError && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{applyError}</p>}
 
+      <ClubSection title="Матчи">
+        {tournamentCurrent?.tournament_id && (tournamentCurrent.status === "active" || tournamentCurrent.status === "completed") && (
+          <ClubTile
+            icon={IconFlagCheckered}
+            title="Турнир"
+            hint={tournamentCurrent.status === "active" ? "идёт сейчас" : "итоги"}
+            onClick={() => navigate(`/clubs/tournament/${tournamentCurrent.tournament_id}`)}
+          />
+        )}
+        <ClubTile icon={IconGoal} title="Состав" hint={isManager ? "управление" : "посмотреть"} onClick={() => navigate("/clubs/squad")} />
+        {league?.enabled && (
+          <ClubTile
+            icon={IconTrophy}
+            title="Лига клубов"
+            hint={league.my_row ? `${league.my_row.rank} место · ${league.my_row.points} очк.` : "пока без очков"}
+            onClick={() => openSheet("league")}
+          />
+        )}
+        <ClubTile
+          icon={IconSwords}
+          tint="text-red-500"
+          title="Война"
+          hint={war?.state === "active" ? `идёт · ${war.me?.score ?? 0}:${war.opponent?.score ?? 0}` : war ? `рейтинг ${war.war_rating}` : undefined}
+          onClick={() => openSheet("war")}
+        />
+        <ClubTile
+          icon={IconBrain}
+          title="Клубные игры"
+          hint={club.games_rewards_left ? `наград сегодня: ${club.games_rewards_left.game + club.games_rewards_left.penalty + club.games_rewards_left.position_match}` : undefined}
+          onClick={() => openSheet("games")}
+        />
+      </ClubSection>
+      {isManager && !tournamentCurrent?.can_apply && tournamentCurrent?.cooldown_seconds_remaining != null && (
+        <p className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-xs text-ink-mist">
+          <IconClock size={14} />
+          Новую заявку на турнир можно подать через {formatCountdown(tournamentCurrent.cooldown_seconds_remaining)}
+        </p>
+      )}
+      </>}
+
+      {tab === "together" && <ClubSection title="Вместе">
+        <ClubTile icon={IconTarget} title="Задания недели" onClick={() => openSheet("quests")} />
+        <ClubTile icon={IconFire} tint="text-orange-500" title="Рейд" hint="босс недели" onClick={() => openSheet("raid")} />
+        <ClubTile icon={IconChart} title="Активность" onClick={() => openSheet("activity")} />
+        <ClubTile
+          icon={IconChat}
+          tint="text-accent-cyan"
+          title="Стена"
+          badge={club.wall_unread ? club.wall_unread : undefined}
+          onClick={() => openSheet("wall")}
+        />
+      </ClubSection>}
+
+      {tab === "treasury" && <ClubSection title="Казна и карты">
+        <ClubTile
+          icon={IconShop}
+          title="Магазин"
+          badge={club.rewards_unclaimed ? `🎁 ${club.rewards_unclaimed}` : undefined}
+          onClick={() => openSheet("shop")}
+        />
+        <ClubTile icon={IconStar} tint="text-amber-500" title="Казна" hint="поддержать звёздами" onClick={() => openSheet("treasury")} />
+        {club.can_spend_budget && <ClubTile icon={IconGift} title="Клубные паки" onClick={() => navigate("/clubs/packs")} />}
+        <ClubTile icon={IconSwap} title="Лишние карты" hint="продать или слить" onClick={() => navigate("/clubs/surplus")} />
+        <ClubTile icon={IconShirt} tint="text-accent-cyan" title="Эмблема" hint={isCaptain ? "конструктор" : "посмотреть"} onClick={() => navigate("/clubs/emblem")} />
+      </ClubSection>}
+
+      {tab === "club" && <>
+      <ClubSection title="О клубе">
+        <ClubTile icon={IconTrophy} tint="text-amber-500" title="Трофеи" onClick={() => openSheet("trophies")} />
+        <ClubTile icon={IconTarget} title="Статистика" onClick={() => openSheet("stats")} />
+        <ClubTile icon={IconChart} tint="text-accent-cyan" title="Рейтинг клубов" onClick={() => openSheet("leaderboard")} />
+      </ClubSection>
+
       {club.invite_code && profile && (
-        <div className="rounded-2xl bg-bg-surface p-3">
-          <p className="text-xs text-ink-mist">Ссылка-приглашение</p>
-          <div className="mt-2 flex items-center gap-2 rounded-xl bg-black/20 px-3 py-2">
-            <span className="flex-1 truncate font-mono text-xs text-ink-mist">
-              https://t.me/{profile.telegram_bot_username}?start=club_{club.invite_code}
-            </span>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(`https://t.me/${profile.telegram_bot_username}?start=club_${club.invite_code}`);
-                hapticNotify("success");
-              }}
-              className="shrink-0 rounded-lg bg-white/10 px-2 py-1 text-caption font-bold text-ink-chalk"
-            >
-              Копировать
-            </button>
-          </div>
+        <div className="flex gap-2">
           <button
             onClick={() => {
               const link = `https://t.me/${profile.telegram_bot_username}?start=club_${club.invite_code}`;
               const text = `Вступай в мой клуб «${club.name}» в VICTOR FC — вместе играем турниры и лигу!`;
               void shareToTelegram(null, `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
             }}
-            className="mt-2 w-full rounded-xl bg-floodlight py-2 text-xs font-bold text-bg-base active:scale-95"
+            className="flex-1 rounded-xl bg-floodlight py-2.5 text-xs font-bold text-bg-base active:scale-95"
           >
             Пригласить друга в Telegram
           </button>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(`https://t.me/${profile.telegram_bot_username}?start=club_${club.invite_code}`);
+              hapticNotify("success");
+            }}
+            className="shrink-0 rounded-xl bg-white/10 px-3 py-2.5 text-xs font-bold text-ink-chalk active:scale-95"
+          >
+            Копировать ссылку
+          </button>
         </div>
       )}
-
-      <button
-        onClick={() => navigate("/clubs/squad")}
-        className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
-      >
-        <IconGoal size={16} className="text-accent-lime" />
-        {isManager ? "Управление составом" : "Состав клуба"}
-      </button>
-
-      <button
-        onClick={() => navigate("/clubs/surplus")}
-        className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
-      >
-        <IconSwap size={16} className="text-accent-lime" />
-        <span className="flex-1">Лишние карты</span>
-        <span className="text-caption font-normal text-ink-mist-dim">продать или обменять</span>
-      </button>
-
-      {league?.enabled && (
-        <button
-          onClick={() => navigate("/clubs/league")}
-          className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-accent-lime/15 to-bg-surface p-3 text-left active:scale-[0.99]"
-        >
-          <IconTrophy size={18} className="shrink-0 text-accent-lime" />
-          <span className="min-w-0 flex-1">
-            <span className="block text-sm font-semibold text-ink-chalk">Лига клубов</span>
-            <span className="block text-caption text-ink-mist">
-              {league.my_row
-                ? `${league.my_row.rank} место · ${league.my_row.points} очк.${league.my_row.reward > 0 ? ` · приз ${league.my_row.reward}` : ""}`
-                : "Играйте, открывайте паки и выполняйте задания — клуб получит очки"}
-            </span>
-          </span>
-          <IconChevronRight size={16} className="shrink-0 text-ink-mist-dim" />
-        </button>
-      )}
-
-      <button
-        onClick={() => navigate("/clubs/activity")}
-        className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
-      >
-        <IconChart size={16} className="text-accent-lime" />
-        Активность клуба
-      </button>
-
-      {club.can_spend_budget && (
-        <button
-          onClick={() => navigate("/clubs/packs")}
-          className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
-        >
-          <IconGift size={16} className="text-accent-lime" />
-          Клубные паки
-        </button>
-      )}
-
-      <button
-        onClick={() => navigate("/clubs/games")}
-        className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
-      >
-        <IconBrain size={16} className="text-accent-lime" />
-        Клубные игры
-      </button>
-
-      <button
-        onClick={() => navigate("/clubs/leaderboard")}
-        className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
-      >
-        <IconChart size={16} className="text-accent-lime" />
-        Рейтинг клубов
-      </button>
-
-      <button
-        onClick={() => navigate(`/clubs/${club.id}/trophies`)}
-        className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
-      >
-        <IconTrophy size={16} className="text-amber-300" />
-        Трофейная комната
-      </button>
-
-      <button
-        onClick={() => navigate("/clubs/stats")}
-        className="flex items-center gap-2 rounded-2xl bg-bg-surface p-3 text-left text-sm font-semibold text-ink-chalk active:scale-[0.99]"
-      >
-        <IconTarget size={16} className="text-accent-lime" />
-        Статистика клуба
-      </button>
 
       {isManager && club.club_type === "closed" && joinRequests && joinRequests.length > 0 && (
         <div className="flex flex-col gap-2">
@@ -638,8 +471,22 @@ function ClubHome({ club }: { club: Club }) {
 
       {actionError && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{actionError}</p>}
 
-      <div className="flex flex-col gap-2">
-        <p className="font-display text-sm font-bold text-ink-chalk">Участники</p>
+      <details open className="group flex flex-col gap-2">
+        <summary className="flex cursor-pointer list-none items-center gap-2 rounded-2xl bg-bg-surface p-3 text-sm font-semibold text-ink-chalk">
+          <IconUsers size={16} className="text-accent-lime" />
+          <span className="flex-1">Участники · {club.member_count}/11</span>
+          <IconChevronRight size={16} className="text-ink-mist-dim transition-transform group-open:rotate-90" />
+        </summary>
+        <div className="mt-2 flex flex-col gap-2">
+        {isCaptain && (
+          <button
+            onClick={() => clubTypeMutation.mutate(club.club_type === "open" ? "closed" : "open")}
+            disabled={clubTypeMutation.isPending}
+            className="rounded-xl bg-white/5 px-3 py-2 text-left text-xs text-ink-mist active:scale-95 disabled:opacity-40"
+          >
+            Сделать клуб {club.club_type === "open" ? "закрытым (по заявке)" : "открытым"}
+          </button>
+        )}
         {isCaptain && (
           <label className="flex items-center gap-2 rounded-xl bg-bg-surface px-3 py-2 text-xs text-ink-mist">
             <input
@@ -652,7 +499,7 @@ function ClubHome({ club }: { club: Club }) {
           </label>
         )}
         {club.members.map((m) => (
-          <div key={m.user_id} className="flex items-center justify-between rounded-xl bg-bg-surface p-3">
+          <div key={m.user_id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-bg-surface p-3">
             <span className="flex min-w-0 items-center gap-1.5 text-sm text-ink-chalk">
               <span className="truncate">{m.username ?? m.first_name ?? `#${m.user_id}`} · {CLUB_ROLE_LABELS[m.role]}</span>
               {m.sponsor_tier && <SponsorBadge tier={m.sponsor_tier} />}
@@ -689,11 +536,13 @@ function ClubHome({ club }: { club: Club }) {
             </div>
           </div>
         ))}
-      </div>
+        </div>
+      </details>
 
       <button onClick={() => setShowLeaveConfirm(true)} className="rounded-xl bg-white/5 py-2.5 text-sm font-semibold text-ink-mist active:scale-95">
         Покинуть клуб
       </button>
+      </>}
 
       {showLeaveConfirm && (
         <div
@@ -724,6 +573,8 @@ function ClubHome({ club }: { club: Club }) {
           </div>
         </div>
       )}
+
+      <ClubSheet sheet={sheet} clubId={club.id} onClose={closeSheet} />
 
       <ConfirmDialog
         open={!!confirmMemberAction}

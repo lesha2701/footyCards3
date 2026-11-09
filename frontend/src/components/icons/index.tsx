@@ -629,3 +629,38 @@ export function IconCounter(props: IconProps) {
     </IconBase>
   );
 }
+
+export function IconSwords(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <line x1="5" y1="4" x2="17" y2="16" />
+      <line x1="19" y1="4" x2="7" y2="16" />
+      <polyline points="5,4 9,4" />
+      <polyline points="5,4 5,8" />
+      <polyline points="19,4 15,4" />
+      <polyline points="19,4 19,8" />
+      <line x1="14" y1="18.5" x2="19" y2="13.5" />
+      <line x1="10" y1="18.5" x2="5" y2="13.5" />
+      <line x1="17.5" y1="17" x2="20" y2="19.5" />
+      <line x1="6.5" y1="17" x2="4" y2="19.5" />
+    </IconBase>
+  );
+}
+
+export function IconHistory(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M4.5 12a7.5 7.5 0 1 0 2.4-5.5" />
+      <polyline points="4,4.5 4.2,8.4 8.1,8" />
+      <polyline points="12,8 12,12.3 15,14" />
+    </IconBase>
+  );
+}
+
+export function IconBolt(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M13.5 3 5.5 13.5H11l-1 7.5 8.5-11H13z" fill="currentColor" stroke="none" />
+    </IconBase>
+  );
+}

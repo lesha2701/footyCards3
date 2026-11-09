@@ -5,10 +5,12 @@ from types import SimpleNamespace
 import pytest
 
 import app.core.rate_limit as rate_limit_module
-from app.models.enums import MatchResult
+from app.models.enums import CardSource, MatchResult, Position, Rarity
 from app.models.game_config import GameConfig
 from app.services import arena_ladder_service, arena_tactics, match_service
-from tests.factories import get_user_by_telegram_id
+from app.services.card_creation import create_user_card
+from app.services.game_config_service import get_config
+from tests.factories import create_player, get_user_by_telegram_id
 from tests.test_lineups_matches import _build_full_squad, _play_to_completion
 from tests.utils import telegram_headers
 
@@ -162,7 +164,7 @@ async def test_preview_is_stable_until_the_match_is_played(client, db_session, b
 
     again = (await client.post("/api/v1/matches/opponent", headers=headers)).json()
     assert again["opponent_name"] == preview["opponent_name"]
-    assert again["opponent_style"] == preview["opponent_style"]
+    assert again["opponent_style_hint"] == preview["opponent_style_hint"]
 
     # Switching the style changes the matchup line, not the opponent.
     await client.post("/api/v1/lineups/tactic", headers=headers, json={"tactic": "counter"})
@@ -263,10 +265,11 @@ async def test_changing_formation_keeps_players_in_their_lines(client, db_sessio
     assert by_cat == {"GK": 1, "DEF": 3, "MID": 3, "FWD": 2}
     assert not lineup["is_complete"] and len(lineup["slots"]) == 11
 
-    # Back to 4-3-3: the kept players return to their lines.
+    # Back to 4-3-3: the kept players return to their lines, the two who
+    # left come back from the bench.
     back = (await client.post("/api/v1/lineups/templates/1/formation", headers=headers, json={"formation": "4-3-3"})).json()
     assert back["formation"] == "4-3-3"
-    assert sum(1 for s in back["slots"] if s["card"]) == 9
+    assert sum(1 for s in back["slots"] if s["card"]) == 11
 
     # 3-4-3 from the full 4-3-3: the right-back takes the right wing-back
     # slot, not the left one that shares his old code.
@@ -278,6 +281,42 @@ async def test_changing_formation_keeps_players_in_their_lines(client, db_sessio
 
     bad = await client.post("/api/v1/lineups/templates/1/formation", headers=headers, json={"formation": "2-2-6"})
     assert bad.status_code == 409
+
+
+async def test_changing_formation_fills_the_gaps_from_the_collection(client, db_session, bot_token):
+    headers, user = await _make_user(client, db_session, bot_token, 760015)
+    slots = await _build_full_squad(db_session, user.id)
+    await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
+    kept_before = {s["user_card_id"] for s in slots}
+
+    mids = []
+    for rating, position in ((75, Position.CM), (74, Position.CDM), (73, Position.CAM)):
+        player = await create_player(db_session, rating=rating, position=position)
+        mids.append(await create_user_card(db_session, user.id, player.id, CardSource.seed))
+    await db_session.commit()
+
+    # 3-5-2 needs two midfielders more: the two best ones come off the bench.
+    lineup = (await client.post("/api/v1/lineups/templates/1/formation", headers=headers, json={"formation": "3-5-2"})).json()
+    assert lineup["is_complete"]
+    on_pitch = {s["card"]["id"] for s in lineup["slots"] if s["card"]}
+    assert {mids[0].id, mids[1].id} <= on_pitch and mids[2].id not in on_pitch
+    assert len(on_pitch - kept_before) == 2
+
+
+async def test_gaps_respect_the_diamond_limit(client, db_session, bot_token):
+    headers, user = await _make_user(client, db_session, bot_token, 760016)
+    config = await get_config(db_session)
+    config.match_max_diamond_cards = 0
+    slots = await _build_full_squad(db_session, user.id)
+    await client.put("/api/v1/lineups/active", headers=headers, json={"slots": slots})
+
+    diamond = await create_player(db_session, rating=99, position=Position.CM, rarity=Rarity.diamond)
+    await create_user_card(db_session, user.id, diamond.id, CardSource.seed)
+    await db_session.commit()
+
+    lineup = (await client.post("/api/v1/lineups/templates/1/formation", headers=headers, json={"formation": "3-5-2"})).json()
+    assert not any(s["card"]["player"]["rarity"] == "diamond" for s in lineup["slots"] if s["card"])
+    assert not lineup["is_complete"]
 
 
 async def test_match_and_preview_carry_the_formations(client, db_session, bot_token):

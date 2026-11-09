@@ -1,4 +1,5 @@
 from app.models.admin_action import AdminAction
+from app.models.arena_cup import ArenaCupRun
 from app.models.auction import AgentLicense, AuctionBid, AuctionLot
 from app.models.badge import Badge, UserBadge
 from app.models.blackjack import BlackjackMatch
@@ -8,6 +9,7 @@ from app.models.card_skill import CardSkill, CardSkillLedger, UserSkillToken
 from app.models.career import CareerClub, CareerParticipant, CareerProfile, CareerSeason, Friendship
 from app.models.lifestyle import LifestyleItem, UserLifestyleItem
 from app.models.club_base import ClubBaseLedger, UserBaseCosmetic, UserClubBase
+from app.models.town import TownLedger, TownResident, UserTown, UserTownHouse, UserTownResident
 from app.models.manager_club import (
     ManagerClub,
     ManagerContract,
@@ -33,6 +35,7 @@ from app.models.manager_club import (
 from app.models.my_player import MyPlayer, MyPlayerDuel
 from app.models.my_player_extras import MyPlayerEdition, MyPlayerGift, MyPlayerSponsorContract
 from app.models.newbie import NewbieProgress
+from app.models.comeback_gift import ComebackGift
 from app.models.streak_reward import StreakReward
 from app.models.player_career import (
     PlayerCareerCup,
@@ -138,6 +141,7 @@ from app.models.club_stadium_card import ClubStadiumCard
 __all__ = [
     "AnniversaryClaim",
     "AnniversaryMember",
+    "ArenaCupRun",
     "FanBattleLedger",
     "FanBattleMember",
     "HalloweenLedger",
@@ -186,6 +190,11 @@ __all__ = [
     "PathPrestigeLedger",
     "UserAcademy",
     "UserClubBase",
+    "UserTown",
+    "UserTownHouse",
+    "TownResident",
+    "UserTownResident",
+    "TownLedger",
     "ClubBaseLedger",
     "UserBaseCosmetic",
     "AcademyLedger",

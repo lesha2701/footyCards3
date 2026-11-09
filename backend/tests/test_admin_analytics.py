@@ -11,6 +11,7 @@ from app.models.user import User
 from app.models.user_activity import UserDailyActivity
 from app.services.admin_analytics_service import analytics_report
 from app.services.admin_economy_service import economy_report
+from scripts import mode_stats
 from tests.test_admin_packs import _admin_auth
 from tests.utils import telegram_headers
 
@@ -189,3 +190,23 @@ async def test_analytics_endpoint_is_admin_only_and_returns_report(client, bot_t
     assert body["days"] == 7
     assert len(body["activity"]["dau_by_day"]) == 7
     assert {s["key"] for s in body["funnel"]["steps"]} == {"registered", "opened_pack", "played", "returned", "paid"}
+
+
+def test_mode_stats_counts_who_comes_back():
+    day = lambda n: TODAY - timedelta(days=n)  # noqa: E731
+    r = mode_stats.returns({
+        1: {day(10), day(2)},  # the week before last and the last week: came back after a week
+        2: {day(10)},  # left
+        3: {day(3)},  # new this week: in neither cohort
+    }, TODAY)
+    assert (r["last_week"], r["week_before"]) == (1, 2)
+    assert (r["came_back"], r["newcomers"]) == (1, 2)
+    assert r["avg_days"] == round(4 / 3, 1)
+
+
+async def test_mode_stats_reads_every_mode_by_day(db_session):
+    user = await _user(db_session, 850801, TODAY - timedelta(days=20))
+    db_session.add(BlackjackMatch(user_id=user.id, entry_source="free", server_state={}, created_at=at(TODAY)))
+    await db_session.commit()
+    modes = await mode_stats.days_by_mode(db_session, TODAY)
+    assert modes["21: Добавленное время"][user.id] == {TODAY}

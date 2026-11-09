@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { fetchAdminCoaches, fetchAdminMuses, fetchAdminPlayers, fetchAdminStadiums } from "@/admin/api";
+import { fetchAdminCoaches, fetchAdminMuses, fetchAdminPlayers, fetchAdminStadiums, fetchAdminTownResidents } from "@/admin/api";
 import { announceAdminCardOffer, deleteAdminCardOffer, fetchAdminCardOffers, saveAdminCardOffer } from "@/api/cardOffers";
 import { formatGameError } from "@/lib/errors";
 import type { CardOfferAdmin, CardOfferAdminInput, Player } from "@/types";
@@ -16,10 +16,12 @@ const toLocal = (iso: string | null) => {
 };
 const fromLocal = (v: string) => (v ? new Date(v).toISOString() : null);
 
-type Kind = "player" | "coach" | "stadium" | "muse";
-const KIND_LABELS: Record<Kind, string> = { player: "Футболист", coach: "Тренер", stadium: "Стадион", muse: "Муза" };
-const KIND_ID: Record<Kind, "player_id" | "coach_id" | "stadium_id" | "muse_id"> = {
-  player: "player_id", coach: "coach_id", stadium: "stadium_id", muse: "muse_id",
+type Kind = "player" | "coach" | "stadium" | "muse" | "resident";
+const KIND_LABELS: Record<Kind, string> = {
+  player: "Футболист", coach: "Тренер", stadium: "Стадион", muse: "Муза", resident: "Житель",
+};
+const KIND_ID: Record<Kind, "player_id" | "coach_id" | "stadium_id" | "muse_id" | "resident_id"> = {
+  player: "player_id", coach: "coach_id", stadium: "stadium_id", muse: "muse_id", resident: "resident_id",
 };
 
 /** The form: one kind, one chosen card (`label` is what the admin sees). */
@@ -42,7 +44,9 @@ export default function AdminCardOffers() {
   const save = useMutation({
     mutationFn: (d: Draft) => {
       const { id, kind, label: _label, player: _player, ...body } = d;
-      const ids = { player_id: null, coach_id: null, stadium_id: null, muse_id: null, [KIND_ID[kind]]: d[KIND_ID[kind]] };
+      const ids = {
+        player_id: null, coach_id: null, stadium_id: null, muse_id: null, resident_id: null, [KIND_ID[kind]]: d[KIND_ID[kind]],
+      };
       return saveAdminCardOffer({ ...body, ...ids }, id);
     },
     onSuccess: () => { setDraft(null); setError(null); refresh(); },
@@ -139,6 +143,7 @@ function useCandidates(kind: Kind, search: string) {
     queryKey: ["admin-stadiums-search", search], queryFn: () => fetchAdminStadiums(search, 1), enabled: enabled && kind === "stadium",
   });
   const muses = useQuery({ queryKey: ["admin-muses"], queryFn: fetchAdminMuses, enabled: kind === "muse" });
+  const residents = useQuery({ queryKey: ["admin-town-residents"], queryFn: fetchAdminTownResidents, enabled: kind === "resident" });
   if (kind === "player") {
     return (players.data?.items ?? []).map((p) => ({
       id: p.id, player: p,
@@ -148,6 +153,11 @@ function useCandidates(kind: Kind, search: string) {
   if (kind === "coach") return (coaches.data?.items ?? []).map((c) => ({ id: c.id, player: undefined, label: `${c.display_name} · ${c.rarity}` }));
   if (kind === "stadium") return (stadiums.data?.items ?? []).map((s) => ({ id: s.id, player: undefined, label: `${s.display_name} · ${s.rarity}` }));
   const q = search.toLowerCase();
+  if (kind === "resident") {
+    return (residents.data?.residents ?? [])
+      .filter((r) => r.id && (!q || r.name.toLowerCase().includes(q)))
+      .map((r) => ({ id: r.id!, player: undefined, label: `${r.icon} ${r.name} · ${r.rarity}` }));
+  }
   return (muses.data?.muses ?? [])
     .filter((m) => m.id && (!q || m.name.toLowerCase().includes(q)))
     .map((m) => ({ id: m.id!, player: undefined, label: `${m.icon} ${m.name} · ${m.rarity}` }));
@@ -187,7 +197,10 @@ function OfferForm({ draft, onChange, onSave, onCancel, busy }: {
       ) : (
         <div className="flex flex-col gap-1">
           <input
-            placeholder={draft.kind === "muse" ? "Имя музы (можно пусто — все)" : "Найти по имени (от 2 букв)"}
+            placeholder={
+              draft.kind === "muse" ? "Имя музы (можно пусто — все)"
+                : draft.kind === "resident" ? "Имя жителя (можно пусто — все)" : "Найти по имени (от 2 букв)"
+            }
             value={search} onChange={(e) => setSearch(e.target.value)} className={input}
           />
           <div className="flex max-h-48 flex-col overflow-y-auto">

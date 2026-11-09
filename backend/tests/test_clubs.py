@@ -609,6 +609,26 @@ async def test_club_detail_reports_daily_reward_countdown_only_after_claiming(cl
     assert after.json()["daily_reward_seconds_remaining"] > 0
 
 
+async def test_club_detail_reports_club_game_rewards_left_today(client, db_session, bot_token):
+    from datetime import datetime, timedelta, timezone
+
+    from app.models.user import User
+    from app.services.game_config_service import get_config
+
+    await _create_club(client, bot_token, 820203, "Клуб с играми")
+    config = await get_config(db_session)
+    config.club_penalty_daily_reward_limit = 5
+    user = (await db_session.execute(select(User).where(User.telegram_id == 820203))).scalar_one()
+    user.club_penalty_rewarded_attempts_today = 2
+    user.club_penalty_attempts_reset_at = datetime.now(timezone.utc)
+    user.club_game_rewarded_attempts_today = 5  # yesterday's count: a new day starts at the cap
+    user.club_game_attempts_reset_at = datetime.now(timezone.utc) - timedelta(days=2)
+    await db_session.commit()
+
+    left = (await client.get("/api/v1/clubs/me", headers=telegram_headers(820203, bot_token))).json()["games_rewards_left"]
+    assert left["penalty"] == 3
+    assert left["game"] == config.club_game_daily_reward_limit
+
 async def test_claim_daily_reward_concurrent_same_user_no_double_credit(real_pg):
     """Genuine concurrency regression test for the same unhandled-IntegrityError race as
     test_club_packs.py's test_open_club_pack_concurrent_same_idempotency_key_no_double_debit:
