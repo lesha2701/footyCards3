@@ -1706,3 +1706,19 @@ export async function updateAdminAnniversary(payload: {
   const { data } = await api.put<AdminAnniversary>("/admin/anniversary", payload);
   return data;
 }
+
+export interface AdminLoyalty {
+  settings: Record<string, unknown>;
+  defaults: Record<string, unknown>;
+  granted: Record<string, number>;
+}
+
+export async function fetchAdminLoyalty(): Promise<AdminLoyalty> {
+  const { data } = await api.get<AdminLoyalty>("/admin/loyalty");
+  return data;
+}
+
+export async function updateAdminLoyalty(settings: Record<string, unknown>): Promise<AdminLoyalty> {
+  const { data } = await api.put<AdminLoyalty>("/admin/loyalty", { settings });
+  return data;
+}

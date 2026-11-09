@@ -438,6 +438,22 @@ body {
   .anni-glow { animation: none; }
 }
 
+/* «Путь к Центуриону» (components/loyalty): purple night, a gold edge. */
+.centurion-sky {
+  background:
+    radial-gradient(90% 120% at 0% 0%, rgb(217 70 239 / 0.42) 0%, transparent 60%),
+    radial-gradient(70% 90% at 100% 100%, rgb(251 191 36 / 0.22) 0%, transparent 60%),
+    linear-gradient(135deg, #1b0b26 0%, #0b0b14 100%);
+}
+@keyframes centurionGlow {
+  0%, 100% { filter: drop-shadow(0 0 10px rgb(217 70 239 / 0.45)); }
+  50% { filter: drop-shadow(0 0 22px rgb(217 70 239 / 0.8)); }
+}
+.centurion-glow { animation: centurionGlow 2.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .centurion-glow { animation: none; }
+}
+
 /* «Город»: water strips shimmer — a soft light band drifting across, on the
    GPU (background position of one element), never with reduced motion. */
 .town-water {

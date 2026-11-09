@@ -4408,3 +4408,40 @@ export interface AnniversaryClaimResult {
   rewards: GrantedRewards;
   new_balance: number;
 }
+
+// --- Loyalty: «Путь к Центуриону», «Страховка серии», keepsakes (loyalty_service) ---
+
+export interface LoyaltyMilestone {
+  days: number;
+  reached: boolean;
+  /** An exclusive card bound forever (the «Центурион» at 100). */
+  exclusive: boolean;
+  coins: number;
+  card_rarity: Rarity | null;
+}
+
+export interface StreakSave {
+  saved_streak: number;
+  until: string;
+  restored_streak: number;
+  price_stars: number;
+  free_available: boolean;
+}
+
+export interface LoyaltyStatus {
+  enabled: boolean;
+  streak: number;
+  goal: number;
+  milestones: LoyaltyMilestone[];
+  centurion: Player | null;
+  centurion_owned: boolean;
+  streak_save: StreakSave | null;
+}
+
+export type LoyaltyCode = "oldtimer" | "founder" | "centurion";
+
+export interface LoyaltyReward {
+  id: number;
+  code: LoyaltyCode;
+  rewards: Partial<GrantedRewards>;
+}

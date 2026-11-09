@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import { IconCoin } from "@/components/icons";
 import { RARITY_LABELS, RARITY_TEXT } from "@/lib/rarity";
 import { hapticNotify } from "@/lib/telegram";
-import type { GrantedRewards } from "@/types";
+import type { GrantedRewards, LoyaltyCode, LoyaltyReward } from "@/types";
 
 interface StreakReward {
   id: number;
@@ -13,29 +13,65 @@ interface StreakReward {
   rewards: Partial<GrantedRewards>;
 }
 
+interface Keepsake {
+  key: string;
+  big: string;
+  caption: string;
+  title: string;
+  rewards: Partial<GrantedRewards>;
+  markSeen: () => Promise<unknown>;
+}
+
 const BURST = ["🎉", "⚽", "🏆", "✨", "🎖️", "🎊", "⭐", "🔥"];
 
-/** «N дней подряд»: the keepsake the server already granted
- * (streak_reward_service), celebrated once on the next app open. */
+/** How each loyalty keepsake (loyalty_service) is announced. */
+const LOYALTY_COPY: Record<LoyaltyCode, { big: string; caption: string; title: string }> = {
+  centurion: { big: "100", caption: "дней подряд · Центурион", title: "Эксклюзивная карта — только для своих!" },
+  oldtimer: { big: "100", caption: "дней в игре · Старожил", title: "Спасибо, что ты с нами так долго!" },
+  founder: { big: "🏛️", caption: "Основатель", title: "Ты один из первых 100 игроков!" },
+};
+
+/** Keepsakes the server already granted — «N дней подряд»
+ * (streak_reward_service) and loyalty ones (loyalty_service) — celebrated
+ * once each on the next app open. */
 export default function StreakRewardPopup() {
   const queryClient = useQueryClient();
-  const { data } = useQuery({
+  const { data: streak } = useQuery({
     queryKey: ["streak-rewards"],
     queryFn: async () => (await api.get<StreakReward[]>("/streak-rewards/unseen")).data,
     staleTime: 60_000,
   });
-  const seen = useMutation({
-    mutationFn: (id: number) => api.post(`/streak-rewards/${id}/seen`),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["streak-rewards"] }),
+  const { data: loyalty } = useQuery({
+    queryKey: ["loyalty-rewards"],
+    queryFn: async () => (await api.get<LoyaltyReward[]>("/loyalty/unseen")).data,
+    staleTime: 60_000,
   });
-  const reward = data?.[0];
+  const queue: Keepsake[] = [
+    ...(streak ?? []).map((s) => ({
+      key: `s${s.id}`, big: String(s.days), caption: "дней подряд", title: "Спасибо, что ты с нами!",
+      rewards: s.rewards, markSeen: () => api.post(`/streak-rewards/${s.id}/seen`),
+    })),
+    ...(loyalty ?? []).map((l) => ({
+      key: `l${l.id}`, ...(LOYALTY_COPY[l.code] ?? LOYALTY_COPY.oldtimer),
+      rewards: l.rewards, markSeen: () => api.post(`/loyalty/${l.id}/seen`),
+    })),
+  ];
+  const seen = useMutation({
+    mutationFn: (k: Keepsake) => k.markSeen(),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["streak-rewards"] });
+      queryClient.invalidateQueries({ queryKey: ["loyalty-rewards"] });
+      queryClient.invalidateQueries({ queryKey: ["loyalty-status"] });
+    },
+  });
+  const reward = queue[0];
   const r = reward?.rewards ?? {};
 
   return (
     <AnimatePresence>
       {reward && (
         <motion.div
-          key={reward.id}
+          key={reward.key}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -69,10 +105,10 @@ export default function StreakRewardPopup() {
               transition={{ delay: 0.2, duration: 0.7 }}
               className="bg-gradient-to-b from-amber-200 to-amber-500 bg-clip-text font-display text-7xl font-black text-transparent"
             >
-              {reward.days}
+              {reward.big}
             </motion.p>
-            <p className="font-mono text-micro uppercase tracking-wider text-amber-300">дней подряд</p>
-            <p className="mt-2 font-display text-xl font-bold leading-tight text-ink-chalk">Спасибо, что ты с нами!</p>
+            <p className="font-mono text-micro uppercase tracking-wider text-amber-300">{reward.caption}</p>
+            <p className="mt-2 font-display text-xl font-bold leading-tight text-ink-chalk">{reward.title}</p>
             <p className="mt-1 text-sm text-ink-mist">Памятный подарок уже у тебя:</p>
             <div className="mt-3 flex flex-col gap-1.5 text-sm">
               {!!r.coins && (
@@ -91,10 +127,14 @@ export default function StreakRewardPopup() {
                   {r.badge.icon} Значок «{r.badge.name}»
                 </span>
               )}
-              {r.cosmetic && <span className="rounded-xl bg-white/5 py-2">«{r.cosmetic.name}»</span>}
+              {r.cosmetic && (
+                <span className="rounded-xl bg-white/5 py-2">
+                  {r.cosmetic.kind === "profile_frame" ? "Рамка профиля " : ""}«{r.cosmetic.name}»
+                </span>
+              )}
             </div>
             <button
-              onClick={() => seen.mutate(reward.id)}
+              onClick={() => seen.mutate(reward)}
               disabled={seen.isPending}
               className="animate-claim-glow mt-5 w-full rounded-2xl bg-floodlight py-3.5 font-display text-base font-bold text-bg-base active:scale-95"
             >
