@@ -2,8 +2,8 @@
 card_offer_reservations — a copy held for an invoice between pre-checkout and
 delivery, so a limited offer can't be sold past its stock.
 
-Revision ID: 0272
-Revises: 0271
+Revision ID: 0273
+Revises: 0272
 Create Date: 2026-11-05
 """
 from typing import Sequence, Union
@@ -11,8 +11,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0272"
-down_revision: Union[str, None] = "0271"
+revision: str = "0273"
+down_revision: Union[str, None] = "0272"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
