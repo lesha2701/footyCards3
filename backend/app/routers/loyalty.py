@@ -64,6 +64,10 @@ async def status(db: AsyncSession = Depends(get_db), user: User = Depends(get_cu
 
 @router.get("/unseen", response_model=list[LoyaltyRewardOut])
 async def unseen(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    # Asked on every app open by the popup: a keepsake that became due
+    # without a new day (e.g. the «Центурион» card right after the update
+    # for whoever already got the 100-day reward) shows up at once.
+    await loyalty_service.check(db, user)
     return await loyalty_service.unseen(db, user)
 
 

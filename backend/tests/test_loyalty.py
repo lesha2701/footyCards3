@@ -75,12 +75,12 @@ async def test_centurion_backpay_for_who_reached_100_before(client, db_session, 
     user.daily_login_streak = 120
     await db_session.commit()
 
-    await _new_day(client, db_session, headers, user)
+    # Same day, no new visit day: the popup request itself grants it.
+    popup = (await client.get("/api/v1/loyalty/unseen", headers=headers)).json()
     owned = (await db_session.execute(
         select(UserCard.id).where(UserCard.owner_id == user.id, UserCard.player_id == player.id)
     )).scalars().all()
     assert len(owned) == 1
-    popup = (await client.get("/api/v1/loyalty/unseen", headers=headers)).json()
     assert [p["code"] for p in popup] == ["centurion"]
     assert popup[0]["rewards"]["cards"][0]["player"]["id"] == player.id
     assert (await client.post(f"/api/v1/loyalty/{popup[0]['id']}/seen", headers=headers)).status_code == 204
