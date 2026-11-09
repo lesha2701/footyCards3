@@ -10,6 +10,27 @@ export interface TownDistrictState {
   next_price: number;
   owned: number;
   total: number;
+  /** 0…100: care + houses + places + residents settled here. */
+  mood: number;
+  /** % of the houses' base rent the mood pays (70…120 by default). */
+  pct: number;
+  parts: { care: number; houses: number; decor: number; residents: number };
+  /** Ids of the residents settled in the district. */
+  residents: number[];
+}
+
+export interface TownMoodConfig {
+  min_pct: number;
+  max_pct: number;
+  care: number;
+  care_full_hours: number;
+  care_zero_hours: number;
+  houses: number;
+  decor: number;
+  resident: number;
+  resident_legendary: number;
+  resident_slots: number;
+  cared_at: string | null;
 }
 
 export interface TownHotel {
@@ -65,6 +86,7 @@ export interface TownState {
   total_houses: number;
   price_growth_pct: number;
   districts: TownDistrictState[];
+  mood: TownMoodConfig;
   income: { rate_per_day: number; pending: number; cap: number; max_hours: number };
   /** Present on a purchase / a claim. */
   new_balance?: number;
@@ -118,6 +140,8 @@ export interface TownResident {
   copies: number;
   /** Coins one spare copy sells for. */
   spare_coins: number;
+  /** The district the resident lives in, if settled. */
+  district?: string | null;
 }
 
 export interface TownResidentsAlbum {
@@ -138,6 +162,11 @@ export interface TownResidentsAlbum {
 
 export async function fetchTownResidents(): Promise<TownResidentsAlbum> {
   const { data } = await api.get<TownResidentsAlbum>("/town/residents");
+  return data;
+}
+
+export async function settleTownResident(residentId: number, district: string | null): Promise<TownState> {
+  const { data } = await api.post<TownState>(`/town/residents/${residentId}/settle`, { district });
   return data;
 }
 

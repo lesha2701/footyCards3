@@ -38,6 +38,14 @@ copy sells for town_resident_spare_coins[rarity]. A resident with a bonus
 Per kind the bonuses add up, capped by town_resident_bonus_max_pct and
 town_resident_max_daily_coins. Residents count only in an opened town.
 
+Mood of districts (district_moods, GameConfig.town_mood over
+MOOD_DEFAULTS): care (rent collected lately — it fades after
+care_full_hours, gone by care_zero_hours), the share of the district's houses
+owned, the places that light it (DECOR_DISTRICTS) and the residents settled
+in it (resident_slots a district) add up to 0…100; the district's houses
+pay min_pct…max_pct % of their rent along it. The mood is taken when the rent
+is settled, so a town left alone earns its last hours at a low mood.
+
 Closed places on the map (DECOR: a pier, a park with a fountain, the
 legend's island) stay dimmed until bought once for coins
 (GameConfig.town_decor {code: {price, rent_pct}}); a bought place lights
@@ -103,6 +111,18 @@ HOUSES: dict[str, dict[str, str]] = {
 # Closed places on the town map (frontend lib/town.ts DECOR_ZONES — the codes must match).
 DECOR_DISTRICT = "decor"
 DECOR: dict[str, str] = {"pier": "Пирс с колесом обозрения", "park": "Парк с фонтаном", "island": "Остров легенды"}
+
+# Which districts a place cheers up (all = the legend's island, at half).
+DECOR_DISTRICTS: dict[str, tuple[str, ...]] = {"pier": ("beach",), "park": ("center", "favela"), "island": ()}
+
+MOOD_DEFAULTS: dict[str, int] = {
+    "min_pct": 70, "max_pct": 120,                    # houses' rent at mood 0 / 100
+    "care": 40, "care_full_hours": 12, "care_zero_hours": 48,
+    "houses": 20,                                     # all the district's houses owned
+    "decor": 20,                                      # a place in the district (the island: half, everywhere)
+    "resident": 10, "resident_legendary": 20,         # per settled resident
+    "resident_slots": 3,                              # residents a district can house
+}
 
 RARITIES = ("common", "rare", "epic", "legendary")
 _RARITY_ORDER = {r: i for i, r in enumerate(RARITIES)}
@@ -184,6 +204,77 @@ def validate_decor(raw: dict) -> dict:
                 raise ValueError(f"{code}.{key}: нужно целое число ≥ 0")
             row[key] = value
         out[code] = row
+    return out
+
+
+def mood_config(config) -> dict[str, int]:
+    stored = getattr(config, "town_mood", None) or {}
+    out = dict(MOOD_DEFAULTS)
+    for key, value in stored.items():
+        if key in MOOD_DEFAULTS and isinstance(value, int) and not isinstance(value, bool):
+            out[key] = max(0, value)
+    out["max_pct"] = max(out["max_pct"], out["min_pct"])
+    out["care_zero_hours"] = max(out["care_zero_hours"], out["care_full_hours"] + 1)
+    return out
+
+
+def validate_mood(raw: dict) -> dict:
+    """Admin input for GameConfig.town_mood: known keys, integers ≥ 0."""
+    out: dict = {}
+    for key, value in (raw or {}).items():
+        if key not in MOOD_DEFAULTS:
+            raise ValueError(f"неизвестный параметр «{key}»")
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(f"{key}: нужно целое число ≥ 0")
+        out[key] = value
+    return out
+
+
+def care_points(m: dict, town: Optional[UserTown], now: datetime) -> int:
+    """The «care» part of the mood: full right after the rent is collected,
+    fading to 0 between care_full_hours and care_zero_hours."""
+    if town is None:
+        return 0
+    cared = town.cared_at or town.unlocked_at or town.income_since
+    if cared is None:
+        return m["care"]
+    hours = max(0.0, (now - ensure_aware(cared)).total_seconds() / 3600)
+    if hours <= m["care_full_hours"]:
+        return m["care"]
+    if hours >= m["care_zero_hours"]:
+        return 0
+    left = (m["care_zero_hours"] - hours) / (m["care_zero_hours"] - m["care_full_hours"])
+    return int(round(m["care"] * left))
+
+
+def district_moods(config, town: Optional[UserTown], houses, places: set[str], residents, now: datetime) -> dict:
+    """{district: {mood, pct, parts, residents}} — see the module doc."""
+    m = mood_config(config)
+    care = care_points(m, town, now)
+    out = {}
+    for code, buildings in HOUSES.items():
+        owned = sum(1 for h in houses if h.district == code)
+        decor = 0
+        for place in places:
+            if place not in DECOR_DISTRICTS:
+                continue
+            decor += m["decor"] if code in DECOR_DISTRICTS[place] else (m["decor"] // 2 if not DECOR_DISTRICTS[place] else 0)
+        settled = [r for r in residents if r.district == code and r.copies > 0 and r.resident.is_active]
+        settled = settled[:m["resident_slots"]]
+        people = sum(m["resident_legendary"] if r.resident.rarity == "legendary" else m["resident"] for r in settled)
+        parts = {
+            "care": care,
+            "houses": m["houses"] * owned // max(1, len(buildings)),
+            "decor": min(m["decor"], decor),
+            "residents": people,
+        }
+        mood = min(100, sum(parts.values()))
+        out[code] = {
+            "mood": mood,
+            "pct": m["min_pct"] + (m["max_pct"] - m["min_pct"]) * mood // 100,
+            "parts": parts,
+            "residents": [r.resident_id for r in settled],
+        }
     return out
 
 
@@ -293,13 +384,17 @@ async def _income_parts(db: AsyncSession, config, user_id: int, town: Optional[U
     hotel_owned = town is not None and town.hotel_bought_at is not None
     places = await _decor_owned(db, user_id)
     places_pct = decor_pct(config, places)
-    houses_rent = rent_rate(config, houses) * (100 + effects["rent_pct"] + places_pct) // 100
+    owned_residents = await _owned_residents(db, user_id) if config.town_residents_enabled else []
+    moods = district_moods(config, town, houses, places, owned_residents, _now())
+    rents = districts_config(config)
+    mooded = sum(rents[h.district]["rent"] * moods[h.district]["pct"] // 100 for h in houses if h.district in rents)
+    houses_rent = mooded * (100 + effects["rent_pct"] + places_pct) // 100
     hotel = hotel_rent(config, cards) * (100 + effects["hotel_pct"]) // 100
     residents = effects["rent"] + effects["daily_coins"]
     return {
         "houses": houses_rent, "hotel": hotel if hotel_owned else 0, "hotel_if_owned": hotel,
         "residents": residents, "cards": cards, "hotel_owned": hotel_owned, "effects": effects,
-        "places": places, "places_pct": places_pct,
+        "places": places, "places_pct": places_pct, "moods": moods,
         "total": houses_rent + (hotel if hotel_owned else 0) + residents,
     }
 
@@ -420,13 +515,20 @@ async def get_state(db: AsyncSession, user: User) -> dict:
             {
                 "code": code,
                 "name": DISTRICT_NAMES[code],
-                "rent": rents[code]["rent"] * (100 + effects["rent_pct"] + parts["places_pct"]) // 100,
+                "rent": rents[code]["rent"] * parts["moods"][code]["pct"] // 100
+                * (100 + effects["rent_pct"] + parts["places_pct"]) // 100,
+                **parts["moods"][code],
                 "next_price": house_price(config, code, owned_total),
                 "owned": sum(1 for h in houses if h.district == code),
                 "total": len(HOUSES[code]),
             }
             for code in HOUSES
         ],
+        "mood": {
+            **{k: mood_config(config)[k] for k in ("min_pct", "max_pct", "care", "care_full_hours", "care_zero_hours",
+                                                   "houses", "decor", "resident", "resident_legendary", "resident_slots")},
+            "cared_at": (town.cared_at or town.unlocked_at).isoformat() if town and (town.cared_at or town.unlocked_at) else None,
+        },
         "income": {
             "rate_per_day": rate,
             "pending": pending_income(town, rate, config, now) if unlocked else 0,
@@ -470,6 +572,7 @@ async def unlock(db: AsyncSession, user: User, idempotency_key: Optional[str]) -
     if price:
         await debit_coins(db, locked_user, price, TransactionType.town_unlock, "Город: открытие")
     town.unlocked_at = _now()
+    town.cared_at = town.unlocked_at
     town.income_since = town.unlocked_at
     town.income_accrued = 0
     db.add_all([town, TownLedger(user_id=user.id, kind="unlock", coins_spent=price, result={},
@@ -551,6 +654,7 @@ async def claim_income(db: AsyncSession, user: User, idempotency_key: Optional[s
     if amount <= 0:
         raise ConflictError("Пока нечего забирать — рента копится каждый час")
     town.income_accrued = 0
+    town.cared_at = _now()  # collecting is the care that keeps the districts happy
     paid = 0 if locked_user.game_rewards_blocked else amount
     if paid:
         await credit_coins(db, locked_user, paid, TransactionType.town_income, "Город: рента")
@@ -595,6 +699,32 @@ async def _settle_before_population_change(db: AsyncSession, config, user_id: in
     db.add(town)
 
 
+async def settle_resident(db: AsyncSession, user: User, resident_id: int, district: Optional[str]) -> dict:
+    """Moves an owned resident into a district (raises its mood) or out of
+    it (district None). The rent so far is settled at the old moods first."""
+    config = await get_config(db)
+    _require_enabled(config)
+    if district is not None and district not in HOUSES:
+        raise NotFoundError("Такого района нет")
+    await lock_user_for_update(db, user.id)
+    town = await _get_town(db, user.id)
+    _require_open(config, town)
+    owned = await _owned_residents(db, user.id)
+    row = next((r for r in owned if r.resident_id == resident_id and r.copies > 0), None)
+    if row is None:
+        raise NotFoundError("Этого жителя у тебя нет")
+    if district is not None and row.district != district:
+        slots = mood_config(config)["resident_slots"]
+        living = sum(1 for r in owned if r.district == district and r.copies > 0 and r.resident.is_active)
+        if living >= slots:
+            raise ConflictError(f"В районе уже {slots} жителя — сначала выпиши кого-нибудь")
+    _settle_income(town, await _rate(db, config, user.id, town, await _houses(db, user.id)), config, _now())
+    row.district = district
+    db.add_all([town, row])
+    await db.commit()
+    return await get_state(db, user)
+
+
 # --- residents -----------------------------------------------------------------------------------
 
 def resident_out(resident: TownResident, config, owned: Optional[UserTownResident] = None) -> dict:
@@ -610,6 +740,7 @@ def resident_out(resident: TownResident, config, owned: Optional[UserTownResiden
         "effect_label": " · ".join(x for x in (rent_label, bonus) if x) or "Житель города",
         "owned": owned is not None and owned.copies > 0, "copies": owned.copies if owned else 0,
         "spare_coins": spare_coins(config, resident.rarity),
+        "district": owned.district if owned is not None and owned.copies > 0 else None,
     }
 
 

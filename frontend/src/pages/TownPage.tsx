@@ -5,8 +5,8 @@ import { createPortal } from "react-dom";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
-  buyTownDecor, buyTownHotel, buyTownHouse, claimTownIncome, createTownRenameInvoice, fetchTown, fetchTownInvoiceStatus, unlockTown,
-  type TownState,
+  buyTownDecor, buyTownHotel, buyTownHouse, claimTownIncome, createTownRenameInvoice, fetchTown, fetchTownInvoiceStatus,
+  fetchTownResidents, settleTownResident, unlockTown, type TownDistrictState, type TownState,
 } from "@/api/town";
 import GameHero from "@/components/common/GameHero";
 import { IconClose, IconCoin } from "@/components/icons";
@@ -14,6 +14,7 @@ import TownScene from "@/components/town/TownScene";
 import hotelArt from "@/assets/town/hotel.webp";
 import housesArt from "@/assets/town/houses.webp";
 import residentsArt from "@/assets/town/residents.webp";
+import { staticUrl } from "@/lib/api";
 import { formatGameError } from "@/lib/errors";
 import { useMarkSeen } from "@/lib/seenSections";
 import { hapticNotify, openTelegramInvoice } from "@/lib/telegram";
@@ -84,6 +85,15 @@ export default function TownPage() {
     },
     onError: fail,
   });
+  const settle = useMutation({
+    mutationFn: ({ id, district: d }: { id: number; district: string | null }) => settleTownResident(id, d),
+    onSuccess: (data, v) => {
+      apply(data);
+      void queryClient.invalidateQueries({ queryKey: ["town-residents"] });
+      setNotice(v.district ? "Житель переехал — району стало веселее 🎉" : "Житель выписан из района");
+    },
+    onError: fail,
+  });
   const hotel = useMutation({
     mutationFn: () => buyTownHotel(crypto.randomUUID()),
     onSuccess: (data) => { apply(data); setNotice("Отель открыт — твои карты заселились 🏨"); },
@@ -125,6 +135,8 @@ export default function TownPage() {
       district={district}
       state={state}
       messages={<>{messages}{!locked && <RentBar state={state} busy={claim.isPending} onClaim={() => claim.mutate()} />}</>}
+      settling={settle.isPending}
+      onSettle={(id, d) => settle.mutateAsync({ id, district: d })}
       buying={buy.isPending}
       onBuy={(c) => buy.mutateAsync({ district: district.code, code: c })}
     />
@@ -301,7 +313,11 @@ function TownMap({
               badge: (
                 <span className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center whitespace-nowrap rounded-2xl bg-black/65 px-2.5 py-1 font-display text-xs font-bold text-white shadow-lg ring-1 ring-white/25 backdrop-blur-sm group-hover:scale-105">
                   <span><span aria-hidden>{z.emoji}</span> {z.name}</span>
-                  {d && <span className="text-[10px] font-semibold text-white/70">🏠 {d.owned}/{d.total}</span>}
+                  {d && (
+                    <span className="text-[10px] font-semibold text-white/70">
+                      🏠 {d.owned}/{d.total} · {moodEmoji(d.mood)} {d.mood}
+                    </span>
+                  )}
                 </span>
               ),
             };
@@ -518,12 +534,15 @@ function RenameSheet({
 }
 
 function DistrictView({
-  district, state, messages, buying, onBuy,
+  district, state, messages, buying, onBuy, settling, onSettle,
 }: {
   district: District; state?: TownState; messages: ReactNode; buying: boolean; onBuy: (code: string) => Promise<unknown>;
+  settling: boolean; onSettle: (residentId: number, district: string | null) => Promise<unknown>;
 }) {
   const [picked, setPicked] = useState<TownBuilding | null>(null);
   const info = state?.districts.find((d) => d.code === district.code);
+  // A happy district is busy: the fewer people on its streets, the sadder it is.
+  const movers = info ? district.movers.filter((_, i) => i % 10 < 3 + Math.round((info.mood / 100) * 7)) : district.movers;
   const mine = new Set(state?.houses.filter((h) => h.district === district.code).map((h) => h.code));
   return (
     <div className="flex flex-col gap-3">
@@ -532,7 +551,7 @@ function DistrictView({
         <div className="min-w-0">
           <h1 className="font-display text-xl font-bold leading-tight text-ink-chalk">{district.name}</h1>
           <p className="truncate text-xs text-ink-mist">
-            {info ? `Твоих домов ${info.owned}/${info.total} · дом +${fmt(info.rent)} в день` : district.tagline}
+            {info ? `Твоих домов ${info.owned}/${info.total} · дом +${fmt(info.rent)} в день · ${moodEmoji(info.mood)} ${info.mood}` : district.tagline}
           </p>
         </div>
       </div>
@@ -561,7 +580,7 @@ function DistrictView({
         <TownScene
           art={district.art}
           label={`${district.name}: ${district.buildings.length} зданий`}
-          movers={district.movers}
+          movers={movers}
           water={district.water}
           onPick={(c) => setPicked(district.buildings.find((b) => b.code === c) ?? null)}
           zones={district.buildings.map((b) => {
@@ -586,6 +605,10 @@ function DistrictView({
         />
       </section>
 
+      {state && info && state.unlocked && (
+        <MoodPanel info={info} state={state} district={district} settling={settling} onSettle={onSettle} />
+      )}
+
       <HouseSheet
         building={picked}
         district={district}
@@ -596,6 +619,104 @@ function DistrictView({
         onClose={() => setPicked(null)}
       />
     </div>
+  );
+}
+
+function moodEmoji(mood: number): string {
+  return mood >= 80 ? "😄" : mood >= 60 ? "🙂" : mood >= 40 ? "😐" : "😟";
+}
+
+/** The district's mood: what makes it, what it pays, and its residents. */
+function MoodPanel({ info, state, district, settling, onSettle }: {
+  info: TownDistrictState; state: TownState; district: District; settling: boolean;
+  onSettle: (residentId: number, district: string | null) => Promise<unknown>;
+}) {
+  const m = state.mood;
+  const [choosing, setChoosing] = useState(false);
+  const { data: album } = useQuery({ queryKey: ["town-residents"], queryFn: fetchTownResidents });
+  const byId = new Map((album?.residents ?? []).map((r) => [r.id, r]));
+  const settled = info.residents.map((id) => byId.get(id)).filter((r) => !!r);
+  const free = Math.max(0, m.resident_slots - info.residents.length);
+  const rows: [string, number, number, string][] = [
+    ["🧹 Уход", info.parts.care, m.care, `Собирай ренту хотя бы раз в ${m.care_full_hours} ч — иначе уход тает`],
+    ["🏠 Дома", info.parts.houses, m.houses, "Каждый купленный дом района"],
+    ["⛲ Места", info.parts.decor, m.decor, "Пирс — пляжу, парк — центру и фавелам, остров — всем"],
+    ["🧑 Жители", info.parts.residents, m.resident_slots * m.resident_legendary, `До ${m.resident_slots} жителей: +${m.resident}, легенда +${m.resident_legendary}`],
+  ];
+  return (
+    <section className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-bg-surface p-3" aria-label="Настроение района" data-testid="mood-panel">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-bold text-ink-chalk">{moodEmoji(info.mood)} Настроение {info.mood}/100</p>
+        <p className={`text-xs font-bold ${info.pct >= 100 ? "text-accent-lime" : "text-legend"}`}>рента домов {info.pct}%</p>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-white/10">
+        <div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-accent-lime" style={{ width: `${info.mood}%` }} />
+      </div>
+      <ul className="flex flex-col gap-1">
+        {rows.map(([label, value, max, hint]) => (
+          <li key={label} className="flex items-center gap-2 text-[11px]">
+            <span className="w-20 shrink-0 text-ink-chalk">{label}</span>
+            <span className="w-12 shrink-0 font-mono text-ink-mist">{value}/{max}</span>
+            <span className="min-w-0 flex-1 truncate text-ink-mist-dim">{hint}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="flex items-center gap-2">
+        {settled.map((r) => (
+          <button
+            key={r.id} type="button" disabled={settling} onClick={() => void onSettle(r.id, null)}
+            className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-white/5 ring-1 ring-cyan-300/40"
+            aria-label={`${r.name} — выписать из района`}
+          >
+            {r.image_path ? <img src={staticUrl(r.image_path)} alt="" className="h-full w-full object-cover" /> : <span className="text-2xl">{r.icon}</span>}
+            <span className="absolute right-0 top-0 rounded-bl bg-black/70 px-0.5 text-[9px] text-white">✕</span>
+          </button>
+        ))}
+        {Array.from({ length: free }, (_, i) => (
+          <button
+            key={i} type="button" onClick={() => setChoosing(true)}
+            className="grid h-12 w-12 shrink-0 place-items-center rounded-xl border-2 border-dashed border-white/20 text-lg text-ink-mist"
+            aria-label="Поселить жителя"
+          >
+            +
+          </button>
+        ))}
+        <span className="min-w-0 flex-1 text-[11px] leading-tight text-ink-mist">Посели сюда жителей. Нажми на жителя, чтобы выписать</span>
+      </div>
+      {choosing && createPortal(
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={() => setChoosing(false)}>
+          <div
+            role="dialog" aria-label="Поселить жителя" onClick={(e) => e.stopPropagation()}
+            className="safe-bottom max-h-[70vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-white/10 bg-bg-surface p-4"
+          >
+            <p className="mb-2 font-display text-lg font-bold text-ink-chalk">Кого поселить: {district.name}</p>
+            {!album?.residents.some((r) => r.owned) && (
+              <p className="text-xs text-ink-mist">У тебя пока нет жителей — они приходят из паков «Жители».</p>
+            )}
+            <div className="grid grid-cols-3 gap-2">
+              {(album?.residents ?? []).filter((r) => r.owned && r.district !== district.code).map((r) => {
+                const elsewhere = r.district ? state.districts.find((d) => d.code === r.district)?.name : null;
+                return (
+                  <button
+                    key={r.id} type="button" disabled={settling}
+                    onClick={() => void onSettle(r.id, district.code).then(() => setChoosing(false), () => setChoosing(false))}
+                    className="flex flex-col items-center gap-1 rounded-xl bg-white/5 p-2 text-center"
+                  >
+                    {r.image_path ? <img src={staticUrl(r.image_path)} alt="" className="h-14 w-14 rounded-lg object-cover" /> : <span className="text-3xl">{r.icon}</span>}
+                    <span className="text-[11px] font-bold text-ink-chalk">{r.name}</span>
+                    <span className="text-[10px] text-ink-mist">
+                      {r.rarity === "legendary" ? `+${state.mood.resident_legendary}` : `+${state.mood.resident}`} к настроению
+                      {elsewhere ? ` · сейчас: ${elsewhere}` : ""}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </section>
   );
 }
 

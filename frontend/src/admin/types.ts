@@ -858,6 +858,7 @@ export interface GameConfig {
   town_resident_bonus_max_pct: number;
   town_resident_max_daily_coins: number;
   town_decor: Record<string, { price: number; rent_pct: number }>;
+  town_mood: Record<string, number>;
   trade_send_min_account_age_days: number;
   trade_send_min_active_days: number;
   trade_daily_coins_receive_cap: number;

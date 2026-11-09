@@ -41,7 +41,15 @@ type Form = Pick<GameConfig, "club_base_enabled" | "club_base_buildings" | "club
   | "club_base_income_max_days" | "club_base_cosmetics"
   | "town_enabled" | "town_districts" | "town_price_growth_pct" | "town_income_max_hours"
   | "town_unlock_coins" | "town_rename_stars" | "town_hotel_price" | "town_hotel_rent_per_100_cards"
-  | "town_hotel_max_cards" | "town_decor">;
+  | "town_hotel_max_cards" | "town_decor" | "town_mood">;
+
+// [GameConfig.town_mood key, label, default (town_service.MOOD_DEFAULTS)]
+const TOWN_MOOD: [string, string, number][] = [
+  ["min_pct", "Рента при 0, %", 70], ["max_pct", "Рента при 100, %", 120],
+  ["care", "Уход, очков", 40], ["care_full_hours", "Уход полный, ч", 12], ["care_zero_hours", "Уход в 0, ч", 48],
+  ["houses", "Все дома, очков", 20], ["decor", "Место, очков", 20],
+  ["resident", "Житель, очков", 10], ["resident_legendary", "Легенда, очков", 20], ["resident_slots", "Жителей в районе", 3],
+];
 
 const TOWN_DECOR: Record<string, string> = {
   park: "⛲ Парк с фонтаном", pier: "🎡 Пирс с колесом обозрения", island: "🏆 Остров легенды",
@@ -93,6 +101,7 @@ export default function AdminClubBasePage() {
       town_hotel_rent_per_100_cards: config.town_hotel_rent_per_100_cards,
       town_hotel_max_cards: config.town_hotel_max_cards,
       town_decor: config.town_decor ?? {},
+      town_mood: config.town_mood ?? {},
     });
   }, [config]);
 
@@ -287,6 +296,27 @@ export default function AdminClubBasePage() {
               </div>
             );
           })}
+        </div>
+        <p className="mt-3 text-xs text-slate-400">
+          Настроение районов (0…100): уход + дома + места + жители. Рента домов района идёт от «при 0» до «при 100» %.
+          Пустое поле — значение по умолчанию.
+        </p>
+        <div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3 lg:grid-cols-5">
+          {TOWN_MOOD.map(([key, label, def]) => (
+            <label key={key} className="flex flex-col gap-1 rounded-lg bg-white/5 p-2">
+              <span className="text-slate-400">{label}</span>
+              <input
+                type="number" min={0} placeholder={String(def)} value={form.town_mood[key] ?? ""}
+                onChange={(e) => {
+                  const next = { ...form.town_mood };
+                  if (e.target.value === "") delete next[key];
+                  else next[key] = Math.max(0, Math.round(Number(e.target.value)));
+                  setForm({ ...form, town_mood: next });
+                }}
+                className="rounded bg-bg-base px-2 py-1 outline-none"
+              />
+            </label>
+          ))}
         </div>
         <button type="button" disabled={save.isPending} onClick={() => save.mutate()}
                 className="mt-3 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-black disabled:opacity-50">

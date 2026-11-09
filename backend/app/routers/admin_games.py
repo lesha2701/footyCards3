@@ -53,6 +53,11 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
             updates["town_districts"] = town_service.validate_districts(updates["town_districts"])
         except ValueError as exc:
             raise ConflictError(f"Город: {exc}")
+    if updates.get("town_mood") is not None:
+        try:
+            updates["town_mood"] = town_service.validate_mood(updates["town_mood"])
+        except ValueError as exc:
+            raise ConflictError(f"Город, настроение районов: {exc}")
     if updates.get("town_decor") is not None:
         try:
             updates["town_decor"] = town_service.validate_decor(updates["town_decor"])

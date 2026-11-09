@@ -25,6 +25,9 @@ class UserTown(Base):
     name: Mapped[Optional[str]] = mapped_column(String(24), nullable=True)
     # The «Отель»: its rent follows how many cards the player holds.
     hotel_bought_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The last time the rent was collected — the «care» part of every
+    # district's mood (town_service.district_moods).
+    cared_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
 
@@ -103,6 +106,8 @@ class UserTownResident(Base):
     resident_id: Mapped[int] = mapped_column(ForeignKey("town_residents.id", ondelete="CASCADE"), nullable=False, index=True)
     copies: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     source: Mapped[str] = mapped_column(String(16), nullable=False)
+    # The district the resident lives in (raises its mood), None = not settled.
+    district: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
     acquired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     resident: Mapped[TownResident] = relationship(lazy="joined")
