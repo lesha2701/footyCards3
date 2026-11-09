@@ -629,6 +629,8 @@ async def create_lot(db: AsyncSession, user: User, payload: AuctionLotCreateIn) 
         raise ConflictError(reason, details={"rule": "auction_card_not_listable"})
     if card.is_locked_by_admin:
         raise ConflictError("Карточка заблокирована администратором")
+    if card.is_bound():
+        raise ConflictError("Эту карточку нельзя продать — она привязана к тебе")
     if card.is_locked_in_trade:
         raise ConflictError("Карточка участвует в обмене")
     if card.is_in_lineup or card.is_in_tactico_squad:

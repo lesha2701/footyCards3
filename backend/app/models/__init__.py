@@ -37,6 +37,7 @@ from app.models.my_player_extras import MyPlayerEdition, MyPlayerGift, MyPlayerS
 from app.models.newbie import NewbieProgress
 from app.models.comeback_gift import ComebackGift
 from app.models.streak_reward import StreakReward
+from app.models.loyalty import LoyaltyReward
 from app.models.player_career import (
     PlayerCareerCup,
     PlayerCareerGoldenBall,
@@ -329,6 +330,7 @@ __all__ = [
     "MyPlayerDuel",
     "NewbieProgress",
     "StreakReward",
+    "LoyaltyReward",
     "LifestyleItem",
     "UserLifestyleItem",
     "PlayerCareerSeason",

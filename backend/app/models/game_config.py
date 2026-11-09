@@ -1042,6 +1042,9 @@ class GameConfig(TimestampMixin, Base):
     anniversary_starts_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     anniversary_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     anniversary_settings: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # Loyalty keepsakes (services/loyalty_service.py): «Старожил», «Основатель»,
+    # the «Центурион» card and «Страховка серии» — over loyalty_service.DEFAULTS.
+    loyalty_settings: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
 
     # «Топ недели» (weekly_top_service.py): every Monday the top places of
     # each ranking get the reward of their place. weekly_top_rewards is one
