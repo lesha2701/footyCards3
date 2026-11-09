@@ -31,9 +31,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 BADGES = {
     # key: (name, icon, image, sort)
-    "centurion": ("Центурион", "💜", "badges/centurion_100.svg", 954),
-    "oldtimer": ("Старожил", "💚", "badges/oldtimer_100.svg", 955),
-    "pioneer": ("Первопроходец", "🏛️", "badges/pioneer.svg", 956),
+    "centurion": ("Центурион", "💜", "badges/centurion_100.webp", 954),
+    "oldtimer": ("Старожил", "💚", "badges/oldtimer_100.webp", 955),
+    "pioneer": ("Первопроходец", "🧭", "badges/pioneer.webp", 956),
 }
 FRAMES = {
     "oldtimer": ("Старожил", "100 дней в VICTOR FC — живой и активный", "oldtimer", 957),
