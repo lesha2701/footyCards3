@@ -37,6 +37,15 @@ class ManagerNpcIn(BaseModel):
     seasons: int = 1
 
 
+class ManagerRenewIn(BaseModel):
+    wage: int = Field(ge=0)
+    seasons: int = Field(ge=1, le=3)
+
+
+class ManagerExtendIn(BaseModel):
+    seasons: int = Field(default=1, ge=1, le=3)
+
+
 class ManagerLookIn(BaseModel):
     shape: Optional[str] = Field(default=None, max_length=32)
     symbol: Optional[str] = Field(default=None, max_length=32)

@@ -40,6 +40,7 @@ import { CupPanel, NewsPanel } from "@/components/manager/CupNewsPanel";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconCoin, IconProfile, IconSearch, IconTrophy } from "@/components/icons";
 import ClubCardSheet from "@/components/manager/ClubCardSheet";
+import { ExtendNpcForm, RenewContractForm } from "@/components/manager/RenewForms";
 import AcademyPicker from "@/components/manager/AcademyPicker";
 import AnalyticsPanel from "@/components/manager/AnalyticsPanel";
 import MatchPlanPanel from "@/components/manager/MatchPlanPanel";
@@ -233,6 +234,8 @@ function ClubTab({ view, club, onView, onError }: TabProps & { club: ManagerClub
     mutationFn: ({ id, accept }: { id: number; accept: boolean }) => respondManagerOffer(id, accept), onSuccess: onView, onError,
   });
   const sellNpc = useMutation({ mutationFn: (id: number) => releaseManagerNpc(id), onSuccess: onView, onError });
+  const [renewing, setRenewing] = useState<string | null>(null);
+  const done = (v: ManagerView) => { onView(v); setRenewing(null); };
   const locked = club.trade_locked;
   const rules = view.rules;
   const base = club.base;
@@ -353,15 +356,16 @@ function ClubTab({ view, club, onView, onError }: TabProps & { club: ManagerClub
         )}
         {club.contracts.map((c) => (
           <div key={c.id} className="flex flex-col gap-2 rounded-xl bg-bg-raised p-2.5">
-            <div className="flex items-center gap-2">
+            <div className="flex items-start gap-2">
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-semibold text-ink-chalk">
-                  {c.player_name} <span className="font-normal text-ink-mist">· {c.position} · {c.rating}</span>
-                  {c.kind === "loan" && <span className="ml-1 rounded bg-white/10 px-1 text-micro text-ink-mist">аренда</span>}
-                  {c.status === "on_loan" && <span className="ml-1 rounded bg-white/10 px-1 text-micro text-ink-mist">в аренде</span>}
-                </span>
-                <span className="block truncate text-micro text-ink-mist">
-                  {c.owner_name} · {eur(c.value ?? 0)} · {c.wage} мон./сезон · сезонов {c.seasons_left} · ⚽ {c.goals} 🅰️ {c.assists}
+                <NameLine name={c.player_name} position={c.position} rating={c.rating} tags={<>
+                  {c.kind === "loan" && <span className="shrink-0 rounded bg-white/10 px-1 text-micro font-normal text-ink-mist">аренда</span>}
+                  {c.status === "on_loan" && <span className="shrink-0 rounded bg-white/10 px-1 text-micro font-normal text-ink-mist">в аренде</span>}
+                </>} />
+                <span className="block text-micro text-ink-mist">
+                  <span className="break-words">{c.owner_name}</span> · {eur(c.value ?? 0)} · {c.wage} мон./сезон ·{" "}
+                  <span className={c.seasons_left <= 0 ? "text-amber-300" : undefined}>{c.seasons_left <= 0 ? "последний сезон" : `сезонов ${c.seasons_left}`}</span>
+                  {" "}· ⚽ {c.goals} 🅰️ {c.assists}
                 </span>
               </span>
               {!locked && c.status === "active" && (
@@ -369,16 +373,27 @@ function ClubTab({ view, club, onView, onError }: TabProps & { club: ManagerClub
                   className="shrink-0 rounded-lg bg-bg-surface px-2.5 py-1.5 text-micro text-ink-mist">Отпустить</button>
               )}
             </div>
+            {c.status === "active" && c.kind !== "loan" && (
+              club.offers_sent.some((o) => o.kind === "renew" && o.user_id === c.user_id) ? (
+                <p className="text-micro text-ink-mist">✉️ Новый контракт предложен — ждём ответа игрока</p>
+              ) : (
+                <button onClick={() => setRenewing(renewing === `c${c.id}` ? null : `c${c.id}`)}
+                  className="rounded-lg bg-bg-surface py-1.5 text-xs font-semibold text-ink-chalk">
+                  ✍️ {c.seasons_left <= 0 ? "Продлить контракт" : "Новый контракт"}
+                </button>
+              )
+            )}
+            {renewing === `c${c.id}` && <RenewContractForm contract={c} view={view} club={club} onDone={done} onError={onError} />}
             {c.status === "active" && <ShareButton kind="manager_transfer" id={c.id} label="Here we go! — поделиться" compact />}
           </div>
         ))}
         {club.offers_sent.map((c) => (
           <div key={c.id} className="flex items-center gap-2 rounded-xl border border-dashed border-white/10 p-2.5">
             <span className="min-w-0 flex-1 text-micro text-ink-mist">
-              ✉️ <b className="text-ink-chalk">{c.player_name}</b> · {c.kind === "sign" ? "контракт" : c.kind === "loan" ? "аренда" : "трансфер"}
+              ✉️ <b className="break-words text-ink-chalk">{c.player_name}</b> · {c.kind === "sign" ? "контракт" : c.kind === "renew" ? "новый контракт" : c.kind === "loan" ? "аренда" : "трансфер"}
               {c.fee > 0 && <> за {eur(c.fee)}</>} · {c.wage} мон./сезон × {c.seasons_total}
               <span className="block">
-                {c.kind !== "sign" && (c.club_agreed ? "клуб согласен ✓" : "ждём клуб")}{c.kind !== "sign" && " · "}{c.player_agreed ? "игрок согласен ✓" : "ждём игрока"}
+                {c.kind !== "sign" && c.kind !== "renew" && (c.club_agreed ? "клуб согласен ✓" : "ждём клуб")}{c.kind !== "sign" && c.kind !== "renew" && " · "}{c.player_agreed ? "игрок согласен ✓" : "ждём игрока"}
               </span>
             </span>
             <button onClick={() => cancel.mutate(c.id)} className="shrink-0 text-micro text-ink-mist underline">Отозвать</button>
@@ -389,18 +404,27 @@ function ClubTab({ view, club, onView, onError }: TabProps & { club: ManagerClub
       <section className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4">
         <h2 className="font-display text-base font-bold text-ink-chalk">📋 Футболисты</h2>
         {club.npcs.length === 0 && <p className="text-caption text-ink-mist">Купи или арендуй во вкладке «Трансферы».</p>}
-        {club.npcs.map((n) => (
-          <div key={n.id} className="flex items-center gap-2 rounded-xl bg-bg-raised p-2.5">
-            <span className="w-9 font-mono text-micro text-ink-mist">{n.position}</span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm text-ink-chalk">
-                {n.name}
-                <span className="ml-1 rounded bg-white/10 px-1 text-micro text-ink-mist">{n.kind === "loan" ? (n.auto ? "авто-аренда" : "аренда") : `контракт ${n.seasons_left} сез.`}</span>
-              </span>
-              <span className="block text-micro text-ink-mist">{eur(n.value)} · зарплата {eur(n.wage)}/сезон{n.goals > 0 && ` · ⚽ ${n.goals}`}</span>
-            </span>
-            <b className="text-sm text-ink-chalk">{n.rating}</b>
-            {!locked && (
+        {club.npcs.map((n) => {
+          const ends = n.seasons_left <= 0;
+          const canExtend = !locked && (n.kind === "loan" ? ends : n.seasons_left < 3);
+          return (
+            <div key={n.id} className="flex flex-col gap-2 rounded-xl bg-bg-raised p-2.5">
+              <div className="flex items-center gap-2">
+                <span className="w-9 shrink-0 font-mono text-micro text-ink-mist">{n.position}</span>
+                <span className="min-w-0 flex-1">
+                  <NameLine name={n.name} className="text-sm" tags={
+                    <span className={`shrink-0 rounded px-1 text-micro ${ends ? "bg-amber-400/15 text-amber-300" : "bg-white/10 text-ink-mist"}`}>
+                      {n.kind === "loan" ? (n.auto ? "авто-аренда" : "аренда") : ends ? "последний сезон" : `контракт ${n.seasons_left} сез.`}
+                    </span>
+                  } />
+                  <span className="block text-micro text-ink-mist">{eur(n.value)} · зарплата {eur(n.wage)}/сезон{n.goals > 0 && ` · ⚽ ${n.goals}`}</span>
+                </span>
+                <b className="shrink-0 text-sm text-ink-chalk">{n.rating}</b>
+                {canExtend && (
+                  <button onClick={() => setRenewing(renewing === `n${n.id}` ? null : `n${n.id}`)}
+                    className="shrink-0 rounded-lg bg-bg-surface px-2 py-1.5 text-micro font-semibold text-ink-chalk">Продлить</button>
+                )}
+                {!locked && (
               <button
                 onClick={() => setConfirm({
                   title: n.kind === "buy" ? `Продать ${n.name}?` : `Вернуть ${n.name} из аренды?`,
@@ -411,9 +435,12 @@ function ClubTab({ view, club, onView, onError }: TabProps & { club: ManagerClub
               >
                 {n.kind === "buy" ? "Продать" : "Вернуть"}
               </button>
-            )}
-          </div>
-        ))}
+                )}
+              </div>
+              {renewing === `n${n.id}` && <ExtendNpcForm npc={n} club={club} onDone={done} onError={onError} />}
+            </div>
+          );
+        })}
       </section>
 
       <ConfirmDialog
@@ -426,6 +453,21 @@ function ClubTab({ view, club, onView, onError }: TabProps & { club: ManagerClub
         onCancel={() => setConfirm(null)}
       />
     </div>
+  );
+}
+
+/** A player's name with his position and tags: a long name is cut, the
+ * position and tags always stay visible (phones). */
+function NameLine({ name, position, rating, tags, className = "text-sm font-semibold" }: {
+  name: string; position?: string | null; rating?: number | null; tags?: ReactNode; className?: string;
+}) {
+  const meta = [position, rating].filter((v) => v != null && v !== "").join(" · ");
+  return (
+    <span className={`flex min-w-0 items-center gap-1 text-ink-chalk ${className}`}>
+      <span className="min-w-0 truncate">{name}</span>
+      {meta && <span className="shrink-0 font-normal text-ink-mist">· {meta}</span>}
+      {tags}
+    </span>
   );
 }
 
@@ -508,6 +550,7 @@ const MOVE_LABEL: Record<ManagerMoveKind, (m: ManagerMove) => string> = {
   release: () => "контракт расторгнут",
   expired: () => "контракт истёк",
   unpaid: (m) => (m.fee ? "не хватило на зарплату — выкуплен" : "не хватило на зарплату"),
+  extend: (m) => (m.fee ? "аренда продлена ещё на сезон" : "контракт продлён"),
 };
 
 function Moves() {
@@ -535,10 +578,8 @@ function Moves() {
             {m.direction === "in" ? "↘" : "↗"}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-semibold text-ink-chalk">
-              {m.who}{m.position && <span className="font-normal text-ink-mist"> · {m.position}{m.rating != null && ` · ${m.rating}`}</span>}
-            </span>
-            <span className="block truncate text-micro text-ink-mist">
+            <NameLine name={m.who} position={m.position} rating={m.position ? m.rating : null} />
+            <span className="block text-micro text-ink-mist">
               {MOVE_LABEL[m.kind]?.(m) ?? m.kind} · {new Date(m.at).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}
             </span>
           </span>
@@ -559,13 +600,13 @@ function MarketRow({ p, children }: { p: ManagerMarketPlayer; children?: ReactNo
       <div className="flex items-center gap-2">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-cyan font-display text-sm font-black text-bg-base">{p.rating}</span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-ink-chalk">{p.player_name} <span className="font-normal text-ink-mist">· {p.position}</span></span>
-          <span className="block truncate text-micro text-ink-mist">
-            {p.owner_name} · ур. {p.level}{p.is_friend && " · 🤝"}{" · "}
+          <NameLine name={p.player_name} position={p.position} />
+          <span className="block text-micro text-ink-mist">
+            <span className="break-words">{p.owner_name}</span> · ур. {p.level}{p.is_friend && " · 🤝"}{" · "}
             {p.club ? `${p.club.on_loan ? "в аренде в " : ""}«${p.club.name}», ${p.club.seasons_left} сез.` : p.looking ? "ищет клуб" : "без клуба"}
           </span>
         </span>
-        <span className="text-right">
+        <span className="shrink-0 text-right">
           <span className="block font-display text-sm font-bold text-accent-lime">{eur(p.value)}</span>
           <Trend pct={p.trend_pct} />
         </span>
@@ -762,12 +803,12 @@ function CatalogRow({ p, club, open, seasons, busy, onToggle, onSeasons, onSign 
       <button onClick={onToggle} disabled={!free || club.trade_locked} className="flex items-center gap-2 text-left disabled:cursor-default">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/90 font-display text-sm font-black text-bg-base">{p.rating}</span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-ink-chalk">{p.name} <span className="font-normal text-ink-mist">· {p.position}</span></span>
+          <NameLine name={p.name} position={p.position} />
           <span className="block truncate text-micro text-ink-mist">
             {p.taken_by ? (p.mine ? "уже в твоём клубе" : `играет за «${p.taken_by}»`) : `${p.club} · зарплата ${eur(p.wage_now)}/сезон`}
           </span>
         </span>
-        <span className="text-right">
+        <span className="shrink-0 text-right">
           <span className="block font-display text-sm font-bold text-accent-lime">{eur(p.value)}</span>
           <span className="block text-[9px] text-ink-mist">аренда {eur(p.loan_fee)}</span>
         </span>
@@ -1010,12 +1051,12 @@ function MeTab({ view, onView, onError }: TabProps) {
       {view.offers.map((o) => (
         <section key={o.id} className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4 ring-1 ring-accent-lime/40">
           <p className="text-sm text-ink-chalk">
-            ✍️ <b>{o.club_name}</b> ({o.club_owner}) — {o.kind === "sign" ? "контракт" : o.kind === "loan" ? "аренда на сезон" : "переход"}
+            ✍️ <b>{o.club_name}</b> ({o.club_owner}) — {o.kind === "sign" ? "контракт" : o.kind === "renew" ? "новый контракт с твоим клубом" : o.kind === "loan" ? "аренда на сезон" : "переход"}
           </p>
           <p className="text-xs text-ink-mist">
             {o.wage} монет за сезон · {o.seasons_total} {o.seasons_total === 1 ? "сезон" : "сезона"}
             {o.fee > 0 && <> · клубу {eur(o.fee)}</>}
-            {o.kind !== "sign" && <> · {o.club_agreed ? "твой клуб согласен" : "ждём ответ твоего клуба"}</>}
+            {o.kind !== "sign" && o.kind !== "renew" && <> · {o.club_agreed ? "твой клуб согласен" : "ждём ответ твоего клуба"}</>}
           </p>
           {o.player_agreed ? (
             <p className="text-micro text-accent-lime">Ты согласился — ждём твой клуб</p>

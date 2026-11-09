@@ -32,8 +32,9 @@ export interface ManagerSquadPlayer {
 export interface ManagerContract {
   id: number;
   user_id: number;
-  kind: "sign" | "transfer" | "loan";
-  status: "offered" | "active" | "on_loan" | "ended" | "declined" | "cancelled";
+  /** renew = the club's new contract for its own player (an offer only). */
+  kind: "sign" | "transfer" | "loan" | "renew";
+  status: "offered" | "active" | "on_loan" | "ended" | "declined" | "cancelled" | "accepted";
   /** Transfer / loan fee, € to the selling club. */
   fee: number;
   /** Coins per season to the player's wallet. */
@@ -71,6 +72,8 @@ export interface ManagerNpc {
   goals: number;
   value: number;
   sell_back: number;
+  /** € for one more season of a loan now. */
+  loan_fee: number;
 }
 
 export interface ManagerLook {
@@ -556,7 +559,7 @@ export async function fetchManagerMarket(): Promise<{ players: ManagerMarketPlay
 
 export type ManagerMoveKind =
   | "sign" | "transfer" | "loan" | "buy" | "auto" | "loan_back"
-  | "sold" | "loaned_out" | "release" | "expired" | "unpaid";
+  | "sold" | "loaned_out" | "release" | "expired" | "unpaid" | "extend";
 
 export interface ManagerMove {
   id: number;
@@ -662,6 +665,12 @@ export async function endManagerContract(contractId: number): Promise<ManagerVie
   return data;
 }
 
+/** The club offers its player new terms: `seasons` from now, `wage` coins a season. */
+export async function renewManagerContract(contractId: number, wage: number, seasons: number): Promise<ManagerView> {
+  const { data } = await api.post<ManagerView>(`/manager/contracts/${contractId}/renew`, { wage, seasons });
+  return data;
+}
+
 export async function setManagerMarket(open: boolean): Promise<ManagerView> {
   const { data } = await api.post<ManagerView>("/manager/market", { open });
   return data;
@@ -669,6 +678,12 @@ export async function setManagerMarket(open: boolean): Promise<ManagerView> {
 
 export async function signManagerNpc(playerId: number, kind: "buy" | "loan", seasons = 1): Promise<ManagerView> {
   const { data } = await api.post<ManagerView>("/manager/npc", { player_id: playerId, kind, seasons });
+  return data;
+}
+
+/** A bought footballer: a contract of `seasons` from now; a loan: one more season. */
+export async function extendManagerNpc(npcId: number, seasons = 1): Promise<ManagerView> {
+  const { data } = await api.post<ManagerView>(`/manager/npc/${npcId}/extend`, { seasons });
   return data;
 }
 
