@@ -76,6 +76,16 @@ def test_game_rewards_blocked_covers_the_admin_flag_and_the_rest():
     assert flagged.game_rewards_blocked_flag is True
 
 
+def test_paused_says_why_games_pay_nothing():
+    now = datetime.now(timezone.utc)
+    assert anti_bot_service.paused(_user()) is None
+    assert anti_bot_service.paused(_user(game_rewards_blocked_flag=True))["reason"] == "blocked"
+    assert anti_bot_service.paused(_user(presence_challenge={"token": "t"}))["reason"] == "presence"
+    rest = anti_bot_service.paused(_user(rest_required_until=now + timedelta(hours=1)))
+    assert rest["reason"] == "rest" and rest["until"]
+    assert anti_bot_service.paused(_user(rest_required_until=now - timedelta(hours=1))) is None
+
+
 def test_only_game_posts_count_as_play():
     assert anti_bot_service.is_game_action("POST", "/api/v1/games/memory/start")
     assert anti_bot_service.is_game_action("POST", "/api/v1/tactico/matches/5/pick")

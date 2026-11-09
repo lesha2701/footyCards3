@@ -1197,6 +1197,11 @@ async def _finalize_match(
     events = (await db.execute(select(MatchEvent).where(MatchEvent.match_id == match.id))).scalars().all()
     await _settle_card_stats(db, locked_user, state, list(events), forced_result is not None)
     state["report"] = build_report(match, state, list(events), result, forfeited=forced_result is not None)
+    # «+0» needs a reason on the result screen: rewards paused, or today's
+    # ranked matches used up (still paid, not rated).
+    if isinstance(state["report"], dict):
+        state["report"]["paused"] = anti_bot_service.paused(locked_user)
+        state["report"]["ranked"] = ranked
     match.server_state = state
     flag_modified(match, "server_state")
     if forced_result is None and result == MatchResult.win and match.opponent_user_id and not cup:

@@ -98,6 +98,20 @@ def take_ranked_slot(user: User, config: GameConfig, mode: str) -> bool:
     return True
 
 
+def paused(user: User) -> Optional[dict]:
+    """Why games don't pay / rate this player right now, for the result
+    screen (a player shouldn't see «+0» without a word): "blocked" (the admin
+    flag), "presence" (an unanswered «Ты здесь?»), "rest" (until `until`)."""
+    if user.game_rewards_blocked_flag:
+        return {"reason": "blocked", "until": None}
+    if user.presence_challenge:
+        return {"reason": "presence", "until": None}
+    until = ensure_aware(user.rest_required_until) if user.rest_required_until else None
+    if until and until > datetime.now(timezone.utc):
+        return {"reason": "rest", "until": until.isoformat()}
+    return None
+
+
 def status(user: User, config: GameConfig) -> dict:
     """For the player: are games paying, and if not, until when to rest."""
     now = datetime.now(timezone.utc)
