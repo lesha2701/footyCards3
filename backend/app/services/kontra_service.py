@@ -697,6 +697,8 @@ async def _finish(db: AsyncSession, battle: KontraBattle, state: dict, config: G
         won = state["winner"] == "me"
         battle.result = "win" if won else "loss"
         delta = config.kontra_rating_win if won else -config.kontra_rating_loss
+        if battle.opponent_user_id is None:
+            delta = anti_bot_service.bot_win_delta(delta, config)
         if not anti_bot_service.take_ranked_slot(user, config, "kontra"):
             delta = 0  # daily ranked limit / resting (anti_bot_service)
         user.kontra_rating = max(0, user.kontra_rating + delta)

@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_current_admin
 from app.database import get_db
 from app.models.user import User
-from app.schemas.admin_antifraud import AntifraudBanIn, AntifraudBanOut, AntifraudScanOut, BotSuspectOut, RewardsBlockIn
+from app.schemas.admin_antifraud import AntifraudBanIn, AntifraudBanOut, AntifraudScanOut, BotSuspectOut, RewardsBlockIn, WatchIn
 from app.services import admin_antifraud_service
 from app.services.admin_log_service import log_action
 
@@ -41,6 +41,22 @@ async def rewards_block(
     await log_action(
         db, admin.id, "antifraud_rewards_block", "user", None,
         new_value={"blocked": payload.blocked, "count": len(changed), "user_ids": changed[:500]},
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
+    return {"changed": len(changed), "user_ids": changed}
+
+
+@router.post("/watch")
+async def watch(
+    payload: WatchIn, request: Request,
+    admin: User = Depends(get_current_admin), db: AsyncSession = Depends(get_db),
+):
+    """«Под наблюдением» («Ты здесь?» и «усталость») on / off for many accounts."""
+    changed = await admin_antifraud_service.set_watched(db, payload.user_ids, payload.watched)
+    await log_action(
+        db, admin.id, "antifraud_watch", "user", None,
+        new_value={"watched": payload.watched, "count": len(changed), "user_ids": changed[:500]},
         ip_address=request.client.host if request.client else None,
     )
     await db.commit()

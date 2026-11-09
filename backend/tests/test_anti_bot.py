@@ -26,7 +26,8 @@ def _reset_rate_limits():
 
 
 def _user(**fields):
-    base = dict(play_streak_started_at=None, last_play_at=None, rest_required_until=None, game_rewards_blocked_flag=False)
+    base = dict(play_streak_started_at=None, last_play_at=None, rest_required_until=None, game_rewards_blocked_flag=False,
+                anti_bot_watch=True)
     base.update(fields)
     return User(**base)
 
@@ -99,6 +100,8 @@ async def test_game_post_tracks_play_and_limits_show_the_rest(client, db_session
     assert (await client.post("/api/v1/auth/session", headers=headers)).status_code == 200
     user = await get_user_by_telegram_id(db_session, 990001)
     await get_config(db_session)
+    user.anti_bot_watch = True
+    await db_session.commit()
     await client.post("/api/v1/games/memory/start", headers=headers, json={})
     await db_session.refresh(user)
     assert user.last_play_at is not None and user.play_streak_started_at is not None
@@ -112,7 +115,7 @@ async def test_game_post_tracks_play_and_limits_show_the_rest(client, db_session
 
 
 async def test_ranked_limit_per_mode(db_session):
-    user = User(telegram_id=990101, username="r", balance=0)
+    user = User(telegram_id=990101, username="r", balance=0, anti_bot_watch=True)
     db_session.add(user)
     await db_session.commit()
     config = await get_config(db_session)
@@ -162,7 +165,10 @@ async def _presence_user(client, db_session, bot_token, telegram_id):
     headers = telegram_headers(telegram_id, bot_token)
     assert (await client.post("/api/v1/auth/session", headers=headers)).status_code == 200
     await get_config(db_session)
-    return await get_user_by_telegram_id(db_session, telegram_id), headers
+    user = await get_user_by_telegram_id(db_session, telegram_id)
+    user.anti_bot_watch = True
+    await db_session.commit()
+    return user, headers
 
 
 async def test_presence_check_after_an_hour_of_play_and_a_right_answer(client, db_session, bot_token):
@@ -217,3 +223,42 @@ async def test_limits_show_the_modes_whose_ranked_matches_are_used_up(client, db
     await db_session.commit()
     limits = (await client.get("/api/v1/games/limits", headers=headers)).json()
     assert limits["ranked_done"] == ["arena"] and limits["ranked_limit"] == config.ranked_daily_limit == 30
+
+
+async def test_accounts_not_under_watch_never_get_checks_or_rest(client, db_session, bot_token):
+    headers = telegram_headers(990401, bot_token)
+    assert (await client.post("/api/v1/auth/session", headers=headers)).status_code == 200
+    await get_config(db_session)
+    user = await get_user_by_telegram_id(db_session, 990401)
+    await client.post("/api/v1/games/memory/start", headers=headers, json={})
+    await db_session.refresh(user)
+    assert user.last_play_at is None and user.presence_due_at is None  # not tracked at all
+    # Leftovers from before the watch list don't block anyone.
+    assert _user(anti_bot_watch=False, presence_challenge={"token": "t"},
+                 rest_required_until=datetime.now(timezone.utc) + timedelta(hours=1)).game_rewards_blocked is False
+
+
+def test_a_win_over_a_bot_is_worth_a_third():
+    config = SimpleNamespace(bot_win_rating_pct=33)
+    assert anti_bot_service.bot_win_delta(3, config) == 1
+    assert anti_bot_service.bot_win_delta(20, config) == 7  # Контратака
+    assert anti_bot_service.bot_win_delta(6, config) == 2
+    assert anti_bot_service.bot_win_delta(-1, config) == -1  # losses stay
+    assert anti_bot_service.bot_win_delta(3, SimpleNamespace(bot_win_rating_pct=0)) == 0
+    assert anti_bot_service.bot_win_delta(3, SimpleNamespace(bot_win_rating_pct=100)) == 3
+
+
+async def test_admin_puts_accounts_under_watch(client, db_session, bot_token):
+    from app.services import admin_antifraud_service
+
+    user = User(telegram_id=990411, username="w", balance=0, rest_required_until=datetime.now(timezone.utc) + timedelta(hours=1))
+    db_session.add(user)
+    await db_session.commit()
+    assert await admin_antifraud_service.set_watched(db_session, [user.id], True) == [user.id]
+    await db_session.commit()
+    await db_session.refresh(user)
+    assert user.anti_bot_watch is True and user.game_rewards_blocked is True  # resting counts now
+    await admin_antifraud_service.set_watched(db_session, [user.id], False)
+    await db_session.commit()
+    await db_session.refresh(user)
+    assert user.anti_bot_watch is False and user.rest_required_until is None and user.game_rewards_blocked is False

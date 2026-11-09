@@ -41,13 +41,20 @@ class User(TimestampMixin, Base):
     # and the open one ({token, answer, options, wrong}; answer never sent out).
     presence_due_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     presence_challenge: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # «Под наблюдением» (admin, «Антифрод»): only these accounts get «Ты здесь?»
+    # and «усталость» — everyone else never sees them.
+    anti_bot_watch: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     @hybrid_property
     def game_rewards_blocked(self) -> bool:
-        """No game rewards / rating: the admin flag, an unanswered «Ты здесь?»
-        check, or resting after a too long stretch of play (a script that
-        never sleeps)."""
-        if self.game_rewards_blocked_flag or self.presence_challenge:
+        """No game rewards / rating: the admin flag or, for an account under
+        watch, an unanswered «Ты здесь?» check / resting after a too long
+        stretch of play (a script that never sleeps)."""
+        if self.game_rewards_blocked_flag:
+            return True
+        if not self.anti_bot_watch:
+            return False
+        if self.presence_challenge:
             return True
         until = self.rest_required_until
         if until is None:

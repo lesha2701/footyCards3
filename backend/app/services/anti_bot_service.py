@@ -65,6 +65,8 @@ def next_state(user: User, config: GameConfig, now: datetime) -> Optional[dict]:
 
 async def track_play(db: AsyncSession, user: User) -> None:
     """Called for every game action (core/dependencies.get_current_user)."""
+    if not user.anti_bot_watch:
+        return  # the checks are only for accounts under watch («Антифрод»)
     config = await db.get(GameConfig, 1)  # identity map; never creates the row
     if config is None or not (config.anti_bot_enabled or config.presence_check_enabled):
         return
@@ -78,6 +80,16 @@ async def track_play(db: AsyncSession, user: User) -> None:
 
 
 RANKED_MODES = ("arena", "tactico", "mordoboi", "stratego", "kontra", "penalty")
+
+
+def bot_win_delta(delta: int, config: GameConfig) -> int:
+    """A rating gain against a bot, cut to config.bot_win_rating_pct of it
+    (at least 1 while the % is above 0): beating the bot over and over is no
+    way up the table, beating people is. Losses stay as they are."""
+    if delta <= 0:
+        return delta
+    pct = max(0, min(100, config.bot_win_rating_pct))
+    return max(1, round(delta * pct / 100)) if pct else 0
 
 
 def take_ranked_slot(user: User, config: GameConfig, mode: str) -> bool:
@@ -104,6 +116,8 @@ def paused(user: User) -> Optional[dict]:
     flag), "presence" (an unanswered «Ты здесь?»), "rest" (until `until`)."""
     if user.game_rewards_blocked_flag:
         return {"reason": "blocked", "until": None}
+    if not user.anti_bot_watch:
+        return None
     if user.presence_challenge:
         return {"reason": "presence", "until": None}
     until = ensure_aware(user.rest_required_until) if user.rest_required_until else None

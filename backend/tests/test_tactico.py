@@ -217,10 +217,10 @@ async def test_bot_match_full_playthrough_rewards_and_rating(client, db_session,
     assert match["user_score"] == 11
     assert match["opponent_score"] == 0
     assert match["reward_coins"] > 0
-    assert match["rating_delta"] == 3
+    assert match["rating_delta"] == 1  # a win over the bot is worth a third (bot_win_rating_pct)
 
     await db_session.refresh(user)
-    assert user.tactics_rating == 3
+    assert user.tactics_rating == 1
     assert user.balance >= match["reward_coins"]
 
 
@@ -543,7 +543,7 @@ async def test_tactics_rating_ranking_metric(client, db_session, bot_token, monk
     assert resp.status_code == 200
     body = resp.json()
     assert body["me"] is not None
-    assert body["me"]["value"] == 3
+    assert body["me"]["value"] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -795,7 +795,7 @@ async def test_tactico_stats_endpoint_reflects_rating_changes(client, db_session
         match = resp.json()
 
     resp = await client.get("/api/v1/tactico/stats", headers=headers)
-    assert resp.json()["tactics_rating"] == 3
+    assert resp.json()["tactics_rating"] == 1
 
 
 # ---------------------------------------------------------------------------
