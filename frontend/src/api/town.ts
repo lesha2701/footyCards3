@@ -145,6 +145,17 @@ export interface TownResident {
   district?: string | null;
   /** The resident's bonus works now (settled, or settling not required). */
   bonus_active?: boolean;
+  /** «Набор жителей» the resident belongs to. */
+  set_name?: string | null;
+}
+
+export interface TownResidentSet {
+  name: string;
+  total: number;
+  owned: number;
+  complete: boolean;
+  resident_ids: number[];
+  rent_pct: number;
 }
 
 export interface TownResidentsAlbum {
@@ -160,6 +171,10 @@ export interface TownResidentsAlbum {
   caps: { pct: number; daily_coins: number };
   /** Bonuses work only for residents settled in a district. */
   bonus_settled_only?: boolean;
+  /** «Наборы жителей»: a whole set adds rent_pct % to the houses (all at most sets_max_pct). */
+  sets?: TownResidentSet[];
+  sets_pct?: number;
+  sets_max_pct?: number;
   /** Present on a sale. */
   sold_coins?: number;
   new_balance?: number;

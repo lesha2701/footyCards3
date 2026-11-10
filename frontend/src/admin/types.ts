@@ -1468,6 +1468,7 @@ export interface AdminTownResident {
   bonus: string;
   bonus_value: number;
   bonus_label?: string;
+  set_name?: string | null;
   drop_weight: number;
   is_pack_droppable: boolean;
   is_active: boolean;

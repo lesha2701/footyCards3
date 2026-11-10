@@ -90,6 +90,9 @@ class TownResident(TimestampMixin, Base):
     rarity: Mapped[str] = mapped_column(String(16), default="common", nullable=False)
     bonus: Mapped[str] = mapped_column(String(24), default="none", nullable=False)
     bonus_value: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # «Набор жителей»: residents with the same set_name form a set; holding
+    # every active one gives the town town_mood.set_rent_pct (town_service.resident_sets).
+    set_name: Mapped[Optional[str]] = mapped_column(String(48), nullable=True)
     # Relative weight among residents of the same rarity in a pack slot.
     drop_weight: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
     # False = never drops from packs (shop offers, admin grants, events).

@@ -123,6 +123,9 @@ MOOD_DEFAULTS: dict[str, int] = {
     "resident": 10, "resident_legendary": 20,         # per settled resident
     "resident_slots": 3,                              # residents a district can house
     "bonus_settled_only": 1,                          # 1 = a resident's bonus works only while settled
+    # «Наборы жителей»: every set held whole adds set_rent_pct % to the houses'
+    # rent (all sets together at most set_max_pct); a set needs set_min_size residents.
+    "set_rent_pct": 5, "set_max_pct": 25, "set_min_size": 2,
 }
 
 RARITIES = ("common", "rare", "epic", "legendary")
@@ -368,6 +371,42 @@ def resident_effects(config, owned: list[UserTownResident]) -> dict:
     }
 
 
+def resident_sets(config, catalog: list[tuple[int, str]], owned: list[UserTownResident]) -> list[dict]:
+    """«Наборы жителей»: `catalog` is (resident id, set_name) of every active
+    resident in a set. A set is whole when each of them is held."""
+    m = mood_config(config)
+    held = {r.resident_id for r in owned if r.copies > 0}
+    members: dict[str, list[int]] = {}
+    for resident_id, name in catalog:
+        name = (name or "").strip()
+        if name:
+            members.setdefault(name, []).append(resident_id)
+    out = []
+    for name, ids in sorted(members.items()):
+        if len(ids) < max(1, m["set_min_size"]):
+            continue
+        have = sum(1 for i in ids if i in held)
+        out.append({"name": name, "total": len(ids), "owned": have, "complete": have == len(ids),
+                    "resident_ids": ids, "rent_pct": m["set_rent_pct"]})
+    return out
+
+
+def sets_pct(config, sets: list[dict]) -> int:
+    m = mood_config(config)
+    return min(sum(s["rent_pct"] for s in sets if s["complete"]), m["set_max_pct"])
+
+
+async def _resident_sets(db: AsyncSession, config, owned: list[UserTownResident]) -> list[dict]:
+    if not config.town_residents_enabled:
+        return []
+    catalog = (await db.execute(
+        select(TownResident.id, TownResident.set_name)
+        .where(TownResident.is_active.is_(True), TownResident.set_name.is_not(None))
+        .order_by(TownResident.sort_order, TownResident.id)
+    )).all()
+    return resident_sets(config, [(i, n) for i, n in catalog], owned)
+
+
 async def user_bonus(db: AsyncSession, user_id: int, kind: str, config=None) -> int:
     """One resident bonus outside the town (xp_pct, game_attempts, build_pct)."""
     config = config or await get_config(db)
@@ -391,18 +430,20 @@ async def _income_parts(db: AsyncSession, config, user_id: int, town: Optional[U
     cards = await _card_count(db, user_id)
     hotel_owned = town is not None and town.hotel_bought_at is not None
     places = await _decor_owned(db, user_id)
-    places_pct = decor_pct(config, places)
     owned_residents = await _owned_residents(db, user_id) if config.town_residents_enabled else []
+    sets = await _resident_sets(db, config, owned_residents)
+    places_pct = decor_pct(config, places)
+    set_pct = sets_pct(config, sets)
     moods = district_moods(config, town, houses, places, owned_residents, _now())
     rents = districts_config(config)
     mooded = sum(rents[h.district]["rent"] * moods[h.district]["pct"] // 100 for h in houses if h.district in rents)
-    houses_rent = mooded * (100 + effects["rent_pct"] + places_pct) // 100
+    houses_rent = mooded * (100 + effects["rent_pct"] + places_pct + set_pct) // 100
     hotel = hotel_rent(config, cards) * (100 + effects["hotel_pct"]) // 100
     residents = effects["rent"] + effects["daily_coins"]
     return {
         "houses": houses_rent, "hotel": hotel if hotel_owned else 0, "hotel_if_owned": hotel,
         "residents": residents, "cards": cards, "hotel_owned": hotel_owned, "effects": effects,
-        "places": places, "places_pct": places_pct, "moods": moods,
+        "places": places, "places_pct": places_pct, "moods": moods, "sets": sets, "sets_pct": set_pct,
         "total": houses_rent + (hotel if hotel_owned else 0) + residents,
     }
 
@@ -515,6 +556,8 @@ async def get_state(db: AsyncSession, user: User) -> dict:
             for code, v in decor_config(config).items()
         ],
         "decor_pct": parts["places_pct"],
+        "sets_pct": parts["sets_pct"],
+        "sets_complete": [s["name"] for s in parts["sets"] if s["complete"]],
         "houses": [{"district": h.district, "code": h.building_code} for h in houses],
         "owned_total": owned_total,
         "total_houses": sum(len(v) for v in HOUSES.values()),
@@ -524,7 +567,7 @@ async def get_state(db: AsyncSession, user: User) -> dict:
                 "code": code,
                 "name": DISTRICT_NAMES[code],
                 "rent": rents[code]["rent"] * parts["moods"][code]["pct"] // 100
-                * (100 + effects["rent_pct"] + parts["places_pct"]) // 100,
+                * (100 + effects["rent_pct"] + parts["places_pct"] + parts["sets_pct"]) // 100,
                 **parts["moods"][code],
                 "next_price": house_price(config, code, owned_total),
                 "owned": sum(1 for h in houses if h.district == code),
@@ -748,6 +791,7 @@ def resident_out(resident: TownResident, config, owned: Optional[UserTownResiden
         "id": resident.id, "name": resident.name, "title": resident.title, "description": resident.description,
         "icon": resident.icon, "image_path": resident.image_path, "rarity": resident.rarity,
         "bonus": resident.bonus, "bonus_value": resident.bonus_value, "bonus_label": bonus,
+        "set_name": resident.set_name,
         "effect_label": " · ".join(x for x in (rent_label, bonus) if x) or "Житель города",
         "owned": owned is not None and owned.copies > 0, "copies": owned.copies if owned else 0,
         "spare_coins": spare_coins(config, resident.rarity),
@@ -767,6 +811,7 @@ async def album(db: AsyncSession, user: User) -> dict:
     owned_rows = await _owned_residents(db, user.id)
     owned = {r.resident_id: r for r in owned_rows}
     effects = resident_effects(config, owned_rows)
+    sets = await _resident_sets(db, config, owned_rows)
     ordered = sorted(residents, key=lambda r: (-_RARITY_ORDER.get(r.rarity, 0), r.sort_order, r.id))
     return {
         "enabled": bool(config.town_residents_enabled),
@@ -778,6 +823,9 @@ async def album(db: AsyncSession, user: User) -> dict:
         "bonuses": {k: effects[k] for k in RESIDENT_BONUSES if k != "none"},
         "caps": {"pct": int(config.town_resident_bonus_max_pct), "daily_coins": int(config.town_resident_max_daily_coins)},
         "bonus_settled_only": bool(mood_config(config)["bonus_settled_only"]),
+        "sets": sets,
+        "sets_pct": sets_pct(config, sets),
+        "sets_max_pct": mood_config(config)["set_max_pct"],
     }
 
 
@@ -859,7 +907,7 @@ def admin_resident_out(resident: TownResident) -> dict:
         "id": resident.id, "name": resident.name, "title": resident.title, "description": resident.description,
         "icon": resident.icon, "image_path": resident.image_path, "rarity": resident.rarity,
         "bonus": resident.bonus, "bonus_value": resident.bonus_value,
-        "bonus_label": bonus_label(resident.bonus, resident.bonus_value),
+        "bonus_label": bonus_label(resident.bonus, resident.bonus_value), "set_name": resident.set_name,
         "drop_weight": resident.drop_weight, "is_pack_droppable": resident.is_pack_droppable,
         "is_active": resident.is_active, "sort_order": resident.sort_order,
     }
@@ -883,6 +931,8 @@ async def admin_save(db: AsyncSession, data: dict, resident_id: Optional[int] = 
         raise ConflictError(f"Неизвестная редкость: {data['rarity']}")
     if data.get("bonus") is not None and data["bonus"] not in RESIDENT_BONUSES:
         raise ConflictError(f"Неизвестный бонус: {data['bonus']}")
+    if "set_name" in data:
+        data["set_name"] = (data["set_name"] or "").strip() or None
     if resident_id is None:
         row = TownResident(**data)
         db.add(row)

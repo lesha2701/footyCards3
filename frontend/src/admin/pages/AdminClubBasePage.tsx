@@ -50,6 +50,8 @@ const TOWN_MOOD: [string, string, number][] = [
   ["houses", "Все дома, очков", 20], ["decor", "Место, очков", 20],
   ["resident", "Житель, очков", 10], ["resident_legendary", "Легенда, очков", 20], ["resident_slots", "Жителей в районе", 3],
   ["bonus_settled_only", "Бонус только поселённым (1/0)", 1],
+  ["set_rent_pct", "Собранный набор, +% ренты", 5], ["set_max_pct", "Все наборы, макс. %", 25],
+  ["set_min_size", "Жителей в наборе, мин.", 2],
 ];
 
 // [GameConfig.town_social key, label, default (town_social_service.SOCIAL_DEFAULTS)]

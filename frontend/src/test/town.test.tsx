@@ -320,6 +320,24 @@ describe("TownPage", () => {
     expect(screen.getByText(/Живёт: Пляж/)).toBeInTheDocument();
   });
 
+  it("shows the resident sets, a badge for a whole one", async () => {
+    vi.mocked(fetchTownResidents).mockResolvedValueOnce({
+      ...album(),
+      residents: [resident(1, "Рыбак", 1), resident(2, "Капитан", 1), resident(3, "Сёрфер", 0)],
+      sets: [
+        { name: "Пляжная банда", total: 2, owned: 2, complete: true, resident_ids: [1, 2], rent_pct: 5 },
+        { name: "Волна", total: 2, owned: 1, complete: false, resident_ids: [1, 3], rent_pct: 5 },
+      ],
+      sets_pct: 5, sets_max_pct: 25,
+    });
+    at("/town/residents");
+    const panel = await screen.findByTestId("town-sets");
+    expect(panel).toHaveTextContent("🏅 Пляжная банда");
+    expect(panel).toHaveTextContent("собран · +5%");
+    expect(panel).toHaveTextContent("1/2 · соберёшь — +5%");
+    expect(panel).toHaveTextContent("❔ Сёрфер");
+  });
+
   it("shows the town's own name and buys the hotel for the cards held", async () => {
     vi.mocked(fetchTown).mockImplementation(async () => town({ name: "Сан-Виктор" }));
     at("/town");

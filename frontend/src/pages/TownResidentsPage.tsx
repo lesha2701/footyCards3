@@ -58,6 +58,7 @@ export default function TownResidentsPage() {
       </div>
 
       {data && <Summary album={data} />}
+      {data && <SetsPanel album={data} />}
       {data && !data.enabled && <p className="rounded-xl bg-amber-400/10 px-3 py-2 text-xs text-legend">Жители временно недоступны.</p>}
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
       {notice && <p className="rounded-xl bg-accent-lime/10 px-3 py-2 text-xs text-accent-lime">{notice}</p>}
@@ -156,6 +157,45 @@ function ResidentCard({ resident: r, busy, enabled, settledOnly, onSell, onClose
           </button>
         )}
       </div>
+    </section>
+  );
+}
+
+/** «Наборы жителей»: progress of each set, a badge for a whole one. */
+function SetsPanel({ album }: { album: TownResidentsAlbum }) {
+  const sets = album.sets ?? [];
+  if (sets.length === 0) return null;
+  const names = new Map(album.residents.map((r) => [r.id, r]));
+  return (
+    <section className="flex flex-col gap-2 rounded-2xl border border-amber-300/25 bg-amber-400/5 p-3" aria-label="Наборы жителей" data-testid="town-sets">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-bold text-ink-chalk">🧩 Наборы жителей</p>
+        {!!album.sets_pct && <span className="text-xs font-bold text-amber-200">+{album.sets_pct}% к ренте домов</span>}
+      </div>
+      {sets.map((s) => (
+        <div key={s.name} className="flex flex-col gap-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className={`truncate text-xs font-semibold ${s.complete ? "text-amber-200" : "text-ink-chalk"}`}>
+              {s.complete ? "🏅 " : ""}{s.name}
+            </p>
+            <span className="shrink-0 text-[11px] text-ink-mist">
+              {s.complete ? `собран · +${s.rent_pct}%` : `${s.owned}/${s.total} · соберёшь — +${s.rent_pct}%`}
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {s.resident_ids.map((id) => {
+              const r = names.get(id);
+              if (!r) return null;
+              return (
+                <span key={id} className={`rounded-full px-2 py-0.5 text-[10px] ${r.owned ? "bg-amber-400/15 text-amber-100" : "bg-white/5 text-ink-mist-dim"}`}>
+                  {r.owned ? r.icon : "❔"} {r.name}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      {!!album.sets_max_pct && <p className="text-[10px] text-ink-mist">Все наборы вместе — не больше +{album.sets_max_pct}%.</p>}
     </section>
   );
 }

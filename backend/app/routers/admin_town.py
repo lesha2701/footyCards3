@@ -28,6 +28,7 @@ class ResidentIn(BaseModel):
     rarity: str = "common"
     bonus: str = "none"
     bonus_value: int = Field(default=0, ge=0, le=100_000)
+    set_name: Optional[str] = Field(default=None, max_length=48)
     drop_weight: int = Field(default=100, ge=0, le=100_000)
     is_pack_droppable: bool = True
     is_active: bool = True

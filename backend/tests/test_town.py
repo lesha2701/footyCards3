@@ -524,3 +524,38 @@ async def test_resident_bonus_works_only_while_settled(client, db_session, bot_t
     await client.post(f"{API}/town/residents/{resident.id}/settle", json={"district": None}, headers=headers)
     album = (await client.get(f"{API}/town/residents", headers=headers)).json()
     assert album["bonuses"]["hotel_pct"] == 0
+
+
+async def test_a_whole_resident_set_adds_rent_and_a_badge(client, db_session, bot_token):
+    await _config(db_session, town_resident_rent=0, town_price_growth_pct=0,
+                  town_districts={"beach": {"price": 0, "rent": 100}},
+                  town_mood={"min_pct": 100, "max_pct": 100, "bonus_settled_only": 0,
+                             "set_rent_pct": 10, "set_max_pct": 15, "set_min_size": 2})
+    headers, user = await _login(client, db_session, bot_token, 990140)
+    assert (await client.post(f"{API}/town/houses/beach/surf/buy", headers=headers, json={})).status_code == 200
+    fisher = await _resident(db_session, name="Рыбак", set_name="Пляжная банда")
+    surfer = await _resident(db_session, name="Сёрфер", set_name=" Пляжная банда ")
+    await _resident(db_session, name="Одиночка", set_name="Один в наборе")  # below set_min_size: no set
+    await town_service.grant(db_session, user.id, fisher, "admin")
+    await db_session.commit()
+
+    album = (await client.get(f"{API}/town/residents", headers=headers)).json()
+    assert [(s["name"], s["owned"], s["total"], s["complete"]) for s in album["sets"]] == [("Пляжная банда", 1, 2, False)]
+    assert album["sets_pct"] == 0
+    assert (await client.get(f"{API}/town", headers=headers)).json()["income"]["rate_per_day"] == 100
+
+    await town_service.grant(db_session, user.id, surfer, "admin")
+    await db_session.commit()
+    album = (await client.get(f"{API}/town/residents", headers=headers)).json()
+    assert album["sets"][0]["complete"] is True and album["sets_pct"] == 10
+    state = (await client.get(f"{API}/town", headers=headers)).json()
+    assert state["sets_pct"] == 10 and state["sets_complete"] == ["Пляжная банда"]
+    assert state["income"]["rate_per_day"] == 110
+
+
+def test_resident_sets_are_capped():
+    config = type("C", (), {"town_mood": {"set_rent_pct": 10, "set_max_pct": 15, "set_min_size": 1}})()
+    rows = [UserTownResident(resident_id=i, copies=1) for i in (1, 2)]
+    sets = town_service.resident_sets(config, [(1, "A"), (2, "B"), (3, "C")], rows)
+    assert [s["complete"] for s in sets] == [True, True, False]
+    assert town_service.sets_pct(config, sets) == 15
