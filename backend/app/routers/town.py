@@ -8,7 +8,7 @@ from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.schemas.stars import StarsInvoiceStatusOut
-from app.services import stars_payment_service, town_service, town_social_service
+from app.services import stars_payment_service, town_season_service, town_service, town_social_service
 
 router = APIRouter(prefix="/town", tags=["town"])
 
@@ -79,6 +79,16 @@ async def claim_quest(quest_id: int, db: AsyncSession = Depends(get_db), user: U
 @router.get("/guests")
 async def guests(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await town_social_service.guests(db, user)
+
+
+@router.get("/season")
+async def season(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await town_season_service.shop(db, user)
+
+
+@router.post("/season/{code}/invoice")
+async def season_invoice(code: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await town_season_service.create_invoice(db, user, code)
 
 
 @router.get("/week")

@@ -150,3 +150,52 @@ async def test_town_week_counts_old_guests_and_pays_the_past_week_once(client, d
     assert now["top"][0]["user_id"] == b.id and now["top"][0]["score"] == 14 and now["top"][0]["reward"] == 500
     assert now["me"]["place"] == 1
     assert (await client.get(f"{API}/town/week", headers=fresh_headers)).json()["me"] is None
+
+
+async def test_seasonal_decorations_sell_for_stars_in_their_season_numbered(client, db_session, bot_token, monkeypatch):
+    from app.services import town_season_service
+    from tests.test_town import _fake_invoice_link
+
+    stars_payment_service = await _fake_invoice_link(monkeypatch)
+    monkeypatch.setattr(town_season_service, "current_season", lambda: "winter")
+    await _config(db_session, town_districts={"beach": {"price": 0, "rent": 100}}, town_price_growth_pct=0,
+                  town_social={**SOCIAL, "season_item_stars": 30, "season_item_supply": 2})
+    a_headers, a = await _login(client, db_session, bot_token, 990331)
+    b_headers, b = await _login(client, db_session, bot_token, 990332)
+    c_headers, c = await _login(client, db_session, bot_token, 990333)
+
+    shop = (await client.get(f"{API}/town/season", headers=a_headers)).json()
+    assert shop["season"] == "winter" and shop["stars"] == 30
+    assert {i["code"] for i in shop["items"]} == {"tree", "snowman", "garland"}
+    assert (await client.post(f"{API}/town/season/pumpkins/invoice", headers=a_headers)).status_code == 409  # not its season
+    assert (await client.post(f"{API}/town/season/nope/invoice", headers=a_headers)).status_code == 404
+
+    async def buy(headers, user, charge):
+        inv = await client.post(f"{API}/town/season/tree/invoice", headers=headers)
+        assert inv.status_code == 200, inv.text
+        token = inv.json()["payload_token"]
+        assert (await stars_payment_service.validate_pre_checkout(db_session, token, 30))[0]
+        await stars_payment_service.deliver_payment(db_session, token, user.telegram_id, charge, 30)
+        await stars_payment_service.deliver_payment(db_session, token, user.telegram_id, charge, 30)  # retried
+        return token
+
+    await buy(a_headers, a, "ch-season-a")
+    assert (await client.post(f"{API}/town/season/tree/invoice", headers=a_headers)).status_code == 409  # already his
+    await buy(b_headers, b, "ch-season-b")
+    assert (await client.post(f"{API}/town/season/tree/invoice", headers=c_headers)).status_code == 409  # sold out
+
+    state = (await client.get(f"{API}/town", headers=b_headers)).json()
+    assert state["season_items"] == [{"code": "tree", "name": "Новогодняя ёлка на площади", "emoji": "🎄", "serial": 2}]
+    tree = next(i for i in (await client.get(f"{API}/town/season", headers=c_headers)).json()["items"] if i["code"] == "tree")
+    assert tree["on_sale"] is False and tree["sold"] == 2
+
+    await _with_house(client, a_headers)
+    view = (await client.get(f"{API}/town/visit/{a.id}", headers=c_headers)).json()
+    assert [(i["code"], i["serial"]) for i in view["season_items"]] == [("tree", 1)]
+
+    # Out of season the bought one stays and is shown; the shop no longer sells winter.
+    monkeypatch.setattr(town_season_service, "current_season", lambda: "summer")
+    summer = (await client.get(f"{API}/town/season", headers=a_headers)).json()
+    owned_tree = next(i for i in summer["items"] if i["code"] == "tree")
+    assert owned_tree["owned"] is True and owned_tree["on_sale"] is False and owned_tree["serial"] == 1
+    assert "snowman" not in {i["code"] for i in summer["items"]}

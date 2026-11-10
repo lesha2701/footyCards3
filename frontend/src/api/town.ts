@@ -73,6 +73,8 @@ export interface TownState {
   unlock_coins: number;
   /** 0 — renaming is not sold. */
   rename_stars: number;
+  /** «Сезонный город»: the limited decorations the player holds (style only). */
+  season_items?: TownSeasonOwned[];
   /** The player's own name for the town; null — not named yet. */
   name: string | null;
   hotel: TownHotel;
@@ -268,6 +270,7 @@ export interface TownVisitView {
   owner: string;
   districts: { code: string; name: string; owned: number; total: number; mood: number }[];
   places: string[];
+  season_items?: TownSeasonOwned[];
   hotel: boolean;
   population: number;
   likes_today: number;
@@ -326,5 +329,46 @@ export interface TownWeek {
 
 export async function fetchTownWeek(): Promise<TownWeek> {
   const { data } = await api.get<TownWeek>("/town/week");
+  return data;
+}
+
+// --- «Сезонный город» (backend town_season_service): Stars, style only ---
+
+export type TownSeason = "winter" | "spring" | "summer" | "autumn";
+
+export interface TownSeasonOwned {
+  code: string;
+  name: string;
+  emoji: string;
+  serial: number;
+}
+
+export interface TownSeasonItem {
+  code: string;
+  name: string;
+  emoji: string;
+  season: TownSeason;
+  on_sale: boolean;
+  owned: boolean;
+  serial: number | null;
+  sold: number;
+  /** 0 = no limit. */
+  supply: number;
+}
+
+export interface TownSeasonShop {
+  season: TownSeason;
+  season_name: string;
+  stars: number;
+  items: TownSeasonItem[];
+}
+
+export async function fetchTownSeason(): Promise<TownSeasonShop> {
+  const { data } = await api.get<TownSeasonShop>("/town/season");
+  return data;
+}
+
+export async function createTownSeasonInvoice(code: string): Promise<StarsInvoiceCreate> {
+  const { data } = await api.post<StarsInvoiceCreate>(`/town/season/${code}/invoice`);
   return data;
 }

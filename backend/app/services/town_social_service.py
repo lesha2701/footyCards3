@@ -67,6 +67,9 @@ SOCIAL_DEFAULTS: dict[str, int] = {
     "week_reward_2": 2000,
     "week_reward_3": 1000,
     "week_reward_rest": 300,
+    # «Сезонный город» (town_season_service): Stars for a seasonal decoration, copies of each (0 = no limit)
+    "season_item_stars": 49,
+    "season_item_supply": 0,
 }
 
 # mode key (newbie_service.games_played) -> how a quest names it
@@ -349,6 +352,7 @@ async def _view(db: AsyncSession, config, user: User, owner_id: int, visit: Town
             for code in town_service.HOUSES
         ],
         "places": sorted(places),
+        "season_items": await _season_items(db, owner_id),
         "hotel": town.hotel_bought_at is not None,
         "population": sum(r.copies for r in residents if r.copies > 0 and r.resident.is_active),
         "likes_today": await _likes(db, owner_id, day), "likes_total": await _likes(db, owner_id),
@@ -543,3 +547,9 @@ async def week_ranking(db: AsyncSession, user: User) -> dict:
             "mine": {"place": my_last.place, "coins": my_last.coins} if my_last else None,
         },
     }
+
+
+async def _season_items(db: AsyncSession, owner_id: int) -> list[dict]:
+    from app.services import town_season_service
+
+    return await town_season_service.owned_items(db, owner_id)

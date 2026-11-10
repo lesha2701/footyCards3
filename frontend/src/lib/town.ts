@@ -346,3 +346,17 @@ export function skyAt(hour: number): Sky {
   if (hour >= 18) return "dusk";
   return "day";
 }
+
+export type Season = "winter" | "spring" | "summer" | "autumn";
+
+/** The season by the month (1–12): winter Dec–Feb, spring Mar–May, summer Jun–Aug, autumn Sep–Nov. */
+export function seasonAt(month: number): Season {
+  if (month === 12 || month <= 2) return "winter";
+  if (month <= 5) return "spring";
+  if (month <= 8) return "summer";
+  return "autumn";
+}
+
+/** What drifts over the town map in a season (summer: clear sky). */
+export const SEASON_PARTICLES: Record<Season, string> = { winter: "❄", spring: "🌸", summer: "", autumn: "🍂" };
+export const SEASON_LABEL: Record<Season, string> = { winter: "❄️ Зима", spring: "🌸 Весна", summer: "☀️ Лето", autumn: "🍂 Осень" };

@@ -7,7 +7,7 @@ import {
   buyTownDecor, buyTownHotel, buyTownHouse, claimTownIncome, claimTownQuest, fetchTown, fetchTownResidents, giftTown, likeTown, sellTownResidentSpare, settleTownResident, unlockTown, type TownQuests, type TownResident, type TownResidentsAlbum, type TownState, type TownVisitView,
 } from "@/api/town";
 import { useAuthStore } from "@/store/authStore";
-import { DISTRICTS, MAP_ZONES, SCENE_H, SCENE_W, SPRITES, moverAt, skyAt, type Mover } from "@/lib/town";
+import { DISTRICTS, MAP_ZONES, SCENE_H, SCENE_W, SPRITES, moverAt, seasonAt, skyAt, type Mover } from "@/lib/town";
 import TownPage from "@/pages/TownPage";
 import TownGuestsPage from "@/pages/TownGuestsPage";
 import TownResidentsPage from "@/pages/TownResidentsPage";
@@ -126,6 +126,14 @@ vi.mock("@/api/town", () => ({
   visitTown: vi.fn(async () => visit()),
   likeTown: vi.fn(async () => visit({ liked: true, likes_today: 1 })),
   giftTown: vi.fn(async () => visit({ gifted: true, can_gift: false, new_balance: 4700 })),
+  fetchTownSeason: vi.fn(async () => ({
+    season: "winter", season_name: "Зима", stars: 49,
+    items: [
+      { code: "tree", name: "Новогодняя ёлка на площади", emoji: "🎄", season: "winter", on_sale: false, owned: true, serial: 7, sold: 10, supply: 0 },
+      { code: "snowman", name: "Снеговик в шарфе клуба", emoji: "⛄", season: "winter", on_sale: true, owned: false, serial: null, sold: 3, supply: 100 },
+    ],
+  })),
+  createTownSeasonInvoice: vi.fn(),
   fetchTownWeek: vi.fn(async () => ({
     week: "2026-W46", ends_on: "2026-11-15",
     points: { like: 10, guest: 3, house: 1 },
@@ -282,6 +290,18 @@ describe("TownPage", () => {
     await waitFor(() => expect(claimTownQuest).toHaveBeenCalledWith(1, expect.anything()));
     expect(await screen.findByText(/Житель доволен: \+60 монет/)).toBeInTheDocument();
     await waitFor(() => expect(useAuthStore.getState().user?.balance).toBe(5060));
+  });
+
+  it("sells the season's decorations for Stars and shows the owned ones", async () => {
+    at("/town");
+    const panel = await screen.findByTestId("town-season");
+    expect(panel).toHaveTextContent("Твоё · № 7");
+    expect(panel).toHaveTextContent("Осталось 97 из 100");
+    expect(screen.getByRole("button", { name: "Купить: Снеговик в шарфе клуба" })).toHaveTextContent("⭐ 49");
+  });
+
+  it("picks the season by the month", () => {
+    expect([1, 3, 6, 9, 12].map(seasonAt)).toEqual(["winter", "spring", "summer", "autumn", "winter"]);
   });
 
   it("shows the town of the week ranking and the past week's prize", async () => {

@@ -6,7 +6,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
   buyTownDecor, buyTownHotel, buyTownHouse, claimTownIncome, createTownRenameInvoice, fetchTown, fetchTownInvoiceStatus,
-  claimTownQuest, fetchTownQuests, fetchTownResidents, settleTownResident, unlockTown, type TownDistrictState, type TownState,
+  claimTownQuest, createTownSeasonInvoice, fetchTownQuests, fetchTownResidents, fetchTownSeason, settleTownResident, unlockTown,
+  type TownDistrictState, type TownState,
 } from "@/api/town";
 import GameHero from "@/components/common/GameHero";
 import { IconClose, IconCoin } from "@/components/icons";
@@ -19,7 +20,7 @@ import { formatGameError } from "@/lib/errors";
 import { useMarkSeen } from "@/lib/seenSections";
 import { hapticNotify, openTelegramInvoice } from "@/lib/telegram";
 import {
-  DECOR_ZONES, DISTRICTS, FIREWORKS_BOX, MAP_ZONES, SCENE_H, SCENE_W, TOWN_MAP, districtOf, type DecorZone, type District,
+  DECOR_ZONES, DISTRICTS, FIREWORKS_BOX, MAP_ZONES, SCENE_H, SCENE_W, SEASON_LABEL, TOWN_MAP, districtOf, type DecorZone, type District,
   type TownBuilding,
 } from "@/lib/town";
 import { useAuthStore } from "@/store/authStore";
@@ -268,6 +269,56 @@ function TownStrip({ state, claimBusy, onClaim, hotelBusy, onHotel }: {
   );
 }
 
+/** «Сезонный город»: the season's limited decorations for Stars — style only. */
+function SeasonPanel() {
+  const queryClient = useQueryClient();
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const { data } = useQuery({ queryKey: ["town-season"], queryFn: fetchTownSeason });
+  const buy = useMutation({
+    mutationFn: (code: string) => payWithStars(() => createTownSeasonInvoice(code)),
+    onSuccess: (state) => {
+      void queryClient.invalidateQueries({ queryKey: ["town-season"] });
+      if (!state) return;
+      hapticNotify("success");
+      queryClient.setQueryData(["town"], state);
+      setMessage({ ok: true, text: "Украшение уже в городе ✨" });
+    },
+    onError: (err) => { hapticNotify("error"); setMessage({ ok: false, text: formatGameError(err, "Не получилось") }); },
+  });
+  if (!data || data.items.length === 0) return null;
+  return (
+    <section className="flex flex-col gap-2 rounded-2xl border border-sky-300/25 bg-sky-400/5 p-3" aria-label="Сезонные украшения" data-testid="town-season">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-bold text-ink-chalk">{SEASON_LABEL[data.season]} в городе</p>
+        <span className="text-[10px] text-ink-mist">только в сезон · для красоты</span>
+      </div>
+      {data.items.map((item) => (
+        <div key={item.code} className="flex items-center gap-2">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/5 text-xl" aria-hidden>{item.emoji}</span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-semibold text-ink-chalk">{item.name}</p>
+            <p className="truncate text-[10px] text-ink-mist">
+              {item.owned ? `Твоё · № ${item.serial}` : item.supply ? `Осталось ${fmt(Math.max(0, item.supply - item.sold))} из ${fmt(item.supply)}` : `Уже у ${fmt(item.sold)}`}
+            </p>
+          </div>
+          {item.owned ? (
+            <span className="shrink-0 text-xs font-bold text-accent-lime">✓</span>
+          ) : (
+            <button
+              type="button" disabled={!item.on_sale || buy.isPending} onClick={() => buy.mutate(item.code)}
+              aria-label={`Купить: ${item.name}`}
+              className={`shrink-0 rounded-lg px-2 py-1 text-[11px] font-bold ${item.on_sale ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"}`}
+            >
+              {item.on_sale ? `⭐ ${fmt(data.stars)}` : "Нет"}
+            </button>
+          )}
+        </div>
+      ))}
+      {message && <p className={`text-[11px] ${message.ok ? "text-accent-lime" : "text-red-400"}`}>{message.text}</p>}
+    </section>
+  );
+}
+
 /** «Задания жителей»: today's small quests, each from one of the residents. */
 function QuestsPanel() {
   const queryClient = useQueryClient();
@@ -355,10 +406,12 @@ function TownMap({
         <TownStrip state={state} claimBusy={claimBusy} onClaim={onClaim} hotelBusy={hotelBusy} onHotel={onHotel} />
       )}
       {state?.enabled && state.unlocked && <QuestsPanel />}
+      {state?.enabled && state.unlocked && <SeasonPanel />}
       <section className="rounded-3xl border border-white/10 bg-bg-surface p-2">
         <TownScene
           art={TOWN_MAP}
           label="Карта города"
+          decorations={state?.season_items}
           onPick={(c) => {
             const picked = DECOR_ZONES.find((d) => `decor:${d.code}` === c);
             if (picked) setPlace(picked);

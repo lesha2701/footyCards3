@@ -66,6 +66,7 @@ const TOWN_SOCIAL: [string, string, number][] = [
   ["week_rewarded_places", "Неделя: мест с наградой", 10], ["week_reward_1", "Неделя: 1 место", 3000],
   ["week_reward_2", "Неделя: 2 место", 2000], ["week_reward_3", "Неделя: 3 место", 1000],
   ["week_reward_rest", "Неделя: 4+ место", 300],
+  ["season_item_stars", "Сезонное украшение, ⭐", 49], ["season_item_supply", "Копий украшения (0 = без лимита)", 0],
 ];
 
 const TOWN_DECOR: Record<string, string> = {

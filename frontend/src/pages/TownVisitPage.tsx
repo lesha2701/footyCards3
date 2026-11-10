@@ -76,6 +76,7 @@ export default function TownVisitPage() {
             <TownScene
               art={TOWN_MAP}
               label={`Карта: ${data.name}`}
+              decorations={data.season_items}
               onPick={() => undefined}
               zones={[...MAP_ZONES.filter((z) => z.code !== "base").map((z) => {
                 const d = district(z.code);

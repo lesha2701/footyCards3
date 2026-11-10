@@ -532,6 +532,7 @@ async def get_state(db: AsyncSession, user: User) -> dict:
         "unlocked": unlocked,
         "unlock_coins": max(0, int(config.town_unlock_coins)),
         "rename_stars": max(0, int(config.town_rename_stars)),
+        "season_items": await _season_items(db, user.id),
         "name": town.name if town is not None else None,
         "hotel": {
             "owned": parts["hotel_owned"],
@@ -1007,6 +1008,10 @@ async def validate_stars_invoice(db: AsyncSession, invoice) -> tuple[bool, str]:
     config = await get_config(db)
     if not config.town_enabled:
         return False, "Город сейчас закрыт"
+    if invoice.academy_speedup.startswith("town:season:"):
+        from app.services import town_season_service
+
+        return await town_season_service.validate_invoice(db, invoice)
     if invoice.academy_speedup != _RENAME:
         return False, "Unknown order"
     if not is_unlocked(config, await db.get(UserTown, invoice.user_id)):
@@ -1020,6 +1025,10 @@ async def deliver_stars_invoice(db: AsyncSession, user: User, invoice) -> dict:
     """Called by stars_payment_service.deliver_payment under the invoice row
     lock (idempotent there). The payment is taken, so it never refuses; the
     caller commits."""
+    if invoice.academy_speedup.startswith("town:season:"):
+        from app.services import town_season_service
+
+        return await town_season_service.deliver_invoice(db, user, invoice)
     town = await _get_town(db, user.id)
     order = (await db.execute(select(TownLedger).where(
         TownLedger.user_id == user.id, TownLedger.idempotency_key == f"order-{invoice.payload_token}",
@@ -1031,3 +1040,9 @@ async def deliver_stars_invoice(db: AsyncSession, user: User, invoice) -> dict:
                                  idempotency_key=f"stars-{invoice.payload_token}")])
     await db.flush()
     return {"kind": "town_rename", "name": name}
+
+
+async def _season_items(db: AsyncSession, user_id: int) -> list[dict]:
+    from app.services import town_season_service
+
+    return await town_season_service.owned_items(db, user_id)

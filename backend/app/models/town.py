@@ -160,6 +160,24 @@ class TownVisit(Base):
     __table_args__ = (UniqueConstraint("visitor_id", "owner_id", "day", name="uq_town_visit_day"),)
 
 
+class UserTownSeasonItem(Base):
+    """«Сезонный город»: a limited decoration bought for Stars
+    (town_season_service.ITEMS), numbered per item."""
+
+    __tablename__ = "user_town_season_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(24), nullable=False)
+    serial: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "code", name="uq_town_season_item_user"),
+        UniqueConstraint("code", "serial", name="uq_town_season_item_serial"),
+    )
+
+
 class TownWeek(Base):
     """«Город недели» settled for a week (ISO "2026-W46"): the row is the
     lock — a week is paid once, whoever reads the ranking first."""
