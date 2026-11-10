@@ -87,15 +87,16 @@ DEFAULT_CLUB_BASE_COSMETICS: list = [
 # (before town_price_growth_pct for every house already owned) and its rent
 # in coins a day. The 0267 migration writes the same values.
 DEFAULT_TOWN_DISTRICTS: dict = {
-    "favela": {"price": 1500, "rent": 10},
-    "center": {"price": 3000, "rent": 18},
-    "mountains": {"price": 4500, "rent": 25},
-    "beach": {"price": 6000, "rent": 32},
-    "business": {"price": 9000, "rent": 42},
-    "residential": {"price": 2200, "rent": 14},
-    "industrial": {"price": 7500, "rent": 36},
-    "airport": {"price": 11000, "rent": 50},
-    "island": {"price": 14000, "rent": 60},
+    # 0278: ~10% dearer houses, ~10% less rent.
+    "favela": {"price": 1700, "rent": 9},
+    "center": {"price": 3300, "rent": 16},
+    "mountains": {"price": 5000, "rent": 23},
+    "beach": {"price": 6600, "rent": 29},
+    "business": {"price": 9900, "rent": 38},
+    "residential": {"price": 2400, "rent": 13},
+    "industrial": {"price": 8300, "rent": 33},
+    "airport": {"price": 12100, "rent": 45},
+    "island": {"price": 15400, "rent": 54},
 }
 
 # «Город», closed places on the map (pier, park, island): the price of
