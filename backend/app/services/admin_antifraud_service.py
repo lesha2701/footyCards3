@@ -184,7 +184,7 @@ async def ban_users(db: AsyncSession, user_ids: list[int]) -> list[int]:
 BOT_LIST = 100
 
 
-async def bot_suspects(db: AsyncSession, days: int = 7, min_games: int = 150) -> list[dict]:
+async def bot_suspects(db: AsyncSession, days: int = 7, min_games: int = 150, cleared: bool = False) -> list[dict]:
     """Accounts whose games (mini-games, Card Arena, Тактико) over the last
     `days` show no real sleep: active many hours a day, short longest break.
     Sorted by «days without sleep» (a day with 18+ active hours and no 4h
@@ -220,8 +220,8 @@ async def bot_suspects(db: AsyncSession, days: int = 7, min_games: int = 150) ->
     for uid in heavy:
         stamps = sorted(times.get(uid, []))
         user = users.get(uid)
-        if not stamps or user is None or user.is_admin:
-            continue
+        if not stamps or user is None or user.is_admin or user.anti_bot_cleared != cleared:
+            continue  # `cleared` = the list of accounts checked by hand instead
         hours = {s.replace(minute=0, second=0, microsecond=0) for s in stamps}
         per_day: dict = defaultdict(list)
         for s in stamps:
@@ -244,6 +244,7 @@ async def bot_suspects(db: AsyncSession, days: int = 7, min_games: int = 150) ->
             "rewards_blocked": user.game_rewards_blocked_flag,
             "resting": user.game_rewards_blocked and not user.game_rewards_blocked_flag,
             "watched": user.anti_bot_watch,
+            "cleared": user.anti_bot_cleared,
         })
     rows.sort(key=lambda r: (-r["days_without_sleep"], -r["active_hours_per_day"]))
     return rows[:BOT_LIST]
@@ -259,6 +260,25 @@ async def set_rewards_blocked(db: AsyncSession, user_ids: list[int], blocked: bo
     )).scalars().all())
     if targets:
         await db.execute(update(User).where(User.id.in_(targets)).values(game_rewards_blocked=blocked))
+    return targets
+
+
+async def set_cleared(db: AsyncSession, user_ids: list[int], cleared: bool) -> list[int]:
+    """«Проверен, не бот»: the account leaves the suspects list, and with it
+    any watch, open check, rest and the rewards block. Undoing it only puts
+    the account back on the list. The caller commits."""
+    ids = list(dict.fromkeys(user_ids))[:MAX_BAN_BATCH]
+    if not ids:
+        return []
+    targets = list((await db.execute(
+        select(User.id).where(User.id.in_(ids), User.is_admin.is_(False))
+    )).scalars().all())
+    if targets:
+        values: dict = {"anti_bot_cleared": cleared}
+        if cleared:
+            values.update(anti_bot_watch=False, presence_challenge=None, presence_due_at=None,
+                          rest_required_until=None, game_rewards_blocked=False)
+        await db.execute(update(User).where(User.id.in_(targets)).values(**values))
     return targets
 
 
