@@ -539,7 +539,8 @@ async def get_state(db: AsyncSession, user: User) -> dict:
         },
         "income": {
             "rate_per_day": rate,
-            "pending": pending_income(town, rate, config, now) if unlocked else 0,
+            "pending": (pending_income(town, rate, config, now) + int(town.gifts_pending or 0)) if unlocked and town else 0,
+            "gifts": int(town.gifts_pending or 0) if unlocked and town else 0,
             "cap": _income_cap(rate, config),
             "max_hours": int(config.town_income_max_hours),
         },
@@ -658,15 +659,17 @@ async def claim_income(db: AsyncSession, user: User, idempotency_key: Optional[s
     town = await _get_town(db, user.id)
     _require_open(config, town)
     _settle_income(town, await _rate(db, config, user.id, town, await _houses(db, user.id)), config, _now())
-    amount = int(town.income_accrued or 0)
+    gifts = int(town.gifts_pending or 0)
+    amount = int(town.income_accrued or 0) + gifts
     if amount <= 0:
         raise ConflictError("Пока нечего забирать — рента копится каждый час")
     town.income_accrued = 0
+    town.gifts_pending = 0  # guests' gifts (town_social_service.gift) come with the rent
     town.cared_at = _now()  # collecting is the care that keeps the districts happy
     paid = 0 if locked_user.game_rewards_blocked else amount
     if paid:
         await credit_coins(db, locked_user, paid, TransactionType.town_income, "Город: рента")
-    db.add_all([town, TownLedger(user_id=user.id, kind="income", coins_earned=paid, result={"accrued": amount},
+    db.add_all([town, TownLedger(user_id=user.id, kind="income", coins_earned=paid, result={"accrued": amount - gifts, "gifts": gifts},
                                  idempotency_key=idempotency_key)])
     await db.commit()
     return {**await get_state(db, user), "claimed": paid, "new_balance": locked_user.balance}

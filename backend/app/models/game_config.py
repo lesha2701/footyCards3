@@ -1400,6 +1400,8 @@ class GameConfig(TimestampMixin, Base):
     town_resident_max_daily_coins: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
     # Mood of districts (town_service.MOOD_DEFAULTS overridden key by key).
     town_mood: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # Residents' quests and guests (town_social_service.SOCIAL_DEFAULTS overridden key by key).
+    town_social: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     # Closed places on the town map (town_service.DECOR): {code: {price,
     # rent_pct}}; a bought place adds rent_pct % to the houses' rent.
     town_decor: Mapped[dict] = mapped_column(

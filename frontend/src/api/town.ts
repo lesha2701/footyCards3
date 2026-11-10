@@ -87,7 +87,8 @@ export interface TownState {
   price_growth_pct: number;
   districts: TownDistrictState[];
   mood: TownMoodConfig;
-  income: { rate_per_day: number; pending: number; cap: number; max_hours: number };
+  /** pending includes the guests' gifts (gifts), paid with the rent. */
+  income: { rate_per_day: number; pending: number; cap: number; max_hours: number; gifts?: number };
   /** Present on a purchase / a claim. */
   new_balance?: number;
   claimed?: number;
@@ -186,5 +187,96 @@ export async function createTownRenameInvoice(name: string): Promise<StarsInvoic
 
 export async function fetchTownInvoiceStatus(payloadToken: string): Promise<StarsInvoiceStatus> {
   const { data } = await api.get<StarsInvoiceStatus>(`/town/stars-invoices/${payloadToken}`);
+  return data;
+}
+
+// --- residents' quests and guests (backend town_social_service) ---
+
+export interface TownQuest {
+  id: number;
+  kind: string;
+  label: string;
+  target: number;
+  progress: number;
+  reward_coins: number;
+  done: boolean;
+  claimed: boolean;
+  resident: { id: number; name: string; icon: string; image_path: string | null; rarity: Rarity } | null;
+}
+
+export interface TownQuests {
+  day: string;
+  quests: TownQuest[];
+  paid?: number;
+  new_balance?: number;
+}
+
+export async function fetchTownQuests(): Promise<TownQuests> {
+  const { data } = await api.get<TownQuests>("/town/quests");
+  return data;
+}
+
+export async function claimTownQuest(id: number): Promise<TownQuests> {
+  const { data } = await api.post<TownQuests>(`/town/quests/${id}/claim`);
+  return data;
+}
+
+export interface TownGuestTown {
+  user_id: number;
+  name: string;
+  owner: string;
+  friend: boolean;
+  houses: number;
+  likes: number;
+  visited: boolean;
+  liked: boolean;
+  gifted: boolean;
+}
+
+export interface TownGuests {
+  towns: TownGuestTown[];
+  gift_price: number;
+  gift_rent: number;
+  gifts_left: number;
+  likes_today: number;
+  likes_total: number;
+}
+
+export async function fetchTownGuests(): Promise<TownGuests> {
+  const { data } = await api.get<TownGuests>("/town/guests");
+  return data;
+}
+
+export interface TownVisitView {
+  user_id: number;
+  name: string;
+  owner: string;
+  districts: { code: string; name: string; owned: number; total: number; mood: number }[];
+  places: string[];
+  hotel: boolean;
+  population: number;
+  likes_today: number;
+  likes_total: number;
+  liked: boolean;
+  gifted: boolean;
+  can_gift: boolean;
+  gift_price: number;
+  gift_rent: number;
+  gifts_left: number;
+  new_balance?: number;
+}
+
+export async function visitTown(ownerId: number): Promise<TownVisitView> {
+  const { data } = await api.get<TownVisitView>(`/town/visit/${ownerId}`);
+  return data;
+}
+
+export async function likeTown(ownerId: number): Promise<TownVisitView> {
+  const { data } = await api.post<TownVisitView>(`/town/visit/${ownerId}/like`);
+  return data;
+}
+
+export async function giftTown(ownerId: number): Promise<TownVisitView> {
+  const { data } = await api.post<TownVisitView>(`/town/visit/${ownerId}/gift`);
   return data;
 }

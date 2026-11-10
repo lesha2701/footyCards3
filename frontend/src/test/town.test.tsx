@@ -4,12 +4,14 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  buyTownDecor, buyTownHotel, buyTownHouse, claimTownIncome, fetchTown, fetchTownResidents, sellTownResidentSpare, settleTownResident, unlockTown, type TownResident, type TownResidentsAlbum, type TownState,
+  buyTownDecor, buyTownHotel, buyTownHouse, claimTownIncome, claimTownQuest, fetchTown, fetchTownResidents, giftTown, likeTown, sellTownResidentSpare, settleTownResident, unlockTown, type TownQuests, type TownResident, type TownResidentsAlbum, type TownState, type TownVisitView,
 } from "@/api/town";
 import { useAuthStore } from "@/store/authStore";
 import { DISTRICTS, MAP_ZONES, SCENE_H, SCENE_W, SPRITES, moverAt, type Mover } from "@/lib/town";
 import TownPage from "@/pages/TownPage";
+import TownGuestsPage from "@/pages/TownGuestsPage";
 import TownResidentsPage from "@/pages/TownResidentsPage";
+import TownVisitPage from "@/pages/TownVisitPage";
 
 const inside = ([x, y]: [number, number]) => x >= 0 && x <= SCENE_W && y >= 0 && y <= SCENE_H;
 
@@ -114,7 +116,33 @@ vi.mock("@/api/town", () => ({
   settleTownResident: vi.fn(async () => town()),
   createTownRenameInvoice: vi.fn(),
   fetchTownInvoiceStatus: vi.fn(),
+  fetchTownQuests: vi.fn(async () => quests()),
+  claimTownQuest: vi.fn(async () => ({ ...quests(true), paid: 60, new_balance: 5060 })),
+  fetchTownGuests: vi.fn(async () => ({
+    towns: [{ user_id: 7, name: "Город Пети", owner: "Петя", friend: true, houses: 9, likes: 4, visited: false, liked: false, gifted: false }],
+    gift_price: 300, gift_rent: 100, gifts_left: 3, likes_today: 1, likes_total: 12,
+  })),
+  visitTown: vi.fn(async () => visit()),
+  likeTown: vi.fn(async () => visit({ liked: true, likes_today: 1 })),
+  giftTown: vi.fn(async () => visit({ gifted: true, can_gift: false, new_balance: 4700 })),
 }));
+
+const quests = (claimed = false): TownQuests => ({
+  day: "2026-11-10",
+  quests: [
+    { id: 1, kind: "claim", label: "Собери ренту города", target: 1, progress: 1, reward_coins: 60, done: true, claimed,
+      resident: { id: 2, name: "Капитан", icon: "⚓", image_path: null, rarity: "legendary" } },
+    { id: 2, kind: "visit", label: "Загляни в гости в 2 города", target: 2, progress: 0, reward_coins: 60, done: false,
+      claimed: false, resident: null },
+  ],
+});
+
+const visit = (over: Partial<TownVisitView> = {}): TownVisitView => ({
+  user_id: 7, name: "Город Пети", owner: "Петя",
+  districts: [{ code: "beach", name: "Пляж", owned: 3, total: 12, mood: 70 }],
+  places: ["pier"], hotel: true, population: 5, likes_today: 0, likes_total: 4,
+  liked: false, gifted: false, can_gift: true, gift_price: 300, gift_rent: 100, gifts_left: 3, ...over,
+});
 
 describe("TownPage", () => {
   beforeEach(() => {
@@ -131,6 +159,8 @@ describe("TownPage", () => {
           <Routes>
             <Route path="/town" element={<TownPage />} />
             <Route path="/town/residents" element={<TownResidentsPage />} />
+            <Route path="/town/guests" element={<TownGuestsPage />} />
+            <Route path="/town/visit/:ownerId" element={<TownVisitPage />} />
             <Route path="/town/:district" element={<TownPage />} />
             <Route path="/base" element={<p>экран базы</p>} />
           </Routes>
@@ -230,6 +260,32 @@ describe("TownPage", () => {
     await waitFor(() => expect(sellTownResidentSpare).toHaveBeenCalledWith(1, 1));
     expect(await screen.findByText(/Продано: \+10 монет/)).toBeInTheDocument();
     await waitFor(() => expect(useAuthStore.getState().user?.balance).toBe(5010));
+  });
+
+  it("shows the residents' quests and pays a done one", async () => {
+    at("/town");
+    const panel = await screen.findByTestId("town-quests");
+    await waitFor(() => expect(panel).toHaveTextContent("Собери ренту города"));
+    expect(panel).toHaveTextContent("Капитан · 1/1");
+    expect(screen.getByRole("button", { name: "Награда за задание: Загляни в гости в 2 города" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Награда за задание: Собери ренту города" }));
+    await waitFor(() => expect(claimTownQuest).toHaveBeenCalledWith(1, expect.anything()));
+    expect(await screen.findByText(/Житель доволен: \+60 монет/)).toBeInTheDocument();
+    await waitFor(() => expect(useAuthStore.getState().user?.balance).toBe(5060));
+  });
+
+  it("lists towns to visit, likes one and leaves a gift", async () => {
+    at("/town/guests");
+    fireEvent.click(await screen.findByRole("link", { name: "В гости: Город Пети" }));
+    expect(await screen.findByRole("heading", { name: "Город Пети" })).toBeInTheDocument();
+    expect(screen.getByText(/Хозяин: Петя/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "❤️ Лайк" }));
+    await waitFor(() => expect(likeTown).toHaveBeenCalledWith(7));
+    expect(await screen.findByRole("button", { name: "❤️ Лайк есть" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /🎁 Подарок/ }));
+    await waitFor(() => expect(giftTown).toHaveBeenCalledWith(7));
+    expect(await screen.findByText(/хозяин получит \+100 к ренте/)).toBeInTheDocument();
+    await waitFor(() => expect(useAuthStore.getState().user?.balance).toBe(4700));
   });
 
   it("tells a resident's bonus sleeps until he is settled, and where he lives", async () => {

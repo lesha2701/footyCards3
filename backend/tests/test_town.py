@@ -118,7 +118,7 @@ async def test_rent_accrues_is_capped_and_collected_once(client, db_session, bot
     town.income_since = datetime.now(timezone.utc) - timedelta(hours=12, minutes=1)
     await db_session.commit()
     state = (await client.get(f"{API}/town", headers=headers)).json()
-    assert state["income"] == {"rate_per_day": 48, "pending": 24, "cap": 48, "max_hours": 24}
+    assert state["income"] == {"rate_per_day": 48, "pending": 24, "cap": 48, "max_hours": 24, "gifts": 0}
     claim = await client.post(f"{API}/town/income/claim", headers=headers, json={"idempotency_key": "r1"})
     assert claim.status_code == 200, claim.text
     assert claim.json()["claimed"] == 24 and claim.json()["new_balance"] == 900 + 24

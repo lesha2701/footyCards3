@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -28,6 +28,9 @@ class UserTown(Base):
     # The last time the rent was collected — the «care» part of every
     # district's mood (town_service.district_moods).
     cared_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Gifts guests left (town_social_service.gift): paid with the next rent
+    # collection, on top of it.
+    gifts_pending: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
 
@@ -113,3 +116,42 @@ class UserTownResident(Base):
     resident: Mapped[TownResident] = relationship(lazy="joined")
 
     __table_args__ = (UniqueConstraint("user_id", "resident_id", name="uq_user_town_residents_user_resident"),)
+
+
+class UserTownQuest(Base):
+    """A daily «Задание жителя» (town_social_service): one of
+    GameConfig.town_social.quests_per_day, unique per (user, day, slot).
+    `baseline` is the counter when it was given (games played so far) —
+    progress is the counter now minus it."""
+
+    __tablename__ = "user_town_quests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    day: Mapped[date] = mapped_column(Date, nullable=False)
+    slot: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    target: Mapped[int] = mapped_column(Integer, nullable=False)
+    baseline: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    reward_coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    resident_id: Mapped[Optional[int]] = mapped_column(ForeignKey("town_residents.id", ondelete="SET NULL"), nullable=True)
+    claimed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (UniqueConstraint("user_id", "day", "slot", name="uq_user_town_quest_slot"),)
+
+
+class TownVisit(Base):
+    """A guest in someone's town on a day: one row per (visitor, owner, day),
+    with the like and the gift the guest left (town_social_service)."""
+
+    __tablename__ = "town_visits"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    visitor_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    day: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    liked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    gift_coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    __table_args__ = (UniqueConstraint("visitor_id", "owner_id", "day", name="uq_town_visit_day"),)

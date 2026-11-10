@@ -838,6 +838,7 @@ class GameConfigOut(BaseModel):
     town_resident_max_daily_coins: int = 200
     town_decor: dict = {}
     town_mood: dict = {}
+    town_social: dict = {}
     calendar_catchup_coins: int = 150
     calendar_catchup_stars: int = 10
     calendar_catchup_max_per_month: int = 5
@@ -1699,6 +1700,7 @@ class GameConfigUpdate(BaseModel):
     town_resident_max_daily_coins: Optional[int] = Field(default=None, ge=0, le=1_000_000)
     town_decor: Optional[dict[str, dict[str, int]]] = None
     town_mood: Optional[dict[str, int]] = None
+    town_social: Optional[dict[str, int]] = None
     trade_send_min_account_age_days: Optional[int] = Field(default=None, ge=0, le=365)
     trade_send_min_active_days: Optional[int] = Field(default=None, ge=0, le=365)
     trade_daily_coins_receive_cap: Optional[int] = Field(default=None, ge=0)

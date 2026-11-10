@@ -8,7 +8,7 @@ from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.schemas.stars import StarsInvoiceStatusOut
-from app.services import stars_payment_service, town_service
+from app.services import stars_payment_service, town_service, town_social_service
 
 router = APIRouter(prefix="/town", tags=["town"])
 
@@ -64,6 +64,36 @@ async def unlock(payload: KeyRequest, db: AsyncSession = Depends(get_db), user: 
 @router.get("/residents")
 async def residents(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await town_service.album(db, user)
+
+
+@router.get("/quests")
+async def quests(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await town_social_service.quests(db, user)
+
+
+@router.post("/quests/{quest_id}/claim")
+async def claim_quest(quest_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await town_social_service.claim_quest(db, user, quest_id)
+
+
+@router.get("/guests")
+async def guests(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await town_social_service.guests(db, user)
+
+
+@router.get("/visit/{owner_id}")
+async def visit(owner_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await town_social_service.visit(db, user, owner_id)
+
+
+@router.post("/visit/{owner_id}/like")
+async def like(owner_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await town_social_service.like(db, user, owner_id)
+
+
+@router.post("/visit/{owner_id}/gift")
+async def gift(owner_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await town_social_service.gift(db, user, owner_id)
 
 
 @router.post("/residents/{resident_id}/settle")

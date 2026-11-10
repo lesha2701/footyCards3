@@ -6,7 +6,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
   buyTownDecor, buyTownHotel, buyTownHouse, claimTownIncome, createTownRenameInvoice, fetchTown, fetchTownInvoiceStatus,
-  fetchTownResidents, settleTownResident, unlockTown, type TownDistrictState, type TownState,
+  claimTownQuest, fetchTownQuests, fetchTownResidents, settleTownResident, unlockTown, type TownDistrictState, type TownState,
 } from "@/api/town";
 import GameHero from "@/components/common/GameHero";
 import { IconClose, IconCoin } from "@/components/icons";
@@ -73,7 +73,11 @@ export default function TownPage() {
   };
   const claim = useMutation({
     mutationFn: () => claimTownIncome(crypto.randomUUID()),
-    onSuccess: (data) => { apply(data); setNotice(`Жильцы заплатили ренту: +${fmt(data.claimed ?? 0)} монет 🏘️`); },
+    onSuccess: (data) => {
+      apply(data);
+      setNotice(`Жильцы заплатили ренту: +${fmt(data.claimed ?? 0)} монет 🏘️`);
+      void queryClient.invalidateQueries({ queryKey: ["town-quests"] });
+    },
     onError: fail,
   });
   const buy = useMutation({
@@ -229,7 +233,7 @@ function TownStrip({ state, claimBusy, onClaim, hotelBusy, onHotel }: {
           Рента · +{fmt(income.rate_per_day)}/д
         </span>
         <span className={`w-full rounded-lg px-1 py-1 text-[11px] font-bold ${income.pending > 0 ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"}`}>
-          {income.pending > 0 ? `Забрать ${fmt(income.pending)}` : `0 из ${fmt(income.cap)}`}
+          {income.pending > 0 ? `Забрать ${fmt(income.pending)}${income.gifts ? " 🎁" : ""}` : `0 из ${fmt(income.cap)}`}
         </span>
       </button>
       {hotel.owned ? (
@@ -264,6 +268,59 @@ function TownStrip({ state, claimBusy, onClaim, hotelBusy, onHotel }: {
   );
 }
 
+/** «Задания жителей»: today's small quests, each from one of the residents. */
+function QuestsPanel() {
+  const queryClient = useQueryClient();
+  const updateBalance = useAuthStore((s) => s.updateBalance);
+  const [message, setMessage] = useState<string | null>(null);
+  const { data } = useQuery({ queryKey: ["town-quests"], queryFn: fetchTownQuests, refetchInterval: 60_000 });
+  const claim = useMutation({
+    mutationFn: claimTownQuest,
+    onSuccess: (res) => {
+      hapticNotify("success");
+      if (res.new_balance != null) updateBalance(res.new_balance);
+      queryClient.setQueryData(["town-quests"], res);
+      setMessage(`Житель доволен: +${fmt(res.paid ?? 0)} монет`);
+    },
+    onError: (err) => { hapticNotify("error"); setMessage(formatGameError(err, "Не получилось")); },
+  });
+  return (
+    <section className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-bg-surface p-3" aria-label="Задания жителей" data-testid="town-quests">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-bold text-ink-chalk">📜 Задания жителей</p>
+        <Link to="/town/guests" className="rounded-full bg-cyan-400/10 px-3 py-1 text-xs font-bold text-cyan-200">👋 В гости ›</Link>
+      </div>
+      {(data?.quests ?? []).map((q) => (
+        <div key={q.id} className="flex items-center gap-2">
+          <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-xl bg-white/5">
+            {q.resident?.image_path
+              ? <img src={staticUrl(q.resident.image_path)} alt="" className="h-full w-full object-cover" />
+              : <span className="text-lg">{q.resident?.icon ?? "🏛️"}</span>}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className={`truncate text-xs font-semibold ${q.claimed ? "text-ink-mist-dim line-through" : "text-ink-chalk"}`}>{q.label}</p>
+            <p className="truncate text-[10px] text-ink-mist">
+              {q.resident ? q.resident.name : "Мэр"} · {q.progress}/{q.target}
+            </p>
+          </div>
+          {q.claimed ? (
+            <span className="shrink-0 text-xs font-bold text-accent-lime">✓</span>
+          ) : (
+            <button
+              type="button" disabled={!q.done || claim.isPending} onClick={() => claim.mutate(q.id)}
+              aria-label={`Награда за задание: ${q.label}`}
+              className={`flex shrink-0 items-center gap-0.5 rounded-lg px-2 py-1 text-[11px] font-bold ${q.done ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"}`}
+            >
+              <IconCoin size={11} /> {fmt(q.reward_coins)}
+            </button>
+          )}
+        </div>
+      ))}
+      {message && <p className="text-[11px] text-accent-lime">{message}</p>}
+    </section>
+  );
+}
+
 function TownMap({
   state, messages, claimBusy, onClaim, hotelBusy, onHotel, renameBusy, onRename, decorBusy, onDecor,
 }: {
@@ -294,6 +351,7 @@ function TownMap({
       {state && !(state.enabled && !state.unlocked) && (
         <TownStrip state={state} claimBusy={claimBusy} onClaim={onClaim} hotelBusy={hotelBusy} onHotel={onHotel} />
       )}
+      {state?.enabled && state.unlocked && <QuestsPanel />}
       <section className="rounded-3xl border border-white/10 bg-bg-surface p-2">
         <TownScene
           art={TOWN_MAP}
