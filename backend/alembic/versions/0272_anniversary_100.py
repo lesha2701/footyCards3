@@ -4,7 +4,10 @@ badge «100 дней» (the calendar's last gift), an empty, inactive collection
 «Клуб Центурионов» with the gold frame (card_skin 'gold100') — legends with
 100+ caps, filled when their art is ready — its completion badge (new
 card_collections.reward_badge_id) and «Юбилейный пак» (3 cards of that
-collection, granted by the calendar and the community goal, never sold).
+collection): granted by the calendar, the community goal and «Старожил», and
+on sale during the event — for coins (up to 10 a day) and, as a separate
+pack, for Stars (no daily limit). Both show only once the collection has
+cards (pack_service.collection_pool_ready).
 
 The event is switched on with its dates (21.11 – 30.11 Moscow, right after
 «Битва фанатов»): it starts by itself at midnight of the 21st.
@@ -33,6 +36,10 @@ BADGE = "100 дней"
 COLLECTION = "Клуб Центурионов"
 COLLECTION_BADGE = "Клуб Центурионов"
 PACK_SLUG = "anniversary-100"
+STARS_PACK_SLUG = "anniversary-100-stars"
+PACK_COINS = 2500
+PACK_DAILY_LIMIT = 10
+PACK_STARS = 20
 PACK_ODDS = (("rare", "0.55"), ("epic", "0.35"), ("legendary", "0.10"))
 
 
@@ -97,22 +104,30 @@ def upgrade() -> None:
             "d": "Легенды, сыгравшие 100+ матчей за сборную, — в доспехах центурионов и золотой рамке. "
                  "Только из юбилейного пака."}).scalar_one()
 
-    pack_id = conn.execute(sa.text(
-        "INSERT INTO packs (slug, name, description, price, card_count, guaranteed_min_rarity, image_path, is_active, "
-        "sort_order, pity_enabled, coach_drop_chance, stadium_drop_chance, skill_token_drop_chance, player_pool, "
-        "muse_drop_chance, created_at, updated_at) "
-        "VALUES (:slug, 'Юбилейный пак', :descr, 2500, 3, 'rare', 'packs/anniversary.webp', false, -10, false, "
-        "0, 0, 0, :pool, 0, now(), now()) ON CONFLICT (slug) DO NOTHING RETURNING id"
-    ), {"slug": PACK_SLUG, "pool": f"collection:{collection_id}",
-        "descr": "Подарок к 100 дням Victor FC: 3 карточки коллекции «Клуб Центурионов» в золотой рамке."}).scalar()
-    if pack_id is not None:
+    descr = "3 карточки коллекции «Клуб Центурионов» в золотой рамке. Только на 100 дней Victor FC."
+
+    def _pack(slug: str, name: str, stars, daily_limit, sort: int) -> int:
+        new_id = conn.execute(sa.text(
+            "INSERT INTO packs (slug, name, description, price, stars_price, daily_limit_per_user, card_count, "
+            "guaranteed_min_rarity, image_path, is_active, sort_order, available_from, available_until, "
+            "pity_enabled, coach_drop_chance, stadium_drop_chance, skill_token_drop_chance, player_pool, "
+            "muse_drop_chance, created_at, updated_at) "
+            "VALUES (:slug, :name, :descr, :price, :stars, :limit, 3, 'rare', 'packs/anniversary.webp', true, "
+            ":sort, :start, :end, false, 0, 0, 0, :pool, 0, now(), now()) ON CONFLICT (slug) DO NOTHING RETURNING id"
+        ), {"slug": slug, "name": name, "descr": descr, "price": PACK_COINS, "stars": stars, "limit": daily_limit,
+            "sort": sort, "start": STARTS_AT, "end": ENDS_AT, "pool": f"collection:{collection_id}"}).scalar()
+        if new_id is None:
+            return conn.execute(sa.text("SELECT id FROM packs WHERE slug = :s"), {"s": slug}).scalar_one()
         for rarity, prob in PACK_ODDS:
             conn.execute(sa.text(
                 "INSERT INTO pack_rarity_probabilities (pack_id, rarity, probability) "
                 "VALUES (:p, CAST(:r AS rarity_enum), CAST(:prob AS NUMERIC))"
-            ), {"p": pack_id, "r": rarity, "prob": prob})
-    else:
-        pack_id = conn.execute(sa.text("SELECT id FROM packs WHERE slug = :s"), {"s": PACK_SLUG}).scalar_one()
+            ), {"p": new_id, "r": rarity, "prob": prob})
+        return new_id
+
+    # The coins pack is also the one the gifts open (anniversary_settings.pack_id).
+    pack_id = _pack(PACK_SLUG, "Юбилейный пак", None, PACK_DAILY_LIMIT, -11)
+    _pack(STARS_PACK_SLUG, "Юбилейный пак ⭐", PACK_STARS, None, -10)
 
     conn.execute(sa.text(
         "UPDATE game_config SET anniversary_enabled = true, anniversary_starts_at = :start, "
