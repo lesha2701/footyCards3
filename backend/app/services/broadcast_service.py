@@ -10,6 +10,9 @@ from app.models.user import User
 from app.services.game_config_service import get_config
 
 BROADCAST_TITLE = "Обновление"
+# The bot puts a «Перейти в игру» button under a notification of this object
+# type (bot/services/notifier.py _RELATED_GAME_PATHS).
+UPDATE_OBJECT_TYPE = "app_update"
 
 
 def _premium_task_body(task_count: int, message: Optional[str]) -> str:
@@ -58,7 +61,7 @@ async def send_update_broadcast(db: AsyncSession, message: str) -> tuple[int, da
             [
                 {
                     "user_id": uid, "type": NotificationType.admin_message,
-                    "title": BROADCAST_TITLE, "body": message,
+                    "title": BROADCAST_TITLE, "body": message, "related_object_type": UPDATE_OBJECT_TYPE,
                     "is_read": False, "telegram_sent": False, "created_at": now,
                 }
                 for uid in user_ids

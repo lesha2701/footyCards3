@@ -47,6 +47,7 @@ async def test_admin_broadcast_reaches_all_users_and_updates_status(client, bot_
         matching = [n for n in notifications_resp.json() if n["body"] == "Вышло обновление!"]
         assert len(matching) == 1
         assert matching[0]["type"] == "admin_message"
+        assert matching[0]["related_object_type"] == "app_update"  # the bot adds «Перейти в игру»
 
         status_resp = await client.get("/api/v1/updates/status", headers=headers)
         assert status_resp.json()["broadcast_at"] is not None
