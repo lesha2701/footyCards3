@@ -28,7 +28,7 @@ export default function TownWeekPage() {
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">Рейтинг сейчас недоступен</p>}
       {last?.mine && (
         <p className="rounded-2xl border border-accent-lime/30 bg-accent-lime/10 px-3 py-2 text-xs text-accent-lime" data-testid="town-week-mine">
-          Прошлая неделя: твой город {medal(last.mine.place)} место{last.mine.coins ? ` — +${fmt(last.mine.coins)} монет` : ""}
+          Прошлая неделя: твой город на {last.mine.place} месте {medal(last.mine.place)}{last.mine.coins ? ` — +${fmt(last.mine.coins)} монет` : ""}
         </p>
       )}
       {data && (

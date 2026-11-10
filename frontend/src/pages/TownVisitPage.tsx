@@ -7,7 +7,7 @@ import { IconCoin } from "@/components/icons";
 import TownScene from "@/components/town/TownScene";
 import { formatGameError } from "@/lib/errors";
 import { hapticNotify } from "@/lib/telegram";
-import { DECOR_ZONES, MAP_ZONES, TOWN_MAP } from "@/lib/town";
+import { DECOR_ZONES, MAP_ZONES, TOWN_MAP, badgeAnchor } from "@/lib/town";
 import { useAuthStore } from "@/store/authStore";
 
 const fmt = (n: number) => n.toLocaleString("ru-RU");
@@ -85,9 +85,9 @@ export default function TownVisitPage() {
                   label: z.name,
                   zone: z.zone,
                   badge: (
-                    <span className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center whitespace-nowrap rounded-2xl bg-black/65 px-2.5 py-1 font-display text-xs font-bold text-white shadow-lg ring-1 ring-white/25">
+                    <span className={`absolute top-1/2 flex -translate-y-1/2 flex-col items-center whitespace-nowrap rounded-xl bg-black/65 px-1.5 py-0.5 font-display text-[10px] font-bold leading-tight text-white shadow-lg ring-1 ring-white/25 ${badgeAnchor(z.zone)}`}>
                       <span><span aria-hidden>{z.emoji}</span> {z.name}</span>
-                      {d && <span className="text-[10px] font-semibold text-white/70">🏠 {d.owned}/{d.total} · {moodEmoji(d.mood)} {d.mood}</span>}
+                      {d && <span className="text-[9px] font-semibold text-white/70">🏠 {d.owned}/{d.total} · {moodEmoji(d.mood)} {d.mood}</span>}
                     </span>
                   ),
                 };

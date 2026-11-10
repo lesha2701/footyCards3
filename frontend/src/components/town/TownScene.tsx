@@ -156,7 +156,7 @@ export default function TownScene({
         )}
         <SeasonDrift />
         {decorations.length > 0 && (
-          <span className="pointer-events-none absolute bottom-2 left-2 flex gap-1 rounded-full bg-black/45 px-2 py-0.5 text-base" data-testid="town-decorations">
+          <span className="pointer-events-none absolute bottom-2 right-2 flex gap-1 rounded-full bg-black/45 px-2 py-0.5 text-base" data-testid="town-decorations">
             {decorations.map((d) => <span key={d.code} title={`${d.name} № ${d.serial}`}>{d.emoji}</span>)}
           </span>
         )}

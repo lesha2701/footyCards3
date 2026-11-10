@@ -481,3 +481,11 @@ export function seasonAt(month: number): Season {
 /** What drifts over the town map in a season (summer: clear sky). */
 export const SEASON_PARTICLES: Record<Season, string> = { winter: "❄", spring: "🌸", summer: "", autumn: "🍂" };
 export const SEASON_LABEL: Record<Season, string> = { winter: "❄️ Зима", spring: "🌸 Весна", summer: "☀️ Лето", autumn: "🍂 Осень" };
+
+/** Ten districts share a phone-wide map: a badge on a zone at the picture's
+ * edge hugs that edge instead of spilling past it (tailwind classes). */
+export function badgeAnchor([x0, , x1]: Box): string {
+  if (x0 <= 20) return "left-1";
+  if (x1 >= 890) return "right-1";
+  return "left-1/2 -translate-x-1/2";
+}

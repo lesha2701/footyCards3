@@ -311,7 +311,7 @@ describe("TownPage", () => {
   it("shows the town of the week ranking and the past week's prize", async () => {
     at("/town/week");
     expect(await screen.findByRole("link", { name: /Город Пети/ })).toHaveAttribute("href", "/town/visit/7");
-    expect(screen.getByTestId("town-week-mine")).toHaveTextContent("🥇 место — +3 000 монет");
+    expect(screen.getByTestId("town-week-mine")).toHaveTextContent("на 1 месте 🥇 — +3 000 монет");
     expect(screen.getByText(/❤️ лайк гостя — 10/)).toBeInTheDocument();
   });
 
