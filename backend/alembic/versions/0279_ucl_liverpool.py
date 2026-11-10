@@ -1,6 +1,7 @@
 """«Лига чемпионов»: Liverpool of the 4 Nov 2026 away win at Fenerbahçe —
 the starting XI and the five substitutes (art in static/players/<rarity>/ucl_*.webp).
-Ratings follow EA SPORTS FC 27. They drop from the regular packs
+Ratings follow EA SPORTS FC 27; rarity by rating: 90+ legendary, 85–89 epic,
+80–84 rare, below 80 common. They drop from the regular packs
 (is_pack_droppable) like the rest of the collection.
 
 The collection was made in the admin panel, so it is found by name; a
@@ -26,22 +27,22 @@ SELL_PRICE = {"common": 10, "rare": 35, "epic": 120, "legendary": 400}
 # name, art slug, position, country, rating, attack, defence, rarity, duel style, character trait
 PLAYERS = (
     # starting XI
-    ("Алиссон Бекер", "alisson", "GK", "Бразилия", 87, 55, 89, "legendary", "reading", "stoic"),
-    ("Джо Гомес", "gomez", "CB", "Англия", 79, 66, 81, "rare", "reading", "peacemaker"),
-    ("Вирджил ван Дейк", "van_dijk", "CB", "Нидерланды", 88, 72, 91, "legendary", "power", "stoic"),
-    ("Жереми Жаке", "jacquet", "CB", "Франция", 77, 58, 79, "rare", "power", "emotional"),
+    ("Алиссон Бекер", "alisson", "GK", "Бразилия", 87, 55, 89, "epic", "reading", "stoic"),
+    ("Джо Гомес", "gomez", "CB", "Англия", 79, 66, 81, "common", "reading", "peacemaker"),
+    ("Вирджил ван Дейк", "van_dijk", "CB", "Нидерланды", 88, 72, 91, "epic", "power", "stoic"),
+    ("Жереми Жаке", "jacquet", "CB", "Франция", 77, 58, 79, "common", "power", "emotional"),
     ("Доминик Собослаи", "szoboszlai", "CAM", "Венгрия", 86, 86, 75, "epic", "power", "spark"),
-    ("Алексис Мак Аллистер", "mac_allister", "CM", "Аргентина", 84, 83, 78, "epic", "reading", "peacemaker"),
-    ("Костас Цимикас", "tsimikas", "LB", "Греция", 76, 72, 75, "rare", "speed", "emotional"),
-    ("Виктор Муньос", "munoz", "LW", "Испания", 79, 82, 52, "rare", "speed", "spark"),
+    ("Алексис Мак Аллистер", "mac_allister", "CM", "Аргентина", 84, 83, 78, "rare", "reading", "peacemaker"),
+    ("Костас Цимикас", "tsimikas", "LB", "Греция", 76, 72, 75, "common", "speed", "emotional"),
+    ("Виктор Муньос", "munoz", "LW", "Испания", 79, 82, 52, "common", "speed", "spark"),
     ("Брэдли Барколя", "barcola", "LW", "Франция", 85, 87, 45, "epic", "speed", "spark"),
     ("Трей Ньони", "nyoni", "CM", "Англия", 67, 66, 60, "common", "technique", "spark"),
-    ("Рио Нгумоа", "ngumoha", "LW", "Англия", 75, 79, 40, "rare", "speed", "spark"),
+    ("Рио Нгумоа", "ngumoha", "LW", "Англия", 75, 79, 40, "common", "speed", "spark"),
     # substitutes
     ("Флориан Вирц", "wirtz", "CAM", "Германия", 86, 87, 58, "epic", "technique", "stoic"),
     ("Александер Исак", "isak", "ST", "Швеция", 86, 88, 45, "epic", "technique", "stoic"),
-    ("Коди Гакпо", "gakpo", "LW", "Нидерланды", 82, 84, 50, "epic", "technique", "peacemaker"),
-    ("Милош Керкез", "kerkez", "LB", "Венгрия", 81, 76, 79, "epic", "speed", "emotional"),
+    ("Коди Гакпо", "gakpo", "LW", "Нидерланды", 82, 84, 50, "rare", "technique", "peacemaker"),
+    ("Милош Керкез", "kerkez", "LB", "Венгрия", 81, 76, 79, "rare", "speed", "emotional"),
     ("Льюис Кумас", "koumas", "LW", "Уэльс", 69, 72, 38, "common", "speed", "spark"),
 )
 
