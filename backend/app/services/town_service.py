@@ -122,6 +122,7 @@ MOOD_DEFAULTS: dict[str, int] = {
     "decor": 20,                                      # a place in the district (the island: half, everywhere)
     "resident": 10, "resident_legendary": 20,         # per settled resident
     "resident_slots": 3,                              # residents a district can house
+    "bonus_settled_only": 1,                          # 1 = a resident's bonus works only while settled
 }
 
 RARITIES = ("common", "rare", "epic", "legendary")
@@ -340,13 +341,20 @@ async def _owned_residents(db: AsyncSession, user_id: int) -> list[UserTownResid
     )).unique().scalars())
 
 
+def bonus_active(config, row: UserTownResident) -> bool:
+    """A resident's bonus works while he lives in a district (or always,
+    when GameConfig.town_mood.bonus_settled_only is 0)."""
+    return not mood_config(config)["bonus_settled_only"] or row.district in HOUSES
+
+
 def resident_effects(config, owned: list[UserTownResident]) -> dict:
-    """Population and what the residents add to the town's income."""
+    """Population and what the residents add to the town's income. Every copy
+    pays the rent; a bonus counts once, and only while bonus_active."""
     live = [r for r in owned if r.resident.is_active and r.copies > 0]
     population = sum(r.copies for r in live)
     sums = {k: 0 for k in RESIDENT_BONUSES if k != "none"}
     for row in live:
-        if row.resident.bonus in sums:
+        if row.resident.bonus in sums and bonus_active(config, row):
             sums[row.resident.bonus] += max(0, int(row.resident.bonus_value))
     pct_cap = max(0, int(config.town_resident_bonus_max_pct))
     return {
@@ -741,6 +749,7 @@ def resident_out(resident: TownResident, config, owned: Optional[UserTownResiden
         "owned": owned is not None and owned.copies > 0, "copies": owned.copies if owned else 0,
         "spare_coins": spare_coins(config, resident.rarity),
         "district": owned.district if owned is not None and owned.copies > 0 else None,
+        "bonus_active": resident.bonus != "none" and owned is not None and owned.copies > 0 and bonus_active(config, owned),
     }
 
 
@@ -765,6 +774,7 @@ async def album(db: AsyncSession, user: User) -> dict:
         "rent_per_resident": max(0, int(config.town_resident_rent)),
         "bonuses": {k: effects[k] for k in RESIDENT_BONUSES if k != "none"},
         "caps": {"pct": int(config.town_resident_bonus_max_pct), "daily_coins": int(config.town_resident_max_daily_coins)},
+        "bonus_settled_only": bool(mood_config(config)["bonus_settled_only"]),
     }
 
 

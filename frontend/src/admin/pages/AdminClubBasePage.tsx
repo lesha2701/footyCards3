@@ -49,6 +49,7 @@ const TOWN_MOOD: [string, string, number][] = [
   ["care", "Уход, очков", 40], ["care_full_hours", "Уход полный, ч", 12], ["care_zero_hours", "Уход в 0, ч", 48],
   ["houses", "Все дома, очков", 20], ["decor", "Место, очков", 20],
   ["resident", "Житель, очков", 10], ["resident_legendary", "Легенда, очков", 20], ["resident_slots", "Жителей в районе", 3],
+  ["bonus_settled_only", "Бонус только поселённым (1/0)", 1],
 ];
 
 const TOWN_DECOR: Record<string, string> = {

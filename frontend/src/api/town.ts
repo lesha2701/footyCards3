@@ -142,6 +142,8 @@ export interface TownResident {
   spare_coins: number;
   /** The district the resident lives in, if settled. */
   district?: string | null;
+  /** The resident's bonus works now (settled, or settling not required). */
+  bonus_active?: boolean;
 }
 
 export interface TownResidentsAlbum {
@@ -155,6 +157,8 @@ export interface TownResidentsAlbum {
    * and build_pct work outside the town (Мой игрок, mini-games, the base). */
   bonuses: { rent_pct: number; hotel_pct: number; daily_coins: number; xp_pct?: number; game_attempts?: number; build_pct?: number };
   caps: { pct: number; daily_coins: number };
+  /** Bonuses work only for residents settled in a district. */
+  bonus_settled_only?: boolean;
   /** Present on a sale. */
   sold_coins?: number;
   new_balance?: number;

@@ -39,7 +39,8 @@ async def _config(db_session, **overrides) -> GameConfig:
         config = GameConfig(id=1)
         db_session.add(config)
     overrides.setdefault("town_unlock_coins", 0)  # open for everyone unless a test sells it
-    overrides.setdefault("town_mood", {"min_pct": 100, "max_pct": 100})  # neutral unless a test is about mood
+    # Neutral mood and every bonus on, unless a test is about mood / settling.
+    overrides.setdefault("town_mood", {"min_pct": 100, "max_pct": 100, "bonus_settled_only": 0})
     for key, value in overrides.items():
         setattr(config, key, value)
     await db_session.commit()
@@ -449,7 +450,7 @@ def test_build_hours_never_go_below_a_tenth():
     assert town_service.build_hours(2, 25) == 1.5
     assert town_service.build_hours(0, 50) == 0 and town_service.build_hours(3, 0) == 3
     config = GameConfig(id=1, town_resident_bonus_max_pct=100, town_resident_rent=1, town_resident_max_daily_coins=0)
-    row = UserTownResident(copies=1)
+    row = UserTownResident(copies=1, district="beach")  # settled: the bonus works
     row.resident = TownResident(name="x", rarity="legendary", bonus="build_pct", bonus_value=200, is_active=True)
     assert town_service.resident_effects(config, [row])["build_pct"] == 90
 
@@ -500,3 +501,26 @@ async def test_district_mood_sets_the_rent_and_residents_settle_in(client, db_se
     await db_session.commit()
     beach = next(d for d in (await client.get(f"{API}/town", headers=headers)).json()["districts"] if d["code"] == "beach")
     assert beach["parts"]["care"] == 0
+
+
+async def test_resident_bonus_works_only_while_settled(client, db_session, bot_token):
+    await _config(db_session, town_resident_rent=1, town_resident_bonus_max_pct=100,
+                  town_mood={"min_pct": 100, "max_pct": 100, "bonus_settled_only": 1})
+    headers, user = await _login(client, db_session, bot_token, 990130)
+    resident = await _resident(db_session, name="Капитан", rarity="legendary", bonus="hotel_pct", bonus_value=20)
+    await town_service.grant(db_session, user.id, resident, "admin")
+    await db_session.commit()
+
+    album = (await client.get(f"{API}/town/residents", headers=headers)).json()
+    assert album["bonus_settled_only"] is True
+    assert album["bonuses"]["hotel_pct"] == 0 and album["population"] == 1
+    assert album["residents"][0]["bonus_active"] is False
+
+    assert (await client.post(f"{API}/town/residents/{resident.id}/settle", json={"district": "beach"},
+                              headers=headers)).status_code == 200
+    album = (await client.get(f"{API}/town/residents", headers=headers)).json()
+    assert album["bonuses"]["hotel_pct"] == 20 and album["residents"][0]["bonus_active"] is True
+
+    await client.post(f"{API}/town/residents/{resident.id}/settle", json={"district": None}, headers=headers)
+    album = (await client.get(f"{API}/town/residents", headers=headers)).json()
+    assert album["bonuses"]["hotel_pct"] == 0

@@ -704,6 +704,7 @@ function MoodPanel({ info, state, district, settling, onSettle }: {
                   >
                     {r.image_path ? <img src={staticUrl(r.image_path)} alt="" className="h-14 w-14 rounded-lg object-cover" /> : <span className="text-3xl">{r.icon}</span>}
                     <span className="text-[11px] font-bold text-ink-chalk">{r.name}</span>
+                    {r.bonus_label && <span className="text-[10px] font-semibold text-cyan-300">{r.bonus_label}</span>}
                     <span className="text-[10px] text-ink-mist">
                       {r.rarity === "legendary" ? `+${state.mood.resident_legendary}` : `+${state.mood.resident}`} к настроению
                       {elsewhere ? ` · сейчас: ${elsewhere}` : ""}

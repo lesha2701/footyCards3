@@ -7,6 +7,7 @@ import residentsArt from "@/assets/town/residents.webp";
 import { IconCoin } from "@/components/icons";
 import MuseArt from "@/components/muses/MuseArt";
 import { formatGameError } from "@/lib/errors";
+import { districtOf } from "@/lib/town";
 import { RARITY_LABELS } from "@/lib/rarity";
 import { hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
@@ -62,7 +63,7 @@ export default function TownResidentsPage() {
       {notice && <p className="rounded-xl bg-accent-lime/10 px-3 py-2 text-xs text-accent-lime">{notice}</p>}
 
       {resident && (
-        <ResidentCard resident={resident} busy={sell.isPending} enabled={!!data?.enabled}
+        <ResidentCard resident={resident} busy={sell.isPending} enabled={!!data?.enabled} settledOnly={!!data?.bonus_settled_only}
           onSell={() => sell.mutate(resident.id)} onClose={() => setPicked(null)} />
       )}
 
@@ -79,17 +80,25 @@ export default function TownResidentsPage() {
               className={`relative flex min-w-0 flex-col gap-1 rounded-2xl p-1 text-left ${picked === r.id ? "bg-cyan-400/15 ring-1 ring-cyan-300/60" : "bg-bg-surface"}`}
             >
               <MuseArt muse={r} locked={!r.owned} className="aspect-[3/4] w-full rounded-2xl" iconClass="text-4xl" />
+              {r.owned && r.district && (
+                <span className="absolute left-2 top-2 rounded-full bg-black/70 px-1 text-[11px] leading-5" aria-label="Поселён в район">
+                  {districtOf(r.district)?.emoji ?? "🏠"}
+                </span>
+              )}
               {r.copies > 1 && (
                 <span className="absolute right-2 top-2 rounded-full bg-black/70 px-1.5 text-[11px] font-bold leading-5 text-white">×{r.copies}</span>
               )}
               <span className={`truncate px-0.5 text-xs font-semibold ${r.owned ? "text-ink-chalk" : "text-ink-mist-dim"}`}>{r.name}</span>
-              <span className="truncate px-0.5 text-[10px] text-cyan-300">{r.bonus_label || RARITY_LABELS[r.rarity as Rarity] || r.rarity}</span>
+              <span className={`truncate px-0.5 text-[10px] ${r.bonus !== "none" && r.owned && !r.bonus_active ? "text-ink-mist-dim line-through" : "text-cyan-300"}`}>
+                {r.bonus_label || RARITY_LABELS[r.rarity as Rarity] || r.rarity}
+              </span>
             </button>
           ))}
         </div>
       )}
       <p className="px-1 text-center text-xs text-ink-mist">
-        Жители приходят из паков «Жители» и из магазина. Каждая копия платит ренту, бонус жителя считается один раз.
+        Жители приходят из паков «Жители» и из магазина. Каждая копия платит ренту, бонус жителя считается один раз
+        {data?.bonus_settled_only ? " и работает, только пока житель поселён в район (по 3 в районе)" : ""}.
       </p>
     </div>
   );
@@ -116,9 +125,10 @@ function Summary({ album }: { album: TownResidentsAlbum }) {
   );
 }
 
-function ResidentCard({ resident: r, busy, enabled, onSell, onClose }: {
-  resident: TownResident; busy: boolean; enabled: boolean; onSell: () => void; onClose: () => void;
+function ResidentCard({ resident: r, busy, enabled, settledOnly, onSell, onClose }: {
+  resident: TownResident; busy: boolean; enabled: boolean; settledOnly: boolean; onSell: () => void; onClose: () => void;
 }) {
+  const home = r.district ? districtOf(r.district) : undefined;
   return (
     <section className="flex gap-3 rounded-2xl border border-white/10 bg-bg-surface p-3" aria-label={r.name}>
       <MuseArt muse={r} locked={!r.owned} className="aspect-[3/4] w-20 shrink-0 rounded-xl" iconClass="text-3xl" />
@@ -133,6 +143,12 @@ function ResidentCard({ resident: r, busy, enabled, onSell, onClose }: {
         <p className="text-xs font-semibold text-cyan-300">{r.effect_label}</p>
         {r.description && <p className="text-[11px] text-ink-mist">{r.description}</p>}
         <p className="text-[11px] text-ink-mist">{r.owned ? `Копий: ${r.copies}` : "Ещё не живёт в твоём городе"}</p>
+        {r.owned && home && <p className="text-[11px] text-accent-lime">{home.emoji} Живёт: {home.name}{r.bonus !== "none" ? " — бонус работает" : ""}</p>}
+        {r.owned && !home && settledOnly && r.bonus !== "none" && (
+          <Link to="/town" className="text-[11px] font-semibold text-legend underline">
+            💤 Бонус спит — посели жителя в район (район → «+»)
+          </Link>
+        )}
         {r.copies > 1 && r.spare_coins > 0 && (
           <button type="button" disabled={busy || !enabled} onClick={onSell}
             className="mt-1 min-h-[40px] self-start rounded-xl bg-floodlight px-3 text-xs font-bold text-bg-base disabled:opacity-40">

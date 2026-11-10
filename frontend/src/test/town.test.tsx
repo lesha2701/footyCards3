@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  buyTownDecor, buyTownHotel, buyTownHouse, claimTownIncome, fetchTown, sellTownResidentSpare, settleTownResident, unlockTown, type TownResident, type TownResidentsAlbum, type TownState,
+  buyTownDecor, buyTownHotel, buyTownHouse, claimTownIncome, fetchTown, fetchTownResidents, sellTownResidentSpare, settleTownResident, unlockTown, type TownResident, type TownResidentsAlbum, type TownState,
 } from "@/api/town";
 import { useAuthStore } from "@/store/authStore";
 import { DISTRICTS, MAP_ZONES, SCENE_H, SCENE_W, SPRITES, moverAt, type Mover } from "@/lib/town";
@@ -230,6 +230,21 @@ describe("TownPage", () => {
     await waitFor(() => expect(sellTownResidentSpare).toHaveBeenCalledWith(1, 1));
     expect(await screen.findByText(/Продано: \+10 монет/)).toBeInTheDocument();
     await waitFor(() => expect(useAuthStore.getState().user?.balance).toBe(5010));
+  });
+
+  it("tells a resident's bonus sleeps until he is settled, and where he lives", async () => {
+    vi.mocked(fetchTownResidents).mockResolvedValueOnce({
+      ...album(), bonus_settled_only: true,
+      residents: [
+        resident(2, "Капитан", 1, { rarity: "legendary", bonus: "rent_pct", bonus_value: 20, bonus_label: "+20% к ренте домов", bonus_active: false }),
+        resident(1, "Рыбак", 2, { district: "beach" }),
+      ],
+    });
+    at("/town/residents");
+    fireEvent.click(await screen.findByRole("button", { name: "Капитан, копий 1" }));
+    expect(screen.getByRole("link", { name: /Бонус спит — посели жителя в район/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Рыбак, копий 2" }));
+    expect(screen.getByText(/Живёт: Пляж/)).toBeInTheDocument();
   });
 
   it("shows the town's own name and buys the hotel for the cards held", async () => {
