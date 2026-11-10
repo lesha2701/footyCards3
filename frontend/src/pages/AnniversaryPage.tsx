@@ -43,7 +43,7 @@ function rewardOf(result: AnniversaryClaimResult, subtitle?: string): Reward {
 }
 
 /** «💯 Нам 100 дней!»: the recap «Мои 100 дней», the gift calendar, the
- *  community goal «Сотня» and the collection «Первые 100». */
+ *  community goal «Сотня» and the collection «Клуб Центурионов». */
 export default function AnniversaryPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();

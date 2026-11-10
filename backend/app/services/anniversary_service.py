@@ -13,7 +13,7 @@ One switch (GameConfig.anniversary_enabled), the dates (anniversary_starts_at
   every player who played at least community_min_games of them.
 - The gift calendar: one gift a local day, in order (a missed day isn't
   lost, the next gift waits); the last one carries the «100 дней» badge.
-- «Первые 100»: the anniversary collection (frame "gold100") and its pack —
+- «Клуб Центурионов»: the anniversary collection (frame "gold100") and its pack —
   an admin fills them; the calendar can include the pack.
 
 Rewards are reward_bundle_service bundles (coins / pack / card of a rarity /

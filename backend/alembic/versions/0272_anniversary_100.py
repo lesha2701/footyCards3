@@ -1,8 +1,10 @@
 """«💯 Нам 100 дней!»: the community goal and calendar (anniversary_members /
 anniversary_claims), the event switch, dates and numbers on game_config, the
-badge «100 дней» (the calendar's last gift) and an empty, inactive
-collection «Первые 100» with the gold frame (card_skin 'gold100') for an
-admin to fill.
+badge «100 дней» (the calendar's last gift), an empty, inactive collection
+«Клуб Центурионов» with the gold frame (card_skin 'gold100') — legends with
+100+ caps, filled when their art is ready — its completion badge (new
+card_collections.reward_badge_id) and «Юбилейный пак» (3 cards of that
+collection, granted by the calendar and the community goal, never sold).
 
 The event is switched on with its dates (21.11 – 30.11 Moscow, right after
 «Битва фанатов»): it starts by itself at midnight of the 21st.
@@ -28,7 +30,10 @@ _MSK = timezone(timedelta(hours=3))
 STARTS_AT = datetime(2026, 11, 21, tzinfo=_MSK)
 ENDS_AT = datetime(2026, 12, 1, tzinfo=_MSK)
 BADGE = "100 дней"
-COLLECTION = "Первые 100"
+COLLECTION = "Клуб Центурионов"
+COLLECTION_BADGE = "Клуб Центурионов"
+PACK_SLUG = "anniversary-100"
+PACK_ODDS = (("rare", "0.55"), ("epic", "0.35"), ("legendary", "0.10"))
 
 
 def upgrade() -> None:
@@ -72,19 +77,52 @@ def upgrade() -> None:
     conn.execute(sa.text(
         "UPDATE badges SET image_path = 'badges/anniversary_100.webp' WHERE id = :id AND image_path IS NULL"
     ), {"id": badge_id})
+    # A collection can also award a badge when it's complete.
+    op.add_column("card_collections", sa.Column(
+        "reward_badge_id", sa.Integer(), sa.ForeignKey("badges.id", ondelete="SET NULL"), nullable=True,
+    ))
+    club_badge_id = conn.execute(sa.text("SELECT id FROM badges WHERE name = :n"), {"n": COLLECTION_BADGE}).scalar()
+    if club_badge_id is None:
+        club_badge_id = conn.execute(sa.text(
+            "INSERT INTO badges (name, icon, image_path, is_active, sort_order, created_at, updated_at) "
+            "VALUES (:n, '🏛️', 'badges/centurions_club.webp', true, 921, now(), now()) RETURNING id"
+        ), {"n": COLLECTION_BADGE}).scalar_one()
     collection_id = conn.execute(sa.text("SELECT id FROM card_collections WHERE name = :n"), {"n": COLLECTION}).scalar()
     if collection_id is None:
         collection_id = conn.execute(sa.text(
-            "INSERT INTO card_collections (name, description, is_active, sort_order, reward_coins, card_skin, "
-            "created_at, updated_at) VALUES (:n, :d, false, 920, 5000, 'gold100', now(), now()) RETURNING id"
-        ), {"n": COLLECTION, "d": "Юбилейная коллекция к 100 дням Victor FC — в золотой рамке."}).scalar_one()
+            "INSERT INTO card_collections (name, description, is_active, sort_order, reward_coins, reward_badge_id, "
+            "card_skin, created_at, updated_at) VALUES (:n, :d, false, 920, 5000, :b, 'gold100', now(), now()) "
+            "RETURNING id"
+        ), {"n": COLLECTION, "b": club_badge_id,
+            "d": "Легенды, сыгравшие 100+ матчей за сборную, — в доспехах центурионов и золотой рамке. "
+                 "Только из юбилейного пака."}).scalar_one()
+
+    pack_id = conn.execute(sa.text(
+        "INSERT INTO packs (slug, name, description, price, card_count, guaranteed_min_rarity, image_path, is_active, "
+        "sort_order, pity_enabled, coach_drop_chance, stadium_drop_chance, skill_token_drop_chance, player_pool, "
+        "muse_drop_chance, created_at, updated_at) "
+        "VALUES (:slug, 'Юбилейный пак', :descr, 2500, 3, 'rare', 'packs/anniversary.webp', false, -10, false, "
+        "0, 0, 0, :pool, 0, now(), now()) ON CONFLICT (slug) DO NOTHING RETURNING id"
+    ), {"slug": PACK_SLUG, "pool": f"collection:{collection_id}",
+        "descr": "Подарок к 100 дням Victor FC: 3 карточки коллекции «Клуб Центурионов» в золотой рамке."}).scalar()
+    if pack_id is not None:
+        for rarity, prob in PACK_ODDS:
+            conn.execute(sa.text(
+                "INSERT INTO pack_rarity_probabilities (pack_id, rarity, probability) "
+                "VALUES (:p, CAST(:r AS rarity_enum), CAST(:prob AS NUMERIC))"
+            ), {"p": pack_id, "r": rarity, "prob": prob})
+    else:
+        pack_id = conn.execute(sa.text("SELECT id FROM packs WHERE slug = :s"), {"s": PACK_SLUG}).scalar_one()
+
     conn.execute(sa.text(
         "UPDATE game_config SET anniversary_enabled = true, anniversary_starts_at = :start, "
         "anniversary_ends_at = :end, anniversary_settings = CAST(:settings AS JSON) WHERE id = 1"
-    ), {"start": STARTS_AT, "end": ENDS_AT, "settings": json.dumps({"badge_id": badge_id, "collection_id": collection_id})})
+    ), {"start": STARTS_AT, "end": ENDS_AT, "settings": json.dumps(
+        {"badge_id": badge_id, "collection_id": collection_id, "pack_id": pack_id})})
 
 
 def downgrade() -> None:
+    op.drop_column("card_collections", "reward_badge_id")
     op.drop_index("ix_anniversary_claims_user_id", table_name="anniversary_claims")
     op.drop_table("anniversary_claims")
     op.drop_table("anniversary_members")

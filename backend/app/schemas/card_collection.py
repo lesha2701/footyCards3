@@ -14,6 +14,7 @@ class CardCollectionOut(BaseModel):
     image_path: Optional[str]
     reward_coins: int
     reward_pack_id: Optional[int]
+    reward_badge_id: Optional[int] = None
     card_skin: Optional[str] = None
 
 
@@ -25,6 +26,7 @@ class CardCollectionCreate(BaseModel):
     image_path: Optional[str] = None
     reward_coins: int = 0
     reward_pack_id: Optional[int] = None
+    reward_badge_id: Optional[int] = None
     card_skin: Optional[Literal["zombie", "vampire", "fans", "gold100"]] = None
 
 
@@ -36,6 +38,7 @@ class CardCollectionUpdate(BaseModel):
     image_path: Optional[str] = None
     reward_coins: Optional[int] = None
     reward_pack_id: Optional[int] = None
+    reward_badge_id: Optional[int] = None
     card_skin: Optional[Literal["zombie", "vampire", "fans", "gold100", ""]] = None
 
 

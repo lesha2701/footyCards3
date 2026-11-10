@@ -108,7 +108,7 @@ function PlayerCard({
   // «Капитаны» of «Битва фанатов»: the frame wears the viewer's side colour.
   const fanColor = useFanColor();
   const fanSkin = !isPath && !hwSkin && player.collection_skin === "fans";
-  // «Первые 100» of «💯 Нам 100 дней!»: the gold anniversary frame.
+  // «Клуб Центурионов» of «💯 Нам 100 дней!»: the gold anniversary frame.
   const goldSkin = !isPath && !hwSkin && player.collection_skin === "gold100";
   const imageUrl = staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp");
 

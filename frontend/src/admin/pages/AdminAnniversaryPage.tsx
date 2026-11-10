@@ -12,7 +12,7 @@ const NUMBERS: [string, string][] = [
   ["teaser_days", "Анонс на главной за дней до старта"],
   ["badge_id", "ID значка «100 дней» (флаг badge в подарке)"],
   ["pack_id", "ID юбилейного пака (флаг pack в подарке)"],
-  ["collection_id", "ID коллекции «Первые 100»"],
+  ["collection_id", "ID коллекции «Клуб Центурионов»"],
 ];
 
 /** datetime-local value (local time) ⇄ ISO with the browser's offset. */

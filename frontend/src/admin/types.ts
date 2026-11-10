@@ -960,6 +960,7 @@ export interface CardCollection {
   image_path: string | null;
   reward_coins: number;
   reward_pack_id: number | null;
+  reward_badge_id?: number | null;
 }
 
 export type AdminWheelPrizePool = "regular" | "golden" | "jackpot";

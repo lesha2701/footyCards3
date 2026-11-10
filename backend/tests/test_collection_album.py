@@ -246,3 +246,22 @@ async def test_admin_bulk_set_collection_players_rejects_unknown_player_id(clien
         json={"player_ids": [999999]},
     )
     assert resp.status_code == 404
+
+
+async def test_collection_reward_grants_a_badge(client, db_session, bot_token):
+    from app.models.badge import UserBadge
+    from tests.factories import create_badge
+
+    badge = await create_badge(db_session, name="Клуб Центурионов", icon="🏛️")
+    collection = CardCollection(name="Badge Set", is_active=True, reward_coins=0, reward_badge_id=badge.id)
+    db_session.add(collection)
+    await db_session.flush()
+    await create_player(db_session, rarity=Rarity.common, collection_id=collection.id)
+    pack = await create_pack(db_session, "badge-set-pack", price=0, card_count=1, probabilities={Rarity.common: 1.0})
+    user, headers = await _register(client, db_session, 880021, bot_token)
+
+    assert (await client.post(f"/api/v1/packs/{pack.id}/open", headers=headers, json={})).status_code == 200
+    owned = (await db_session.execute(
+        select(UserBadge).where(UserBadge.user_id == user.id, UserBadge.badge_id == badge.id)
+    )).scalars().all()
+    assert len(owned) == 1
