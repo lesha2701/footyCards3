@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { SCENE_H, SCENE_W, SPRITES, moverAt, type Box, type Mover } from "@/lib/town";
+import { SCENE_H, SCENE_W, SPRITES, moverAt, skyAt, type Box, type Mover, type Sky } from "@/lib/town";
 
 const SPRITE_URLS = import.meta.glob<string>("@/assets/town/{people,vehicles}/*.webp", { eager: true, import: "default" });
 const spriteUrl = (key: string) => SPRITE_URLS[`/src/assets/town/${key}.webp`];
@@ -8,6 +8,23 @@ const spriteUrl = (key: string) => SPRITE_URLS[`/src/assets/town/${key}.webp`];
 export type SceneZone = { code: string; label: string; zone: Box; locked?: boolean; badge?: ReactNode };
 
 const pct = (v: number, of: number) => `${(v / of) * 100}%`;
+
+// A tint over the picture (under the badges): multiplied, so the lights stay bright.
+const SKY_TINT: Record<Sky, { color: string; opacity: number } | null> = {
+  dawn: { color: "#ffb9a8", opacity: 0.22 },
+  day: null,
+  dusk: { color: "#ff8a4c", opacity: 0.3 },
+  night: { color: "#1b2a6b", opacity: 0.62 },
+};
+
+function useSky(): Sky {
+  const [sky, setSky] = useState<Sky>(() => skyAt(new Date().getHours()));
+  useEffect(() => {
+    const id = window.setInterval(() => setSky(skyAt(new Date().getHours())), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+  return sky;
+}
 
 function prefersReducedMotion(): boolean {
   try {
@@ -31,6 +48,8 @@ export default function TownScene({
 }) {
   const refs = useRef<(SVGGElement | null)[]>([]);
   const [hint, setHint] = useState<string | null>(null);
+  const sky = useSky();
+  const tint = SKY_TINT[sky];
 
   useEffect(() => {
     const place = (seconds: number) => {
@@ -63,6 +82,7 @@ export default function TownScene({
         style={{ aspectRatio: `${SCENE_W} / ${SCENE_H}` }}
         role="img"
         aria-label={label}
+        data-sky={sky}
       >
         <img src={art} alt="" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
         {water && (
@@ -89,6 +109,21 @@ export default function TownScene({
             );
           })}
         </svg>
+        {tint && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 transition-opacity duration-1000"
+            style={{ background: tint.color, opacity: tint.opacity, mixBlendMode: "multiply" }}
+          />
+        )}
+        {sky === "night" && (
+          // Windows and street lamps: a warm glow over the lit-up parts of the picture.
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{ background: "radial-gradient(ellipse at 50% 60%, rgba(255,190,90,0.18), transparent 60%)", mixBlendMode: "screen" }}
+          />
+        )}
         {overlay}
         {zones.map((z) => {
           const [x0, y0, x1, y1] = z.zone;

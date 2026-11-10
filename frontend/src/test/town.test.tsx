@@ -7,7 +7,7 @@ import {
   buyTownDecor, buyTownHotel, buyTownHouse, claimTownIncome, claimTownQuest, fetchTown, fetchTownResidents, giftTown, likeTown, sellTownResidentSpare, settleTownResident, unlockTown, type TownQuests, type TownResident, type TownResidentsAlbum, type TownState, type TownVisitView,
 } from "@/api/town";
 import { useAuthStore } from "@/store/authStore";
-import { DISTRICTS, MAP_ZONES, SCENE_H, SCENE_W, SPRITES, moverAt, type Mover } from "@/lib/town";
+import { DISTRICTS, MAP_ZONES, SCENE_H, SCENE_W, SPRITES, moverAt, skyAt, type Mover } from "@/lib/town";
 import TownPage from "@/pages/TownPage";
 import TownGuestsPage from "@/pages/TownGuestsPage";
 import TownResidentsPage from "@/pages/TownResidentsPage";
@@ -312,5 +312,13 @@ describe("TownPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Отель" }));
     await waitFor(() => expect(buyTownHotel).toHaveBeenCalled());
     expect(await screen.findByText(/Отель открыт/)).toBeInTheDocument();
+  });
+});
+
+describe("skyAt", () => {
+  it("lights the town by the player's clock", () => {
+    expect([0, 5, 6, 7, 8, 12, 17, 18, 20, 21, 23].map(skyAt)).toEqual(
+      ["night", "night", "dawn", "dawn", "day", "day", "day", "dusk", "dusk", "night", "night"],
+    );
   });
 });

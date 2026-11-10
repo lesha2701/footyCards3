@@ -336,3 +336,13 @@ export const DECOR_ZONES: DecorZone[] = [
 
 /** Where the fireworks go up once every place is open (over the stadium). */
 export const FIREWORKS_BOX: Box = [480, 330, 880, 600];
+
+export type Sky = "dawn" | "day" | "dusk" | "night";
+
+/** The town's light by the player's own clock: dawn 6–8, day 8–18, dusk 18–21, night 21–6. */
+export function skyAt(hour: number): Sky {
+  if (hour >= 21 || hour < 6) return "night";
+  if (hour < 8) return "dawn";
+  if (hour >= 18) return "dusk";
+  return "day";
+}
