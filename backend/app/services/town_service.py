@@ -77,6 +77,10 @@ DISTRICT_NAMES: dict[str, str] = {
     "beach": "Пляж",
     "mountains": "Горы",
     "business": "Бизнес-район",
+    "residential": "Жилой квартал",
+    "industrial": "Промзона",
+    "airport": "Аэропорт",
+    "island": "Круизный остров",
 }
 
 HOUSES: dict[str, dict[str, str]] = {
@@ -106,6 +110,62 @@ HOUSES: dict[str, dict[str, str]] = {
         "tower": "Офисная башня", "bank_tower": "Банк", "law": "Юристы", "sponsors": "Офис спонсоров",
         "agents": "Футбольные агенты", "exchange": "Биржа", "cars": "Автосалон", "congress": "Конгресс-центр",
     },
+    "residential": {
+        "townhouses": "Таунхаусы",
+        "apartments": "Дом с балконами",
+        "stone_house": "Каменный дом",
+        "cottage": "Белый коттедж",
+        "kindergarten": "Детский сад",
+        "school": "Школа",
+        "school_field": "Школьное поле",
+        "grocery": "Овощная лавка",
+        "academy": "Футбольная академия",
+        "field_house": "Домик у поля",
+        "cafe": "Кафе с террасой",
+        "square": "Сквер с фонтаном",
+    },
+    "industrial": {
+        "water_tower": "Водонапорная башня",
+        "plant": "Химзавод",
+        "port": "Грузовой порт",
+        "cargo_ship": "Сухогруз",
+        "kit_factory": "Фабрика формы",
+        "ball_factory": "Фабрика мячей",
+        "print": "Цех печати",
+        "warehouse": "Склад",
+        "trucks": "Автопарк",
+        "workers_field": "Заводское поле",
+        "canteen": "Столовая",
+        "station": "Грузовая станция",
+    },
+    "airport": {
+        "training": "Тренировочный центр",
+        "lounge": "Лаунж-павильон",
+        "trophy": "Зал трофеев",
+        "residence": "Резиденция",
+        "gym": "Фитнес-клуб",
+        "hotel": "Отель аэропорта",
+        "parking": "Парковка",
+        "fuel": "Заправка",
+        "terminal": "Терминал",
+        "tower": "Диспетчерская башня",
+        "cargo": "Грузовой ангар",
+        "jets": "Ангар бизнес-джетов",
+    },
+    "island": {
+        "resort": "Курорт на холме",
+        "palazzo": "Палаццо",
+        "lighthouse": "Маяк",
+        "trophy": "Музей трофеев",
+        "lagoon": "Лагуна",
+        "hotel": "Отель у моря",
+        "beach_bar": "Пляжный бар",
+        "pier_restaurant": "Ресторан на пирсе",
+        "marina": "Марина",
+        "terminal": "Круизный терминал",
+        "liner": "Круизный лайнер",
+        "bungalows": "Бунгало на воде",
+    },
 }
 
 # Closed places on the town map (frontend lib/town.ts DECOR_ZONES — the codes must match).
@@ -113,7 +173,9 @@ DECOR_DISTRICT = "decor"
 DECOR: dict[str, str] = {"pier": "Пирс с колесом обозрения", "park": "Парк с фонтаном", "island": "Остров легенды"}
 
 # Which districts a place cheers up (all = the legend's island, at half).
-DECOR_DISTRICTS: dict[str, tuple[str, ...]] = {"pier": ("beach",), "park": ("center", "favela"), "island": ()}
+DECOR_DISTRICTS: dict[str, tuple[str, ...]] = {
+    "pier": ("beach", "island"), "park": ("center", "favela", "residential"), "island": (),
+}
 
 MOOD_DEFAULTS: dict[str, int] = {
     "min_pct": 70, "max_pct": 120,                    # houses' rent at mood 0 / 100

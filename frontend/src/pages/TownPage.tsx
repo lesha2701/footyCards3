@@ -391,7 +391,7 @@ function TownMap({
   const canRename = !!state?.unlocked && state.enabled && state.rename_stars > 0;
   return (
     <div className="flex flex-col gap-4">
-      <GameHero game="home-town" title={state?.name ?? "Город"} subtitle="Шесть районов, дома и жители — всё твоё" />
+      <GameHero game="home-town" title={state?.name ?? "Город"} subtitle="Девять районов, база, дома и жители — всё твоё" />
       {canRename && (
         <button
           type="button"

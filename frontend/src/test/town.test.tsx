@@ -17,9 +17,13 @@ import TownWeekPage from "@/pages/TownWeekPage";
 const inside = ([x, y]: [number, number]) => x >= 0 && x <= SCENE_W && y >= 0 && y <= SCENE_H;
 
 describe("town data", () => {
-  it("has five districts of twelve buildings and the base on the map", () => {
-    expect(DISTRICTS.map((d) => d.code)).toEqual(["center", "favela", "beach", "mountains", "business"]);
-    expect(MAP_ZONES.map((z) => z.code).sort()).toEqual(["base", "beach", "business", "center", "favela", "mountains"]);
+  it("has nine districts of twelve buildings and the base on the map", () => {
+    expect(DISTRICTS.map((d) => d.code)).toEqual([
+      "center", "favela", "beach", "mountains", "business", "residential", "industrial", "airport", "island",
+    ]);
+    expect(MAP_ZONES.map((z) => z.code).sort()).toEqual([
+      "airport", "base", "beach", "business", "center", "favela", "industrial", "island", "mountains", "residential",
+    ]);
     for (const d of DISTRICTS) {
       expect(d.buildings).toHaveLength(12);
       expect(new Set(d.buildings.map((b) => b.code)).size).toBe(12);
@@ -70,7 +74,7 @@ const town = (over: Partial<TownState> = {}): TownState => ({
   residents: { enabled: true, population: 7, rent_per_resident: 1, rent: 7, rent_pct: 20, hotel_pct: 0, daily_coins: 0 },
   houses: [{ district: "beach", code: "surf" }],
   owned_total: 1,
-  total_houses: 60,
+  total_houses: 108,
   price_growth_pct: 4,
   districts: DISTRICTS.map((d) => ({
     code: d.code, name: d.name, rent: 45, next_price: 4160, owned: d.code === "beach" ? 1 : 0, total: 12,

@@ -1,5 +1,5 @@
-/** «Город»: the player's own football town — an overview map of six
- * districts and one illustrated scene per district (src/assets/town/*.webp,
+/** «Город»: the player's own football town — an overview map of nine
+ * districts and the club base, and one illustrated scene per district (src/assets/town/*.webp,
  * 900×1200) with tap zones over its buildings and a light animated layer of
  * residents and vehicles walking fixed routes. Visual only for now: buying
  * houses and residents comes later, on the backend. Every coordinate here is
@@ -11,6 +11,10 @@ import centerArt from "@/assets/town/center.webp";
 import favelaArt from "@/assets/town/favela.webp";
 import mapArt from "@/assets/town/map.webp";
 import mountainsArt from "@/assets/town/mountains.webp";
+import airportArt from "@/assets/town/airport.webp";
+import industrialArt from "@/assets/town/industrial.webp";
+import islandArt from "@/assets/town/island.webp";
+import residentialArt from "@/assets/town/residential.webp";
 
 export const SCENE_W = 900;
 export const SCENE_H = 1200;
@@ -33,7 +37,8 @@ export type Mover = {
   start: number;
 };
 
-export type DistrictCode = "center" | "favela" | "beach" | "mountains" | "business";
+export type DistrictCode =
+  | "center" | "favela" | "beach" | "mountains" | "business" | "residential" | "industrial" | "airport" | "island";
 
 export type District = {
   code: DistrictCode;
@@ -240,6 +245,118 @@ const DRAWN: District[] = [
       walk(8, [[80, 1090], [280, 1100], [340, 1150]], 0.2, 11),
       walk(9, [[255, 520], [265, 700], [280, 760]], 0.7, 8),
     ],
+  },  {
+    code: "residential",
+    name: "Жилой квартал",
+    emoji: "🏘️",
+    tagline: "Таунхаусы, школа и поле футбольной академии",
+    art: residentialArt,
+    buildings: [
+      b("townhouses", "Таунхаусы", "🏘️", "Пять цветных домиков в ряд.", [55, 15, 465, 200]),
+      b("apartments", "Дом с балконами", "🌺", "Балконы в цветах и вид на поле.", [550, 0, 860, 200]),
+      b("stone_house", "Каменный дом", "🪨", "Старый дом с садом и белым заборчиком.", [35, 220, 240, 360]),
+      b("cottage", "Белый коттедж", "🏡", "Синие ставни и гортензии у входа.", [300, 205, 475, 330]),
+      b("kindergarten", "Детский сад", "🧸", "Горки, качели и будущие звёзды.", [550, 210, 840, 375]),
+      b("school", "Школа", "🏫", "Уроки до обеда, футбол после.", [30, 365, 345, 525]),
+      b("school_field", "Школьное поле", "⚽", "Мини-поле во дворе школы.", [345, 405, 600, 515]),
+      b("grocery", "Овощная лавка", "🍊", "Фрукты для игроков академии.", [690, 400, 880, 550]),
+      b("academy", "Футбольная академия", "🎓", "Клубный дом и трибуны у поля.", [240, 530, 700, 650]),
+      b("field_house", "Домик у поля", "🏠", "Самые близкие соседи академии.", [40, 625, 155, 760]),
+      b("cafe", "Кафе с террасой", "☕", "Зонтики, цветы и разговоры о матче.", [10, 855, 360, 1140]),
+      b("square", "Сквер с фонтаном", "⛲", "Скамейки и фонтан для всего квартала.", [480, 880, 870, 1130]),
+    ],
+    movers: [
+      walk(3, ring(645, 1005, 120, 50), 0, 9, true),
+      walk(10, [[20, 560], [650, 560]], 0.3, 9),
+      walk(8, [[205, 680], [745, 680], [745, 790], [205, 790]], 0, 12, true),
+      walk(12, [[205, 680], [745, 680], [745, 790], [205, 790]], 0.5, 11, true),
+      drive(6, [[0, 215], [520, 190]], 0.2, 40),
+    ],
+  },
+  {
+    code: "industrial",
+    name: "Промзона",
+    emoji: "🏭",
+    tagline: "Фабрики формы и мячей, склады и грузовой порт",
+    art: industrialArt,
+    buildings: [
+      b("water_tower", "Водонапорная башня", "🗼", "Видна с любой улицы промзоны.", [55, 90, 165, 260]),
+      b("plant", "Химзавод", "🧪", "Цистерны и трубы: краски для формы.", [150, 55, 400, 210]),
+      b("port", "Грузовой порт", "🏗️", "Краны грузят контейнеры с мерчем.", [400, 30, 650, 200]),
+      b("cargo_ship", "Сухогруз", "🚢", "Везёт форму клуба за океан.", [650, 110, 850, 200]),
+      b("kit_factory", "Фабрика формы", "👕", "Здесь шьют футболки клуба.", [230, 185, 650, 385]),
+      b("ball_factory", "Фабрика мячей", "⚽", "Купол-мяч и тысячи мячей в день.", [650, 235, 870, 405]),
+      b("print", "Цех печати", "🎨", "Номера и фамилии на футболках.", [360, 385, 615, 545]),
+      b("warehouse", "Склад", "📦", "Погрузочные ворота и контейнеры.", [615, 420, 900, 595]),
+      b("trucks", "Автопарк", "🚚", "Фургоны развозят мерч по городу.", [0, 480, 270, 645]),
+      b("workers_field", "Заводское поле", "🥅", "Матчи цехов после смены.", [10, 330, 290, 470]),
+      b("canteen", "Столовая", "🍲", "Горячий обед для всей смены.", [40, 855, 310, 1010]),
+      b("station", "Грузовая станция", "🚂", "Перрон и товарный поезд.", [430, 840, 870, 1060]),
+    ],
+    movers: [
+      walk(3, [[250, 660], [690, 660], [690, 840], [250, 840]], 0, 10, true),
+      walk(7, [[250, 660], [690, 660], [690, 840], [250, 840]], 0.5, 9, true),
+      walk(5, [[470, 1050], [870, 935]], 0.2, 8),
+      walk(9, [[300, 565], [600, 565]], 0.6, 9),
+      drive(4, [[0, 1045], [180, 1095], [290, 1195]], 0.1, 35),
+    ],
+  },
+  {
+    code: "airport",
+    name: "Аэропорт",
+    emoji: "✈️",
+    tagline: "Терминал, ангары и тренировочный центр у моря",
+    art: airportArt,
+    buildings: [
+      b("training", "Тренировочный центр", "🏟️", "Зал и поле для команды перед вылетом.", [20, 55, 470, 210]),
+      b("lounge", "Лаунж-павильон", "🛋️", "Ожидание рейса в тишине.", [495, 70, 680, 160]),
+      b("trophy", "Зал трофеев", "🏆", "Кубки встречают прилетающих.", [690, 120, 880, 240]),
+      b("residence", "Резиденция", "🏛️", "Особняк с фонтаном для гостей клуба.", [340, 180, 600, 320]),
+      b("gym", "Фитнес-клуб", "🏋️", "Тренажёры для экипажей и игроков.", [690, 245, 880, 340]),
+      b("hotel", "Отель аэропорта", "🏨", "Номера с видом на взлётную полосу.", [50, 360, 345, 560]),
+      b("parking", "Парковка", "🅿️", "Машины встречающих.", [515, 365, 725, 475]),
+      b("fuel", "Заправка", "⛽", "Топливо для машин и автобусов.", [740, 380, 890, 455]),
+      b("terminal", "Терминал", "🛫", "Стеклянный зал и трапы к самолётам.", [125, 575, 525, 785]),
+      b("tower", "Диспетчерская башня", "📡", "Отсюда видно весь аэродром.", [25, 590, 125, 810]),
+      b("cargo", "Грузовой ангар", "📦", "Погрузчики и багаж команд.", [490, 560, 685, 685]),
+      b("jets", "Ангар бизнес-джетов", "🛩️", "Частные самолёты звёзд.", [685, 535, 885, 670]),
+    ],
+    movers: [
+      drive(3, [[100, 575], [480, 545], [900, 500]], 0.3, 35),
+      walk(2, ring(530, 305, 70, 22), 0, 8, true),
+      walk(9, [[160, 800], [600, 770]], 0.4, 10),
+      walk(11, [[300, 335], [480, 345]], 0.1, 8),
+      walk(6, [[560, 690], [880, 690]], 0.7, 9),
+    ],
+  },
+  {
+    code: "island",
+    name: "Круизный остров",
+    emoji: "🛳️",
+    tagline: "Курорт, марина и круизный лайнер у пирса",
+    art: islandArt,
+    water: [0, 1100, 500, 1200],
+    buildings: [
+      b("resort", "Курорт на холме", "🌅", "Террасы, бассейны и закат над морем.", [60, 55, 360, 200]),
+      b("palazzo", "Палаццо", "🏛️", "Вилла с куполом и садом.", [370, 95, 545, 195]),
+      b("lighthouse", "Маяк", "🗼", "Белый маяк на краю острова.", [640, 30, 720, 125]),
+      b("trophy", "Музей трофеев", "🏆", "Золотой кубок за стеклом.", [30, 305, 230, 420]),
+      b("lagoon", "Лагуна", "🏝️", "Бассейн с островком и водопадом.", [380, 280, 760, 450]),
+      b("hotel", "Отель у моря", "🏨", "Арки, балконы и цветы.", [20, 450, 210, 590]),
+      b("beach_bar", "Пляжный бар", "🍹", "Шезлонги и коктейли на песке.", [650, 430, 890, 535]),
+      b("pier_restaurant", "Ресторан на пирсе", "🦞", "Ужин над водой.", [460, 525, 720, 640]),
+      b("marina", "Марина", "⛵", "Яхты и парусники у причала.", [540, 640, 880, 800]),
+      b("terminal", "Круизный терминал", "🎫", "Здесь встречают пассажиров лайнера.", [80, 690, 390, 860]),
+      b("liner", "Круизный лайнер", "🛳️", "Плавучий город у пирса.", [50, 860, 520, 1100]),
+      b("bungalows", "Бунгало на воде", "🛖", "Домики на сваях над лагуной.", [600, 830, 900, 1000]),
+    ],
+    movers: [
+      walk(6, [[470, 1000], [760, 1140]], 0.2, 8),
+      walk(2, [[0, 825], [450, 880]], 0.6, 9),
+      walk(8, [[600, 555], [880, 520]], 0.1, 7),
+      walk(11, [[230, 560], [440, 520]], 0.4, 8),
+      walk(4, [[620, 880], [790, 960]], 0.8, 6),
+    ],
   },
 ];
 
@@ -265,12 +382,16 @@ export const TOWN_MAP = mapArt;
 
 /** The overview map: each district's area on it; the club base opens its own page. */
 export const MAP_ZONES: MapZone[] = [
-  { code: "mountains", name: "Горы", emoji: "🏔️", zone: [20, 90, 440, 420] },
-  { code: "business", name: "Бизнес-район", emoji: "💼", zone: [450, 80, 890, 390] },
-  { code: "favela", name: "Фавелы", emoji: "🎶", zone: [20, 460, 440, 730] },
-  { code: "base", name: "Клубная база", emoji: "🏟️", zone: [450, 400, 890, 720] },
-  { code: "beach", name: "Пляж", emoji: "🏖️", zone: [10, 740, 440, 1150] },
-  { code: "center", name: "Центр", emoji: "🏛️", zone: [450, 740, 890, 1050] },
+  { code: "mountains", name: "Горы", emoji: "🏔️", zone: [10, 130, 260, 420] },
+  { code: "business", name: "Бизнес-район", emoji: "💼", zone: [265, 150, 540, 390] },
+  { code: "airport", name: "Аэропорт", emoji: "✈️", zone: [550, 60, 900, 200] },
+  { code: "industrial", name: "Промзона", emoji: "🏭", zone: [560, 210, 900, 495] },
+  { code: "favela", name: "Фавелы", emoji: "🎶", zone: [10, 425, 260, 640] },
+  { code: "base", name: "Клубная база", emoji: "🏟️", zone: [270, 400, 530, 610] },
+  { code: "residential", name: "Жилой квартал", emoji: "🏘️", zone: [540, 505, 900, 730] },
+  { code: "beach", name: "Пляж", emoji: "🏖️", zone: [10, 690, 270, 900] },
+  { code: "center", name: "Центр", emoji: "🏛️", zone: [275, 640, 540, 810] },
+  { code: "island", name: "Круизный остров", emoji: "🛳️", zone: [400, 810, 900, 1120] },
 ];
 
 export const districtOf = (code: string | undefined): District | undefined => DISTRICTS.find((d) => d.code === code);
@@ -329,13 +450,13 @@ export type DecorZone = { code: DecorCode; name: string; emoji: string; about: s
  * must match): dimmed with a lock until bought, then lit up. A drawn picture
  * (assets/town/decor/<code>.webp, transparent) replaces the emoji when it exists. */
 export const DECOR_ZONES: DecorZone[] = [
-  { code: "park", name: "Парк с фонтаном", emoji: "⛲", about: "Парк у горного озера: фонтан, фонари и скамейки для жителей", zone: [140, 360, 330, 465] },
-  { code: "pier", name: "Пирс с колесом обозрения", emoji: "🎡", about: "Пирс в море с колесом обозрения и огнями над водой", zone: [455, 1062, 630, 1188] },
-  { code: "island", name: "Остров легенды", emoji: "🏆", about: "Остров со статуей легенды клуба — виден с любого берега", zone: [655, 1062, 885, 1188] },
+  { code: "park", name: "Парк с фонтаном", emoji: "⛲", about: "Парк у горного озера: фонтан, фонари и скамейки для жителей", zone: [60, 320, 200, 405] },
+  { code: "pier", name: "Пирс с колесом обозрения", emoji: "🎡", about: "Пирс в море с колесом обозрения и огнями над водой", zone: [170, 960, 330, 1060] },
+  { code: "island", name: "Остров легенды", emoji: "🏆", about: "Остров со статуей легенды клуба — виден с любого берега", zone: [60, 1090, 330, 1190] },
 ];
 
 /** Where the fireworks go up once every place is open (over the stadium). */
-export const FIREWORKS_BOX: Box = [480, 330, 880, 600];
+export const FIREWORKS_BOX: Box = [280, 380, 520, 600];
 
 export type Sky = "dawn" | "day" | "dusk" | "night";
 

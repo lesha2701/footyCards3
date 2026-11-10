@@ -92,6 +92,10 @@ DEFAULT_TOWN_DISTRICTS: dict = {
     "mountains": {"price": 4500, "rent": 25},
     "beach": {"price": 6000, "rent": 32},
     "business": {"price": 9000, "rent": 42},
+    "residential": {"price": 2200, "rent": 14},
+    "industrial": {"price": 7500, "rent": 36},
+    "airport": {"price": 11000, "rent": 50},
+    "island": {"price": 14000, "rent": 60},
 }
 
 # «Город», closed places on the map (pier, park, island): the price of

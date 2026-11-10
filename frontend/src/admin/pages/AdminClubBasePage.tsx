@@ -75,6 +75,7 @@ const TOWN_DECOR: Record<string, string> = {
 
 const TOWN_DISTRICTS: Record<string, string> = {
   favela: "🎨 Фавелы", center: "🏛️ Центр", mountains: "🏔️ Горы", beach: "🏖️ Пляж", business: "🏙️ Бизнес-район",
+  residential: "🏘️ Жилой квартал", industrial: "🏭 Промзона", airport: "✈️ Аэропорт", island: "🛳️ Круизный остров",
 };
 
 // Kind -> values that can be sold (the first value of each kind is the free default).
