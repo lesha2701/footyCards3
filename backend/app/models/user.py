@@ -44,6 +44,9 @@ class User(TimestampMixin, Base):
     # «Под наблюдением» (admin, «Антифрод»): only these accounts get «Ты здесь?»
     # and «усталость» — everyone else never sees them.
     anti_bot_watch: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # «Проверен, не бот» (admin, «Антифрод»): checked by hand — left out of
+    # the «Похоже на ботов» list however much they play.
+    anti_bot_cleared: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     @hybrid_property
     def game_rewards_blocked(self) -> bool:

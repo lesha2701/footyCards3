@@ -262,3 +262,23 @@ async def test_admin_puts_accounts_under_watch(client, db_session, bot_token):
     await db_session.commit()
     await db_session.refresh(user)
     assert user.anti_bot_watch is False and user.rest_required_until is None and user.game_rewards_blocked is False
+
+
+async def test_cleared_accounts_leave_the_suspects_list_and_lose_every_check(db_session):
+    bot = User(telegram_id=990501, username="cleared", balance=0, anti_bot_watch=True, game_rewards_blocked_flag=True)
+    db_session.add(bot)
+    await db_session.commit()
+    now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    for i in range(24 * 6 * 3):
+        db_session.add(GameSession(user_id=bot.id, game_type=GameType.memory_sequence, status=GameSessionStatus.won,
+                                   created_at=now - timedelta(minutes=10 * i)))
+    await db_session.commit()
+    names = lambda rows: {r["username"] for r in rows}  # noqa: E731
+    assert "cleared" in names(await admin_antifraud_service.bot_suspects(db_session, days=7, min_games=50))
+
+    await admin_antifraud_service.set_cleared(db_session, [bot.id], True)
+    await db_session.commit()
+    await db_session.refresh(bot)
+    assert bot.anti_bot_cleared and not bot.anti_bot_watch and not bot.game_rewards_blocked
+    assert "cleared" not in names(await admin_antifraud_service.bot_suspects(db_session, days=7, min_games=50))
+    assert "cleared" in names(await admin_antifraud_service.bot_suspects(db_session, days=7, min_games=50, cleared=True))

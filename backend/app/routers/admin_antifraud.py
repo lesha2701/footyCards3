@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_current_admin
 from app.database import get_db
 from app.models.user import User
-from app.schemas.admin_antifraud import AntifraudBanIn, AntifraudBanOut, AntifraudScanOut, BotSuspectOut, RewardsBlockIn, WatchIn
+from app.schemas.admin_antifraud import AntifraudBanIn, AntifraudBanOut, AntifraudScanOut, BotSuspectOut, ClearedIn, RewardsBlockIn, WatchIn
 from app.services import admin_antifraud_service
 from app.services.admin_log_service import log_action
 
@@ -25,10 +25,11 @@ async def scan(
 @router.get("/bots", response_model=list[BotSuspectOut])
 async def bots(
     days: int = Query(7, ge=1, le=30), min_games: int = Query(150, ge=10, le=100_000),
-    db: AsyncSession = Depends(get_db),
+    cleared: bool = Query(False), db: AsyncSession = Depends(get_db),
 ):
-    """Accounts that play around the clock (no sleep) — likely scripts."""
-    return await admin_antifraud_service.bot_suspects(db, days=days, min_games=min_games)
+    """Accounts that play around the clock (no sleep) — likely scripts.
+    `cleared=true`: the ones an admin marked «Проверен, не бот» instead."""
+    return await admin_antifraud_service.bot_suspects(db, days=days, min_games=min_games, cleared=cleared)
 
 
 @router.post("/rewards-block")
@@ -41,6 +42,22 @@ async def rewards_block(
     await log_action(
         db, admin.id, "antifraud_rewards_block", "user", None,
         new_value={"blocked": payload.blocked, "count": len(changed), "user_ids": changed[:500]},
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
+    return {"changed": len(changed), "user_ids": changed}
+
+
+@router.post("/cleared")
+async def mark_cleared(
+    payload: ClearedIn, request: Request,
+    admin: User = Depends(get_current_admin), db: AsyncSession = Depends(get_db),
+):
+    """«Проверен, не бот» on / off for many accounts."""
+    changed = await admin_antifraud_service.set_cleared(db, payload.user_ids, payload.cleared)
+    await log_action(
+        db, admin.id, "antifraud_cleared", "user", None,
+        new_value={"cleared": payload.cleared, "count": len(changed), "user_ids": changed[:500]},
         ip_address=request.client.host if request.client else None,
     )
     await db.commit()
