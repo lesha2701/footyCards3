@@ -288,7 +288,10 @@ function QuestsPanel() {
     <section className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-bg-surface p-3" aria-label="Задания жителей" data-testid="town-quests">
       <div className="flex items-center justify-between">
         <p className="text-sm font-bold text-ink-chalk">📜 Задания жителей</p>
-        <Link to="/town/guests" className="rounded-full bg-cyan-400/10 px-3 py-1 text-xs font-bold text-cyan-200">👋 В гости ›</Link>
+        <span className="flex gap-1.5">
+          <Link to="/town/week" className="rounded-full bg-amber-400/10 px-3 py-1 text-xs font-bold text-amber-200">🏆 Неделя</Link>
+          <Link to="/town/guests" className="rounded-full bg-cyan-400/10 px-3 py-1 text-xs font-bold text-cyan-200">👋 В гости ›</Link>
+        </span>
       </div>
       {(data?.quests ?? []).map((q) => (
         <div key={q.id} className="flex items-center gap-2">

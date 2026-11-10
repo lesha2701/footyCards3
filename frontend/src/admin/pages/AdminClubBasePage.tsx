@@ -59,6 +59,11 @@ const TOWN_SOCIAL: [string, string, number][] = [
   ["visit_target", "Визитов в задании", 2], ["gift_price", "Подарок стоит гостю", 300],
   ["gift_rent", "Хозяину от подарка", 100], ["gifts_per_day", "Подарков гостю в день", 3],
   ["gifts_received_per_day", "Подарков городу в день", 5], ["guests_listed", "Городов в списке", 12],
+  ["week_like_points", "Неделя: очков за лайк", 10], ["week_guest_points", "Неделя: очков за гостя", 3],
+  ["week_house_points", "Неделя: очков за дом", 1], ["week_min_account_days", "Неделя: возраст гостя, дней", 3],
+  ["week_rewarded_places", "Неделя: мест с наградой", 10], ["week_reward_1", "Неделя: 1 место", 3000],
+  ["week_reward_2", "Неделя: 2 место", 2000], ["week_reward_3", "Неделя: 3 место", 1000],
+  ["week_reward_rest", "Неделя: 4+ место", 300],
 ];
 
 const TOWN_DECOR: Record<string, string> = {

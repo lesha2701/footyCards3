@@ -81,6 +81,11 @@ async def guests(db: AsyncSession = Depends(get_db), user: User = Depends(get_cu
     return await town_social_service.guests(db, user)
 
 
+@router.get("/week")
+async def week(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await town_social_service.week_ranking(db, user)
+
+
 @router.get("/visit/{owner_id}")
 async def visit(owner_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await town_social_service.visit(db, user, owner_id)

@@ -155,3 +155,31 @@ class TownVisit(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     __table_args__ = (UniqueConstraint("visitor_id", "owner_id", "day", name="uq_town_visit_day"),)
+
+
+class TownWeek(Base):
+    """«Город недели» settled for a week (ISO "2026-W46"): the row is the
+    lock — a week is paid once, whoever reads the ranking first."""
+
+    __tablename__ = "town_weeks"
+
+    week: Mapped[str] = mapped_column(String(10), primary_key=True)
+    settled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class TownWeekResult(Base):
+    """A rewarded place of «Город недели»."""
+
+    __tablename__ = "town_week_results"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    week: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
+    place: Mapped[int] = mapped_column(Integer, nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("week", "place", name="uq_town_week_place"),
+        UniqueConstraint("week", "user_id", name="uq_town_week_user"),
+    )

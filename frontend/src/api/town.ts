@@ -280,3 +280,36 @@ export async function giftTown(ownerId: number): Promise<TownVisitView> {
   const { data } = await api.post<TownVisitView>(`/town/visit/${ownerId}/gift`);
   return data;
 }
+
+// --- «Город недели» (backend town_social_service.week_ranking) ---
+
+export interface TownWeekRow {
+  place: number;
+  user_id: number;
+  name: string;
+  owner: string;
+  score: number;
+  likes: number;
+  guests: number;
+  houses: number;
+  reward?: number;
+}
+
+export interface TownWeek {
+  week: string;
+  ends_on: string;
+  points: { like: number; guest: number; house: number };
+  rewards: { place: number; coins: number }[];
+  top: TownWeekRow[];
+  me: TownWeekRow | null;
+  last_week: {
+    week: string;
+    winners: { place: number; user_id: number; owner: string; score: number; coins: number }[];
+    mine: { place: number; coins: number } | null;
+  };
+}
+
+export async function fetchTownWeek(): Promise<TownWeek> {
+  const { data } = await api.get<TownWeek>("/town/week");
+  return data;
+}

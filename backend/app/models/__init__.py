@@ -9,7 +9,7 @@ from app.models.card_skill import CardSkill, CardSkillLedger, UserSkillToken
 from app.models.career import CareerClub, CareerParticipant, CareerProfile, CareerSeason, Friendship
 from app.models.lifestyle import LifestyleItem, UserLifestyleItem
 from app.models.club_base import ClubBaseLedger, UserBaseCosmetic, UserClubBase
-from app.models.town import TownLedger, TownResident, TownVisit, UserTown, UserTownHouse, UserTownQuest, UserTownResident
+from app.models.town import TownLedger, TownResident, TownVisit, TownWeek, TownWeekResult, UserTown, UserTownHouse, UserTownQuest, UserTownResident
 from app.models.manager_club import (
     ManagerClub,
     ManagerContract,
@@ -192,6 +192,8 @@ __all__ = [
     "UserTownResident",
     "UserTownQuest",
     "TownVisit",
+    "TownWeek",
+    "TownWeekResult",
     "TownLedger",
     "ClubBaseLedger",
     "UserBaseCosmetic",

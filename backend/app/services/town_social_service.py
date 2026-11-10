@@ -18,9 +18,17 @@ the guest gift_price coins, the owner gets gift_rent of them added to the
 next rent collection (user_towns.gifts_pending) — the rest is burnt, so a
 gift is no way to move coins between accounts; gifts_per_day a guest and
 gifts_received_per_day a town.
+
+«Город недели» (week_ranking): the ISO week of the local calendar; a town
+scores week_like_points a like, week_guest_points a guest (a visitor a day)
+and week_house_points a house it owns. Only guests whose account is
+week_min_account_days old count (fresh twinks farm nothing). The past week
+is settled lazily by the first reader: a town_weeks row (PK = the week) is
+the lock, week_reward_1..3 / week_reward_rest coins go to the first
+week_rewarded_places towns (reward-blocked players get 0, banned none).
 """
 import random
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import func, select
@@ -30,7 +38,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.timeutil import app_timezone, local_today
 from app.models.enums import TransactionType
-from app.models.town import TownLedger, TownResident, TownVisit, UserTown, UserTownQuest, UserTownResident
+from app.models.town import (
+    TownLedger, TownResident, TownVisit, TownWeek, TownWeekResult, UserTown, UserTownHouse, UserTownQuest, UserTownResident,
+)
 from app.models.user import User
 from app.services import town_service
 from app.services.game_config_service import get_config
@@ -47,6 +57,16 @@ SOCIAL_DEFAULTS: dict[str, int] = {
     "gifts_per_day": 3,         # gifts a guest can give a day
     "gifts_received_per_day": 5,
     "guests_listed": 12,        # towns in the guests list
+    # «Город недели»
+    "week_like_points": 10,
+    "week_guest_points": 3,
+    "week_house_points": 1,
+    "week_min_account_days": 3,
+    "week_rewarded_places": 10,
+    "week_reward_1": 3000,
+    "week_reward_2": 2000,
+    "week_reward_3": 1000,
+    "week_reward_rest": 300,
 }
 
 # mode key (newbie_service.games_played) -> how a quest names it
@@ -399,3 +419,127 @@ async def gift(db: AsyncSession, user: User, owner_id: int) -> dict:
     db.add_all([row, town])
     await db.commit()
     return {**await _view(db, config, user, owner_id, row), "new_balance": locked_user.balance}
+
+
+# --- «Город недели» ------------------------------------------------------------------------------
+
+def week_key(day: date) -> str:
+    year, week, _ = day.isocalendar()
+    return f"{year}-W{week:02d}"
+
+
+def week_days(day: date) -> tuple[date, date]:
+    monday = day - timedelta(days=day.weekday())
+    return monday, monday + timedelta(days=6)
+
+
+def week_reward(s: dict, place: int) -> int:
+    if place > s["week_rewarded_places"]:
+        return 0
+    return {1: s["week_reward_1"], 2: s["week_reward_2"], 3: s["week_reward_3"]}.get(place, s["week_reward_rest"])
+
+
+async def _week_scores(db: AsyncSession, config, day: date) -> list[dict]:
+    """Every scoring town of the week of `day`, best first."""
+    s = social_config(config)
+    monday, sunday = week_days(day)
+    old_enough = _now() - timedelta(days=s["week_min_account_days"])
+    counted = (select(TownVisit.owner_id, TownVisit.liked)
+               .join(User, User.id == TownVisit.visitor_id)
+               .where(TownVisit.day >= monday, TownVisit.day <= sunday, User.created_at <= old_enough,
+                      User.is_banned.is_(False)))
+    likes: dict[int, int] = {}
+    guests: dict[int, int] = {}
+    for owner_id, liked in (await db.execute(counted)).all():
+        guests[owner_id] = guests.get(owner_id, 0) + 1
+        if liked:
+            likes[owner_id] = likes.get(owner_id, 0) + 1
+    if not guests:
+        return []
+    houses = dict((await db.execute(
+        select(UserTownHouse.user_id, func.count()).where(
+            UserTownHouse.user_id.in_(guests), UserTownHouse.district != town_service.DECOR_DISTRICT,
+        ).group_by(UserTownHouse.user_id)
+    )).all())
+    owners = {u.id: u for u in (await db.execute(select(User).where(User.id.in_(guests)))).scalars()}
+    towns = {t.user_id: t for t in (await db.execute(select(UserTown).where(UserTown.user_id.in_(guests)))).scalars()}
+    rows = []
+    for owner_id in guests:
+        owner = owners.get(owner_id)
+        if owner is None or owner.is_banned or owner_id not in towns:
+            continue
+        score = (likes.get(owner_id, 0) * s["week_like_points"] + guests[owner_id] * s["week_guest_points"]
+                 + int(houses.get(owner_id, 0)) * s["week_house_points"])
+        rows.append({
+            "user_id": owner_id, "name": towns[owner_id].name or f"Город {_owner_name(owner)}", "owner": _owner_name(owner),
+            "score": score, "likes": likes.get(owner_id, 0), "guests": guests[owner_id], "houses": int(houses.get(owner_id, 0)),
+        })
+    rows.sort(key=lambda r: (-r["score"], -r["likes"], r["user_id"]))
+    for place, row in enumerate(rows, start=1):
+        row["place"] = place
+    return rows
+
+
+async def settle_week(db: AsyncSession, config, day: date) -> bool:
+    """Pays the week of `day` once (the town_weeks row is the lock)."""
+    key = week_key(day)
+    if await db.get(TownWeek, key) is not None:
+        return False
+    s = social_config(config)
+    ranking = await _week_scores(db, config, day)
+    try:
+        db.add(TownWeek(week=key))
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        return False
+    for row in ranking[:s["week_rewarded_places"]]:
+        coins = week_reward(s, row["place"])
+        user = await lock_user_for_update(db, row["user_id"])
+        paid = 0 if user.game_rewards_blocked else coins
+        if paid:
+            await credit_coins(db, user, paid, TransactionType.town_week, f"«Город недели»: {row['place']} место",
+                               related_object_type="town_week", related_object_id=row["place"])
+        db.add(TownWeekResult(week=key, place=row["place"], user_id=row["user_id"], score=row["score"], coins=paid))
+    try:
+        await db.commit()
+    except IntegrityError:  # another reader settled it at the same moment
+        await db.rollback()
+        return False
+    return True
+
+
+async def week_ranking(db: AsyncSession, user: User) -> dict:
+    config = await get_config(db)
+    town_service._require_enabled(config)
+    s = social_config(config)
+    today = local_today()
+    last_week_day = today - timedelta(days=7)
+    await settle_week(db, config, last_week_day)
+    ranking = await _week_scores(db, config, today)
+    mine = next((r for r in ranking if r["user_id"] == user.id), None)
+    last_key = week_key(last_week_day)
+    winners = (await db.execute(
+        select(TownWeekResult).where(TownWeekResult.week == last_key).order_by(TownWeekResult.place).limit(3)
+    )).scalars().all()
+    names = {u.id: u for u in (await db.execute(
+        select(User).where(User.id.in_([w.user_id for w in winners] or [0]))
+    )).scalars()}
+    my_last = (await db.execute(
+        select(TownWeekResult).where(TownWeekResult.week == last_key, TownWeekResult.user_id == user.id)
+    )).scalar_one_or_none()
+    _, sunday = week_days(today)
+    return {
+        "week": week_key(today),
+        "ends_on": sunday.isoformat(),
+        "points": {"like": s["week_like_points"], "guest": s["week_guest_points"], "house": s["week_house_points"]},
+        "rewards": [{"place": p, "coins": week_reward(s, p)} for p in range(1, s["week_rewarded_places"] + 1)],
+        "top": [{**r, "reward": week_reward(s, r["place"])} for r in ranking[:20]],
+        "me": mine,
+        "last_week": {
+            "week": last_key,
+            "winners": [{"place": w.place, "user_id": w.user_id, "owner": _owner_name(names.get(w.user_id)),
+                         "score": w.score, "coins": w.coins} for w in winners],
+            "mine": {"place": my_last.place, "coins": my_last.coins} if my_last else None,
+        },
+    }

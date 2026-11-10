@@ -12,6 +12,7 @@ import TownPage from "@/pages/TownPage";
 import TownGuestsPage from "@/pages/TownGuestsPage";
 import TownResidentsPage from "@/pages/TownResidentsPage";
 import TownVisitPage from "@/pages/TownVisitPage";
+import TownWeekPage from "@/pages/TownWeekPage";
 
 const inside = ([x, y]: [number, number]) => x >= 0 && x <= SCENE_W && y >= 0 && y <= SCENE_H;
 
@@ -125,6 +126,14 @@ vi.mock("@/api/town", () => ({
   visitTown: vi.fn(async () => visit()),
   likeTown: vi.fn(async () => visit({ liked: true, likes_today: 1 })),
   giftTown: vi.fn(async () => visit({ gifted: true, can_gift: false, new_balance: 4700 })),
+  fetchTownWeek: vi.fn(async () => ({
+    week: "2026-W46", ends_on: "2026-11-15",
+    points: { like: 10, guest: 3, house: 1 },
+    rewards: [{ place: 1, coins: 3000 }, { place: 2, coins: 2000 }, { place: 3, coins: 1000 }, { place: 4, coins: 300 }],
+    top: [{ place: 1, user_id: 7, name: "Город Пети", owner: "Петя", score: 44, likes: 3, guests: 4, houses: 2, reward: 3000 }],
+    me: null,
+    last_week: { week: "2026-W45", winners: [{ place: 1, user_id: 1, owner: "Я", score: 30, coins: 3000 }], mine: { place: 1, coins: 3000 } },
+  })),
 }));
 
 const quests = (claimed = false): TownQuests => ({
@@ -161,6 +170,7 @@ describe("TownPage", () => {
             <Route path="/town/residents" element={<TownResidentsPage />} />
             <Route path="/town/guests" element={<TownGuestsPage />} />
             <Route path="/town/visit/:ownerId" element={<TownVisitPage />} />
+            <Route path="/town/week" element={<TownWeekPage />} />
             <Route path="/town/:district" element={<TownPage />} />
             <Route path="/base" element={<p>экран базы</p>} />
           </Routes>
@@ -272,6 +282,13 @@ describe("TownPage", () => {
     await waitFor(() => expect(claimTownQuest).toHaveBeenCalledWith(1, expect.anything()));
     expect(await screen.findByText(/Житель доволен: \+60 монет/)).toBeInTheDocument();
     await waitFor(() => expect(useAuthStore.getState().user?.balance).toBe(5060));
+  });
+
+  it("shows the town of the week ranking and the past week's prize", async () => {
+    at("/town/week");
+    expect(await screen.findByRole("link", { name: /Город Пети/ })).toHaveAttribute("href", "/town/visit/7");
+    expect(screen.getByTestId("town-week-mine")).toHaveTextContent("🥇 место — +3 000 монет");
+    expect(screen.getByText(/❤️ лайк гостя — 10/)).toBeInTheDocument();
   });
 
   it("lists towns to visit, likes one and leaves a gift", async () => {

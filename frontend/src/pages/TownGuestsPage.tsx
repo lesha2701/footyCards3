@@ -21,6 +21,7 @@ export default function TownGuestsPage() {
             {data ? `Твоему городу лайков: сегодня ${fmt(data.likes_today)} · всего ${fmt(data.likes_total)}` : "Загрузка…"}
           </p>
         </div>
+        <Link to="/town/week" className="shrink-0 rounded-full bg-amber-400/10 px-3 py-1.5 text-xs font-bold text-amber-200">🏆 Неделя</Link>
         <Link to="/town" className="shrink-0 rounded-full bg-white/5 px-3 py-1.5 text-xs font-bold text-ink-mist">🗺️ Город</Link>
       </div>
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">Гости сейчас недоступны</p>}

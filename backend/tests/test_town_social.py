@@ -99,3 +99,54 @@ def test_social_settings_are_validated():
         raise AssertionError(bad)
     assert town_social_service.quest_label("play:arena", 2) == "Сыграй 2 раза в «Card Arena»"
     assert town_social_service.quest_label("visit", 2) == "Загляни в гости в 2 города"
+
+
+async def test_town_week_counts_old_guests_and_pays_the_past_week_once(client, db_session, bot_token):
+    from datetime import datetime, timedelta, timezone
+
+    from app.models.transaction import CoinTransaction
+    from app.models.town import TownWeekResult
+    from app.core.timeutil import local_today
+
+    await _config(db_session, town_districts={"beach": {"price": 0, "rent": 100}}, town_price_growth_pct=0,
+                  town_social={**SOCIAL, "week_rewarded_places": 2, "week_reward_1": 500, "week_reward_2": 200})
+    a_headers, a = await _login(client, db_session, bot_token, 990321, balance=0)
+    b_headers, b = await _login(client, db_session, bot_token, 990322, balance=0)
+    old_headers, old = await _login(client, db_session, bot_token, 990323, balance=0)
+    fresh_headers, fresh = await _login(client, db_session, bot_token, 990324, balance=0)
+    await _with_house(client, a_headers)
+    await _with_house(client, b_headers)
+    old.created_at = datetime.now(timezone.utc) - timedelta(days=30)
+    await db_session.commit()
+
+    last_week = local_today() - timedelta(days=7)
+    db_session.add_all([
+        TownVisit(visitor_id=old.id, owner_id=a.id, day=last_week, liked=True),
+        TownVisit(visitor_id=old.id, owner_id=b.id, day=last_week, liked=False),
+        TownVisit(visitor_id=fresh.id, owner_id=b.id, day=last_week, liked=True),  # a fresh account: not counted
+    ])
+    await db_session.commit()
+
+    res = await client.get(f"{API}/town/week", headers=a_headers)
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["points"] == {"like": 10, "guest": 3, "house": 1}
+    winners = body["last_week"]["winners"]
+    assert [(w["user_id"], w["score"], w["coins"]) for w in winners] == [(a.id, 14, 500), (b.id, 4, 200)]
+    assert body["last_week"]["mine"] == {"place": 1, "coins": 500}
+
+    again = await client.get(f"{API}/town/week", headers=b_headers)
+    assert again.status_code == 200
+    rows = (await db_session.execute(select(TownWeekResult))).scalars().all()
+    assert len(rows) == 2
+    paid = (await db_session.execute(select(CoinTransaction).where(CoinTransaction.user_id == a.id,
+                                                                   CoinTransaction.related_object_type == "town_week"))).scalars().all()
+    assert len(paid) == 1
+
+    # This week: a like from the old account puts the town on top.
+    like = await client.post(f"{API}/town/visit/{b.id}/like", headers=old_headers)
+    assert like.status_code == 200, like.text
+    now = (await client.get(f"{API}/town/week", headers=b_headers)).json()
+    assert now["top"][0]["user_id"] == b.id and now["top"][0]["score"] == 14 and now["top"][0]["reward"] == 500
+    assert now["me"]["place"] == 1
+    assert (await client.get(f"{API}/town/week", headers=fresh_headers)).json()["me"] is None
