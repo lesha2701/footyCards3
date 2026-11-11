@@ -1023,6 +1023,13 @@ class GameConfig(TimestampMixin, Base):
     kontra_boss_reward_tiers: Mapped[list] = mapped_column(
         JSON, default=lambda: [[0, 20], [20000, 50], [60000, 100], [150000, 200], [400000, 400]], nullable=False,
     )
+    # Weekly arena leagues: [[peak rating of the week, coins], ...] — the
+    # names (Бронза … Легенда) go by index (kontra_service.LEAGUE_NAMES).
+    kontra_leagues: Mapped[list] = mapped_column(
+        JSON, default=lambda: [[0, 0], [1060, 150], [1140, 300], [1240, 600], [1360, 1000]], nullable=False,
+    )
+    # Squad tactics: % more damage against the tactic yours counters.
+    kontra_tactic_edge_pct: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     kontra_gear_drop_boss_pct: Mapped[int] = mapped_column(Integer, default=35, nullable=False)
     kontra_gear_drop_arena_pct: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     kontra_chest_coins: Mapped[int] = mapped_column(Integer, default=1500, nullable=False)

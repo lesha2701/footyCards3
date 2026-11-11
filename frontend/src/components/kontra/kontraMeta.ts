@@ -1,4 +1,4 @@
-import type { KontraEvent, KontraUnit } from "@/types";
+import type { KontraEvent, KontraTactic, KontraUnit } from "@/types";
 
 /** Border colour per card tier (legendary-level tiers share the gold). */
 export const TIER_RING: Record<string, string> = {
@@ -63,4 +63,12 @@ export function turnOrder(units: KontraUnit[], current: string | null, size = 5)
   const first = alive.find((u) => u.id === current);
   const rest = alive.filter((u) => u.id !== current).sort((a, b) => b.meter_pct - a.meter_pct);
   return [...(first ? [first] : []), ...rest].slice(0, size);
+}
+
+/** Does my squad's tactic beat theirs (+edge% damage), or the other way round? */
+export function tacticVerdict(mine: KontraTactic | null | undefined, theirs: KontraTactic | null | undefined): "win" | "lose" | null {
+  if (!mine || !theirs) return null;
+  if (mine.beats === theirs.code) return "win";
+  if (theirs.beats === mine.code) return "lose";
+  return null;
 }

@@ -725,6 +725,8 @@ export interface GameConfig {
   kontra_boss_max_rounds: number;
   kontra_boss_week_hp: number;
   kontra_boss_reward_tiers: [number, number][];
+  kontra_leagues: [number, number][];
+  kontra_tactic_edge_pct: number;
   kontra_gear_drop_boss_pct: number;
   kontra_gear_drop_arena_pct: number;
   kontra_chest_coins: number;

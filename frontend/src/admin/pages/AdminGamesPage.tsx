@@ -1604,7 +1604,23 @@ export default function AdminGamesPage() {
           {field("kontra_gear_drop_arena_pct", "Комплект за победу на арене, %")}
           {field("kontra_chest_coins", "Сундук комплекта, монет (0 — нет)")}
           {field("kontra_chest_stars", "Сундук комплекта, ⭐ (0 — нет)")}
+          {field("kontra_tactic_edge_pct", "Тактика: % урона, если твоя бьёт тактику соперника")}
         </div>
+        <label className="mt-3 flex flex-col gap-1">
+          <span className="text-xs text-slate-400">
+            Лиги недели (Бронза, Серебро, Золото, Платина, Легенда) — строки «лучший рейтинг недели монеты», до 5 строк
+          </span>
+          <textarea
+            rows={5}
+            value={(form.kontra_leagues ?? []).map(([r, c]) => `${r} ${c}`).join("\n")}
+            onChange={(e) => setForm({
+              ...form,
+              kontra_leagues: e.target.value.split("\n").map((l) => l.trim().split(/\s+/).map(Number))
+                .filter((p) => p.length === 2 && p.every(Number.isFinite)).slice(0, 5) as [number, number][],
+            })}
+            className="rounded-lg bg-bg-surface px-3 py-2 font-mono text-xs outline-none"
+          />
+        </label>
         <label className="mt-3 flex flex-col gap-1">
           <span className="text-xs text-slate-400">Босс: награда за урон попытки — строки «урон монеты»</span>
           <textarea

@@ -469,3 +469,53 @@ body {
   60% { transform: scale(1); opacity: 1; }
   100% { transform: scale(1.12); opacity: 0; }
 }
+
+/* «Контратака»: the stands behind the far goal — a crowd of dots with
+   flash-bulbs (pure CSS, no per-frame JS). */
+.kontra-crowd {
+  background-image:
+    radial-gradient(circle, rgba(255, 255, 255, 0.35) 0 1px, transparent 1.6px),
+    radial-gradient(circle, rgba(148, 197, 255, 0.25) 0 1px, transparent 1.6px);
+  background-size: 7px 6px, 11px 9px;
+  background-position: 0 0, 3px 2px;
+  -webkit-mask-image: linear-gradient(180deg, #000 30%, transparent);
+  mask-image: linear-gradient(180deg, #000 30%, transparent);
+}
+.kontra-bulb {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow: 0 0 8px 3px rgba(255, 255, 255, 0.8);
+  opacity: 0;
+  animation: kontra-bulb 2.8s infinite;
+}
+@keyframes kontra-bulb {
+  0%, 86%, 100% { opacity: 0; }
+  88% { opacity: 1; }
+  92% { opacity: 0.2; }
+}
+.kontra-bob {
+  animation: kontra-bob 2.4s ease-in-out infinite;
+}
+@keyframes kontra-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+.kontra-spin {
+  animation: kontra-spin 3s linear infinite;
+}
+@keyframes kontra-spin {
+  to { transform: rotate(360deg); }
+}
+.kontra-pulse-ring {
+  animation: kontra-pulse-ring 1.4s ease-out infinite;
+}
+@keyframes kontra-pulse-ring {
+  0% { transform: scale(0.85); opacity: 0.9; }
+  100% { transform: scale(1.25); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kontra-bulb, .kontra-bob, .kontra-spin, .kontra-pulse-ring { animation: none; }
+}
