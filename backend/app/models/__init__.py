@@ -36,6 +36,7 @@ from app.models.my_player import MyPlayer, MyPlayerDuel
 from app.models.my_player_extras import MyPlayerEdition, MyPlayerGift, MyPlayerSponsorContract
 from app.models.newbie import NewbieProgress
 from app.models.comeback_gift import ComebackGift
+from app.models.stars_patron import StarsPatronAward
 from app.models.streak_reward import StreakReward
 from app.models.player_career import (
     PlayerCareerCup,

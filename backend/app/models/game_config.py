@@ -406,6 +406,17 @@ class GameConfig(TimestampMixin, Base):
     comeback_gift_cooldown_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     comeback_gift_coins: Mapped[int] = mapped_column(Integer, default=3000, nullable=False)
     comeback_gift_pack_slug: Mapped[str] = mapped_column(String, default="elite", nullable=False)
+    # Thanks to Stars buyers (stars_patron_service): «Покровитель недели» —
+    # the previous week's top buyers (at least week_min Stars): #1 gets the
+    # trophy and a card of week_card_rarity, places 2..week_places get coins;
+    # «Преторианец» — the badge + trophy at praetorian_threshold Stars in all.
+    stars_patron_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    stars_patron_week_min: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    stars_patron_week_places: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    stars_patron_week_card_rarity: Mapped[str] = mapped_column(String(16), default="legendary", nullable=False)
+    stars_patron_week_coins: Mapped[int] = mapped_column(Integer, default=5000, nullable=False)
+    stars_praetorian_threshold: Mapped[int] = mapped_column(Integer, default=10000, nullable=False)
+    stars_praetorian_badge_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Shop "предложение дня" (services/shop_offer_service.py): one coin pack a
     # day at a discount, once per player per day. pack_id = None rotates
     # through the active coin packs by date. Off by default.

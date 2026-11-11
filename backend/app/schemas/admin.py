@@ -374,6 +374,13 @@ class GameConfigOut(BaseModel):
     comeback_gift_cooldown_days: int = 30
     comeback_gift_coins: int = 3000
     comeback_gift_pack_slug: str = "elite"
+    stars_patron_enabled: bool = True
+    stars_patron_week_min: int = 100
+    stars_patron_week_places: int = 3
+    stars_patron_week_card_rarity: str = "legendary"
+    stars_patron_week_coins: int = 5000
+    stars_praetorian_threshold: int = 10000
+    stars_praetorian_badge_id: Optional[int] = None
     shop_daily_offer_enabled: bool = False
     shop_daily_offer_discount_pct: int = 25
     shop_daily_offer_pack_id: Optional[int] = None
@@ -1242,6 +1249,12 @@ class GameConfigUpdate(BaseModel):
     comeback_gift_cooldown_days: Optional[int] = Field(default=None, ge=1, le=365)
     comeback_gift_coins: Optional[int] = Field(default=None, ge=0, le=100000)
     comeback_gift_pack_slug: Optional[str] = Field(default=None, max_length=100)
+    stars_patron_enabled: Optional[bool] = None
+    stars_patron_week_min: Optional[int] = Field(default=None, ge=1, le=1000000)
+    stars_patron_week_places: Optional[int] = Field(default=None, ge=0, le=10)
+    stars_patron_week_card_rarity: Optional[Literal["", "common", "rare", "epic", "legendary", "diamond"]] = None
+    stars_patron_week_coins: Optional[int] = Field(default=None, ge=0, le=1000000)
+    stars_praetorian_threshold: Optional[int] = Field(default=None, ge=0, le=10000000)
     shop_daily_offer_enabled: Optional[bool] = None
     shop_daily_offer_discount_pct: Optional[int] = Field(default=None, ge=1, le=90)
     # 0 = rotate through active coin packs by date (stored as NULL).

@@ -221,6 +221,7 @@ export default function AdminGamesPage() {
       | "bot_daily_digest_enabled"
       | "bot_comeback_enabled"
       | "comeback_gift_enabled"
+      | "stars_patron_enabled"
       | "shop_daily_offer_enabled"
       | "club_league_enabled"
       | "career_enabled"
@@ -971,6 +972,34 @@ export default function AdminGamesPage() {
           {toggle("bot_comeback_enabled", "Включено")}
           {field("bot_comeback_days", "Через сколько дней без захода")}
           {field("bot_comeback_hour", "Час отправки (0–23)")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Покровители (Stars)</p>
+        <p className="mb-3 text-sm text-ink-mist">
+          Каждый понедельник лучший покупатель звёзд прошлой недели получает трофей «Покровитель недели», карту и письмо;
+          следующие места — письмо и монеты. За покупки на сумму от порога — значок и трофей «Преторианец».
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {toggle("stars_patron_enabled", "Включено")}
+          {field("stars_patron_week_min", "Мин. ⭐ за неделю")}
+          {field("stars_patron_week_places", "Мест с благодарностью")}
+          {field("stars_patron_week_coins", "Монеты за 2-е и далее")}
+          <label className="block text-sm">
+            <span className="mb-1 block text-ink-mist">Карта за 1-е место</span>
+            <select
+              value={form.stars_patron_week_card_rarity ?? ""}
+              onChange={(e) => setForm({ ...form, stars_patron_week_card_rarity: e.target.value })}
+              className="w-full rounded-xl bg-bg-base px-3 py-2 text-ink-chalk"
+            >
+              <option value="">без карты</option>
+              <option value="epic">эпическая</option>
+              <option value="legendary">легендарная</option>
+              <option value="diamond">алмазная</option>
+            </select>
+          </label>
+          {field("stars_praetorian_threshold", "«Преторианец» от ⭐")}
         </div>
       </section>
 

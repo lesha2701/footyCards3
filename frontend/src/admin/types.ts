@@ -367,6 +367,13 @@ export interface GameConfig {
   comeback_gift_cooldown_days: number;
   comeback_gift_coins: number;
   comeback_gift_pack_slug: string;
+  stars_patron_enabled: boolean;
+  stars_patron_week_min: number;
+  stars_patron_week_places: number;
+  stars_patron_week_card_rarity: string;
+  stars_patron_week_coins: number;
+  stars_praetorian_threshold: number;
+  stars_praetorian_badge_id: number | null;
   shop_daily_offer_enabled: boolean;
   shop_daily_offer_discount_pct: number;
   shop_daily_offer_pack_id: number | null;
