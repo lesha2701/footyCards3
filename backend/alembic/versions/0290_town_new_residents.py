@@ -5,8 +5,8 @@ new sets «Службы спасения», «Люди гавани», «Хра�
 Сан-Виктора» and «Вечер в Сан-Викторе». Inserted only where the picture is
 not in the catalog yet, after the admin's own residents.
 
-Revision ID: 0279
-Revises: 0278
+Revision ID: 0290
+Revises: 0289
 Create Date: 2026-11-12
 """
 from typing import Sequence, Union
@@ -14,8 +14,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0279"
-down_revision: Union[str, None] = "0278"
+revision: str = "0290"
+down_revision: Union[str, None] = "0289"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
