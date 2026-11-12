@@ -252,6 +252,13 @@ class User(TimestampMixin, Base):
     kontra_boss_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     kontra_boss_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     kontra_arena_offers: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # Defence log: attacks on the squad after this moment are "new".
+    kontra_defense_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Weekly league: the week (Monday) and the best arena rating in it; the
+    # league reward of a finished week waits here until claimed.
+    kontra_week: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    kontra_week_best: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    kontra_league_reward: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Футбольный магнат
     magnate_wins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

@@ -3,9 +3,11 @@ import type {
   KontraArena,
   KontraBattle,
   KontraBoss,
+  KontraDefense,
   KontraGearList,
   KontraHub,
   KontraSquad,
+  KontraTacticCode,
   StarsInvoiceCreate,
 } from "@/types";
 
@@ -93,5 +95,29 @@ export async function buyKontraChest(): Promise<KontraGearList> {
 
 export async function createKontraChestInvoice(): Promise<StarsInvoiceCreate> {
   const { data } = await api.post<StarsInvoiceCreate>("/kontra/gear/chest/stars-invoice");
+  return data;
+}
+
+export async function setKontraTactic(tactic: KontraTacticCode | null): Promise<KontraSquad> {
+  const { data } = await api.put<KontraSquad>("/kontra/squad/tactic", { tactic });
+  return data;
+}
+
+export async function claimKontraLeague(): Promise<KontraHub> {
+  const { data } = await api.post<KontraHub>("/kontra/league/claim");
+  return data;
+}
+
+export async function fetchKontraDefense(): Promise<KontraDefense> {
+  const { data } = await api.get<KontraDefense>("/kontra/defense");
+  return data;
+}
+
+export async function markKontraDefenseSeen(): Promise<void> {
+  await api.post("/kontra/defense/seen");
+}
+
+export async function kontraRevenge(battleId: number): Promise<KontraArena> {
+  const { data } = await api.post<KontraArena>(`/kontra/defense/${battleId}/revenge`);
   return data;
 }
