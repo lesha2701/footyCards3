@@ -148,6 +148,84 @@ DEFAULTS: dict = {
     # share price alerts (a move of price_alert_pct % or more after a round), the best
     # sponsor signed for a forgetful club and a reminder remind_hours before the window closes.
     "analytics_stars": 129, "analytics_days": 30, "price_alert_pct": 8, "remind_hours": 24,
+    # «Штаб президента» (manager_staff): club jobs for the owner's «Жители города».
+    # Places by division (top first); the effect by the resident's rarity; the
+    # wage a season in % of the division grant; caps together with «Клубная база».
+    "staff_slots": [6, 6, 5, 5, 4, 4, 3, 3],
+    "staff_effects": {
+        "coach": {"common": 1, "rare": 2, "epic": 3, "legendary": 4},
+        "physio": {"common": 10, "rare": 20, "epic": 30, "legendary": 40},
+        "agent": {"common": 3, "rare": 5, "epic": 8, "legendary": 12},
+        "marketing": {"common": 4, "rare": 8, "epic": 12, "legendary": 18},
+        "scout": {"common": 5, "rare": 10, "epic": 15, "legendary": 20},
+        "press": {"common": 25, "rare": 50, "epic": 75, "legendary": 100},
+        "driver": {"common": 0, "rare": 0, "epic": 0, "legendary": 0},
+    },
+    "staff_wage_pct": {"common": 1, "rare": 2, "epic": 3, "legendary": 5},
+    "staff_caps": {"matchday_pct": 40, "discount_pct": 40, "injury_pct": 80, "coach_pct": 5, "scout_pct": 30},
+    # The VIP staff for Stars: «Помощник» (manager_assistant; «Аналитик» = analytics_*),
+    # both at once, the one-time free week of the assistant, the report size,
+    # what the assistant may spend in a window by default (% of the division grant).
+    "assistant_stars": 149, "assistant_days": 30, "staff_bundle_stars": 229, "assistant_trial_days": 7,
+    "assistant_log_size": 30, "assistant_limit_pct": 25, "assistant_hours": 3,
+    # Skins of the VIP staff, the president's cars and office rooms (coins or Stars,
+    # both 0 = free default); `art` draws them in the app.
+    "staff_items": [
+        {"code": "skin_assistant_classic", "kind": "skin", "role": "assistant", "name": "Деловой костюм", "about": "Строгий тёмный костюм",
+         "art": {"skin": "#f1c7a5", "hair": "#3b2416", "hair_style": "bun", "outfit": "#1f2a44", "accent": "#c6e63a"}, "coins": 0, "stars": 0},
+        {"code": "skin_assistant_red", "kind": "skin", "role": "assistant", "name": "Красное платье", "about": "Вечерний приём у спонсора",
+         "art": {"skin": "#e9b892", "hair": "#111111", "hair_style": "long", "outfit": "#b3122e", "accent": "#f5d06f"}, "coins": 0, "stars": 79},
+        {"code": "skin_assistant_blonde", "kind": "skin", "role": "assistant", "name": "Блонд и жемчуг", "about": "Светлый жакет и жемчужные серьги",
+         "art": {"skin": "#f6d2b8", "hair": "#e8c46a", "hair_style": "bob", "outfit": "#f2ede4", "accent": "#d9d2c3"}, "coins": 0, "stars": 99},
+        {"code": "skin_assistant_tech", "kind": "skin", "role": "assistant", "name": "Неон-тех", "about": "Гарнитура и неоновый жакет",
+         "art": {"skin": "#c98c64", "hair": "#6a2bd1", "hair_style": "pony", "outfit": "#0e1b2c", "accent": "#00e5ff"}, "coins": 0, "stars": 129},
+        {"code": "skin_assistant_gold", "kind": "skin", "role": "assistant", "name": "Золотой сезон", "about": "Для президента-чемпиона",
+         "art": {"skin": "#8d5a3b", "hair": "#2a1a10", "hair_style": "curls", "outfit": "#141414", "accent": "#f2c14e"}, "coins": 0, "stars": 199},
+        {"code": "skin_analyst_classic", "kind": "skin", "role": "analyst", "name": "Ноутбук и кофе", "about": "Худи и вечный дедлайн",
+         "art": {"skin": "#f0c6a0", "hair": "#4a3426", "hair_style": "short", "outfit": "#33475b", "accent": "#7fd1ff", "glasses": True}, "coins": 0, "stars": 0},
+        {"code": "skin_analyst_board", "kind": "skin", "role": "analyst", "name": "Тактическая доска", "about": "Рубашка, маркер и схемы",
+         "art": {"skin": "#d9a37c", "hair": "#1d1d1d", "hair_style": "side", "outfit": "#eef1f5", "accent": "#1565c0", "glasses": True}, "coins": 0, "stars": 79},
+        {"code": "skin_analyst_data", "kind": "skin", "role": "analyst", "name": "Дата-центр", "about": "Очки с графиками и светящийся планшет",
+         "art": {"skin": "#a66b48", "hair": "#c0c0c0", "hair_style": "short", "outfit": "#0b2e2a", "accent": "#3dffa8", "glasses": True}, "coins": 0, "stars": 99},
+        {"code": "car_hatch", "kind": "car", "name": "Городской хэтчбек", "about": "Скромно, но со вкусом",
+         "art": {"body": "#9aa4b1", "shape": "hatch"}, "coins": 0, "stars": 0},
+        {"code": "car_sedan", "kind": "car", "name": "Бизнес-седан", "about": "Чёрный седан с водителем",
+         "art": {"body": "#1b1f27", "shape": "sedan"}, "coins": 15000, "stars": 0},
+        {"code": "car_suv", "kind": "car", "name": "Внедорожник клуба", "about": "Большой и надёжный",
+         "art": {"body": "#1f8a4c", "shape": "suv"}, "coins": 30000, "stars": 0},
+        {"code": "car_sport", "kind": "car", "name": "Спорткар", "about": "Президент приезжает первым",
+         "art": {"body": "#c62828", "shape": "sport"}, "coins": 0, "stars": 149},
+        {"code": "car_limo", "kind": "car", "name": "Лимузин", "about": "Для финала кубка",
+         "art": {"body": "#f5f5f5", "shape": "limo"}, "coins": 0, "stars": 249},
+        {"code": "room_basic", "kind": "room", "name": "Кабинет у раздевалки", "about": "Стол, шарф и кофемашина",
+         "art": {"wall": "#20303f", "floor": "#3a2c22", "window": "#88a9c3"}, "coins": 0, "stars": 0},
+        {"code": "room_glass", "kind": "room", "name": "Стеклянный офис", "about": "Вид на поле",
+         "art": {"wall": "#0f2236", "floor": "#2b3542", "window": "#3fae6a"}, "coins": 20000, "stars": 0},
+        {"code": "room_classic", "kind": "room", "name": "Кабинет с трофеями", "about": "Дерево, кожа и витрина кубков",
+         "art": {"wall": "#3b1f14", "floor": "#24140d", "window": "#d9a441"}, "coins": 0, "stars": 99},
+        {"code": "room_penthouse", "kind": "room", "name": "Пентхаус над стадионом", "about": "Ночной город и огни стадиона",
+         "art": {"wall": "#0b0b1a", "floor": "#14142b", "window": "#6a5cff"}, "coins": 0, "stars": 199},
+    ],
+    # «Пресс-конференция» (manager_press, a «События клуба» event): after these rounds,
+    # a question by the last result; options as events (money_pct, fans, form).
+    "press_rounds": [2, 5, 9, 13],
+    "press_questions": [
+        {"code": "press_win", "when": "win", "emoji": "🎙", "title": "Пресс-конференция: победа",
+         "text": "Журналисты спрашивают: это начало чемпионской гонки?",
+         "options": [{"code": "bold", "label": "Да, мы идём за титулом!", "fans": 300, "form_pct": -1, "form_rounds": 1},
+                     {"code": "calm", "label": "Это только один матч", "form_pct": 2, "form_rounds": 2},
+                     {"code": "team", "label": "Хвалю команду и болельщиков", "fans": 150, "form_pct": 1, "form_rounds": 2}]},
+        {"code": "press_draw", "when": "draw", "emoji": "🎙", "title": "Пресс-конференция: ничья",
+         "text": "Соседи по таблице уходят вперёд. Что скажете?",
+         "options": [{"code": "ref", "label": "Судья украл у нас победу", "fans": 200, "money_pct": -1},
+                     {"code": "work", "label": "Будем работать, впереди длинный сезон", "form_pct": 1, "form_rounds": 2},
+                     {"code": "young", "label": "Дам шанс молодым в следующем туре", "form_pct": 1, "form_rounds": 1, "fans": 100}]},
+        {"code": "press_loss", "when": "loss", "emoji": "🎙", "title": "Пресс-конференция: поражение",
+         "text": "Болельщики свистели после матча. Кто виноват?",
+         "options": [{"code": "me", "label": "Это моя ответственность", "fans": 100, "form_pct": 2, "form_rounds": 2},
+                     {"code": "players", "label": "Игроки не выполнили установку", "form_pct": -2, "form_rounds": 2, "fans": 50},
+                     {"code": "promise", "label": "Обещаю усиление — купим игрока", "fans": 250, "money_pct": -2}]},
+    ],
     # «События клуба»: after these rounds of the season an event comes (one each).
     "event_rounds": [3, 7, 11],
     # Options: money_pct = % of the division grant (+ income, − expense), fans, form_pct for form_rounds next rounds.
@@ -227,6 +305,7 @@ KINDS: dict[str, tuple[str, str]] = {
     "event_in": ("income", "События клуба"),
     "cup": ("income", "Кубок менеджеров"),
     "event_out": ("expense", "События клуба"),
+    "staff_wages": ("expense", "Зарплаты штаба"),
 }
 REPORT_SEASONS = 6
 

@@ -111,3 +111,32 @@ class ManagerBondIssueIn(BaseModel):
 
 class ManagerBondBuyIn(BaseModel):
     units: int = Field(ge=1, le=10_000)
+
+
+class ManagerStaffHireIn(BaseModel):
+    resident_id: int
+    role: str = Field(max_length=16)
+
+
+class ManagerStaffNameIn(BaseModel):
+    role: Literal["assistant", "analyst"]
+    name: str = Field(max_length=40)
+
+
+class ManagerAssistantRulesIn(BaseModel):
+    limit: Optional[int] = Field(default=None, ge=0)
+    sponsor: Optional[bool] = None
+    kit: Optional[bool] = None
+    fill: Optional[bool] = None
+    renew_min_rating: Optional[int] = Field(default=None, ge=0, le=99)
+    renew_max_wage: Optional[int] = Field(default=None, ge=0)
+    decline_below_pct: Optional[int] = Field(default=None, ge=0, le=300)
+    events: Optional[Literal["safe", "balanced", "bold", "off"]] = None
+    plan: Optional[Literal["auto", "normal", "off"]] = None
+
+
+class ManagerDealCheckIn(BaseModel):
+    kind: Literal["live", "npc"]
+    target_id: int
+    fee: int = Field(default=0, ge=0)
+    wage: int = Field(default=0, ge=0)

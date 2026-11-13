@@ -114,17 +114,33 @@ async def after_round(db: AsyncSession, club: ManagerClub, league: ManagerLeague
         async with db.begin_nested():
             db.add(ManagerEvent(club_id=club.id, season_key=league.season_key, slot=slot, code=template["code"],
                                 data={"title": template.get("title"), "text": template.get("text"), "emoji": template.get("emoji"),
-                                      "options": template.get("options") or [], "league_id": league.id}))
+                                      "options": template.get("options") or [], "league_id": league.id,
+                                      "round": league.rounds_played}))
     except IntegrityError:
         return  # this slot's event already came
     await notify(db, club.owner_id, NotificationType.manager_event, f"«{club.name}»: {template.get('emoji', '📰')} {template.get('title')}",
                  "Нужно твоё решение — загляни в «Менеджер»", related_object_type="manager_club", related_object_id=club.id)
 
 
-def _option_out(o: dict, grant: int) -> dict:
+def _option_out(o: dict, grant: int, boost_pct: int = 0) -> dict:
+    """`boost_pct` (a press conference with the staff's press attaché) adds to
+    the fans an option wins."""
     money = int(grant * finance._num(o.get("money_pct")) / 100)
-    return {"code": o.get("code"), "label": o.get("label"), "money": money, "fans": int(finance._num(o.get("fans"))),
+    up = lambda v: int(v * (100 + boost_pct) / 100) if v > 0 else int(v)  # noqa: E731
+    return {"code": o.get("code"), "label": o.get("label"), "money": money, "fans": up(int(finance._num(o.get("fans")))),
             "form_pct": finance._num(o.get("form_pct")), "form_rounds": int(finance._num(o.get("form_rounds")))}
+
+
+def is_press(e: ManagerEvent) -> bool:
+    return str(e.code or "").startswith("press_")
+
+
+async def boost_of(db: AsyncSession, club: ManagerClub, e: ManagerEvent, config) -> int:
+    if not is_press(e):
+        return 0
+    from app.services import manager_staff as staff
+
+    return int((await staff.effects(db, club.owner_id, config)).get("press", 0))
 
 
 async def choose(db: AsyncSession, user: User, event_id: int, option: str, now: Optional[datetime] = None) -> dict:
@@ -144,7 +160,17 @@ async def choose(db: AsyncSession, user: User, event_id: int, option: str, now: 
     raw = next((o for o in (event.data or {}).get("options") or [] if o.get("code") == option), None)
     if raw is None:
         raise NotFoundError("Такого варианта нет")
-    out = _option_out(raw, finance.grant_of(club.division, config))
+    await apply_choice(db, club, league, event, raw, config, now)
+    await db.commit()
+    return await view(db, user)
+
+
+async def apply_choice(db: AsyncSession, club: ManagerClub, league: ManagerLeague, event: ManagerEvent, raw: dict, config,
+                       now: Optional[datetime] = None, by: Optional[str] = None) -> dict:
+    """The (locked) club takes an option of an open event — no commit (the
+    assistant answers inside a round). `by` = who decided ("assistant")."""
+    option = raw.get("code")
+    out = _option_out(raw, finance.grant_of(club.division, config), await boost_of(db, club, event, config))
     if out["money"]:
         await finance.book(db, club, "event_in" if out["money"] > 0 else "event_out", out["money"], league.season_key,
                            ref=f"event:{event.id}", note=(event.data or {}).get("title"))
@@ -156,17 +182,17 @@ async def choose(db: AsyncSession, user: User, event_id: int, option: str, now: 
             {"pct": out["form_pct"], "league_id": league.id, "from": start, "to": start + out["form_rounds"], "event": event.id}]
         flag_modified(club, "buffs")
     event.status, event.choice, event.decided_at = "chosen", option, now or datetime.now(timezone.utc)
-    event.data = {**(event.data or {}), "result": out}
+    event.data = {**(event.data or {}), "result": out, **({"by": by} if by else {})}
     flag_modified(event, "data")
-    await db.commit()
-    return await view(db, user)
+    return out
 
 
-def _event_out(e: ManagerEvent, grant: int, open_: bool) -> dict:
+def _event_out(e: ManagerEvent, grant: int, open_: bool, boost_pct: int = 0) -> dict:
     d = e.data or {}
     return {"id": e.id, "code": e.code, "title": d.get("title"), "text": d.get("text"), "emoji": d.get("emoji"),
             "status": "offered" if open_ else ("expired" if e.status == "offered" else e.status), "choice": e.choice,
-            "options": [_option_out(o, grant) for o in d.get("options") or []], "result": d.get("result")}
+            "press": is_press(e), "by": d.get("by"),
+            "options": [_option_out(o, grant, boost_pct if is_press(e) else 0) for o in d.get("options") or []], "result": d.get("result")}
 
 
 async def open_events(db: AsyncSession, club: ManagerClub, league: Optional[ManagerLeague]) -> list[ManagerEvent]:
@@ -198,6 +224,6 @@ async def view(db: AsyncSession, user: User) -> dict:
         "plan": plan["code"] if plan else NORMAL,
         "can_plan": next_round is not None,
         "form_pct": buff_pct(club, league.id, next_round) if next_round is not None else 0,
-        "events": [_event_out(e, grant, True) for e in opened],
+        "events": [_event_out(e, grant, True, await boost_of(db, club, e, config)) for e in opened],
         "recent": [_event_out(e, grant, False) for e in recent],
     }

@@ -31,7 +31,8 @@ from app.services.game_config_service import get_config
 from app.services.notification_service import notify
 
 PASSES = {
-    "analytics": ("Аналитика Pro", "Разбор соперника, алерты по акциям, спонсор и напоминания до закрытия окна"),
+    "analytics": ("Аналитик", "Разбор соперника, совет на тур, оценка сделок, разбор матча, прогноз сезона, алерты по акциям"),
+    "assistant": ("Помощник", "Спонсоры, пустые места, продления, план на матч, события и пресс-конференции — пока ты офлайн, по твоим правилам"),
 }
 LINES = ("GK", "DEF", "MID", "FWD")
 RELATED = "manager_club"
@@ -147,7 +148,9 @@ async def assistant_season_start(db: AsyncSession, club: ManagerClub, key: str, 
     """Before the (locked) club's season start: the best sponsor if none was signed."""
     from app.models.manager_club import ManagerDeal
 
-    if not active(club, "analytics") or await finance._taken(db, club.id, "sponsor", key):
+    from app.services import manager_assistant as assistant
+
+    if not (active(club, "analytics") or active(club, "assistant")) or await finance._taken(db, club.id, "sponsor", key):
         return None
     terms = finance.sponsor_terms(club, snap, config)
     if not terms:
@@ -161,7 +164,9 @@ async def assistant_season_start(db: AsyncSession, club: ManagerClub, key: str, 
     except ConflictError:
         return None
     await finance.book(db, club, "sponsor", best["upfront"], key, ref=f"sponsor_up:{deal.id}", note=best["brand"])
-    return f"📊 «Аналитика Pro» подписала спонсора: {best['emoji']} {best['name']}"
+    assistant.season_start_note(club, f"Ты забыл спонсора — подписала лучшего: {best['emoji']} {best['name']}", best["upfront"], config)
+    who = "Помощник" if active(club, "assistant") else "Аналитик"
+    return f"🗂 {who} подписал спонсора: {best['emoji']} {best['name']}"
 
 
 async def _gaps(db: AsyncSession, club: ManagerClub, key: str) -> list[str]:
@@ -246,9 +251,19 @@ async def analytics(db: AsyncSession, user: User) -> dict:
     if club is None:
         raise NotFoundError("Сначала основай клуб")
     if not active(club, "analytics"):
-        raise ForbiddenError("Разбор соперника — с «Аналитикой Pro»")
+        raise ForbiddenError("Разбор соперника — у «Аналитика»")
     league = await db.get(ManagerLeague, club.league_id) if club.league_id else None
-    out: dict = {"opponent": None}
+    out: dict = {"opponent": None, "advice": None, "review": None, "forecast": None}
+    if league is not None and league.status == "active":
+        from app.services import manager_press as press
+
+        state = league.state or {}
+        mine = next((t for t in state.get("teams") or [] if t["club_id"] == club.id), None)
+        out["advice"] = await advice_for(db, league, club, config)
+        out["review"] = review(state, mine["index"]) if mine else None
+        fc = press.forecast(league, club.id)
+        if fc:
+            out["forecast"] = {"place": fc[0], "of": fc[1]}
     if league is not None:
         nxt = await ms.next_match(db, league, club, config)
         state = league.state or {}
@@ -299,3 +314,148 @@ async def price_alerts(db: AsyncSession, league: ManagerLeague, before: dict[int
             await notify(db, holder.owner_id, NotificationType.manager_event,
                          f"{arrow} Акции «{names.get(cid)}» {'+' if change > 0 else ''}{change}%",
                          f"После тура: {old} € → {new} € за акцию", related_object_type=RELATED, related_object_id=cid)
+
+
+# --- «Аналитик»: advice, the last match, the season forecast, a deal check -------------------
+
+ADVICE_GAP = 3
+
+
+def advise(my_rating, their_rating, their_style: Optional[str], my_injuries: int = 0) -> dict:
+    """The plan and the style for the next match, and why — the same rule the
+    assistant follows."""
+    from app.services import manager_tactics as tactics
+
+    gap = int((their_rating or 0) - (my_rating or 0))
+    if my_injuries >= 2:
+        plan, why = "rotate", f"{my_injuries} травмы — бережём лидеров"
+    elif gap >= ADVICE_GAP:
+        plan, why = "bus", f"соперник сильнее на {gap} — играем от обороны"
+    elif gap <= -ADVICE_GAP:
+        plan, why = "press", f"мы сильнее на {-gap} — давим с первой минуты"
+    else:
+        plan, why = None, "силы равны — обычная игра"
+    style = next((s for s in tactics.STYLES if tactics.BEATS.get(s) == their_style), None) if their_style else None
+    return {"plan": plan, "why": why, "style": style, "style_label": tactics.STYLE_LABELS.get(style) if style else None,
+            "style_why": f"бьёт «{tactics.STYLE_LABELS.get(their_style, their_style)}» соперника" if style else None}
+
+
+async def advice_for(db: AsyncSession, league: ManagerLeague, club: ManagerClub, config) -> Optional[dict]:
+    state = league.state or {}
+    fixtures = state.get("fixtures") or []
+    teams = state.get("teams") or []
+    if league.rounds_played >= len(fixtures):
+        return None
+    mine = next((t for t in teams if t.get("club_id") == club.id), None)
+    if mine is None:
+        return None
+    pair = next(((h, a) for h, a in fixtures[league.rounds_played] if mine["index"] in (h, a)), None)
+    if pair is None:
+        return None
+    other = teams[pair[1] if pair[0] == mine["index"] else pair[0]]
+    style = other.get("style")
+    if other.get("club_id"):
+        rival = await db.get(ManagerClub, other["club_id"])
+        style = rival.style if rival else style
+    hurt = (state.get("injuries") or {}).get(str(club.id)) or {}
+    injured = sum(1 for v in hurt.values() if int(v.get("back", 0)) > league.rounds_played)
+    return advise(mine.get("rating"), other.get("rating"), style, injured)
+
+
+def review(state: dict, index: int) -> Optional[dict]:
+    """The club's last match: the score and what decided it."""
+    teams = state.get("teams") or []
+    for round_results in reversed(state.get("results") or []):
+        for m in round_results:
+            if index not in (m["home"], m["away"]):
+                continue
+            home = m["home"] == index
+            other = teams[m["away"] if home else m["home"]]
+            mine = teams[index]
+            f, a = (m["hs"], m["as"]) if home else (m["as"], m["hs"])
+            my_lines, their_lines = _lines(mine), _lines(other)
+            diffs = sorted(((my_lines[line] or 0) - (their_lines[line] or 0), line) for line in LINES if my_lines[line] and their_lines[line])
+            weakest = diffs[0] if diffs else None
+            strongest = diffs[-1] if diffs else None
+            names = {"GK": "вратарь", "DEF": "оборона", "MID": "полузащита", "FWD": "атака"}
+            styles = m.get("styles") or [None, None]
+            my_style, their_style = (styles[0], styles[1]) if home else (styles[1], styles[0])
+            from app.services import manager_tactics as tactics
+
+            edge = tactics.edge(my_style, their_style) if my_style and their_style else "even"
+            notes = []
+            if weakest and weakest[0] < 0:
+                notes.append(f"проиграли линию: {names[weakest[1]]} слабее на {-weakest[0]}")
+            if strongest and strongest[0] > 0:
+                notes.append(f"сильная сторона: {names[strongest[1]]} +{strongest[0]}")
+            if edge == "win":
+                notes.append("наш стиль бил стиль соперника")
+            elif edge == "lose":
+                notes.append("стиль соперника бил наш — смени тактику")
+            return {"opponent": other["name"], "home": home, "for": f, "against": a,
+                    "result": "win" if f > a else "draw" if f == a else "loss", "notes": notes}
+    return None
+
+
+async def check_deal(db: AsyncSession, user: User, kind: str, target_id: int, fee: int = 0, wage: int = 0) -> dict:
+    """«Аналитик» on a deal before it is sent: the price against the value,
+    the player against the starter of his line, the wage against the free budget.
+    kind: "live" (a user's player, target = his user id) or "npc" (catalog, target = player id)."""
+    from app.services import manager_service as ms, my_player_service
+
+    config = await get_config(db)
+    club = await ms._owned_club(db, user.id)
+    if club is None:
+        raise NotFoundError("Сначала основай клуб")
+    if not active(club, "analytics"):
+        raise ForbiddenError("Оценка сделки — у «Аналитика»")
+    if kind == "live":
+        mp = await my_player_service.get_my_player(db, target_id)
+        if mp is None:
+            raise NotFoundError("Игрок не найден")
+        rating, position, name = my_player_service.rating_of(mp, config), mp.position.value, mp.name
+        current = await ms._active_contract(db, target_id)
+        value = ms.live_value(rating, current, config)
+        cost = int(fee) + ms.wage_eur(int(wage), config)
+    elif kind == "npc":
+        player = await db.get(ms.Player, target_id)
+        if player is None:
+            raise NotFoundError("Футболист не найден")
+        rating, position, name = player.rating, player.position.value, player.display_name
+        snap = await ms.base_snapshot(db, club.owner_id, config)
+        terms = ms.npc_terms(rating, config, club.division, snap["discount_pct"], await ms._farm_loan_cut(db, club))
+        value = terms["value"]
+        fee = int(fee) or terms["value"]
+        cost = fee + terms["wage_now"]
+    else:
+        raise NotFoundError("Такой сделки нет")
+    line = _line(position)
+    squad = await ms.squad_view(db, club, config)
+    same = [p for p in squad["xi"] if _line(p.get("position")) == line and p["kind"] != "kid"]
+    weakest = min(same, key=lambda p: p["rating"]) if same else None
+    free = max(0, club.budget - await ms.start_bill(db, club, config))
+    lines, verdict = [], "ok"
+    if kind == "live" and fee and value:
+        over = round((fee - value) * 100 / value)
+        if over >= 30:
+            lines.append(f"Переплата {over}% к стоимости ({ms.money(value)})")
+            verdict = "bad"
+        elif over <= -20:
+            lines.append(f"Дешевле стоимости на {-over}% — хорошая цена")
+        else:
+            lines.append(f"Цена близка к стоимости ({ms.money(value)})")
+    if weakest is None:
+        lines.append(f"Займёт пустое место в линии — сразу в старт")
+    elif rating > weakest["rating"]:
+        lines.append(f"Сильнее {weakest['name']} ({weakest['rating']}) — выйдет в старте")
+    else:
+        lines.append(f"Слабее {weakest['name']} ({weakest['rating']}) — будет в запасе")
+        verdict = "bad" if verdict == "bad" else "meh"
+    if cost > free:
+        lines.append(f"Не хватает бюджета: нужно {ms.money(cost)}, свободно {ms.money(free)}")
+        verdict = "bad"
+    elif cost * 2 > free:
+        lines.append(f"Заберёт больше половины свободного бюджета ({ms.money(free)})")
+        verdict = "meh" if verdict == "ok" else verdict
+    return {"name": name, "rating": rating, "position": position, "value": value, "cost": cost, "free": free,
+            "verdict": verdict, "lines": lines}

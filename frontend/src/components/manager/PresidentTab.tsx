@@ -10,13 +10,16 @@ import {
   type ManagerOffice,
   type ManagerReportSeason,
   type ManagerSponsorOffer,
+  type ManagerTodayTab,
 } from "@/api/manager";
-import officeArt from "@/assets/manager/office.webp";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { KitShirt } from "@/components/manager/Emblem";
 import ExchangePanel from "@/components/manager/ExchangePanel";
 import MatchdayPanel from "@/components/manager/MatchdayPanel";
+import { AwayReport, DeskOverlay, Diary } from "@/components/manager/OfficeDesk";
+import { useOfficeStaff } from "@/components/manager/useOfficeStaff";
+import OfficeScene from "@/components/manager/OfficeScene";
 import PresidentRating from "@/components/manager/PresidentRating";
 import { eur } from "@/lib/managerMoney";
 import { hapticNotify } from "@/lib/telegram";
@@ -38,7 +41,7 @@ const pct = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(1).replace("."
 /** «💼 Кабинет президента» of «Менеджер»: the club's value, the income and
  * expense report by seasons, the season sponsor, the bank and financial deals
  * for the coming season. Club euros only — they never become coins. */
-export default function PresidentTab({ onError }: { onError: (e: unknown) => void }) {
+export default function PresidentTab({ onError, onTab = () => {} }: { onError: (e: unknown) => void; onTab?: (t: ManagerTodayTab) => void }) {
   const queryClient = useQueryClient();
   const { data } = useQuery({ queryKey: ["manager", "office"], queryFn: fetchManagerOffice });
   const [section, setSection] = useState<Section>("report");
@@ -60,7 +63,9 @@ export default function PresidentTab({ onError }: { onError: (e: unknown) => voi
   ];
   return (
     <div className="flex flex-col gap-4" data-testid="president-tab">
-      <OfficeHero office={data} />
+      <OfficeHero office={data} onTab={onTab} />
+      <AwayReport onTab={onTab} />
+      <Diary onTab={onTab} />
       <div className="grid grid-cols-4 gap-1.5">
         {sections.map(([id, icon, label]) => (
           <button key={id} onClick={() => setSection(id)}
@@ -105,17 +110,26 @@ const VALUE_PARTS: { key: keyof ManagerOffice["value"]["parts"]; label: string; 
   { key: "titles", label: "Трофеи", color: "bg-yellow-200" },
 ];
 
-function OfficeHero({ office }: { office: ManagerOffice }) {
+function OfficeHero({ office, onTab }: { office: ManagerOffice; onTab: (t: ManagerTodayTab) => void }) {
+  const { staff } = useOfficeStaff();
   const parts = office.value.parts;
   const positive = VALUE_PARTS.filter((p) => parts[p.key] > 0);
   const sum = positive.reduce((s, p) => s + parts[p.key], 0) || 1;
   const last = office.report[0];
   return (
-    <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#2a1d05] via-[#14261d] to-[#0b1f2e] p-4 ring-1 ring-amber-300/30">
-      <img src={officeArt} alt="" className="pointer-events-none absolute -right-3 -top-3 h-36 w-36 object-cover [mask-image:radial-gradient(circle,black_52%,transparent_72%)]" />
-      <p className="relative text-micro font-bold uppercase tracking-[0.2em] text-amber-300">💼 Кабинет президента</p>
-      <p className="relative mt-1 max-w-[60%] truncate font-display text-base font-bold text-ink-chalk">{office.name}</p>
-      <p className="relative mt-3 text-micro uppercase tracking-wide text-ink-mist">Стоимость клуба</p>
+    <section className="relative overflow-hidden rounded-3xl ring-1 ring-amber-300/30" data-testid="office-hero">
+      <div className="relative h-[200px]">
+        <OfficeScene room={staff?.worn.room?.art} className="absolute inset-0 h-full w-full" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/30 to-transparent" />
+        <div className="relative p-4">
+          <p className="text-micro font-bold uppercase tracking-[0.2em] text-amber-300">💼 Кабинет президента</p>
+          <p className="mt-1 max-w-[55%] truncate font-display text-base font-bold text-ink-chalk">{office.name}</p>
+          {staff?.worn.room && <p className="max-w-[55%] truncate text-[10px] text-ink-mist">{staff.worn.room.name}</p>}
+        </div>
+        <DeskOverlay onTab={onTab} />
+      </div>
+      <div className="relative bg-gradient-to-br from-[#2a1d05] via-[#14261d] to-[#0b1f2e] p-4 pt-3">
+      <p className="relative text-micro uppercase tracking-wide text-ink-mist">Стоимость клуба</p>
       <p className="relative font-display text-3xl font-black leading-none text-transparent [text-shadow:none] bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-500">
         {eur(office.value.total)}
       </p>
@@ -133,6 +147,7 @@ function OfficeHero({ office }: { office: ManagerOffice }) {
         <Chip label={last ? `итог · ${weekOf(last.key)}` : "итог сезона"} value={last ? eur(last.profit) : "—"}
           tone={!last ? "text-ink-mist" : last.profit >= 0 ? "text-emerald-300" : "text-red-300"} />
         <Chip label="фанаты" value={office.fans.toLocaleString("ru-RU")} tone="text-pink-300" />
+      </div>
       </div>
     </section>
   );
