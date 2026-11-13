@@ -106,16 +106,16 @@ def upgrade() -> None:
 
     descr = "3 карточки коллекции «Клуб Центурионов» в золотой рамке. Только на 100 дней Victor FC."
 
-    def _pack(slug: str, name: str, stars, daily_limit, sort: int) -> int:
+    def _pack(slug: str, name: str, stars, daily_limit, sort: int, image: str) -> int:
         new_id = conn.execute(sa.text(
             "INSERT INTO packs (slug, name, description, price, stars_price, daily_limit_per_user, card_count, "
             "guaranteed_min_rarity, image_path, is_active, sort_order, available_from, available_until, "
             "pity_enabled, coach_drop_chance, stadium_drop_chance, skill_token_drop_chance, player_pool, "
             "muse_drop_chance, created_at, updated_at) "
-            "VALUES (:slug, :name, :descr, :price, :stars, :limit, 3, 'rare', 'packs/anniversary.webp', true, "
+            "VALUES (:slug, :name, :descr, :price, :stars, :limit, 3, 'rare', :image, true, "
             ":sort, :start, :end, false, 0, 0, 0, :pool, 0, now(), now()) ON CONFLICT (slug) DO NOTHING RETURNING id"
         ), {"slug": slug, "name": name, "descr": descr, "price": PACK_COINS, "stars": stars, "limit": daily_limit,
-            "sort": sort, "start": STARTS_AT, "end": ENDS_AT, "pool": f"collection:{collection_id}"}).scalar()
+            "sort": sort, "image": image, "start": STARTS_AT, "end": ENDS_AT, "pool": f"collection:{collection_id}"}).scalar()
         if new_id is None:
             return conn.execute(sa.text("SELECT id FROM packs WHERE slug = :s"), {"s": slug}).scalar_one()
         for rarity, prob in PACK_ODDS:
@@ -126,8 +126,8 @@ def upgrade() -> None:
         return new_id
 
     # The coins pack is also the one the gifts open (anniversary_settings.pack_id).
-    pack_id = _pack(PACK_SLUG, "Юбилейный пак", None, PACK_DAILY_LIMIT, -11)
-    _pack(STARS_PACK_SLUG, "Юбилейный пак ⭐", PACK_STARS, None, -10)
+    pack_id = _pack(PACK_SLUG, "Юбилейный пак", None, PACK_DAILY_LIMIT, -11, "packs/anniversary.webp")
+    _pack(STARS_PACK_SLUG, "Юбилейный пак ⭐", PACK_STARS, None, -10, "packs/anniversary_stars.webp")
 
     conn.execute(sa.text(
         "UPDATE game_config SET anniversary_enabled = true, anniversary_starts_at = :start, "
