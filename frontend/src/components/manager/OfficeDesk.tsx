@@ -37,13 +37,13 @@ export function DeskOverlay({ onTab }: { onTab: (t: ManagerTodayTab) => void }) 
     : unseen > 0 ? `Шеф, пока вас не было: ${unseen} ${unseen === 1 ? "дело" : unseen < 5 ? "дела" : "дел"}` : "Всё под контролем, шеф";
   return (
     <>
-      <div className="pointer-events-none absolute bottom-[-6px] left-2 opacity-90"><CarArt art={staff.worn.car?.art} width={96} /></div>
+      <div className="pointer-events-none absolute bottom-[-6px] left-2 opacity-90"><CarArt art={staff.worn.car?.art} code={staff.worn.car?.code} width={84} className="ring-2 ring-black/40 shadow-lg" /></div>
       <button onClick={() => onTab("staff")} className="absolute right-1 top-9 flex flex-col items-end" data-testid="desk-assistant">
         <span className="relative mb-1 max-w-[150px] rounded-2xl rounded-br-sm bg-white/95 px-2.5 py-1.5 text-left text-[11px] font-semibold leading-tight text-bg-base shadow-lg">
           {line}
           {unseen > 0 && active && <span className="absolute -left-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-lime px-1 text-[9px] font-black">{unseen}</span>}
         </span>
-        <StaffPortrait role="assistant" art={skin?.art} size={84} className={active ? "drop-shadow-[0_6px_18px_rgba(0,0,0,0.6)]" : "opacity-60 grayscale-[40%]"} />
+        <StaffPortrait role="assistant" art={skin?.art} code={skin?.code} size={84} className={active ? "drop-shadow-[0_6px_18px_rgba(0,0,0,0.6)]" : "opacity-60 grayscale-[40%]"} />
       </button>
     </>
   );

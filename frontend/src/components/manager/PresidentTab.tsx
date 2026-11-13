@@ -119,7 +119,7 @@ function OfficeHero({ office, onTab }: { office: ManagerOffice; onTab: (t: Manag
   return (
     <section className="relative overflow-hidden rounded-3xl ring-1 ring-amber-300/30" data-testid="office-hero">
       <div className="relative h-[200px]">
-        <OfficeScene room={staff?.worn.room?.art} className="absolute inset-0 h-full w-full" />
+        <OfficeScene room={staff?.worn.room?.art} code={staff?.worn.room?.code} className="absolute inset-0 h-full w-full" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/30 to-transparent" />
         <div className="relative p-4">
           <p className="text-micro font-bold uppercase tracking-[0.2em] text-amber-300">💼 Кабинет президента</p>

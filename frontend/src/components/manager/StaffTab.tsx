@@ -113,7 +113,7 @@ function VipCard({ vip, on, onPick }: { vip: ManagerVip; on: boolean; onPick: ()
     <button onClick={onPick} data-testid={`vip-${vip.role}`}
       className={`relative flex flex-col items-center overflow-hidden rounded-2xl px-2 pb-2.5 pt-1 text-center transition ${on
         ? "bg-white/10 ring-2 ring-violet-300" : "bg-black/25 ring-1 ring-white/10"}`}>
-      <StaffPortrait role={vip.role} art={vip.skin?.art} size={92} className={vip.active ? "" : "opacity-70 grayscale-[35%]"} />
+      <StaffPortrait role={vip.role} art={vip.skin?.art} code={vip.skin?.code} size={92} className={vip.active ? "" : "opacity-70 grayscale-[35%]"} />
       <span className="-mt-1 text-sm font-black text-ink-chalk">{vip.name}</span>
       <span className="text-micro font-semibold text-ink-mist">{vip.emoji} {vip.title}</span>
       <span className={`mt-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${vip.active ? "bg-accent-lime/15 text-accent-lime" : "bg-amber-400/15 text-amber-200"}`}>
@@ -138,7 +138,7 @@ function VipDetails({ vip, data, busy, itemBusy, onStars, onTrial, onDone, onErr
   return (
     <section className="flex flex-col gap-3 rounded-2xl bg-bg-surface p-4" data-testid="vip-details">
       <div className="flex items-start gap-3">
-        <StaffPortrait role={vip.role} art={vip.skin?.art} size={64} />
+        <StaffPortrait role={vip.role} art={vip.skin?.art} code={vip.skin?.code} size={64} />
         <div className="min-w-0 flex-1">
           <p className="font-display text-base font-bold text-ink-chalk">{vip.emoji} {vip.title}</p>
           <p className="text-micro text-ink-mist">{vip.about}</p>
@@ -172,7 +172,7 @@ function VipDetails({ vip, data, busy, itemBusy, onStars, onTrial, onDone, onErr
           return (
             <button key={s.code} disabled={itemBusy || on} onClick={() => onItem(s)}
               className={`flex flex-col items-center rounded-xl p-1.5 text-center ${on ? "bg-violet-400/15 ring-2 ring-violet-300" : "bg-bg-raised ring-1 ring-white/5"}`}>
-              <StaffPortrait role={vip.role} art={s.art} size={58} />
+              <StaffPortrait role={vip.role} art={s.art} code={s.code} size={58} />
               <span className="mt-0.5 line-clamp-1 text-[10px] font-bold text-ink-chalk">{s.name}</span>
               <span className="text-[10px] font-semibold text-ink-mist">{on ? "надет" : s.owned ? "надеть" : s.stars > 0 ? `${s.stars} ⭐` : `${s.coins} 🪙`}</span>
             </button>
@@ -340,8 +340,8 @@ function Status({ data, onItem, busy }: { data: ManagerStaffView; onItem: (i: Ma
           <button key={i.code} disabled={busy || on} onClick={() => onItem(i)}
             className={`flex flex-col items-center gap-1 overflow-hidden rounded-xl p-2 text-center ${on ? "bg-amber-300/10 ring-2 ring-amber-300" : "bg-bg-raised ring-1 ring-white/5"}`}>
             {kind === "car"
-              ? <span className="flex h-12 items-end"><CarArt art={i.art} width={110} /></span>
-              : <OfficeScene room={i.art} className="h-14 w-full rounded-lg" />}
+              ? <span className="flex h-[72px] items-end"><CarArt art={i.art} code={i.code} width={108} /></span>
+              : <OfficeScene room={i.art} code={i.code} className="h-[72px] w-full rounded-lg" />}
             <span className="line-clamp-1 text-[11px] font-bold text-ink-chalk">{i.name}</span>
             <span className={`text-[10px] font-semibold ${on ? "text-amber-200" : "text-ink-mist"}`}>{on ? "выбрано" : price(i)}</span>
           </button>

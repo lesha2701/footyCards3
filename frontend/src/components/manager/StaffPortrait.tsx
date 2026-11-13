@@ -1,6 +1,7 @@
 import { useId } from "react";
 
 import type { ManagerItemArt, ManagerVipRole } from "@/api/manager";
+import { staffArt } from "@/lib/staffArt";
 
 const DEFAULT: Record<ManagerVipRole, Required<Pick<ManagerItemArt, "skin" | "hair" | "hair_style" | "outfit" | "accent">>> = {
   assistant: { skin: "#f1c7a5", hair: "#3b2416", hair_style: "bun", outfit: "#1f2a44", accent: "#c6e63a" },
@@ -52,12 +53,19 @@ function FrontHair({ style, color }: { style: string; color: string }) {
   }
 }
 
-/** A drawn bust of the VIP staff from the skin's colours — no image assets,
- * every skin is a palette (`staff_items[].art`). */
-export default function StaffPortrait({ role, art, size = 88, className = "" }: {
-  role: ManagerVipRole; art?: ManagerItemArt | null; size?: number; className?: string;
+/** The VIP staff's portrait: the skin's picture (assets/manager/staff/<code>.webp)
+ * or, without one, a bust drawn from the skin's colours (`staff_items[].art`). */
+export default function StaffPortrait({ role, art, code, size = 88, className = "" }: {
+  role: ManagerVipRole; art?: ManagerItemArt | null; code?: string | null; size?: number; className?: string;
 }) {
   const uid = useId().replace(/:/g, "");
+  const picture = staffArt(code);
+  if (picture) {
+    return (
+      <img src={picture} alt={role === "assistant" ? "Помощница" : "Аналитик"} width={size} height={size} loading="lazy"
+        className={`rounded-full object-cover ring-2 ring-white/15 ${className}`} style={{ width: size, height: size }} />
+    );
+  }
   const a = { ...DEFAULT[role], ...(art ?? {}) };
   const female = role === "assistant";
   return (

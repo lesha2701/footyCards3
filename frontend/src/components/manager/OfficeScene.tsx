@@ -1,9 +1,15 @@
 import { useId } from "react";
 
 import type { ManagerItemArt } from "@/api/manager";
+import { staffArt } from "@/lib/staffArt";
 
 /** The president's car, side view, by `art.shape`. */
-export function CarArt({ art, width = 120 }: { art?: ManagerItemArt | null; width?: number }) {
+export function CarArt({ art, code, width = 120, className = "" }: { art?: ManagerItemArt | null; code?: string | null; width?: number; className?: string }) {
+  const picture = staffArt(code);
+  if (picture) {
+    return <img src={picture} alt="" loading="lazy" width={width} height={(width * 2) / 3}
+      className={`rounded-lg object-cover ${className}`} style={{ width, height: (width * 2) / 3 }} />;
+  }
   const body = art?.body ?? "#9aa4b1";
   const shape = art?.shape ?? "hatch";
   const roof = {
@@ -36,8 +42,10 @@ export function CarArt({ art, width = 120 }: { art?: ManagerItemArt | null; widt
 
 /** The office room behind the hero: the wall, a window onto the stadium,
  * the president's desk with a trophy. Colours come from the worn room. */
-export default function OfficeScene({ room, className = "" }: { room?: ManagerItemArt | null; className?: string }) {
+export default function OfficeScene({ room, code, className = "" }: { room?: ManagerItemArt | null; code?: string | null; className?: string }) {
   const uid = useId().replace(/:/g, "");
+  const picture = staffArt(code);
+  if (picture) return <img src={picture} alt="" loading="lazy" className={`object-cover ${className}`} />;
   const wall = room?.wall ?? "#20303f";
   const floor = room?.floor ?? "#3a2c22";
   const glow = room?.window ?? "#88a9c3";
