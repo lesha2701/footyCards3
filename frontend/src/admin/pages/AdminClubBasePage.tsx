@@ -41,7 +41,7 @@ type Form = Pick<GameConfig, "club_base_enabled" | "club_base_buildings" | "club
   | "club_base_income_max_days" | "club_base_cosmetics"
   | "town_enabled" | "town_districts" | "town_price_growth_pct" | "town_income_max_hours"
   | "town_unlock_coins" | "town_rename_stars" | "town_hotel_price" | "town_hotel_rent_per_100_cards"
-  | "town_hotel_max_cards" | "town_decor" | "town_mood">;
+  | "town_hotel_max_cards" | "town_decor" | "town_mood" | "town_social">;
 
 // [GameConfig.town_mood key, label, default (town_service.MOOD_DEFAULTS)]
 const TOWN_MOOD: [string, string, number][] = [
@@ -49,6 +49,24 @@ const TOWN_MOOD: [string, string, number][] = [
   ["care", "Уход, очков", 40], ["care_full_hours", "Уход полный, ч", 12], ["care_zero_hours", "Уход в 0, ч", 48],
   ["houses", "Все дома, очков", 20], ["decor", "Место, очков", 20],
   ["resident", "Житель, очков", 10], ["resident_legendary", "Легенда, очков", 20], ["resident_slots", "Жителей в районе", 3],
+  ["bonus_settled_only", "Бонус только поселённым (1/0)", 1],
+  ["set_rent_pct", "Собранный набор, +% ренты", 5], ["set_max_pct", "Все наборы, макс. %", 25],
+  ["set_min_size", "Жителей в наборе, мин.", 2],
+];
+
+// [GameConfig.town_social key, label, default (town_social_service.SOCIAL_DEFAULTS)]
+const TOWN_SOCIAL: [string, string, number][] = [
+  ["quests_per_day", "Заданий в день", 3], ["quest_coins", "Награда, монет", 60],
+  ["quest_coins_legendary", "От легенды, монет", 120], ["play_target", "Игр в задании", 2],
+  ["visit_target", "Визитов в задании", 2], ["gift_price", "Подарок стоит гостю", 300],
+  ["gift_rent", "Хозяину от подарка", 100], ["gifts_per_day", "Подарков гостю в день", 3],
+  ["gifts_received_per_day", "Подарков городу в день", 5], ["guests_listed", "Городов в списке", 12],
+  ["week_like_points", "Неделя: очков за лайк", 10], ["week_guest_points", "Неделя: очков за гостя", 3],
+  ["week_house_points", "Неделя: очков за дом", 1], ["week_min_account_days", "Неделя: возраст гостя, дней", 3],
+  ["week_rewarded_places", "Неделя: мест с наградой", 10], ["week_reward_1", "Неделя: 1 место", 3000],
+  ["week_reward_2", "Неделя: 2 место", 2000], ["week_reward_3", "Неделя: 3 место", 1000],
+  ["week_reward_rest", "Неделя: 4+ место", 300],
+  ["season_item_stars", "Сезонное украшение, ⭐", 49], ["season_item_supply", "Копий украшения (0 = без лимита)", 0],
 ];
 
 const TOWN_DECOR: Record<string, string> = {
@@ -57,6 +75,7 @@ const TOWN_DECOR: Record<string, string> = {
 
 const TOWN_DISTRICTS: Record<string, string> = {
   favela: "🎨 Фавелы", center: "🏛️ Центр", mountains: "🏔️ Горы", beach: "🏖️ Пляж", business: "🏙️ Бизнес-район",
+  residential: "🏘️ Жилой квартал", industrial: "🏭 Промзона", airport: "✈️ Аэропорт", island: "🛳️ Круизный остров",
 };
 
 // Kind -> values that can be sold (the first value of each kind is the free default).
@@ -102,6 +121,7 @@ export default function AdminClubBasePage() {
       town_hotel_max_cards: config.town_hotel_max_cards,
       town_decor: config.town_decor ?? {},
       town_mood: config.town_mood ?? {},
+      town_social: config.town_social ?? {},
     });
   }, [config]);
 
@@ -312,6 +332,27 @@ export default function AdminClubBasePage() {
                   if (e.target.value === "") delete next[key];
                   else next[key] = Math.max(0, Math.round(Number(e.target.value)));
                   setForm({ ...form, town_mood: next });
+                }}
+                className="rounded bg-bg-base px-2 py-1 outline-none"
+              />
+            </label>
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-slate-400">
+          Задания жителей и гости. Подарок: гость платит, хозяин получает часть с рентой, остальное сгорает.
+          Пустое поле — значение по умолчанию.
+        </p>
+        <div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3 lg:grid-cols-5">
+          {TOWN_SOCIAL.map(([key, label, def]) => (
+            <label key={key} className="flex flex-col gap-1 rounded-lg bg-white/5 p-2">
+              <span className="text-slate-400">{label}</span>
+              <input
+                type="number" min={0} placeholder={String(def)} value={form.town_social[key] ?? ""}
+                onChange={(e) => {
+                  const next = { ...form.town_social };
+                  if (e.target.value === "") delete next[key];
+                  else next[key] = Math.max(0, Math.round(Number(e.target.value)));
+                  setForm({ ...form, town_social: next });
                 }}
                 className="rounded bg-bg-base px-2 py-1 outline-none"
               />

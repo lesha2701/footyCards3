@@ -43,3 +43,10 @@ def test_notifier_related_object_player_tournament_and_club_unchanged():
     assert _url(_keyboard_for("club_match", 7)).endswith("/clubs/tournament/7")
     assert _keyboard_for(None, None) is None
     assert _keyboard_for(None, None, "trade_offer") is None
+
+
+def test_notifier_update_broadcast_opens_the_game():
+    markup = _keyboard_for("app_update", None, "admin_message")
+    assert markup.inline_keyboard[0][0].text == "🎮 Перейти в игру"
+    assert _url(markup).endswith("/")
+    assert _keyboard_for(None, None, "admin_message") is None

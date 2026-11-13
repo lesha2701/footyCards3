@@ -9,7 +9,7 @@ from app.models.card_skill import CardSkill, CardSkillLedger, UserSkillToken
 from app.models.career import CareerClub, CareerParticipant, CareerProfile, CareerSeason, Friendship
 from app.models.lifestyle import LifestyleItem, UserLifestyleItem
 from app.models.club_base import ClubBaseLedger, UserBaseCosmetic, UserClubBase
-from app.models.town import TownLedger, TownResident, UserTown, UserTownHouse, UserTownResident
+from app.models.town import TownLedger, TownResident, TownVisit, TownWeek, TownWeekResult, UserTownSeasonItem, UserTown, UserTownHouse, UserTownQuest, UserTownResident
 from app.models.manager_club import (
     ManagerClub,
     ManagerContract,
@@ -36,6 +36,7 @@ from app.models.my_player import MyPlayer, MyPlayerDuel
 from app.models.my_player_extras import MyPlayerEdition, MyPlayerGift, MyPlayerSponsorContract
 from app.models.newbie import NewbieProgress
 from app.models.comeback_gift import ComebackGift
+from app.models.stars_patron import StarsPatronAward
 from app.models.streak_reward import StreakReward
 from app.models.loyalty import LoyaltyReward
 from app.models.player_career import (
@@ -195,6 +196,10 @@ __all__ = [
     "UserTownHouse",
     "TownResident",
     "UserTownResident",
+    "UserTownQuest",
+    "TownVisit",
+    "TownWeek",
+    "TownWeekResult", "UserTownSeasonItem",
     "TownLedger",
     "ClubBaseLedger",
     "UserBaseCosmetic",

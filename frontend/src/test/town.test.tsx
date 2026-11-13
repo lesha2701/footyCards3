@@ -4,19 +4,26 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  buyTownDecor, buyTownHotel, buyTownHouse, claimTownIncome, fetchTown, sellTownResidentSpare, settleTownResident, unlockTown, type TownResident, type TownResidentsAlbum, type TownState,
+  buyTownDecor, buyTownHotel, buyTownHouse, claimTownIncome, claimTownQuest, fetchTown, fetchTownResidents, giftTown, likeTown, sellTownResidentSpare, settleTownResident, unlockTown, type TownQuests, type TownResident, type TownResidentsAlbum, type TownState, type TownVisitView,
 } from "@/api/town";
 import { useAuthStore } from "@/store/authStore";
-import { DISTRICTS, MAP_ZONES, SCENE_H, SCENE_W, SPRITES, moverAt, type Mover } from "@/lib/town";
+import { DISTRICTS, MAP_ZONES, SCENE_H, SCENE_W, SPRITES, moverAt, seasonAt, skyAt, type Mover } from "@/lib/town";
 import TownPage from "@/pages/TownPage";
+import TownGuestsPage from "@/pages/TownGuestsPage";
 import TownResidentsPage from "@/pages/TownResidentsPage";
+import TownVisitPage from "@/pages/TownVisitPage";
+import TownWeekPage from "@/pages/TownWeekPage";
 
 const inside = ([x, y]: [number, number]) => x >= 0 && x <= SCENE_W && y >= 0 && y <= SCENE_H;
 
 describe("town data", () => {
-  it("has five districts of twelve buildings and the base on the map", () => {
-    expect(DISTRICTS.map((d) => d.code)).toEqual(["center", "favela", "beach", "mountains", "business"]);
-    expect(MAP_ZONES.map((z) => z.code).sort()).toEqual(["base", "beach", "business", "center", "favela", "mountains"]);
+  it("has nine districts of twelve buildings and the base on the map", () => {
+    expect(DISTRICTS.map((d) => d.code)).toEqual([
+      "center", "favela", "beach", "mountains", "business", "residential", "industrial", "airport", "island",
+    ]);
+    expect(MAP_ZONES.map((z) => z.code).sort()).toEqual([
+      "airport", "base", "beach", "business", "center", "favela", "industrial", "island", "mountains", "residential",
+    ]);
     for (const d of DISTRICTS) {
       expect(d.buildings).toHaveLength(12);
       expect(new Set(d.buildings.map((b) => b.code)).size).toBe(12);
@@ -67,7 +74,7 @@ const town = (over: Partial<TownState> = {}): TownState => ({
   residents: { enabled: true, population: 7, rent_per_resident: 1, rent: 7, rent_pct: 20, hotel_pct: 0, daily_coins: 0 },
   houses: [{ district: "beach", code: "surf" }],
   owned_total: 1,
-  total_houses: 60,
+  total_houses: 108,
   price_growth_pct: 4,
   districts: DISTRICTS.map((d) => ({
     code: d.code, name: d.name, rent: 45, next_price: 4160, owned: d.code === "beach" ? 1 : 0, total: 12,
@@ -114,7 +121,49 @@ vi.mock("@/api/town", () => ({
   settleTownResident: vi.fn(async () => town()),
   createTownRenameInvoice: vi.fn(),
   fetchTownInvoiceStatus: vi.fn(),
+  fetchTownQuests: vi.fn(async () => quests()),
+  claimTownQuest: vi.fn(async () => ({ ...quests(true), paid: 60, new_balance: 5060 })),
+  fetchTownGuests: vi.fn(async () => ({
+    towns: [{ user_id: 7, name: "Город Пети", owner: "Петя", friend: true, houses: 9, likes: 4, visited: false, liked: false, gifted: false }],
+    gift_price: 300, gift_rent: 100, gifts_left: 3, likes_today: 1, likes_total: 12,
+  })),
+  visitTown: vi.fn(async () => visit()),
+  likeTown: vi.fn(async () => visit({ liked: true, likes_today: 1 })),
+  giftTown: vi.fn(async () => visit({ gifted: true, can_gift: false, new_balance: 4700 })),
+  fetchTownSeason: vi.fn(async () => ({
+    season: "winter", season_name: "Зима", stars: 49,
+    items: [
+      { code: "tree", name: "Новогодняя ёлка на площади", emoji: "🎄", season: "winter", on_sale: false, owned: true, serial: 7, sold: 10, supply: 0 },
+      { code: "snowman", name: "Снеговик в шарфе клуба", emoji: "⛄", season: "winter", on_sale: true, owned: false, serial: null, sold: 3, supply: 100 },
+    ],
+  })),
+  createTownSeasonInvoice: vi.fn(),
+  fetchTownWeek: vi.fn(async () => ({
+    week: "2026-W46", ends_on: "2026-11-15",
+    points: { like: 10, guest: 3, house: 1 },
+    rewards: [{ place: 1, coins: 3000 }, { place: 2, coins: 2000 }, { place: 3, coins: 1000 }, { place: 4, coins: 300 }],
+    top: [{ place: 1, user_id: 7, name: "Город Пети", owner: "Петя", score: 44, likes: 3, guests: 4, houses: 2, reward: 3000 }],
+    me: null,
+    last_week: { week: "2026-W45", winners: [{ place: 1, user_id: 1, owner: "Я", score: 30, coins: 3000 }], mine: { place: 1, coins: 3000 } },
+  })),
 }));
+
+const quests = (claimed = false): TownQuests => ({
+  day: "2026-11-10",
+  quests: [
+    { id: 1, kind: "claim", label: "Собери ренту города", target: 1, progress: 1, reward_coins: 60, done: true, claimed,
+      resident: { id: 2, name: "Капитан", icon: "⚓", image_path: null, rarity: "legendary" } },
+    { id: 2, kind: "visit", label: "Загляни в гости в 2 города", target: 2, progress: 0, reward_coins: 60, done: false,
+      claimed: false, resident: null },
+  ],
+});
+
+const visit = (over: Partial<TownVisitView> = {}): TownVisitView => ({
+  user_id: 7, name: "Город Пети", owner: "Петя",
+  districts: [{ code: "beach", name: "Пляж", owned: 3, total: 12, mood: 70 }],
+  places: ["pier"], hotel: true, population: 5, likes_today: 0, likes_total: 4,
+  liked: false, gifted: false, can_gift: true, gift_price: 300, gift_rent: 100, gifts_left: 3, ...over,
+});
 
 describe("TownPage", () => {
   beforeEach(() => {
@@ -131,6 +180,9 @@ describe("TownPage", () => {
           <Routes>
             <Route path="/town" element={<TownPage />} />
             <Route path="/town/residents" element={<TownResidentsPage />} />
+            <Route path="/town/guests" element={<TownGuestsPage />} />
+            <Route path="/town/visit/:ownerId" element={<TownVisitPage />} />
+            <Route path="/town/week" element={<TownWeekPage />} />
             <Route path="/town/:district" element={<TownPage />} />
             <Route path="/base" element={<p>экран базы</p>} />
           </Routes>
@@ -232,6 +284,84 @@ describe("TownPage", () => {
     await waitFor(() => expect(useAuthStore.getState().user?.balance).toBe(5010));
   });
 
+  it("shows the residents' quests and pays a done one", async () => {
+    at("/town");
+    const panel = await screen.findByTestId("town-quests");
+    await waitFor(() => expect(panel).toHaveTextContent("Собери ренту города"));
+    expect(panel).toHaveTextContent("Капитан · 1/1");
+    expect(screen.getByRole("button", { name: "Награда за задание: Загляни в гости в 2 города" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Награда за задание: Собери ренту города" }));
+    await waitFor(() => expect(claimTownQuest).toHaveBeenCalledWith(1, expect.anything()));
+    expect(await screen.findByText(/Житель доволен: \+60 монет/)).toBeInTheDocument();
+    await waitFor(() => expect(useAuthStore.getState().user?.balance).toBe(5060));
+  });
+
+  it("sells the season's decorations for Stars and shows the owned ones", async () => {
+    at("/town");
+    const panel = await screen.findByTestId("town-season");
+    expect(panel).toHaveTextContent("Твоё · № 7");
+    expect(panel).toHaveTextContent("Осталось 97 из 100");
+    expect(screen.getByRole("button", { name: "Купить: Снеговик в шарфе клуба" })).toHaveTextContent("⭐ 49");
+  });
+
+  it("picks the season by the month", () => {
+    expect([1, 3, 6, 9, 12].map(seasonAt)).toEqual(["winter", "spring", "summer", "autumn", "winter"]);
+  });
+
+  it("shows the town of the week ranking and the past week's prize", async () => {
+    at("/town/week");
+    expect(await screen.findByRole("link", { name: /Город Пети/ })).toHaveAttribute("href", "/town/visit/7");
+    expect(screen.getByTestId("town-week-mine")).toHaveTextContent("на 1 месте 🥇 — +3 000 монет");
+    expect(screen.getByText(/❤️ лайк гостя — 10/)).toBeInTheDocument();
+  });
+
+  it("lists towns to visit, likes one and leaves a gift", async () => {
+    at("/town/guests");
+    fireEvent.click(await screen.findByRole("link", { name: "В гости: Город Пети" }));
+    expect(await screen.findByRole("heading", { name: "Город Пети" })).toBeInTheDocument();
+    expect(screen.getByText(/Хозяин: Петя/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "❤️ Лайк" }));
+    await waitFor(() => expect(likeTown).toHaveBeenCalledWith(7));
+    expect(await screen.findByRole("button", { name: "❤️ Лайк есть" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /🎁 Подарок/ }));
+    await waitFor(() => expect(giftTown).toHaveBeenCalledWith(7));
+    expect(await screen.findByText(/хозяин получит \+100 к ренте/)).toBeInTheDocument();
+    await waitFor(() => expect(useAuthStore.getState().user?.balance).toBe(4700));
+  });
+
+  it("tells a resident's bonus sleeps until he is settled, and where he lives", async () => {
+    vi.mocked(fetchTownResidents).mockResolvedValueOnce({
+      ...album(), bonus_settled_only: true,
+      residents: [
+        resident(2, "Капитан", 1, { rarity: "legendary", bonus: "rent_pct", bonus_value: 20, bonus_label: "+20% к ренте домов", bonus_active: false }),
+        resident(1, "Рыбак", 2, { district: "beach" }),
+      ],
+    });
+    at("/town/residents");
+    fireEvent.click(await screen.findByRole("button", { name: "Капитан, копий 1" }));
+    expect(screen.getByRole("link", { name: /Бонус спит — посели жителя в район/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Рыбак, копий 2" }));
+    expect(screen.getByText(/Живёт: Пляж/)).toBeInTheDocument();
+  });
+
+  it("shows the resident sets, a badge for a whole one", async () => {
+    vi.mocked(fetchTownResidents).mockResolvedValueOnce({
+      ...album(),
+      residents: [resident(1, "Рыбак", 1), resident(2, "Капитан", 1), resident(3, "Сёрфер", 0)],
+      sets: [
+        { name: "Пляжная банда", total: 2, owned: 2, complete: true, resident_ids: [1, 2], rent_pct: 5 },
+        { name: "Волна", total: 2, owned: 1, complete: false, resident_ids: [1, 3], rent_pct: 5 },
+      ],
+      sets_pct: 5, sets_max_pct: 25,
+    });
+    at("/town/residents");
+    const panel = await screen.findByTestId("town-sets");
+    expect(panel).toHaveTextContent("🏅 Пляжная банда");
+    expect(panel).toHaveTextContent("собран · +5%");
+    expect(panel).toHaveTextContent("1/2 · соберёшь — +5%");
+    expect(panel).toHaveTextContent("❔ Сёрфер");
+  });
+
   it("shows the town's own name and buys the hotel for the cards held", async () => {
     vi.mocked(fetchTown).mockImplementation(async () => town({ name: "Сан-Виктор" }));
     at("/town");
@@ -241,5 +371,13 @@ describe("TownPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Отель" }));
     await waitFor(() => expect(buyTownHotel).toHaveBeenCalled());
     expect(await screen.findByText(/Отель открыт/)).toBeInTheDocument();
+  });
+});
+
+describe("skyAt", () => {
+  it("lights the town by the player's clock", () => {
+    expect([0, 5, 6, 7, 8, 12, 17, 18, 20, 21, 23].map(skyAt)).toEqual(
+      ["night", "night", "dawn", "dawn", "day", "day", "day", "dusk", "dusk", "night", "night"],
+    );
   });
 });

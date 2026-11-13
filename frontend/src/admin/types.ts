@@ -367,6 +367,13 @@ export interface GameConfig {
   comeback_gift_cooldown_days: number;
   comeback_gift_coins: number;
   comeback_gift_pack_slug: string;
+  stars_patron_enabled: boolean;
+  stars_patron_week_min: number;
+  stars_patron_week_places: number;
+  stars_patron_week_card_rarity: string;
+  stars_patron_week_coins: number;
+  stars_praetorian_threshold: number;
+  stars_praetorian_badge_id: number | null;
   shop_daily_offer_enabled: boolean;
   shop_daily_offer_discount_pct: number;
   shop_daily_offer_pack_id: number | null;
@@ -725,6 +732,8 @@ export interface GameConfig {
   kontra_boss_max_rounds: number;
   kontra_boss_week_hp: number;
   kontra_boss_reward_tiers: [number, number][];
+  kontra_leagues: [number, number][];
+  kontra_tactic_edge_pct: number;
   kontra_gear_drop_boss_pct: number;
   kontra_gear_drop_arena_pct: number;
   kontra_chest_coins: number;
@@ -859,6 +868,7 @@ export interface GameConfig {
   town_resident_max_daily_coins: number;
   town_decor: Record<string, { price: number; rent_pct: number }>;
   town_mood: Record<string, number>;
+  town_social: Record<string, number>;
   trade_send_min_account_age_days: number;
   trade_send_min_active_days: number;
   trade_daily_coins_receive_cap: number;
@@ -1468,6 +1478,7 @@ export interface AdminTownResident {
   bonus: string;
   bonus_value: number;
   bonus_label?: string;
+  set_name?: string | null;
   drop_weight: number;
   is_pack_droppable: boolean;
   is_active: boolean;

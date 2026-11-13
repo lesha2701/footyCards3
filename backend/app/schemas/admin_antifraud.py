@@ -77,11 +77,17 @@ class BotSuspectOut(BaseModel):
     rewards_blocked: bool = False
     resting: bool = False
     watched: bool = False
+    cleared: bool = False
 
 
 class RewardsBlockIn(BaseModel):
     user_ids: list[int] = Field(min_length=1, max_length=5000)
     blocked: bool = True
+
+
+class ClearedIn(BaseModel):
+    user_ids: list[int] = Field(min_length=1, max_length=5000)
+    cleared: bool = True
 
 
 class WatchIn(BaseModel):

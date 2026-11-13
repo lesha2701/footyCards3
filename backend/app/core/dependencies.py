@@ -159,6 +159,12 @@ async def _get_or_create_user(
 
         await check_comeback(db, user, previous_seen_at)
         await db.refresh(user)
+        # Thanks to Stars buyers: settles last week's «Покровитель недели»
+        # once, and a «Преторианец» who reached the bar before it existed.
+        from app.services import stars_patron_service
+
+        await stars_patron_service.run_daily(db, user)
+        await db.refresh(user)
     if previous_day != today and user.referred_by_id is not None and not user.referral_reward_granted:
         # A new active day may make him a counted friend (referral_service).
         from app.services.referral_service import check_friend

@@ -3863,6 +3863,7 @@ export interface KontraAbility {
   cooldown: number;
   cd: number;
   ready: boolean;
+  ult?: boolean;
 }
 
 export interface KontraPassive {
@@ -3893,6 +3894,64 @@ export interface KontraSquad {
   leader_aura: string | null;
   options: KontraFighter[];
   size: number;
+  tactic: KontraTacticCode | null;
+  tactics: KontraTactic[];
+  tactic_edge_pct: number;
+  leader_ult: KontraAbility | null;
+}
+
+export type KontraTacticCode = "pressing" | "tiki" | "bus";
+
+export interface KontraTactic {
+  code: KontraTacticCode;
+  name: string;
+  bonus: string;
+  beats: KontraTacticCode;
+  beats_name: string;
+}
+
+export interface KontraLeagueTier {
+  name: string;
+  icon: string;
+  at: number;
+  coins: number;
+}
+
+export interface KontraLeague {
+  index: number;
+  name: string;
+  icon: string;
+  week_best: number;
+  coins: number;
+  next_name: string | null;
+  next_at: number | null;
+  next_coins: number | null;
+  week_ends: string;
+  tiers: KontraLeagueTier[];
+}
+
+export interface KontraLeagueReward {
+  name: string;
+  icon: string;
+  coins: number;
+  best: number;
+}
+
+export interface KontraDefenseItem {
+  battle_id: number;
+  attacker_name: string;
+  attacker_rating: number;
+  result: "win" | "loss";
+  survivors: number;
+  created_at: string;
+  is_new: boolean;
+  can_revenge: boolean;
+}
+
+export interface KontraDefense {
+  items: KontraDefenseItem[];
+  wins: number;
+  losses: number;
 }
 
 export interface KontraUnit {
@@ -3926,6 +3985,12 @@ export interface KontraEvent {
   amount?: number;
   effect?: string;
   winner?: string;
+  pct?: number;
+  passive?: string;
+  /** an ability event: the leader's ultimate */
+  ult?: boolean;
+  /** a hit: the attacker's tactic beats the target's */
+  edge?: boolean;
 }
 
 export interface KontraGear {
@@ -3962,7 +4027,14 @@ export interface KontraBattle {
   gear_drop: KontraGear | null;
   boss_name: string | null;
   boss_tagline: string | null;
+  boss_code: string | null;
   created_at: string;
+  tactic_me: KontraTactic | null;
+  tactic_foe: KontraTactic | null;
+  tactic_edge_pct: number;
+  charge_me: number;
+  charge_foe: number;
+  revenge: boolean;
 }
 
 export interface KontraOffer {
@@ -3972,6 +4044,8 @@ export interface KontraOffer {
   power: number;
   is_bot: boolean;
   cards: KontraCard[];
+  tactic: KontraTactic | null;
+  revenge: boolean;
 }
 
 export interface KontraArena {
@@ -3984,6 +4058,11 @@ export interface KontraArena {
   reward_loss: number;
   rating_win: number;
   rating_loss: number;
+  tactic: KontraTactic | null;
+  tactics: KontraTactic[];
+  tactic_edge_pct: number;
+  league: KontraLeague | null;
+  defense_unread: number;
 }
 
 export interface KontraBoss {
@@ -4012,6 +4091,9 @@ export interface KontraHub {
   boss_name: string;
   boss_attempts_left: number;
   gear_count: number;
+  defense_unread: number;
+  league: KontraLeague | null;
+  league_reward: KontraLeagueReward | null;
 }
 
 export interface KontraGearList {

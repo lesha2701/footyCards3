@@ -6,7 +6,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
   buyTownDecor, buyTownHotel, buyTownHouse, claimTownIncome, createTownRenameInvoice, fetchTown, fetchTownInvoiceStatus,
-  fetchTownResidents, settleTownResident, unlockTown, type TownDistrictState, type TownState,
+  claimTownQuest, createTownSeasonInvoice, fetchTownQuests, fetchTownResidents, fetchTownSeason, settleTownResident, unlockTown,
+  type TownDistrictState, type TownState,
 } from "@/api/town";
 import GameHero from "@/components/common/GameHero";
 import { IconClose, IconCoin } from "@/components/icons";
@@ -19,7 +20,7 @@ import { formatGameError } from "@/lib/errors";
 import { useMarkSeen } from "@/lib/seenSections";
 import { hapticNotify, openTelegramInvoice } from "@/lib/telegram";
 import {
-  DECOR_ZONES, DISTRICTS, FIREWORKS_BOX, MAP_ZONES, SCENE_H, SCENE_W, TOWN_MAP, districtOf, type DecorZone, type District,
+  DECOR_ZONES, DISTRICTS, FIREWORKS_BOX, badgeAnchor, MAP_ZONES, SCENE_H, SCENE_W, SEASON_LABEL, TOWN_MAP, districtOf, type DecorZone, type District,
   type TownBuilding,
 } from "@/lib/town";
 import { useAuthStore } from "@/store/authStore";
@@ -73,7 +74,11 @@ export default function TownPage() {
   };
   const claim = useMutation({
     mutationFn: () => claimTownIncome(crypto.randomUUID()),
-    onSuccess: (data) => { apply(data); setNotice(`Жильцы заплатили ренту: +${fmt(data.claimed ?? 0)} монет 🏘️`); },
+    onSuccess: (data) => {
+      apply(data);
+      setNotice(`Жильцы заплатили ренту: +${fmt(data.claimed ?? 0)} монет 🏘️`);
+      void queryClient.invalidateQueries({ queryKey: ["town-quests"] });
+    },
     onError: fail,
   });
   const buy = useMutation({
@@ -229,7 +234,7 @@ function TownStrip({ state, claimBusy, onClaim, hotelBusy, onHotel }: {
           Рента · +{fmt(income.rate_per_day)}/д
         </span>
         <span className={`w-full rounded-lg px-1 py-1 text-[11px] font-bold ${income.pending > 0 ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"}`}>
-          {income.pending > 0 ? `Забрать ${fmt(income.pending)}` : `0 из ${fmt(income.cap)}`}
+          {income.pending > 0 ? `Забрать ${fmt(income.pending)}${income.gifts ? " 🎁" : ""}` : `0 из ${fmt(income.cap)}`}
         </span>
       </button>
       {hotel.owned ? (
@@ -264,6 +269,112 @@ function TownStrip({ state, claimBusy, onClaim, hotelBusy, onHotel }: {
   );
 }
 
+/** «Сезонный город»: the season's limited decorations for Stars — style only. */
+function SeasonPanel() {
+  const queryClient = useQueryClient();
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const { data } = useQuery({ queryKey: ["town-season"], queryFn: fetchTownSeason });
+  const buy = useMutation({
+    mutationFn: (code: string) => payWithStars(() => createTownSeasonInvoice(code)),
+    onSuccess: (state) => {
+      void queryClient.invalidateQueries({ queryKey: ["town-season"] });
+      if (!state) return;
+      hapticNotify("success");
+      queryClient.setQueryData(["town"], state);
+      setMessage({ ok: true, text: "Украшение уже в городе ✨" });
+    },
+    onError: (err) => { hapticNotify("error"); setMessage({ ok: false, text: formatGameError(err, "Не получилось") }); },
+  });
+  if (!data || data.items.length === 0) return null;
+  return (
+    <section className="flex flex-col gap-2 rounded-2xl border border-sky-300/25 bg-sky-400/5 p-3" aria-label="Сезонные украшения" data-testid="town-season">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-bold text-ink-chalk">{SEASON_LABEL[data.season]} в городе</p>
+        <span className="text-[10px] text-ink-mist">только в сезон · для красоты</span>
+      </div>
+      {data.items.map((item) => (
+        <div key={item.code} className="flex items-center gap-2">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/5 text-xl" aria-hidden>{item.emoji}</span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-semibold text-ink-chalk">{item.name}</p>
+            <p className="truncate text-[10px] text-ink-mist">
+              {item.owned ? `Твоё · № ${item.serial}` : item.supply ? `Осталось ${fmt(Math.max(0, item.supply - item.sold))} из ${fmt(item.supply)}` : `Уже у ${fmt(item.sold)}`}
+            </p>
+          </div>
+          {item.owned ? (
+            <span className="shrink-0 text-xs font-bold text-accent-lime">✓</span>
+          ) : (
+            <button
+              type="button" disabled={!item.on_sale || buy.isPending} onClick={() => buy.mutate(item.code)}
+              aria-label={`Купить: ${item.name}`}
+              className={`shrink-0 rounded-lg px-2 py-1 text-[11px] font-bold ${item.on_sale ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"}`}
+            >
+              {item.on_sale ? `⭐ ${fmt(data.stars)}` : "Нет"}
+            </button>
+          )}
+        </div>
+      ))}
+      {message && <p className={`text-[11px] ${message.ok ? "text-accent-lime" : "text-red-400"}`}>{message.text}</p>}
+    </section>
+  );
+}
+
+/** «Задания жителей»: today's small quests, each from one of the residents. */
+function QuestsPanel() {
+  const queryClient = useQueryClient();
+  const updateBalance = useAuthStore((s) => s.updateBalance);
+  const [message, setMessage] = useState<string | null>(null);
+  const { data } = useQuery({ queryKey: ["town-quests"], queryFn: fetchTownQuests, refetchInterval: 60_000 });
+  const claim = useMutation({
+    mutationFn: claimTownQuest,
+    onSuccess: (res) => {
+      hapticNotify("success");
+      if (res.new_balance != null) updateBalance(res.new_balance);
+      queryClient.setQueryData(["town-quests"], res);
+      setMessage(`Житель доволен: +${fmt(res.paid ?? 0)} монет`);
+    },
+    onError: (err) => { hapticNotify("error"); setMessage(formatGameError(err, "Не получилось")); },
+  });
+  return (
+    <section className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-bg-surface p-3" aria-label="Задания жителей" data-testid="town-quests">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-bold text-ink-chalk">📜 Задания</p>
+        <span className="flex gap-1.5">
+          <Link to="/town/week" className="rounded-full bg-amber-400/10 px-3 py-1 text-xs font-bold text-amber-200">🏆 Неделя</Link>
+          <Link to="/town/guests" className="rounded-full bg-cyan-400/10 px-3 py-1 text-xs font-bold text-cyan-200">👋 В гости ›</Link>
+        </span>
+      </div>
+      {(data?.quests ?? []).map((q) => (
+        <div key={q.id} className="flex items-center gap-2">
+          <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-xl bg-white/5">
+            {q.resident?.image_path
+              ? <img src={staticUrl(q.resident.image_path)} alt="" className="h-full w-full object-cover" />
+              : <span className="text-lg">{q.resident?.icon ?? "🏛️"}</span>}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className={`truncate text-xs font-semibold ${q.claimed ? "text-ink-mist-dim line-through" : "text-ink-chalk"}`}>{q.label}</p>
+            <p className="truncate text-[10px] text-ink-mist">
+              {q.resident ? q.resident.name : "Мэр"} · {q.progress}/{q.target}
+            </p>
+          </div>
+          {q.claimed ? (
+            <span className="shrink-0 text-xs font-bold text-accent-lime">✓</span>
+          ) : (
+            <button
+              type="button" disabled={!q.done || claim.isPending} onClick={() => claim.mutate(q.id)}
+              aria-label={`Награда за задание: ${q.label}`}
+              className={`flex shrink-0 items-center gap-0.5 rounded-lg px-2 py-1 text-[11px] font-bold ${q.done ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"}`}
+            >
+              <IconCoin size={11} /> {fmt(q.reward_coins)}
+            </button>
+          )}
+        </div>
+      ))}
+      {message && <p className="text-[11px] text-accent-lime">{message}</p>}
+    </section>
+  );
+}
+
 function TownMap({
   state, messages, claimBusy, onClaim, hotelBusy, onHotel, renameBusy, onRename, decorBusy, onDecor,
 }: {
@@ -280,7 +391,7 @@ function TownMap({
   const canRename = !!state?.unlocked && state.enabled && state.rename_stars > 0;
   return (
     <div className="flex flex-col gap-4">
-      <GameHero game="home-town" title={state?.name ?? "Город"} subtitle="Шесть районов, дома и жители — всё твоё" />
+      <GameHero game="home-town" title={state?.name ?? "Город"} subtitle="Девять районов, база, дома и жители — всё твоё" />
       {canRename && (
         <button
           type="button"
@@ -294,10 +405,13 @@ function TownMap({
       {state && !(state.enabled && !state.unlocked) && (
         <TownStrip state={state} claimBusy={claimBusy} onClaim={onClaim} hotelBusy={hotelBusy} onHotel={onHotel} />
       )}
+      {state?.enabled && state.unlocked && <QuestsPanel />}
+      {state?.enabled && state.unlocked && <SeasonPanel />}
       <section className="rounded-3xl border border-white/10 bg-bg-surface p-2">
         <TownScene
           art={TOWN_MAP}
           label="Карта города"
+          decorations={state?.season_items}
           onPick={(c) => {
             const picked = DECOR_ZONES.find((d) => `decor:${d.code}` === c);
             if (picked) setPlace(picked);
@@ -311,10 +425,10 @@ function TownMap({
               label: z.name,
               zone: z.zone,
               badge: (
-                <span className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center whitespace-nowrap rounded-2xl bg-black/65 px-2.5 py-1 font-display text-xs font-bold text-white shadow-lg ring-1 ring-white/25 backdrop-blur-sm group-hover:scale-105">
+                <span className={`absolute top-1/2 flex -translate-y-1/2 flex-col items-center whitespace-nowrap rounded-xl bg-black/65 px-1.5 py-0.5 font-display text-[10px] font-bold leading-tight text-white shadow-lg ring-1 ring-white/25 backdrop-blur-sm group-hover:scale-105 ${badgeAnchor(z.zone)}`}>
                   <span><span aria-hidden>{z.emoji}</span> {z.name}</span>
                   {d && (
-                    <span className="text-[10px] font-semibold text-white/70">
+                    <span className="text-[9px] font-semibold text-white/70">
                       🏠 {d.owned}/{d.total} · {moodEmoji(d.mood)} {d.mood}
                     </span>
                   )}
@@ -704,6 +818,7 @@ function MoodPanel({ info, state, district, settling, onSettle }: {
                   >
                     {r.image_path ? <img src={staticUrl(r.image_path)} alt="" className="h-14 w-14 rounded-lg object-cover" /> : <span className="text-3xl">{r.icon}</span>}
                     <span className="text-[11px] font-bold text-ink-chalk">{r.name}</span>
+                    {r.bonus_label && <span className="text-[10px] font-semibold text-cyan-300">{r.bonus_label}</span>}
                     <span className="text-[10px] text-ink-mist">
                       {r.rarity === "legendary" ? `+${state.mood.resident_legendary}` : `+${state.mood.resident}`} к настроению
                       {elsewhere ? ` · сейчас: ${elsewhere}` : ""}

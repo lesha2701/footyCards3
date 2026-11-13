@@ -44,6 +44,7 @@ _MATCH_PATH_PREFIXES = {
 # tournaments have a single hub page, and the lineup reminder carries no
 # related object at all, so these are keyed on the notification type.
 _TYPE_PATHS = {
+    "trophy_granted": "/profile",
     "player_tournament_match": "/player-tournament",
     "player_tournament_results_ready": "/player-tournament",
     "player_tournament_reminder": "/player-tournament",
@@ -86,6 +87,12 @@ _RELATED_PATHS = {
     "card_offer": "/packs?tab=cards",
 }
 
+# related_object_type -> Mini App path behind a «Перейти в игру» button: the
+# admin update broadcast (broadcast_service.UPDATE_OBJECT_TYPE) opens the game.
+_RELATED_GAME_PATHS = {
+    "app_update": "/",
+}
+
 
 def _keyboard_for(
     related_object_type: str | None, related_object_id: int | None, notification_type: str | None = None
@@ -93,6 +100,8 @@ def _keyboard_for(
     fixed_path = _TYPE_PATHS.get(notification_type) if notification_type else None
     if fixed_path:
         return open_app_keyboard(fixed_path, text="🎮 Перейти в игру")
+    if related_object_type in _RELATED_GAME_PATHS:
+        return open_app_keyboard(_RELATED_GAME_PATHS[related_object_type], text="🎮 Перейти в игру")
     if related_object_type in _RELATED_PATHS:
         return open_app_keyboard(_RELATED_PATHS[related_object_type], text="⭐ Открыть магазин")
     prefix = _MATCH_PATH_PREFIXES.get(related_object_type) if related_object_type else None

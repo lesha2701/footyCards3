@@ -21,7 +21,8 @@ export default function KontraBossPage() {
     onSuccess: (b) => {
       queryClient.invalidateQueries({ queryKey: ["kontra-boss"] });
       queryClient.invalidateQueries({ queryKey: ["kontra-hub"] });
-      navigate(`/play/kontra/battles/${b.id}`);
+      queryClient.setQueryData(["kontra-battle", b.id], b);
+      navigate(`/play/kontra/battles/${b.id}`, { state: { play: true } });
     },
     onError: (err) => setError(formatGameError(err, "Не удалось начать бой")),
   });

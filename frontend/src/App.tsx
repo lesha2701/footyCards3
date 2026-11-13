@@ -11,6 +11,7 @@ import ComebackGiftPopup from "@/components/common/ComebackGiftPopup";
 import StreakRewardPopup from "@/components/common/StreakRewardPopup";
 import NewbieWelcome from "@/components/newbie/NewbieWelcome";
 import NewbieGiftPopup from "@/components/newbie/NewbieGiftPopup";
+import StarsPatronLetter from "@/components/common/StarsPatronLetter";
 import NewbieNextPage from "@/pages/NewbieNextPage";
 import { createSession } from "@/api/auth";
 import { joinByInvite } from "@/api/clubs";
@@ -81,6 +82,9 @@ const ArenaPage = lazy(() => import("@/pages/ArenaPage"));
 const AcademyPage = lazy(() => import("@/pages/AcademyPage"));
 const TownPage = lazy(() => import("@/pages/TownPage"));
 const TownResidentsPage = lazy(() => import("@/pages/TownResidentsPage"));
+const TownGuestsPage = lazy(() => import("@/pages/TownGuestsPage"));
+const TownVisitPage = lazy(() => import("@/pages/TownVisitPage"));
+const TownWeekPage = lazy(() => import("@/pages/TownWeekPage"));
 const ClubBasePage = lazy(() => import("@/pages/ClubBasePage"));
 const TacticoMatchesPage = lazy(() => import("@/pages/TacticoMatchesPage"));
 const TacticoMatchPage = lazy(() => import("@/pages/TacticoMatchPage"));
@@ -275,6 +279,7 @@ export default function App() {
     {!window.location.pathname.startsWith("/admin") && <StreakRewardPopup />}
     {!window.location.pathname.startsWith("/admin") && <ComebackGiftPopup />}
     {!window.location.pathname.startsWith("/admin") && <NewbieGiftPopup />}
+    {!window.location.pathname.startsWith("/admin") && <StarsPatronLetter />}
     <Routes>
       <Route path="/admin" element={<AdminGuard><AdminLayout /></AdminGuard>}>
         <Route index element={<AdminDashboardPage />} />
@@ -332,6 +337,9 @@ export default function App() {
         <Route path="/base" element={<ClubBasePage />} />
         <Route path="/town" element={<TownPage />} />
         <Route path="/town/residents" element={<TownResidentsPage />} />
+        <Route path="/town/guests" element={<TownGuestsPage />} />
+        <Route path="/town/visit/:ownerId" element={<TownVisitPage />} />
+        <Route path="/town/week" element={<TownWeekPage />} />
         <Route path="/town/:district" element={<TownPage />} />
         <Route path="/play/tactico" element={<TacticoMatchesPage />} />
         <Route path="/play/career" element={<CareerPage />} />

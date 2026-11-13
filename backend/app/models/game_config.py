@@ -87,11 +87,16 @@ DEFAULT_CLUB_BASE_COSMETICS: list = [
 # (before town_price_growth_pct for every house already owned) and its rent
 # in coins a day. The 0267 migration writes the same values.
 DEFAULT_TOWN_DISTRICTS: dict = {
-    "favela": {"price": 1500, "rent": 10},
-    "center": {"price": 3000, "rent": 18},
-    "mountains": {"price": 4500, "rent": 25},
-    "beach": {"price": 6000, "rent": 32},
-    "business": {"price": 9000, "rent": 42},
+    # 0278: ~10% dearer houses, ~10% less rent.
+    "favela": {"price": 1700, "rent": 9},
+    "center": {"price": 3300, "rent": 16},
+    "mountains": {"price": 5000, "rent": 23},
+    "beach": {"price": 6600, "rent": 29},
+    "business": {"price": 9900, "rent": 38},
+    "residential": {"price": 2400, "rent": 13},
+    "industrial": {"price": 8300, "rent": 33},
+    "airport": {"price": 12100, "rent": 45},
+    "island": {"price": 15400, "rent": 54},
 }
 
 # «Город», closed places on the map (pier, park, island): the price of
@@ -401,6 +406,17 @@ class GameConfig(TimestampMixin, Base):
     comeback_gift_cooldown_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     comeback_gift_coins: Mapped[int] = mapped_column(Integer, default=3000, nullable=False)
     comeback_gift_pack_slug: Mapped[str] = mapped_column(String, default="elite", nullable=False)
+    # Thanks to Stars buyers (stars_patron_service): «Покровитель недели» —
+    # the previous week's top buyers (at least week_min Stars): #1 gets the
+    # trophy and a card of week_card_rarity, places 2..week_places get coins;
+    # «Преторианец» — the badge + trophy at praetorian_threshold Stars in all.
+    stars_patron_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    stars_patron_week_min: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    stars_patron_week_places: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    stars_patron_week_card_rarity: Mapped[str] = mapped_column(String(16), default="legendary", nullable=False)
+    stars_patron_week_coins: Mapped[int] = mapped_column(Integer, default=5000, nullable=False)
+    stars_praetorian_threshold: Mapped[int] = mapped_column(Integer, default=10000, nullable=False)
+    stars_praetorian_badge_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Shop "предложение дня" (services/shop_offer_service.py): one coin pack a
     # day at a discount, once per player per day. pack_id = None rotates
     # through the active coin packs by date. Off by default.
@@ -1018,6 +1034,13 @@ class GameConfig(TimestampMixin, Base):
     kontra_boss_reward_tiers: Mapped[list] = mapped_column(
         JSON, default=lambda: [[0, 20], [20000, 50], [60000, 100], [150000, 200], [400000, 400]], nullable=False,
     )
+    # Weekly arena leagues: [[peak rating of the week, coins], ...] — the
+    # names (Бронза … Легенда) go by index (kontra_service.LEAGUE_NAMES).
+    kontra_leagues: Mapped[list] = mapped_column(
+        JSON, default=lambda: [[0, 0], [1060, 150], [1140, 300], [1240, 600], [1360, 1000]], nullable=False,
+    )
+    # Squad tactics: % more damage against the tactic yours counters.
+    kontra_tactic_edge_pct: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     kontra_gear_drop_boss_pct: Mapped[int] = mapped_column(Integer, default=35, nullable=False)
     kontra_gear_drop_arena_pct: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     kontra_chest_coins: Mapped[int] = mapped_column(Integer, default=1500, nullable=False)
@@ -1409,6 +1432,8 @@ class GameConfig(TimestampMixin, Base):
     town_resident_max_daily_coins: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
     # Mood of districts (town_service.MOOD_DEFAULTS overridden key by key).
     town_mood: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # Residents' quests and guests (town_social_service.SOCIAL_DEFAULTS overridden key by key).
+    town_social: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     # Closed places on the town map (town_service.DECOR): {code: {price,
     # rent_pct}}; a bought place adds rent_pct % to the houses' rent.
     town_decor: Mapped[dict] = mapped_column(

@@ -44,6 +44,9 @@ class User(TimestampMixin, Base):
     # «Под наблюдением» (admin, «Антифрод»): only these accounts get «Ты здесь?»
     # and «усталость» — everyone else never sees them.
     anti_bot_watch: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # «Проверен, не бот» (admin, «Антифрод»): checked by hand — left out of
+    # the «Похоже на ботов» list however much they play.
+    anti_bot_cleared: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     @hybrid_property
     def game_rewards_blocked(self) -> bool:
@@ -249,6 +252,13 @@ class User(TimestampMixin, Base):
     kontra_boss_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     kontra_boss_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     kontra_arena_offers: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # Defence log: attacks on the squad after this moment are "new".
+    kontra_defense_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Weekly league: the week (Monday) and the best arena rating in it; the
+    # league reward of a finished week waits here until claimed.
+    kontra_week: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    kontra_week_best: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    kontra_league_reward: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Футбольный магнат
     magnate_wins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

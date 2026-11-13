@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 import { useAdminToastStore } from "@/admin/adminToastStore";
-import { banAntifraudUsers, fetchAntifraudScan, fetchBotSuspects, setAntiBotWatch, setRewardsBlocked, type BotSuspect } from "@/admin/api";
+import { banAntifraudUsers, fetchAntifraudScan, fetchBotSuspects, setAntiBotCleared, setAntiBotWatch, setRewardsBlocked, type BotSuspect } from "@/admin/api";
 import type { AntifraudAccount, AntifraudFarm, AntifraudHub } from "@/admin/types";
 import { ApiRequestError } from "@/lib/api";
 
@@ -227,9 +227,19 @@ function BotsSection() {
   const toast = useAdminToastStore.getState().push;
   const [days, setDays] = useState(7);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [showCleared, setShowCleared] = useState(false);
   const { data, isLoading } = useQuery({
-    queryKey: ["admin-bot-suspects", days],
-    queryFn: () => fetchBotSuspects({ days, min_games: 150 }),
+    queryKey: ["admin-bot-suspects", days, showCleared],
+    queryFn: () => fetchBotSuspects({ days, min_games: 150, cleared: showCleared }),
+  });
+  const clear = useMutation({
+    mutationFn: ({ ids, cleared }: { ids: number[]; cleared: boolean }) => setAntiBotCleared(ids, cleared),
+    onSuccess: (res, vars) => {
+      toast(`${vars.cleared ? "Отмечены «проверен, не бот»" : "Вернулись в список"}: ${res.changed}`, "success");
+      setSelected(new Set());
+      queryClient.invalidateQueries({ queryKey: ["admin-bot-suspects"] });
+    },
+    onError: (err) => toast(err instanceof ApiRequestError ? err.message : "Не получилось", "error"),
   });
   const block = useMutation({
     mutationFn: ({ ids, blocked }: { ids: number[]; blocked: boolean }) => setRewardsBlocked(ids, blocked),
@@ -269,6 +279,10 @@ function BotsSection() {
             {d} дн.
           </button>
         ))}
+        <label className="flex items-center gap-1 text-slate-300">
+          <input type="checkbox" checked={showCleared} onChange={(e) => { setShowCleared(e.target.checked); setSelected(new Set()); }} />
+          Проверенные (не боты)
+        </label>
         <button
           disabled={!sure.length || block.isPending}
           onClick={() => block.mutate({ ids: sure.map((b) => b.id), blocked: true })}
@@ -294,6 +308,17 @@ function BotsSection() {
               className="rounded-lg bg-white/10 px-3 py-1.5 font-bold text-slate-200 disabled:opacity-40">
               Снять наблюдение
             </button>
+            {showCleared ? (
+              <button disabled={clear.isPending} onClick={() => clear.mutate({ ids: [...selected], cleared: false })}
+                className="rounded-lg bg-white/10 px-3 py-1.5 font-bold text-slate-200 disabled:opacity-40">
+                Вернуть в список подозреваемых
+              </button>
+            ) : (
+              <button disabled={clear.isPending} onClick={() => clear.mutate({ ids: [...selected], cleared: true })}
+                className="rounded-lg bg-emerald-500/80 px-3 py-1.5 font-bold text-white disabled:opacity-40">
+                ✓ Проверен, не бот
+              </button>
+            )}
           </>
         )}
       </div>

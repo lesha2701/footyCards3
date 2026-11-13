@@ -78,6 +78,7 @@ export default function AdminResidentsPage() {
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <Field label="Имя"><input value={r.name} onChange={(e) => set({ name: e.target.value })} className={input} /></Field>
             <Field label="Кто он (подпись)"><input value={r.title ?? ""} placeholder="рыбак, бариста…" onChange={(e) => set({ title: e.target.value || null })} className={input} /></Field>
+            <Field label="Набор (одно имя у всех жителей набора)"><input value={r.set_name ?? ""} placeholder="Пляжная банда" onChange={(e) => set({ set_name: e.target.value || null })} className={input} /></Field>
             <Field label="Описание" wide><input value={r.description ?? ""} onChange={(e) => set({ description: e.target.value || null })} className={input} /></Field>
             <Field label="Иконка (без картинки)"><input value={r.icon} onChange={(e) => set({ icon: e.target.value })} className={input} /></Field>
             <Field label="Редкость"><select value={r.rarity} onChange={(e) => set({ rarity: e.target.value })} className={input}>

@@ -24,6 +24,7 @@ API = "/api/v1"
 FRONTEND_CODES = {
     # Kept in step with frontend/src/lib/town.ts (the drawn tap zones).
     "center": 12, "favela": 12, "beach": 12, "mountains": 12, "business": 12,
+    "residential": 12, "industrial": 12, "airport": 12, "island": 12,
 }
 
 
@@ -39,7 +40,8 @@ async def _config(db_session, **overrides) -> GameConfig:
         config = GameConfig(id=1)
         db_session.add(config)
     overrides.setdefault("town_unlock_coins", 0)  # open for everyone unless a test sells it
-    overrides.setdefault("town_mood", {"min_pct": 100, "max_pct": 100})  # neutral unless a test is about mood
+    # Neutral mood and every bonus on, unless a test is about mood / settling.
+    overrides.setdefault("town_mood", {"min_pct": 100, "max_pct": 100, "bonus_settled_only": 0})
     for key, value in overrides.items():
         setattr(config, key, value)
     await db_session.commit()
@@ -73,7 +75,7 @@ async def test_buying_houses_gets_dearer_and_never_charges_twice(client, db_sess
 
     state = (await client.get(f"{API}/town", headers=headers)).json()
     favela = next(d for d in state["districts"] if d["code"] == "favela")
-    assert state["enabled"] and state["owned_total"] == 0 and state["total_houses"] == 60
+    assert state["enabled"] and state["owned_total"] == 0 and state["total_houses"] == 108
     assert favela["next_price"] == 1000 and favela["rent"] == 20
 
     first = await client.post(f"{API}/town/houses/favela/church/buy", headers=headers, json={"idempotency_key": "h1"})
@@ -117,7 +119,7 @@ async def test_rent_accrues_is_capped_and_collected_once(client, db_session, bot
     town.income_since = datetime.now(timezone.utc) - timedelta(hours=12, minutes=1)
     await db_session.commit()
     state = (await client.get(f"{API}/town", headers=headers)).json()
-    assert state["income"] == {"rate_per_day": 48, "pending": 24, "cap": 48, "max_hours": 24}
+    assert state["income"] == {"rate_per_day": 48, "pending": 24, "cap": 48, "max_hours": 24, "gifts": 0}
     claim = await client.post(f"{API}/town/income/claim", headers=headers, json={"idempotency_key": "r1"})
     assert claim.status_code == 200, claim.text
     assert claim.json()["claimed"] == 24 and claim.json()["new_balance"] == 900 + 24
@@ -449,7 +451,7 @@ def test_build_hours_never_go_below_a_tenth():
     assert town_service.build_hours(2, 25) == 1.5
     assert town_service.build_hours(0, 50) == 0 and town_service.build_hours(3, 0) == 3
     config = GameConfig(id=1, town_resident_bonus_max_pct=100, town_resident_rent=1, town_resident_max_daily_coins=0)
-    row = UserTownResident(copies=1)
+    row = UserTownResident(copies=1, district="beach")  # settled: the bonus works
     row.resident = TownResident(name="x", rarity="legendary", bonus="build_pct", bonus_value=200, is_active=True)
     assert town_service.resident_effects(config, [row])["build_pct"] == 90
 
@@ -500,3 +502,61 @@ async def test_district_mood_sets_the_rent_and_residents_settle_in(client, db_se
     await db_session.commit()
     beach = next(d for d in (await client.get(f"{API}/town", headers=headers)).json()["districts"] if d["code"] == "beach")
     assert beach["parts"]["care"] == 0
+
+
+async def test_resident_bonus_works_only_while_settled(client, db_session, bot_token):
+    await _config(db_session, town_resident_rent=1, town_resident_bonus_max_pct=100,
+                  town_mood={"min_pct": 100, "max_pct": 100, "bonus_settled_only": 1})
+    headers, user = await _login(client, db_session, bot_token, 990130)
+    resident = await _resident(db_session, name="Капитан", rarity="legendary", bonus="hotel_pct", bonus_value=20)
+    await town_service.grant(db_session, user.id, resident, "admin")
+    await db_session.commit()
+
+    album = (await client.get(f"{API}/town/residents", headers=headers)).json()
+    assert album["bonus_settled_only"] is True
+    assert album["bonuses"]["hotel_pct"] == 0 and album["population"] == 1
+    assert album["residents"][0]["bonus_active"] is False
+
+    assert (await client.post(f"{API}/town/residents/{resident.id}/settle", json={"district": "beach"},
+                              headers=headers)).status_code == 200
+    album = (await client.get(f"{API}/town/residents", headers=headers)).json()
+    assert album["bonuses"]["hotel_pct"] == 20 and album["residents"][0]["bonus_active"] is True
+
+    await client.post(f"{API}/town/residents/{resident.id}/settle", json={"district": None}, headers=headers)
+    album = (await client.get(f"{API}/town/residents", headers=headers)).json()
+    assert album["bonuses"]["hotel_pct"] == 0
+
+
+async def test_a_whole_resident_set_adds_rent_and_a_badge(client, db_session, bot_token):
+    await _config(db_session, town_resident_rent=0, town_price_growth_pct=0,
+                  town_districts={"beach": {"price": 0, "rent": 100}},
+                  town_mood={"min_pct": 100, "max_pct": 100, "bonus_settled_only": 0,
+                             "set_rent_pct": 10, "set_max_pct": 15, "set_min_size": 2})
+    headers, user = await _login(client, db_session, bot_token, 990140)
+    assert (await client.post(f"{API}/town/houses/beach/surf/buy", headers=headers, json={})).status_code == 200
+    fisher = await _resident(db_session, name="Рыбак", set_name="Пляжная банда")
+    surfer = await _resident(db_session, name="Сёрфер", set_name=" Пляжная банда ")
+    await _resident(db_session, name="Одиночка", set_name="Один в наборе")  # below set_min_size: no set
+    await town_service.grant(db_session, user.id, fisher, "admin")
+    await db_session.commit()
+
+    album = (await client.get(f"{API}/town/residents", headers=headers)).json()
+    assert [(s["name"], s["owned"], s["total"], s["complete"]) for s in album["sets"]] == [("Пляжная банда", 1, 2, False)]
+    assert album["sets_pct"] == 0
+    assert (await client.get(f"{API}/town", headers=headers)).json()["income"]["rate_per_day"] == 100
+
+    await town_service.grant(db_session, user.id, surfer, "admin")
+    await db_session.commit()
+    album = (await client.get(f"{API}/town/residents", headers=headers)).json()
+    assert album["sets"][0]["complete"] is True and album["sets_pct"] == 10
+    state = (await client.get(f"{API}/town", headers=headers)).json()
+    assert state["sets_pct"] == 10 and state["sets_complete"] == ["Пляжная банда"]
+    assert state["income"]["rate_per_day"] == 110
+
+
+def test_resident_sets_are_capped():
+    config = type("C", (), {"town_mood": {"set_rent_pct": 10, "set_max_pct": 15, "set_min_size": 1}})()
+    rows = [UserTownResident(resident_id=i, copies=1) for i in (1, 2)]
+    sets = town_service.resident_sets(config, [(1, "A"), (2, "B"), (3, "C")], rows)
+    assert [s["complete"] for s in sets] == [True, True, False]
+    assert town_service.sets_pct(config, sets) == 15

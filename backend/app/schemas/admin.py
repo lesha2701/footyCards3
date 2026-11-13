@@ -374,6 +374,13 @@ class GameConfigOut(BaseModel):
     comeback_gift_cooldown_days: int = 30
     comeback_gift_coins: int = 3000
     comeback_gift_pack_slug: str = "elite"
+    stars_patron_enabled: bool = True
+    stars_patron_week_min: int = 100
+    stars_patron_week_places: int = 3
+    stars_patron_week_card_rarity: str = "legendary"
+    stars_patron_week_coins: int = 5000
+    stars_praetorian_threshold: int = 10000
+    stars_praetorian_badge_id: Optional[int] = None
     shop_daily_offer_enabled: bool = False
     shop_daily_offer_discount_pct: int = 25
     shop_daily_offer_pack_id: Optional[int] = None
@@ -738,6 +745,8 @@ class GameConfigOut(BaseModel):
     kontra_boss_max_rounds: int = 25
     kontra_boss_week_hp: int = 50_000_000
     kontra_boss_reward_tiers: list = [[0, 20], [20000, 50], [60000, 100], [150000, 200], [400000, 400]]
+    kontra_leagues: list = [[0, 0], [1060, 150], [1140, 300], [1240, 600], [1360, 1000]]
+    kontra_tactic_edge_pct: int = 10
     kontra_gear_drop_boss_pct: int = 35
     kontra_gear_drop_arena_pct: int = 15
     kontra_chest_coins: int = 1500
@@ -838,6 +847,7 @@ class GameConfigOut(BaseModel):
     town_resident_max_daily_coins: int = 200
     town_decor: dict = {}
     town_mood: dict = {}
+    town_social: dict = {}
     calendar_catchup_coins: int = 150
     calendar_catchup_stars: int = 10
     calendar_catchup_max_per_month: int = 5
@@ -1241,6 +1251,12 @@ class GameConfigUpdate(BaseModel):
     comeback_gift_cooldown_days: Optional[int] = Field(default=None, ge=1, le=365)
     comeback_gift_coins: Optional[int] = Field(default=None, ge=0, le=100000)
     comeback_gift_pack_slug: Optional[str] = Field(default=None, max_length=100)
+    stars_patron_enabled: Optional[bool] = None
+    stars_patron_week_min: Optional[int] = Field(default=None, ge=1, le=1000000)
+    stars_patron_week_places: Optional[int] = Field(default=None, ge=0, le=10)
+    stars_patron_week_card_rarity: Optional[Literal["", "common", "rare", "epic", "legendary", "diamond"]] = None
+    stars_patron_week_coins: Optional[int] = Field(default=None, ge=0, le=1000000)
+    stars_praetorian_threshold: Optional[int] = Field(default=None, ge=0, le=10000000)
     shop_daily_offer_enabled: Optional[bool] = None
     shop_daily_offer_discount_pct: Optional[int] = Field(default=None, ge=1, le=90)
     # 0 = rotate through active coin packs by date (stored as NULL).
@@ -1602,6 +1618,8 @@ class GameConfigUpdate(BaseModel):
     kontra_boss_max_rounds: Optional[int] = Field(default=None, ge=3, le=200)
     kontra_boss_week_hp: Optional[int] = Field(default=None, ge=1000)
     kontra_boss_reward_tiers: Optional[list[list[int]]] = None
+    kontra_leagues: Optional[list[list[int]]] = Field(default=None, min_length=1, max_length=5)
+    kontra_tactic_edge_pct: Optional[int] = Field(default=None, ge=0, le=50)
     kontra_gear_drop_boss_pct: Optional[int] = Field(default=None, ge=0, le=100)
     kontra_gear_drop_arena_pct: Optional[int] = Field(default=None, ge=0, le=100)
     kontra_chest_coins: Optional[int] = Field(default=None, ge=0)
@@ -1701,6 +1719,7 @@ class GameConfigUpdate(BaseModel):
     town_resident_max_daily_coins: Optional[int] = Field(default=None, ge=0, le=1_000_000)
     town_decor: Optional[dict[str, dict[str, int]]] = None
     town_mood: Optional[dict[str, int]] = None
+    town_social: Optional[dict[str, int]] = None
     trade_send_min_account_age_days: Optional[int] = Field(default=None, ge=0, le=365)
     trade_send_min_active_days: Optional[int] = Field(default=None, ge=0, le=365)
     trade_daily_coins_receive_cap: Optional[int] = Field(default=None, ge=0)

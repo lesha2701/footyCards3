@@ -85,6 +85,7 @@ from app.routers import (
     streak_rewards,
     loyalty,
     comeback_gifts,
+    stars_patron,
     friends,
     games,
     gifts,
@@ -197,6 +198,7 @@ app.include_router(newbie.router, prefix=API_PREFIX)
 app.include_router(streak_rewards.router, prefix=API_PREFIX)
 app.include_router(loyalty.router, prefix=API_PREFIX)
 app.include_router(comeback_gifts.router, prefix=API_PREFIX)
+app.include_router(stars_patron.router, prefix=API_PREFIX)
 app.include_router(games.router, prefix=API_PREFIX)
 app.include_router(feature_flags.router, prefix=API_PREFIX)
 app.include_router(gifts.router, prefix=API_PREFIX)

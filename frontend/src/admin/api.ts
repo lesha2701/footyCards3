@@ -281,9 +281,16 @@ export interface BotSuspect {
   resting: boolean;
   /** «Под наблюдением»: gets «Ты здесь?» and «усталость». */
   watched: boolean;
+  /** «Проверен, не бот»: left out of the suspects list. */
+  cleared: boolean;
 }
 
-export async function fetchBotSuspects(params: { days: number; min_games: number }): Promise<BotSuspect[]> {
+export async function setAntiBotCleared(userIds: number[], cleared: boolean): Promise<{ changed: number }> {
+  const { data } = await api.post<{ changed: number }>("/admin/antifraud/cleared", { user_ids: userIds, cleared });
+  return data;
+}
+
+export async function fetchBotSuspects(params: { days: number; min_games: number; cleared?: boolean }): Promise<BotSuspect[]> {
   const { data } = await api.get<BotSuspect[]>("/admin/antifraud/bots", { params });
   return data;
 }
