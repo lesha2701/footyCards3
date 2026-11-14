@@ -751,6 +751,52 @@ class GameConfigOut(BaseModel):
     kontra_gear_drop_arena_pct: int = 15
     kontra_chest_coins: int = 1500
     kontra_chest_stars: int = 25
+    magic_enabled: bool = False
+    magic_reward_win: int = 150
+    magic_reward_loss: int = 30
+    magic_daily_limit: int = 3
+    magic_extra_run_coins: int = 150
+    magic_extra_run_stars: int = 2
+    magic_hardcore_daily_limit: int = 1
+    magic_hardcore_run_coins: int = 350
+    magic_hardcore_run_stars: int = 4
+    magic_hardcore_star_runs: int = 1
+    magic_adventure_daily_limit: int = 1
+    magic_adventure_run_coins: int = 450
+    magic_adventure_run_stars: int = 5
+    magic_adventure_star_runs: int = 1
+    magic_creature_pack_coins: int = 2000
+    magic_creature_pack_stars: int = 15
+    magic_wounded_hours: int = 24
+    magic_heal_essence_pct: int = 100
+    magic_heal_stars: int = 10
+    magic_essence_pack: int = 300
+    magic_essence_leadership: int = 450
+    magic_essence_leadership_max: int = 5
+    magic_essence_mana: int = 360
+    magic_essence_mana_max: int = 5
+    magic_essence_per_star: int = 10
+    magic_essence_per_100_coins: int = 10
+    magic_progress_xp_pct: int = 100
+    magic_captain_dup_xp: int = 150
+    magic_captain_dup_daily: int = 1
+    magic_progress_scaling_pct: int = 60
+    magic_challenge_level_cap: int = 3
+    magic_extra_runs_daily_limit: int = 2
+    magic_retry_coins: int = 250
+    magic_retry_stars: int = 3
+    magic_retries_daily_limit: int = 1
+    magic_gold_coins_pct: int = 10
+    magic_easy_reward_pct: int = 60
+    magic_hard_reward_pct: int = 160
+    magic_pack_id: Optional[int] = None
+    magic_pack_chance_normal_pct: int = 5
+    magic_pack_chance_hard_pct: int = 20
+    magic_rating_win: int = 30
+    magic_rating_loss: int = 10
+    magic_days: int = 7
+    magic_moves_per_day: int = 9
+    magic_stack_cap: int = 300
     weekly_top_enabled: bool = True
     weekly_top_size: int = 10
     weekly_top_rewards: list = []
@@ -1624,6 +1670,52 @@ class GameConfigUpdate(BaseModel):
     kontra_gear_drop_arena_pct: Optional[int] = Field(default=None, ge=0, le=100)
     kontra_chest_coins: Optional[int] = Field(default=None, ge=0)
     kontra_chest_stars: Optional[int] = Field(default=None, ge=0, le=10000)
+    magic_enabled: Optional[bool] = None
+    magic_reward_win: Optional[int] = Field(default=None, ge=0)
+    magic_reward_loss: Optional[int] = Field(default=None, ge=0)
+    magic_daily_limit: Optional[int] = Field(default=None, ge=0)
+    magic_extra_run_coins: Optional[int] = Field(default=None, ge=0)
+    magic_extra_run_stars: Optional[int] = Field(default=None, ge=0)
+    magic_hardcore_daily_limit: Optional[int] = Field(default=None, ge=0)
+    magic_hardcore_run_coins: Optional[int] = Field(default=None, ge=0)
+    magic_hardcore_run_stars: Optional[int] = Field(default=None, ge=0)
+    magic_hardcore_star_runs: Optional[int] = Field(default=None, ge=0)
+    magic_adventure_daily_limit: Optional[int] = Field(default=None, ge=0)
+    magic_adventure_run_coins: Optional[int] = Field(default=None, ge=0)
+    magic_adventure_run_stars: Optional[int] = Field(default=None, ge=0)
+    magic_adventure_star_runs: Optional[int] = Field(default=None, ge=0)
+    magic_creature_pack_coins: Optional[int] = Field(default=None, ge=0)
+    magic_creature_pack_stars: Optional[int] = Field(default=None, ge=0)
+    magic_wounded_hours: Optional[int] = Field(default=None, ge=0)
+    magic_heal_essence_pct: Optional[int] = Field(default=None, ge=0)
+    magic_heal_stars: Optional[int] = Field(default=None, ge=0)
+    magic_essence_pack: Optional[int] = Field(default=None, ge=0)
+    magic_essence_leadership: Optional[int] = Field(default=None, ge=0)
+    magic_essence_leadership_max: Optional[int] = Field(default=None, ge=0)
+    magic_essence_mana: Optional[int] = Field(default=None, ge=0)
+    magic_essence_mana_max: Optional[int] = Field(default=None, ge=0)
+    magic_essence_per_star: Optional[int] = Field(default=None, ge=0)
+    magic_essence_per_100_coins: Optional[int] = Field(default=None, ge=0)
+    magic_progress_xp_pct: Optional[int] = Field(default=None, ge=0)
+    magic_captain_dup_xp: Optional[int] = Field(default=None, ge=0)
+    magic_captain_dup_daily: Optional[int] = Field(default=None, ge=0)
+    magic_progress_scaling_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    magic_challenge_level_cap: Optional[int] = Field(default=None, ge=0)
+    magic_extra_runs_daily_limit: Optional[int] = Field(default=None, ge=0)
+    magic_retry_coins: Optional[int] = Field(default=None, ge=0)
+    magic_retry_stars: Optional[int] = Field(default=None, ge=0)
+    magic_retries_daily_limit: Optional[int] = Field(default=None, ge=0)
+    magic_gold_coins_pct: Optional[int] = Field(default=None, ge=0, le=1000)
+    magic_easy_reward_pct: Optional[int] = Field(default=None, ge=0, le=1000)
+    magic_hard_reward_pct: Optional[int] = Field(default=None, ge=0, le=1000)
+    magic_pack_id: Optional[int] = Field(default=None, ge=0)
+    magic_pack_chance_normal_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    magic_pack_chance_hard_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    magic_rating_win: Optional[int] = Field(default=None, ge=0, le=1000)
+    magic_rating_loss: Optional[int] = Field(default=None, ge=0, le=1000)
+    magic_days: Optional[int] = Field(default=None, ge=2, le=10)
+    magic_moves_per_day: Optional[int] = Field(default=None, ge=3, le=15)
+    magic_stack_cap: Optional[int] = Field(default=None, ge=1, le=5000)
     weekly_top_enabled: Optional[bool] = None
     weekly_top_size: Optional[int] = Field(default=None, ge=1, le=100)
     weekly_top_rewards: Optional[list[WeeklyTopRewardIn]] = Field(default=None, max_length=100)

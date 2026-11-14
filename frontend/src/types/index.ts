@@ -1008,6 +1008,7 @@ export interface GameLimits {
   magnate: number;
   mordoboi: number;
   kontra?: number;
+  magic?: number;
   one_on_one?: number;
   otvetka?: number;
   fergie_time?: number;
@@ -1050,6 +1051,7 @@ export type RankingMetric =
   | "stratego_puzzles"
   | "mordoboi_rating"
   | "kontra_rating"
+  | "magic_rating"
   | "games_week"
   | "stars_week"
   | "referrals_week"
@@ -1192,7 +1194,9 @@ export type CosmeticKind =
   | "ring_gloves"
   | "ring_shorts"
   | "ring_entrance"
-  | "helmet";
+  | "helmet"
+  | "magic_hero"
+  | "magic_castle";
 
 export interface Cosmetic {
   id: number;
@@ -4527,3 +4531,5 @@ export interface LoyaltyReward {
   code: LoyaltyCode;
   rewards: Partial<GrantedRewards>;
 }
+
+export * from "./magic";

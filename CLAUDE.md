@@ -35,10 +35,20 @@ Main features:
   Футбольное Стратего (hidden-information board game on cards, bot or
   friend — `stratego_engine.py` holds the pure rules, `stratego_service.py`
   the DB/limits/rewards; only `_hydrate_match` may serialize a match, and
-  it strips unrevealed enemy pieces) and Футбольный магнат (a short
+  it strips unrevealed enemy pieces), Футбольный магнат (a short
   4-seat economic board game — `magnate_engine.py` is the pure, seeded
   rules engine + bot, `magnate_service.py` the lobbies/rooms, turn timers,
-  limits and rewards; see "Turn-based game state" below);
+  limits and rewards; see "Turn-based game state" below) and «Мяч и Магия»
+  (code `magic`, bot only: a 7-day hero run on a random, point-symmetric
+  isometric map (a tall band of a 28×28 grid in quick (7 camps a side, 7 days, +4 moves a day; hero XP ×0.75, captain XP 7 a battle — same pace), 60×60 in hardcore (13 camps a side, 14 days, pays like 2), 76×76 in «Приключение» `adventure` (31 days, no rival, camps stronger with distance, far quarter are lairs of the neutral Lost faction `LOST_UNITS`; the final is the boss Безликий `lost_victor` alone, hypnosis flips the player's strongest stack for 2 rounds; the army rests 20% a night; pays like 4, gold→coins ×0.25; Lost lairs and the boss fight on their own pitch `battle.pitch = "lair"`), buildings (`training` +10% damage once, `floodtower` lifts the fog far, `medic` full heal every 5 days, `tunnel` a mirrored portal pair `obj.to`, `shrine` a ward against the first hypnosis + scouts the nearest lair; `REUSABLE` objects stay after a visit), `map.shape`; old runs 16×16; a mirrored river `map.river` crosses it, the road over `map.bridges`) under fog of war (camps, chests gold-or-XP, market,
+  mines; run gold → coins at the end), a final battle on an 8×5 field with
+  a paid second chance; every mode has its own runs of the day — free ones, then 1 for coins, then a few for Stars, a bought run kept for that mode and day only
+  (`magic_service._run_rules`, `users.magic_runs_day`; `shop_product_service` keys `magic_run:<mode>:<day>` / `magic_retry:`), hero and
+  castle skins are cosmetics kinds `magic_hero` / `magic_castle` (a hero skin dresses one hero class — `engine.SKIN_CLASS`; classes knight / mage / ranger in `engine.HERO_CLASSES`, picked per run); art is SVG
+  with PNG overrides registered in `components/magic/art/pngArt.ts`; the army is creature cards (`users.magic_creatures`, «Магический пак» of every race) led by footballer captains, limited by hero leadership; the fallen leave the collection after a run (half die for essence, half wounded for a day; hardcore: all die); essence buys packs, +leadership, +mana and skins; captains level up from runs and spare duplicates, a guard stack of one footballer's duplicates marches beside the army; one free revival per account — see `docs/magic-army.md`;
+  `magic_engine.py` is the pure seeded
+  rules engine + bot, `magic_service.py` the runs/limits/rewards, actions
+  carry the run `version`; off until `GameConfig.magic_enabled`);
 - «Атака 1 на 1» (`one_on_one_service.py`, deterministic episodes: the TS engine
   `lib/oneOnOne/engine.ts` and its port `one_on_one_engine.py`, team episodes
   `lib/oneOnOne/team.ts` ↔ `team_attack_engine.py` — change both in lockstep, a
@@ -200,7 +210,7 @@ Main features:
   `CoinTransaction` row; the caller still has to `db.add`/`db.commit`. Any
   coins/cards/packs/exchange mutation should go through this pattern.
 - **Mini-game hourly/daily limits**: each mini-game (memory, arena/match,
-  saboteur, penalty, free_kick, hangman, tactico, pairs, stratego, magnate, otvetka, fergie) has two independent
+  saboteur, penalty, free_kick, hangman, tactico, pairs, stratego, magnate, otvetka, fergie, magic) has two independent
   counters on `User`: `<game>_hourly_attempts` / `<game>_hour_started_at`
   (a shared cap, `config.hourly_game_limit`, resets on a rolling 1h window —
   see `game_limits_service.py`) and `<game>_rewarded_attempts_today` /
