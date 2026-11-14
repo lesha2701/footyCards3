@@ -34,7 +34,7 @@ from app.schemas.diamond_upgrade import (
     FeedCardsRequest,
     FeedCardsResult,
 )
-from app.services import card_star_service
+from app.services import anniversary_service, card_star_service
 from app.services.card_upgrade_service import UPGRADE_CARDS_MAX_PAGE, list_rules, list_upgradeable_cards, upgrade_card
 from app.services.collection_service import (
     collection_stats,
@@ -73,6 +73,7 @@ async def claim_card_star(
 async def get_album_overview_route(
     search: Optional[str] = None, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
+    await anniversary_service.sync_collection(db)
     return await get_album_overview(db, user.id, search)
 
 
@@ -81,6 +82,7 @@ async def get_album_collection_detail_route(
     collection_id: int, search: Optional[str] = None, db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    await anniversary_service.sync_collection(db)
     return await get_album_collection_detail(db, user.id, collection_id, search)
 
 

@@ -27,13 +27,14 @@ import time as _time
 from datetime import datetime, time, timedelta, timezone
 from typing import Any, Optional
 
-from sqlalchemy import func, inspect, select
+from sqlalchemy import func, inspect, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError
 from app.core.timeutil import app_timezone, ensure_aware, local_today
 from app.models.anniversary import AnniversaryClaim, AnniversaryMember
+from app.models.card_collection import CardCollection
 from app.models.enums import CardSource, TransactionType
 from app.models.game_config import GameConfig
 from app.models.user import User
@@ -132,6 +133,26 @@ def is_active(config: Optional[GameConfig], now: Optional[datetime] = None) -> b
         return False
     start, end = window(config)
     return start <= (now or _now()) < end
+
+
+async def sync_collection(db: AsyncSession) -> None:
+    """The event's collection («Клуб Центурионов», settings.collection_id) is
+    shown in the album and collectable only while the event runs: switched
+    on at the start and off at the end, lazily on the album / event reads.
+    An admin toggle of it is overridden while the event is set up."""
+    config = await _config(db)
+    if config is None:
+        return
+    collection_id = settings_of(config).get("collection_id")
+    if not collection_id:
+        return
+    want = is_active(config)
+    changed = await db.execute(
+        update(CardCollection).where(CardCollection.id == collection_id, CardCollection.is_active.is_not(want))
+        .values(is_active=want)
+    )
+    if changed.rowcount:
+        await db.commit()
 
 
 def claim_until(config: GameConfig) -> datetime:

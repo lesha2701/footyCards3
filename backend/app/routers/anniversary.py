@@ -13,6 +13,7 @@ router = APIRouter(prefix="/anniversary", tags=["anniversary"])
 
 @router.get("", response_model=AnniversaryStateOut)
 async def get_state(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await anniversary_service.sync_collection(db)
     return await anniversary_service.get_state(db, user)
 
 

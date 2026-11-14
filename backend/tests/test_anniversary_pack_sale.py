@@ -100,3 +100,33 @@ async def test_stars_pack_window_checked_at_pre_checkout(client, db_session, bot
     pre = await client.post("/api/v1/internal/stars-payments/pre-checkout",
                             json={"payload_token": token, "total_amount": 20}, headers=INTERNAL_HEADERS)
     assert pre.json()["ok"] is False
+
+
+async def test_collection_only_in_the_album_while_the_event_runs(client, db_session, bot_token):
+    from app.services import anniversary_service
+    from app.services.game_config_service import get_config
+
+    _, _, headers = await _setup(db_session, client, bot_token, 873005)
+    collection = (await db_session.execute(
+        CardCollection.__table__.select().where(CardCollection.name == "Клуб 873005")
+    )).first()
+    config = await get_config(db_session)
+    now = datetime.now(timezone.utc)
+    config.anniversary_enabled = True
+    config.anniversary_starts_at = now + timedelta(days=7)
+    config.anniversary_ends_at = now + timedelta(days=17)
+    config.anniversary_settings = {"collection_id": collection.id}
+    await db_session.commit()
+    anniversary_service.reset_cache()
+
+    async def album_names():
+        body = (await client.get("/api/v1/collection/album", headers=headers)).json()
+        return {c["name"] for c in body["collections"]}
+
+    assert "Клуб 873005" not in await album_names()  # before the start
+    config.anniversary_starts_at = now - timedelta(hours=1)
+    await db_session.commit()
+    assert "Клуб 873005" in await album_names()  # the event runs
+    config.anniversary_ends_at = now - timedelta(minutes=1)
+    await db_session.commit()
+    assert "Клуб 873005" not in await album_names()  # it's over
