@@ -136,8 +136,13 @@ async def _due(db: AsyncSession, user: User, s: dict, have: set[str]) -> list[tu
         if active >= s["oldtimer_active_days"]:
             pack_id = s["oldtimer_pack_id"]
             if pack_id is None:
+                # The anniversary pack only while its event runs: its cards
+                # (a collection of the event) must not drop before the start.
+                from app.services import anniversary_service
+
                 config = await get_config(db)
-                pack_id = (config.anniversary_settings or {}).get("pack_id")
+                if anniversary_service.is_active(config):
+                    pack_id = (config.anniversary_settings or {}).get("pack_id")
             due.append((OLDTIMER, Bundle(
                 coins=s["oldtimer_coins"], card_rarity=s["oldtimer_card_rarity"], pack_id=pack_id,
                 badge_id=s["oldtimer_badge_id"], cosmetic_id=s["oldtimer_cosmetic_id"],

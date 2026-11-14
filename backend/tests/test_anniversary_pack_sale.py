@@ -137,3 +137,39 @@ async def test_collection_announced_before_the_event_and_gone_after(client, db_s
     config.anniversary_ends_at = now - timedelta(minutes=1)
     await db_session.commit()
     assert await album_item() is None
+
+
+async def test_oldtimer_gets_no_anniversary_pack_before_the_event(client, db_session, bot_token):
+    from sqlalchemy import func, select
+
+    from app.core.timeutil import local_today
+    from app.models.card import UserCard
+    from app.models.player import Player
+    from app.models.user_activity import UserDailyActivity
+    from app.services.game_config_service import get_config
+    from tests.factories import create_badge
+
+    coins, _, headers = await _setup(db_session, client, bot_token, 873006)
+    green = await create_badge(db_session, name="Старожил", icon="💚")
+    config = await get_config(db_session)
+    now = datetime.now(timezone.utc)
+    config.anniversary_enabled = True
+    config.anniversary_starts_at = now + timedelta(days=7)
+    config.anniversary_ends_at = now + timedelta(days=17)
+    config.anniversary_settings = {"pack_id": coins.id}
+    config.loyalty_settings = {"oldtimer_badge_id": green.id}
+    user = await get_user_by_telegram_id(db_session, 873006)
+    user.created_at = now - timedelta(days=120)
+    for i in range(1, 61):  # today's row exists already (registration)
+        db_session.add(UserDailyActivity(user_id=user.id, day=local_today() - timedelta(days=i)))
+    await db_session.commit()
+
+    popup = (await client.get("/api/v1/loyalty/unseen", headers=headers)).json()
+    assert [p["code"] for p in popup] == ["oldtimer"]
+    assert popup[0]["rewards"]["badge"]["name"] == "Старожил"
+    pool_id = int(coins.player_pool.split(":")[1])
+    owned = (await db_session.execute(
+        select(func.count(UserCard.id)).join(Player, Player.id == UserCard.player_id)
+        .where(UserCard.owner_id == user.id, Player.collection_id == pool_id)
+    )).scalar_one()
+    assert owned == 0
