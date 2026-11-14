@@ -182,12 +182,15 @@ def _card_out(player: Player) -> MagicCardOut:
 
 async def _owned(db: AsyncSession, user_id: int) -> list[tuple[Player, int]]:
     """(player, copies) of every footballer version the user owns."""
-    rows = (await db.execute(
-        select(Player, func.count(UserCard.id))
-        .join(UserCard, UserCard.player_id == Player.id)
+    # Count per player id first, then load the players: grouping by Player.id with every
+    # Player column selected fails on Postgres.
+    counts = (
+        select(UserCard.player_id.label("pid"), func.count(UserCard.id).label("n"))
         .where(UserCard.owner_id == user_id, UserCard.is_locked_by_admin.is_(False))
-        .group_by(Player.id)
-    )).all()
+        .group_by(UserCard.player_id)
+        .subquery()
+    )
+    rows = (await db.execute(select(Player, counts.c.n).join(counts, counts.c.pid == Player.id))).all()
     return [(p, int(n)) for p, n in rows]
 
 
