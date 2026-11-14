@@ -4,8 +4,11 @@
   `oldtimer_active_days`+ of them (user_daily_activity — a lower bound before
   migration 0150), not banned. It's checked on a visit, so "alive" is a given.
   Badge «Старожил» (green 100), the profile frame, a card of
-  `oldtimer_card_rarity` and a pack (`oldtimer_pack_id`, else the anniversary
-  pack).
+  `oldtimer_card_rarity` and a pack (`oldtimer_pack_id`, if set).
+- «Подарок старожилу»: every «Старожил» gets the anniversary pack once, on
+  the first visit while the event runs (before the start its cards — a
+  collection of the event — must not drop; whoever became an oldtimer
+  earlier gets it at the start).
 - «Первопроходец»: one of the first `pioneer_limit` registered players (by id,
   like the anniversary recap's player number). Badge and gold frame.
 - «Центурион» backpay: the card for 100 days in a row lives in
@@ -43,6 +46,7 @@ from app.services.wallet_service import lock_user_for_update
 logger = logging.getLogger(__name__)
 
 OLDTIMER = "oldtimer"
+OLDTIMER_GIFT = "oldtimer_gift"
 PIONEER = "pioneer"
 CENTURION = "centurion"
 CENTURION_DAYS = 100
@@ -77,6 +81,7 @@ ID_KEYS = (
 )
 TITLES = {
     OLDTIMER: ("Старожил", "100 дней в VICTOR FC — спасибо, что ты с нами!"),
+    OLDTIMER_GIFT: ("Подарок старожилу", "Юбилейный пак к 100 дням VICTOR FC — спасибо, что ты с нами!"),
     PIONEER: ("Первопроходец", "Ты один из первых игроков VICTOR FC."),
     CENTURION: ("Центурион", "100 дней подряд — эксклюзивная карта, которой нет в паках."),
 }
@@ -134,19 +139,18 @@ async def _due(db: AsyncSession, user: User, s: dict, have: set[str]) -> list[tu
             select(func.count()).select_from(UserDailyActivity).where(UserDailyActivity.user_id == user.id)
         )).scalar_one()
         if active >= s["oldtimer_active_days"]:
-            pack_id = s["oldtimer_pack_id"]
-            if pack_id is None:
-                # The anniversary pack only while its event runs: its cards
-                # (a collection of the event) must not drop before the start.
-                from app.services import anniversary_service
-
-                config = await get_config(db)
-                if anniversary_service.is_active(config):
-                    pack_id = (config.anniversary_settings or {}).get("pack_id")
             due.append((OLDTIMER, Bundle(
-                coins=s["oldtimer_coins"], card_rarity=s["oldtimer_card_rarity"], pack_id=pack_id,
+                coins=s["oldtimer_coins"], card_rarity=s["oldtimer_card_rarity"], pack_id=s["oldtimer_pack_id"] or None,
                 badge_id=s["oldtimer_badge_id"], cosmetic_id=s["oldtimer_cosmetic_id"],
             )))
+    is_oldtimer = OLDTIMER in have or any(code == OLDTIMER for code, _ in due)
+    if is_oldtimer and OLDTIMER_GIFT not in have:
+        from app.services import anniversary_service
+
+        config = await get_config(db)
+        pack_id = (config.anniversary_settings or {}).get("pack_id")
+        if pack_id and anniversary_service.is_active(config):
+            due.append((OLDTIMER_GIFT, Bundle(pack_id=pack_id)))
     player_id = s["centurion_player_id"]
     if CENTURION not in have and player_id:
         reached = (await db.execute(

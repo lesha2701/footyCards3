@@ -173,3 +173,17 @@ async def test_oldtimer_gets_no_anniversary_pack_before_the_event(client, db_ses
         .where(UserCard.owner_id == user.id, Player.collection_id == pool_id)
     )).scalar_one()
     assert owned == 0
+
+    # The event starts: every oldtimer gets the anniversary pack, once.
+    config.anniversary_starts_at = now - timedelta(hours=1)
+    await db_session.commit()
+    gift = (await client.get("/api/v1/loyalty/unseen", headers=headers)).json()
+    assert [p["code"] for p in gift] == ["oldtimer", "oldtimer_gift"]
+    assert len(gift[1]["rewards"]["cards"]) == 3
+    again = (await client.get("/api/v1/loyalty/unseen", headers=headers)).json()
+    assert [p["code"] for p in again] == ["oldtimer", "oldtimer_gift"]
+    owned = (await db_session.execute(
+        select(func.count(UserCard.id)).join(Player, Player.id == UserCard.player_id)
+        .where(UserCard.owner_id == user.id, Player.collection_id == pool_id)
+    )).scalar_one()
+    assert owned == 3

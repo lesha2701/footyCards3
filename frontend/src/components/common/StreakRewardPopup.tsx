@@ -28,6 +28,7 @@ const BURST = ["🎉", "⚽", "🏆", "✨", "🎖️", "🎊", "⭐", "🔥"];
 const LOYALTY_COPY: Record<LoyaltyCode, { big: string; caption: string; title: string }> = {
   centurion: { big: "100", caption: "дней подряд · Центурион", title: "Эксклюзивная карта — только для своих!" },
   oldtimer: { big: "100", caption: "дней в игре · Старожил", title: "Спасибо, что ты с нами так долго!" },
+  oldtimer_gift: { big: "🎁", caption: "Подарок старожилу", title: "Юбилейный пак — к 100 дням VICTOR FC!" },
   pioneer: { big: "🧭", caption: "Первопроходец", title: "Ты один из первых 100 игроков!" },
 };
 

@@ -9,7 +9,7 @@ const FIELDS: [string, string][] = [
   ["oldtimer_days", "«Старожил»: дней с регистрации"],
   ["oldtimer_active_days", "«Старожил»: из них активных дней"],
   ["oldtimer_coins", "«Старожил»: монеты"],
-  ["oldtimer_pack_id", "«Старожил»: ID пака (пусто = пак юбилея)"],
+  ["oldtimer_pack_id", "«Старожил»: ID пака (пусто = без пака; юбилейный — отдельным подарком на ивенте)"],
   ["oldtimer_badge_id", "«Старожил»: ID значка"],
   ["oldtimer_cosmetic_id", "«Старожил»: ID рамки"],
   ["pioneer_limit", "«Первопроходец»: первые N игроков"],
@@ -23,7 +23,7 @@ const FIELDS: [string, string][] = [
   ["streak_save_free_period_days", "Страховка: бесплатно с абонементом раз в N дней"],
 ];
 const RARITIES = ["", "common", "rare", "epic", "legendary", "diamond"];
-const LABELS: Record<string, string> = { oldtimer: "Старожил", pioneer: "Первопроходец", centurion: "Центурион (доплата)" };
+const LABELS: Record<string, string> = { oldtimer: "Старожил", oldtimer_gift: "Подарок старожилу", pioneer: "Первопроходец", centurion: "Центурион (доплата)" };
 
 /** Admin «Лояльность»: «Старожил», «Первопроходец», «Центурион» and «Страховка серии». */
 export default function LoyaltySettingsPanel() {
