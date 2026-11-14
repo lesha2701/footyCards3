@@ -7,7 +7,7 @@ import { fetchRanking } from "@/api/leaderboard";
 import { fetchWeeklyTopHall, fetchWeeklyTopInfo } from "@/api/weeklyTop";
 import EmptyState from "@/components/common/EmptyState";
 import { UserBadge } from "@/components/common/UserBadge";
-import { IconBall, IconBoxingGlove, IconCollection, IconCounter, IconFlag, IconFlagCheckered, IconGoal, IconHandshake, IconStadium, IconStar, IconTrophy, IconUsers, type IconProps } from "@/components/icons";
+import { IconBall, IconBoxingGlove, IconCollection, IconCounter, IconFlag, IconSwords, IconFlagCheckered, IconGoal, IconHandshake, IconStadium, IconStar, IconTrophy, IconUsers, type IconProps } from "@/components/icons";
 import { useAuthStore } from "@/store/authStore";
 import { frameClass } from "@/lib/cosmetics";
 import type { RankingEntry, RankingMetric, WeeklyTopHall, WeeklyTopInfo } from "@/types";
@@ -20,6 +20,7 @@ const METRICS: { value: RankingMetric; label: string; Icon: (props: IconProps) =
   { value: "stratego_puzzles", label: "Задачи Стратего", Icon: IconFlag },
   { value: "mordoboi_rating", label: "Рейтинг Мордобоя", Icon: IconBoxingGlove },
   { value: "kontra_rating", label: "Арена Контратаки", Icon: IconCounter },
+  { value: "magic_rating", label: "Мяч и Магия", Icon: IconSwords },
   { value: "matches_won", label: "Победы", Icon: IconTrophy },
   { value: "cards_count", label: "Карт в коллекции", Icon: IconCollection },
   { value: "unique_players", label: "Уникальных игроков", Icon: IconUsers },

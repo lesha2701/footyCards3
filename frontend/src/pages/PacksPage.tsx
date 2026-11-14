@@ -25,6 +25,7 @@ import { sortPacksByPrice, sortPacksByStarsPrice } from "@/lib/packs";
 import { useAuthStore } from "@/store/authStore";
 import { usePacksUiStore } from "@/store/packsUiStore";
 import MonetizationEntries from "@/components/shop/MonetizationEntries";
+import MagicPackShop from "@/components/shop/MagicPackShop";
 import ArtifactShop from "@/components/artifacts/ArtifactShop";
 import { fetchEquipmentShop } from "@/api/equipment";
 import { fetchArtifacts } from "@/api/monetization";
@@ -193,6 +194,7 @@ export default function PacksPage() {
               onStarsPurchased={starsDone}
             />
           )}
+          <MagicPackShop />
           {!!allPacks.length && (
             <section>
               <div className="mb-2 flex items-center justify-between">

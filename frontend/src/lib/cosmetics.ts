@@ -97,6 +97,8 @@ export const STYLE_OPTIONS: Record<CosmeticKind, string[]> = {
   ring_shorts: Object.keys(SHORTS_STYLES).filter((k) => k !== "red"),
   ring_entrance: Object.keys(ENTRANCE_EMOJI),
   helmet: ["helmet"],
+  magic_hero: ["magic_hero_gold", "magic_hero_shadow", "magic_hero_frost", "magic_hero_ember", "magic_hero_grove", "magic_hero_night"],
+  magic_castle: ["magic_castle_stadium", "magic_castle_ice", "magic_castle_volcano", "magic_castle_cup"],
 };
 
 export const KIND_LABELS: Record<CosmeticKind, string> = {
@@ -108,6 +110,8 @@ export const KIND_LABELS: Record<CosmeticKind, string> = {
   ring_shorts: "Трусы для ринга",
   ring_entrance: "Выход на ринг",
   helmet: "Каска",
+  magic_hero: "Герой «Мяч и Магия»",
+  magic_castle: "Замок «Мяч и Магия»",
 };
 
 export function frameClass(styleKey: string | null | undefined): string | null {

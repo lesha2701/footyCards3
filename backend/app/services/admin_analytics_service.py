@@ -35,6 +35,7 @@ from app.models.player_tournament import PlayerTournament, PlayerTournamentParti
 from app.models.stratego import StrategoMatch
 from app.models.mordoboi import MordoboiMatch
 from app.models.kontra import KontraBattle
+from app.models.magic import MagicRun
 from app.models.tactico import TacticoMatch
 from app.models.user import User
 from app.models.user_activity import UserDailyActivity
@@ -97,6 +98,7 @@ MODE_SOURCES: tuple[_Source, ...] = (
         (MordoboiMatch.user_id, MordoboiMatch.opponent_user_id),
     ),
     _Source("kontra", "Контратака", KontraBattle, KontraBattle.created_at, (KontraBattle.user_id,)),
+    _Source("magic", "Мяч и Магия", MagicRun, MagicRun.created_at, (MagicRun.user_id,)),
     _Source(
         "penalty_pvp", "Пенальти PvP", PenaltyMatch, PenaltyMatch.created_at,
         (PenaltyMatch.user_id, PenaltyMatch.opponent_user_id),

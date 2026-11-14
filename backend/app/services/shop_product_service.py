@@ -9,7 +9,8 @@ Keys: "calendar_catchup:<YYYY-MM-DD>", "cosmetic:<id>", "club_pass",
 "season_premium:<season_id>", "starter_offer",
 "club_emblem:<club_id>:<item_id>", "club_donation:<club_id>:<coins>",
 "club_stars:<club_id>", "muse_accessory:<user_muse_id>:<accessory_id>",
-"free_kick_refill:<YYYY-MM-DD>", "agent_license"."""
+"free_kick_refill:<YYYY-MM-DD>", "agent_license", "magic_run:<mode>:<YYYY-MM-DD>",
+"magic_retry:<run_id>", "magic_pack:1", "magic_heal:1"."""
 import secrets
 from datetime import date
 from typing import Optional
@@ -44,6 +45,10 @@ LABELS = {
     "card_offer": "Карты за звёзды",
     "free_kick_refill": "Штрафной: ещё серия",
     "agent_license": "Агентская лицензия",
+    "magic_run": "Мяч и Магия: ещё поход",
+    "magic_retry": "Мяч и Магия: второй шанс",
+    "magic_pack": "Мяч и Магия: магический пак",
+    "magic_heal": "Мяч и Магия: лечение раненых",
 }
 
 
@@ -151,6 +156,22 @@ async def validate(db: AsyncSession, invoice: StarsInvoice) -> tuple[bool, str]:
         from app.services import agent_license_service
 
         return await agent_license_service.validate_stars(db, invoice.user_id, invoice.stars_amount)
+    if kind == "magic_run":
+        from app.services import magic_service
+
+        return await magic_service.validate_extra_run_stars(db, invoice.user_id, arg, invoice.stars_amount)
+    if kind == "magic_retry":
+        from app.services import magic_service
+
+        return await magic_service.validate_retry_stars(db, invoice.user_id, arg, invoice.stars_amount)
+    if kind == "magic_pack":
+        from app.services import magic_service
+
+        return await magic_service.validate_creature_pack_stars(db, invoice.stars_amount)
+    if kind == "magic_heal":
+        from app.services import magic_service
+
+        return await magic_service.validate_heal_stars(db, invoice.user_id, invoice.stars_amount)
     return False, "Unknown order"
 
 
@@ -226,4 +247,20 @@ async def deliver(
         from app.services import agent_license_service
 
         return await agent_license_service.deliver_stars(db, user, invoice)
+    if kind == "magic_run":
+        from app.services import magic_service
+
+        return await magic_service.deliver_extra_run_stars(db, user, arg)
+    if kind == "magic_retry":
+        from app.services import magic_service
+
+        return await magic_service.deliver_retry_stars(db, user)
+    if kind == "magic_pack":
+        from app.services import magic_service
+
+        return await magic_service.deliver_creature_pack_stars(db, user)
+    if kind == "magic_heal":
+        from app.services import magic_service
+
+        return await magic_service.deliver_heal_stars(db, user)
     raise NotFoundError("Unknown product")

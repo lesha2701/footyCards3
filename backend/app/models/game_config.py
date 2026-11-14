@@ -1027,6 +1027,65 @@ class GameConfig(TimestampMixin, Base):
     kontra_gear_drop_arena_pct: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     kontra_chest_coins: Mapped[int] = mapped_column(Integer, default=1500, nullable=False)
     kontra_chest_stars: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
+    # «Мяч и Магия» (magic_service.py): adventure map + stack battles vs a bot hero. Off by default.
+    magic_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    magic_reward_win: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    magic_reward_loss: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    # Free runs a day (each is rewarded); more are bought: the day's first extra for coins, the rest for Stars.
+    # Runs: every mode has its own day — free runs, then one for coins, then some for Stars.
+    # A bought run counts for that mode and that day only. Prices ≈ 80% of a mode's average
+    # pay (coins) and 1 ⭐ = 100 coins, rounded up (Stars), so a run is bought for
+    # the progress, never as a coin farm. «Быстрая схватка»:
+    magic_daily_limit: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    magic_extra_run_coins: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    magic_extra_run_stars: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    magic_extra_runs_daily_limit: Mapped[int] = mapped_column(Integer, default=2, nullable=False)  # for Stars
+    # «Хардкор» and «Приключение»: the same four numbers.
+    magic_hardcore_daily_limit: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    magic_hardcore_run_coins: Mapped[int] = mapped_column(Integer, default=350, nullable=False)
+    magic_hardcore_run_stars: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    magic_hardcore_star_runs: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    magic_adventure_daily_limit: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    magic_adventure_run_coins: Mapped[int] = mapped_column(Integer, default=450, nullable=False)
+    magic_adventure_run_stars: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    magic_adventure_star_runs: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # «Магический пак»: 5 creature cards of the chosen faction (0 = not sold that way).
+    magic_creature_pack_coins: Mapped[int] = mapped_column(Integer, default=2000, nullable=False)
+    magic_creature_pack_stars: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    magic_wounded_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
+    magic_heal_essence_pct: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    magic_heal_stars: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    magic_essence_pack: Mapped[int] = mapped_column(Integer, default=300, nullable=False)
+    magic_essence_leadership: Mapped[int] = mapped_column(Integer, default=450, nullable=False)
+    magic_essence_leadership_max: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    magic_essence_mana: Mapped[int] = mapped_column(Integer, default=360, nullable=False)
+    magic_essence_mana_max: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    magic_essence_per_star: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    magic_essence_per_100_coins: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    # Progress pace (docs/magic-army.md): run XP %, captain duplicates, how much rivals follow it.
+    magic_progress_xp_pct: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    magic_captain_dup_xp: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    magic_captain_dup_daily: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    magic_progress_scaling_pct: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    magic_challenge_level_cap: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # «Второй шанс»: replay a lost final once, for coins or Stars, so many times a day.
+    magic_retry_coins: Mapped[int] = mapped_column(Integer, default=250, nullable=False)
+    magic_retry_stars: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    magic_retries_daily_limit: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # The run's gold becomes coins at the end (% of the gold, rewarded runs only).
+    magic_gold_coins_pct: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    # Reward % by difficulty (normal = 100).
+    magic_easy_reward_pct: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    magic_hard_reward_pct: Mapped[int] = mapped_column(Integer, default=160, nullable=False)
+    # A pack for a rewarded win: chance by difficulty; no pack id = no packs.
+    magic_pack_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    magic_pack_chance_normal_pct: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    magic_pack_chance_hard_pct: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    magic_rating_win: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    magic_rating_loss: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    magic_days: Mapped[int] = mapped_column(Integer, default=7, nullable=False)
+    magic_moves_per_day: Mapped[int] = mapped_column(Integer, default=9, nullable=False)
+    magic_stack_cap: Mapped[int] = mapped_column(Integer, default=300, nullable=False)
     # «🎃 Ночь тыкв» (services/halloween_service.py): one switch, the dates and
     # every number of the event (pumpkin drops, shop, doors, boss) in
     # halloween_settings — halloween_service.DEFAULT_SETTINGS fills missing keys.

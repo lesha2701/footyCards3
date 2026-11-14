@@ -253,6 +253,36 @@ class User(TimestampMixin, Base):
     kontra_boss_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     kontra_arena_offers: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
+    # «Мяч и Магия» (magic_service.py): weekly rating, the hero's XP (its
+    # level comes from it), finished wins, the saved army {"players": [player
+    # ids]} and the usual hourly/daily pairs.
+    magic_rating: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    magic_hero_xp: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    magic_wins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    magic_army: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Creature cards: {"have": {unit: fighters}, "last_pack": [unit, …]}; None until the starter set.
+    magic_creatures: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    magic_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    magic_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    magic_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    magic_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Paid extras (reset with the day above): runs bought today and banked,
+    # second chances in the final used today and paid with Stars but unused.
+    magic_extra_runs_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    magic_bonus_runs: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # old shared bank, unused
+    # Today's runs by mode: {"day": "YYYY-MM-DD", "<mode>": {"free", "coins", "stars", "bank"}}
+    # (free ones started, bought for coins / Stars, bought and not started yet).
+    magic_runs_day: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    magic_retries_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    magic_retry_credits: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Hero / castle skins (cosmetics kinds "magic_hero" / "magic_castle") — visual only.
+    equipped_magic_hero_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("cosmetics.id", ondelete="SET NULL"), nullable=True
+    )
+    equipped_magic_castle_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("cosmetics.id", ondelete="SET NULL"), nullable=True
+    )
+
     # Футбольный магнат
     magnate_wins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     magnate_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

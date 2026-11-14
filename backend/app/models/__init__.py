@@ -97,6 +97,7 @@ from app.models.mordoboi import MordoboiMatch, MordoboiQueueEntry
 from app.models.fan_battle import FanBattleLedger, FanBattleMember
 from app.models.halloween import HalloweenLedger, HalloweenWallet
 from app.models.kontra import KontraBattle, KontraGear
+from app.models.magic import MagicRun
 from app.models.weekly_top import WeeklyTopAward, WeeklyTopRun
 from app.models.card_offer import CardOffer, CardOfferPurchase, CardOfferView
 from app.models.server_error import ServerError

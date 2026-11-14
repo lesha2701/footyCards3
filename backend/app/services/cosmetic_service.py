@@ -30,6 +30,9 @@ SLOT_BY_KIND = {
     "ring_gloves": "equipped_ring_gloves_id",
     "ring_shorts": "equipped_ring_shorts_id",
     "ring_entrance": "equipped_ring_entrance_id",
+    # «Мяч и Магия» — the hero on the map and the home castle.
+    "magic_hero": "equipped_magic_hero_id",
+    "magic_castle": "equipped_magic_castle_id",
 }
 
 
