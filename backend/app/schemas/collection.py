@@ -228,6 +228,8 @@ class AlbumCollectionSummaryOut(BaseModel):
     reward_coins: int
     reward_pack_name: Optional[str]
     reward_claimed: bool
+    # Set while the collection is only announced (an event's, before its start).
+    available_from: Optional[datetime] = None
 
 
 class AlbumOverviewOut(BaseModel):
@@ -255,6 +257,7 @@ class AlbumCollectionDetailOut(BaseModel):
     is_complete: bool
     reward_claimed: bool
     players: List[AlbumPlayerOut]
+    available_from: Optional[datetime] = None
     # Coaches and stadiums of the collection (they count toward it too).
     staff: List["AlbumStaffOut"] = []
 

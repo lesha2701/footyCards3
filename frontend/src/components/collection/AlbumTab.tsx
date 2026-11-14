@@ -94,7 +94,7 @@ function NextGoal({
   onOpen: (id: number) => void;
 }) {
   const goal = (collections ?? [])
-    .filter((c) => c.id > 0 && !c.is_complete && c.owned_count > 0 && (c.reward_coins > 0 || c.reward_pack_name))
+    .filter((c) => c.id > 0 && !c.available_from && !c.is_complete && c.owned_count > 0 && (c.reward_coins > 0 || c.reward_pack_name))
     .sort((a, b) => (a.total_count - a.owned_count) - (b.total_count - b.owned_count))[0];
   if (!goal) return null;
   const left = goal.total_count - goal.owned_count;
@@ -117,6 +117,11 @@ function NextGoal({
       <IconChevronRight size={16} className="shrink-0 text-ink-mist-dim" />
     </button>
   );
+}
+
+/** «21 ноября» — the day an announced collection opens (Moscow time, like the event). */
+function availableFromLabel(iso: string): string {
+  return new Date(iso).toLocaleDateString("ru-RU", { day: "numeric", month: "long", timeZone: "Europe/Moscow" });
 }
 
 function CollectionSpread({ collection, onClick }: { collection: AlbumCollectionSummary; onClick: () => void }) {
@@ -155,7 +160,9 @@ function CollectionSpread({ collection, onClick }: { collection: AlbumCollection
             style={{ width: `${pct}%` }}
           />
         </div>
-        {collection.is_complete ? (
+        {collection.available_from ? (
+          <p className="mt-1 text-micro font-bold text-amber-300">🔒 Доступна с {availableFromLabel(collection.available_from)}</p>
+        ) : collection.is_complete ? (
           <p className="mt-1 text-micro font-bold uppercase tracking-wide text-accent-lime">Собрана</p>
         ) : collection.reward_coins > 0 ? (
           <p className="mt-1 flex items-center gap-1 text-micro text-ink-mist">
@@ -203,6 +210,11 @@ function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: (
         </div>
       </div>
 
+      {data?.available_from && (
+        <div className="rounded-xl border border-amber-300/30 bg-amber-300/10 px-3 py-2.5 text-center text-xs font-semibold text-amber-200">
+          🔒 Коллекция откроется {availableFromLabel(data.available_from)} — карточки будут только в юбилейном паке
+        </div>
+      )}
       {data && !data.is_complete && data.reward_coins > 0 && (
         <div className="flex flex-col gap-1 rounded-xl bg-bg-surface px-3 py-2.5 text-xs text-ink-mist">
           <p>

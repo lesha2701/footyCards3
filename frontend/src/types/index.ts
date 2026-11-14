@@ -2185,6 +2185,8 @@ export interface AlbumCollectionSummary {
   reward_coins: number;
   reward_pack_name: string | null;
   reward_claimed: boolean;
+  /** Only announced until this moment (an event's collection before its start). */
+  available_from?: string | null;
 }
 
 export interface AlbumOverview {
@@ -2211,6 +2213,7 @@ export interface AlbumCollectionDetail {
   total_count: number;
   is_complete: boolean;
   reward_claimed: boolean;
+  available_from?: string | null;
   players: AlbumPlayer[];
   /** Coaches and stadiums of the collection (they count toward it too). */
   staff?: AlbumStaff[];

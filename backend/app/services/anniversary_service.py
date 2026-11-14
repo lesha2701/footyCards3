@@ -135,24 +135,29 @@ def is_active(config: Optional[GameConfig], now: Optional[datetime] = None) -> b
     return start <= (now or _now()) < end
 
 
-async def sync_collection(db: AsyncSession) -> None:
+async def sync_collection(db: AsyncSession) -> Optional[tuple[int, datetime]]:
     """The event's collection («Клуб Центурионов», settings.collection_id) is
-    shown in the album and collectable only while the event runs: switched
-    on at the start and off at the end, lazily on the album / event reads.
-    An admin toggle of it is overridden while the event is set up."""
+    in the album from the moment the event is set up until it ends — before
+    the start as a teaser «Доступна с …» (its cards drop only from the event
+    packs, hidden until then) — and off after the end. Lazily on the album /
+    event reads; an admin toggle of it is overridden while the event is set
+    up. Returns (collection_id, start) while the start is still ahead."""
     config = await _config(db)
     if config is None:
-        return
+        return None
     collection_id = settings_of(config).get("collection_id")
     if not collection_id:
-        return
-    want = is_active(config)
+        return None
+    start, end = window(config)
+    now = _now()
+    want = bool(config.anniversary_enabled) and now < end
     changed = await db.execute(
         update(CardCollection).where(CardCollection.id == collection_id, CardCollection.is_active.is_not(want))
         .values(is_active=want)
     )
     if changed.rowcount:
         await db.commit()
+    return (int(collection_id), start) if want and now < start else None
 
 
 def claim_until(config: GameConfig) -> datetime:

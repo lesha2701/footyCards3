@@ -102,7 +102,7 @@ async def test_stars_pack_window_checked_at_pre_checkout(client, db_session, bot
     assert pre.json()["ok"] is False
 
 
-async def test_collection_only_in_the_album_while_the_event_runs(client, db_session, bot_token):
+async def test_collection_announced_before_the_event_and_gone_after(client, db_session, bot_token):
     from app.services import anniversary_service
     from app.services.game_config_service import get_config
 
@@ -119,14 +119,21 @@ async def test_collection_only_in_the_album_while_the_event_runs(client, db_sess
     await db_session.commit()
     anniversary_service.reset_cache()
 
-    async def album_names():
+    async def album_item():
         body = (await client.get("/api/v1/collection/album", headers=headers)).json()
-        return {c["name"] for c in body["collections"]}
+        return next((c for c in body["collections"] if c["name"] == "Клуб 873005"), None)
 
-    assert "Клуб 873005" not in await album_names()  # before the start
+    # Before the start: shown as «Доступна с …», in the overview and the detail.
+    item = await album_item()
+    assert item is not None and item["available_from"] is not None
+    detail = (await client.get(f"/api/v1/collection/album/{collection.id}", headers=headers)).json()
+    assert detail["available_from"] is not None
+    # The event runs: a normal collection.
     config.anniversary_starts_at = now - timedelta(hours=1)
     await db_session.commit()
-    assert "Клуб 873005" in await album_names()  # the event runs
+    item = await album_item()
+    assert item is not None and item["available_from"] is None
+    # It's over: gone from the album.
     config.anniversary_ends_at = now - timedelta(minutes=1)
     await db_session.commit()
-    assert "Клуб 873005" not in await album_names()  # it's over
+    assert await album_item() is None
