@@ -51,7 +51,31 @@ class ManagerClub(Base):
     match_plan: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     # Form from the club's events: [{"pct", "league_id", "from", "to"}] — % on every line for rounds from..to-1.
     buffs: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # «Штаб президента» (manager_staff / manager_assistant):
+    # {"names": {role: str}, "skins": {role: code}, "car": code, "room": code,
+    #  "rules": {...}, "log": [...], "seen": iso}.
+    office: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class ManagerStaff(Base):
+    """A club job held by one of the owner's «Жители города» (manager_staff):
+    one per role and per resident. `rarity` (of the resident) sets the effect
+    and `wage` — club euros a season, paid at the season start."""
+
+    __tablename__ = "manager_staff"
+    __table_args__ = (
+        UniqueConstraint("club_id", "role", name="uq_manager_staff_role"),
+        UniqueConstraint("club_id", "resident_id", name="uq_manager_staff_resident"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    club_id: Mapped[int] = mapped_column(ForeignKey("manager_clubs.id", ondelete="CASCADE"), nullable=False, index=True)
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    resident_id: Mapped[int] = mapped_column(ForeignKey("town_residents.id", ondelete="CASCADE"), nullable=False)
+    rarity: Mapped[str] = mapped_column(String(16), nullable=False)
+    wage: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    hired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
 class ManagerContract(Base):

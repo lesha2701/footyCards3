@@ -31,7 +31,7 @@ from app.core.timeutil import ensure_aware
 from app.models.enums import NotificationType, TransactionType
 from app.models.manager_club import ManagerClub, ManagerCosmetic, ManagerMerch
 from app.models.user import User
-from app.services import event_symbols, manager_perks, wallet_service
+from app.services import event_symbols, manager_perks, manager_staff, wallet_service
 from app.services.game_config_service import get_config
 from app.services.notification_service import notify
 
@@ -368,6 +368,10 @@ async def stars_order(db: AsyncSession, user_id: int, code: str, config) -> tupl
         if config.manager_pro_stars <= 0:
             raise ConflictError("«Менеджер Pro» сейчас не продаётся")
         return "manager:pro", "Менеджер Pro", f"Скаут, золотая рамка и значок PRO на {config.manager_pro_days} дней", config.manager_pro_stars
+    if code == manager_staff.BUNDLE or manager_staff.is_item(code, config):  # «Штаб президента»
+        if code != manager_staff.BUNDLE and code in await owned(db, club.id):
+            raise ConflictError("Уже куплено")
+        return manager_staff.stars_order(club, code, config)
     item = _for_sale(config, code)
     if item["stars"] <= 0:
         raise ConflictError("Этот предмет за звёзды не продаётся")
@@ -394,6 +398,11 @@ async def validate_stars(db: AsyncSession, invoice, config) -> tuple[bool, str]:
         return (stars > 0 and stars == invoice.stars_amount, "Цена изменилась — открой покупку заново")
     if code == "pro":
         return (config.manager_pro_stars == invoice.stars_amount, "Цена изменилась — открой покупку заново")
+    if code == manager_staff.BUNDLE or manager_staff.is_item(code, config):
+        price = manager_staff.stars_price(code, config)
+        if code != manager_staff.BUNDLE and code in await owned(db, club.id):
+            return False, "Уже куплено"
+        return (price > 0 and price == invoice.stars_amount, "Цена изменилась — открой покупку заново")
     item = next((i for i in catalog(config) if i["code"] == code), None)
     if item is None or not item["on_sale"] or item["stars"] != invoice.stars_amount:
         return False, "Этот предмет больше не продаётся"
@@ -421,6 +430,8 @@ async def deliver_stars(db: AsyncSession, user: User, invoice, config) -> dict:
         start = max(now, ensure_aware(club.pro_until)) if club.pro_until else now
         club.pro_until = start + timedelta(days=config.manager_pro_days)
         return {"kind": "manager_pro", "name": "Менеджер Pro"}
+    if code == manager_staff.BUNDLE or manager_staff.is_item(code, config):
+        return manager_staff.deliver_stars(db, club, code, config, await owned(db, club.id))
     if code not in await owned(db, club.id):
         db.add(ManagerCosmetic(club_id=club.id, code=code))
     item = next((i for i in catalog(config) if i["code"] == code), {"name": code})

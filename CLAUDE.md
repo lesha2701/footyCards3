@@ -117,10 +117,21 @@ Main features:
   «🏆 Лучший президент» by season profit and capital. Between rounds:
   «Установка на матч» and «События клуба» (`manager_events.py`), the
   seasonal knockout «Кубок менеджеров» and friendlies (`manager_cup.py`),
-  «Газета лиги» / «Постер чемпиона» shares (`manager_news.py`). The Stars
-  pass «Аналитика Pro» (opponent breakdown, share alerts, a forgotten sponsor
-  signed, window reminders), gifts of style items to
-  another club and the stadium skins (`manager_perks.py`, cosmetics kinds
+  «Газета лиги» / «Постер чемпиона» shares (`manager_news.py`),
+  «Пресс-конференция» after `press_rounds` (`manager_press.py`, an event with
+  slot PRESS_SLOT + round). «👥 Штаб» (`manager_staff.py`, table
+  `manager_staff`, `manager_clubs.office` JSON): the club staff are the
+  owner's «Жители города» on roles (effect by rarity within `staff_caps`,
+  folded into `base_snapshot`; wages at the season start, reserved in
+  `wage_bill`), and two VIP Stars passes (`manager_perks.PASSES`):
+  «Аналитик» (opponent breakdown, advice, last-match review, season
+  forecast, deal check `POST /manager/analytics/deal`, share alerts) and
+  «Помощник» (`manager_assistant.py`: by the president's rules and limit —
+  sponsors, empty places, renewals, declining cheap bids in the window via
+  the bot sweep; events / press / the match plan in the season; the report
+  «Пока тебя не было»; a free week once). Skins of both, cars and office
+  rooms (`staff_items`, coins or Stars), gifts of style items to another
+  club and the stadium skins (`manager_perks.py`, cosmetics kinds
   "stands" / "poster") — convenience and style only. Numbers: GameConfig.manager_finance
   over `manager_finance.DEFAULTS`;
 - «Мой игрок» extras (`my_player_extras.py`): a weekly «Спонсор» (one of

@@ -8,6 +8,10 @@ from app.core.rate_limit import check_rate_limit
 from app.database import get_db
 from app.models.user import User
 from app.schemas.manager import (
+    ManagerStaffNameIn,
+    ManagerStaffHireIn,
+    ManagerDealCheckIn,
+    ManagerAssistantRulesIn,
     ManagerBondBuyIn,
     ManagerBondIssueIn,
     ManagerClubUpdateIn,
@@ -29,6 +33,7 @@ from app.schemas.manager import (
     ManagerTicketsIn,
     ManagerStadiumNameIn,
 )
+from app.services import manager_assistant, manager_staff
 from app.services import manager_cup, manager_events, manager_exchange, manager_finance, manager_news, manager_perks, manager_service, manager_shop, manager_today
 
 router = APIRouter(prefix="/manager", tags=["manager"])
@@ -223,6 +228,74 @@ async def extend_npc(
 async def release_npc(npc_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     """Sell a bought footballer back to the system, or end a loan."""
     return await manager_service.release_npc(db, user, npc_id)
+
+
+# --- «Штаб президента»: staff, the VIP assistant and analyst ---------------------------
+
+@router.get("/staff")
+async def get_staff(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """The VIP staff, the club staff from «Жители города», skins, cars and rooms."""
+    return await manager_staff.view(db, user)
+
+
+@router.post("/staff/hire")
+async def hire_staff(payload: ManagerStaffHireIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_staff:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_staff.hire(db, user, payload.resident_id, payload.role)
+
+
+@router.post("/staff/{staff_id}/fire")
+async def fire_staff(staff_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await manager_staff.fire(db, user, staff_id)
+
+
+@router.post("/staff/name")
+async def name_staff(payload: ManagerStaffNameIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_staff:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_staff.rename(db, user, payload.role, payload.name)
+
+
+@router.post("/staff/items/{code}/buy")
+async def buy_staff_item(code: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """A skin, a car or a room for coins."""
+    await check_rate_limit(f"manager_staff:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_staff.buy_item(db, user, code)
+
+
+@router.post("/staff/items/{code}/wear")
+async def wear_staff_item(code: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await manager_staff.wear(db, user, code)
+
+
+@router.post("/assistant/trial")
+async def assistant_trial(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """The assistant's free week, once per club."""
+    return await manager_assistant.start_trial(db, user)
+
+
+@router.put("/assistant/rules")
+async def assistant_rules(payload: ManagerAssistantRulesIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_staff:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_assistant.set_rules(db, user, payload.model_dump(exclude_none=True))
+
+
+@router.get("/assistant")
+async def assistant_report(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """«Пока тебя не было»: what the assistant did."""
+    return await manager_assistant.office_view(db, user)
+
+
+@router.post("/assistant/seen")
+async def assistant_seen(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await manager_assistant.mark_seen(db, user)
+
+
+@router.post("/analytics/deal")
+async def analyst_deal(payload: ManagerDealCheckIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """«Аналитик» on a deal before it is sent."""
+    await check_rate_limit(f"manager_analyst:{user.id}", max_calls=60, window_seconds=60)
+    return await manager_perks.check_deal(db, user, payload.kind, payload.target_id, payload.fee, payload.wage)
+
 
 
 # --- style, merchandise, Pro (manager_shop) ----------------------------------------------------
