@@ -3,8 +3,8 @@
 (`manager_clubs.office`: the VIP staff names and skins, the assistant's
 rules and log, the car and the office worn).
 
-Revision ID: 0298
-Revises: 0297
+Revision ID: 0300
+Revises: 0299
 Create Date: 2026-11-13
 """
 from typing import Sequence, Union
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 from alembic import op
 
 
-revision: str = "0298"
-down_revision: Union[str, None] = "0297"
+revision: str = "0300"
+down_revision: Union[str, None] = "0299"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -66,6 +66,9 @@ USER_COLUMNS = (
     ("magic_retry_credits", "0"),
 )
 SKIN_SLOTS = ("equipped_magic_hero_id", "equipped_magic_castle_id")
+# ck_cosmetics_kind (0194) lists every allowed kind; the skins add two.
+KINDS_BEFORE = "'profile_frame', 'profile_background', 'card_skin', 'brutality', 'ring_gloves', 'ring_shorts', 'ring_entrance', 'helmet'"
+KINDS_AFTER = KINDS_BEFORE + ", 'magic_hero', 'magic_castle'"
 # Hero and castle skins sold in the hub (cosmetics; style_key = what the frontend draws).
 SKINS = (
     ("magic_hero", "Золотой капитан", "Рыцарь: позолоченные доспехи и лавровый венок", "magic_hero_gold", 0, 50, 1),
@@ -120,6 +123,8 @@ def upgrade() -> None:
         op.add_column("users", sa.Column(name, type_, nullable=True))
     for name in SKIN_SLOTS:
         op.add_column("users", sa.Column(name, sa.Integer(), sa.ForeignKey("cosmetics.id", ondelete="SET NULL"), nullable=True))
+    op.drop_constraint("ck_cosmetics_kind", "cosmetics", type_="check")
+    op.create_check_constraint("ck_cosmetics_kind", "cosmetics", f"kind IN ({KINDS_AFTER})")
     cosmetics = sa.table(
         "cosmetics", sa.column("kind", sa.String), sa.column("name", sa.String), sa.column("description", sa.String),
         sa.column("style_key", sa.String), sa.column("coins_price", sa.Integer), sa.column("stars_price", sa.Integer),
@@ -145,6 +150,8 @@ def downgrade() -> None:
     for name in reversed(SKIN_SLOTS):
         op.drop_column("users", name)
     op.execute("DELETE FROM cosmetics WHERE kind IN ('magic_hero', 'magic_castle')")
+    op.drop_constraint("ck_cosmetics_kind", "cosmetics", type_="check")
+    op.create_check_constraint("ck_cosmetics_kind", "cosmetics", f"kind IN ({KINDS_BEFORE})")
     for name, _ in reversed(USER_NULLABLE):
         op.drop_column("users", name)
     for name, _ in reversed(USER_COLUMNS):
