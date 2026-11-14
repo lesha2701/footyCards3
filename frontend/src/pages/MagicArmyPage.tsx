@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Backdrop } from "@/components/magic/Backdrop";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -189,7 +190,7 @@ export default function MagicArmyPage() {
         )}
       </section>
 
-      <div className="safe-bottom fixed inset-x-0 bottom-20 z-30 mx-auto flex max-w-md gap-2 rounded-2xl bg-bg-base/95 px-4 py-2 backdrop-blur">
+      <div className="safe-bottom fixed inset-x-0 bottom-20 z-30 mx-auto flex max-w-md gap-2 rounded-2xl bg-bg-base px-4 py-2">
         <button onClick={() => auto.mutate()} className="flex-1 rounded-xl bg-white/10 py-3 text-sm font-semibold text-ink-chalk active:scale-95">Авто</button>
         <button onClick={() => save.mutate()} disabled={!picks.length || !changed || save.isPending}
           className="flex-[2] rounded-xl bg-amber-400 py-3 text-sm font-bold text-black active:scale-95 disabled:opacity-40">
@@ -200,8 +201,7 @@ export default function MagicArmyPage() {
       {/* Captain picker */}
       <AnimatePresence>
         {captainFor && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setCaptainFor(null)}
-            className="fixed inset-0 z-50 flex items-end justify-center bg-black/70">
+          <Backdrop onClick={() => setCaptainFor(null)} className="fixed inset-0 z-[70] flex items-end justify-center bg-black/70">
             <motion.div initial={{ y: 60 }} animate={{ y: 0 }} exit={{ y: 60 }} onClick={(e) => e.stopPropagation()}
               className="max-h-[75vh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-bg-base p-4 pb-24">
               <p className="font-display text-base font-black text-ink-chalk">Капитан отряда</p>
@@ -236,7 +236,7 @@ export default function MagicArmyPage() {
                 })}
               </div>
             </motion.div>
-          </motion.div>
+          </Backdrop>
         )}
       </AnimatePresence>
     </div>

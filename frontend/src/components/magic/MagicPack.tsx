@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Backdrop } from "@/components/magic/Backdrop";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 
@@ -78,9 +79,8 @@ export function MagicPackOffer({ hub, look = "hero", note }: { hub: MagicHub; lo
           style={{ background: "radial-gradient(circle at 18% 40%, rgba(192,132,252,0.45), transparent 55%), radial-gradient(circle at 90% 0%, rgba(251,191,36,0.22), transparent 45%), linear-gradient(150deg, #2e1065 0%, #1e1b4b 55%, #0f172a 100%)" }}>
           <div className="flex gap-3">
             {art && (
-              <motion.img src={art} alt="" animate={{ rotate: [-3, 3, -3], y: [0, -3, 0] }}
-                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                className="h-32 w-auto shrink-0 drop-shadow-[0_0_18px_rgba(192,132,252,0.7)]" />
+              // Static: a looping transform under a drop-shadow flickers in phone webviews.
+              <img src={art} alt="" className="h-32 w-auto shrink-0 drop-shadow-[0_0_18px_rgba(192,132,252,0.7)]" />
             )}
             <div className="flex min-w-0 flex-1 flex-col">
               <p className="font-display text-lg font-black leading-tight text-ink-chalk">✨ Магический пак</p>
@@ -114,9 +114,8 @@ export function PackReveal({ cards, onClose }: { cards: MagicCreature[]; onClose
   const next = () => setI((v) => Math.min(cards.length, v + 1));
   const c = i >= 0 && !done ? cards[i] : null;
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      onClick={done ? onClose : next}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/85 px-6 backdrop-blur-sm">
+    <Backdrop onClick={done ? onClose : next}
+      className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-black/90 px-6">
       {!done && (
         <button onClick={(e) => { e.stopPropagation(); setI(cards.length); }}
           className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold text-white active:scale-95">
@@ -126,7 +125,7 @@ export function PackReveal({ cards, onClose }: { cards: MagicCreature[]; onClose
       {i === -1 && (
         <>
           <motion.img src={uiArt("magic_pack") ?? undefined} alt="" className="w-56 drop-shadow-[0_0_40px_rgba(192,132,252,0.7)]"
-            animate={{ rotate: [-4, 4, -4], scale: [1, 1.04, 1] }} transition={{ duration: 1.2, repeat: Infinity }} />
+            initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.35 }} />
           <p className="mt-4 font-display text-lg font-black text-amber-200">Нажми, чтобы открыть</p>
         </>
       )}
@@ -148,6 +147,6 @@ export function PackReveal({ cards, onClose }: { cards: MagicCreature[]; onClose
           <p className="mt-5 text-caption text-ink-mist">Нажми, чтобы закрыть</p>
         </>
       )}
-    </motion.div>
+    </Backdrop>
   );
 }
