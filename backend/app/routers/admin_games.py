@@ -145,12 +145,14 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
 
         rows = []
         for row in sorted(updates["streak_rewards"], key=lambda r: r["days"]):
-            bundle = Bundle(**{k: (row.get(k) or None) for k in ("pack_id", "card_rarity", "badge_id", "cosmetic_id")},
+            bundle = Bundle(**{k: (row.get(k) or None)
+                               for k in ("pack_id", "card_rarity", "badge_id", "cosmetic_id", "player_id")},
                             coins=row.get("coins") or 0)
             await reward_bundle_service.validate(db, bundle)
             rows.append({"days": row["days"], "coins": bundle.coins, "pack_id": bundle.pack_id,
                          "card_rarity": getattr(bundle.card_rarity, "value", bundle.card_rarity),
-                         "badge_id": bundle.badge_id, "cosmetic_id": bundle.cosmetic_id})
+                         "badge_id": bundle.badge_id, "cosmetic_id": bundle.cosmetic_id,
+                         "player_id": bundle.player_id})
         if len({r["days"] for r in rows}) != len(rows):
             raise ConflictError("Награды за дни подряд: два порога с одинаковым числом дней")
         config.streak_rewards = rows

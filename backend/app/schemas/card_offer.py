@@ -52,6 +52,8 @@ class CardOfferAdminIn(BaseModel):
     per_user_limit: int = Field(default=1, ge=0, le=1000)
     is_active: bool = True
     sort_order: int = 0
+    # Footballers only: `stock` becomes a numbered edition («№37 из 100»).
+    numbered: bool = False
 
 
 class CardOfferAdminOut(BaseModel):
@@ -69,6 +71,7 @@ class CardOfferAdminOut(BaseModel):
     is_active: bool
     sort_order: int
     live: bool  # on sale right now
+    numbered: bool = False
     announced_at: Optional[datetime] = None
     stars_total: int = 0  # Stars earned on it
     buyers: int = 0  # distinct players who bought

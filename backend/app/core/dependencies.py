@@ -129,7 +129,12 @@ async def _get_or_create_user(
     previous_seen_at = user.last_seen_at
     previous_day = local_today(previous_seen_at) if previous_seen_at else None
     if previous_day != today:
+        old_streak = user.daily_login_streak
         user.daily_login_streak = user.daily_login_streak + 1 if previous_day == today - timedelta(days=1) else 1
+        # «Страховка серии»: one missed day of a long streak can be bought back.
+        from app.services.loyalty_service import note_streak_change
+
+        await note_streak_change(db, user, old_streak, previous_day, today)
         # Same once-a-day trigger feeds the analytics activity history.
         await record_daily_activity(db, user.id, today)
         changed = True
@@ -143,6 +148,11 @@ async def _get_or_create_user(
         from app.services.streak_reward_service import check as check_streak
 
         await check_streak(db, user)
+        await db.refresh(user)
+        # «Старожил», «Основатель», the «Центурион» card owed from before it existed.
+        from app.services.loyalty_service import check as check_loyalty
+
+        await check_loyalty(db, user)
         await db.refresh(user)
         # Back after a long absence: a welcome gift may be due.
         from app.services.comeback_gift_service import check as check_comeback

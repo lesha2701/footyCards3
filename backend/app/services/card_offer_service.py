@@ -5,22 +5,26 @@ one (Player.is_pack_droppable = False) back for a short window.
 Standard Stars flow (shop_product_service, product "card_offer:<id>"):
 availability — window, stock, the player's own limit — is checked at
 pre-checkout; delivery never refuses (the player has paid) and is
-idempotent by invoice (CardOfferPurchase.invoice_id unique). Two buyers
-racing for the very last copy can both get through pre-checkout; both are
-delivered, so a sold-out offer may end one or two copies over its stock.
+idempotent by invoice (CardOfferPurchase.invoice_id unique). Pre-checkout of
+a limited offer holds a copy for the invoice (CardOfferReservation), so two
+buyers can't both pay for the last one.
+
+Numbered editions («№37 из 100»): Player.edition_size is the tirage and the
+copy's serial_number its number; the admin sets it on the offer while no copy
+exists yet, and the copies left come from the Player's own counter.
 """
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, insert, select
+from sqlalchemy import delete, func, insert, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.timeutil import ensure_aware
-from app.models.card_offer import CardOffer, CardOfferPurchase, CardOfferView
+from app.models.card_offer import CardOffer, CardOfferPurchase, CardOfferReservation, CardOfferView
 from app.models.enums import CardSource, NotificationType
 from app.models.notification import Notification
 from app.models.player import Player
@@ -32,6 +36,10 @@ from app.models.town import TownResident
 from app.schemas.card_offer import CardOfferAdminIn, CardOfferAdminOut, CardOfferOut, OfferItemOut
 from app.schemas.player import PlayerOut
 from app.services.wallet_service import lock_user_for_update
+
+
+# Telegram charges right after pre-checkout; the margin covers a slow delivery.
+RESERVATION_MINUTES = 15
 
 
 def _now() -> datetime:
@@ -106,6 +114,9 @@ def _live(offer: CardOffer, now: Optional[datetime] = None) -> bool:
 
 
 def _left(offer: CardOffer) -> Optional[int]:
+    player = offer.player
+    if player is not None and player.edition_size is not None:
+        return max(0, player.edition_size - (player.next_serial_number - 1))
     return None if offer.stock is None else max(0, offer.stock - offer.sold_count)
 
 
@@ -171,8 +182,37 @@ async def stars_order(db: AsyncSession, user: User, offer_id: int) -> tuple[str,
     return f"card_offer:{offer.id}", offer.stars_price, f"Карточка: {name}"[:32], description
 
 
-async def validate_stars(db: AsyncSession, user_id: int, offer_id: int, stars_amount: int) -> tuple[bool, str]:
-    reason = await _check(db, await db.get(CardOffer, offer_id), user_id, stars_amount)
+async def reserve_for_invoice(db: AsyncSession, offer: CardOffer, invoice_id: int) -> Optional[str]:
+    """Pre-checkout of a limited offer: hold a copy for this invoice, under
+    the offer's row lock. Why not, if it can't (None = held)."""
+    now = _now()
+    held_by_others = int((await db.execute(
+        select(func.count(CardOfferReservation.id)).where(
+            CardOfferReservation.offer_id == offer.id, CardOfferReservation.expires_at > now,
+            CardOfferReservation.invoice_id != invoice_id,
+        )
+    )).scalar_one())
+    if _left(offer) - held_by_others <= 0:
+        return "Последние карточки уже оплачивают — попробуй через пару минут"
+    await db.execute(delete(CardOfferReservation).where(
+        CardOfferReservation.offer_id == offer.id,
+        (CardOfferReservation.expires_at <= now) | (CardOfferReservation.invoice_id == invoice_id),
+    ))
+    db.add(CardOfferReservation(offer_id=offer.id, invoice_id=invoice_id, expires_at=now + timedelta(minutes=RESERVATION_MINUTES)))
+    await db.commit()
+    return None
+
+
+async def validate_stars(db: AsyncSession, invoice, offer_id: int) -> tuple[bool, str]:
+    offer = (await db.execute(
+        select(CardOffer).where(CardOffer.id == offer_id).with_for_update(of=CardOffer)
+        .execution_options(populate_existing=True)
+    )).unique().scalar_one_or_none()
+    if offer is not None and offer.player is not None:
+        await db.refresh(offer.player, attribute_names=["next_serial_number"])
+    reason = await _check(db, offer, invoice.user_id, invoice.stars_amount)
+    if reason is None and _left(offer) is not None:
+        reason = await reserve_for_invoice(db, offer, invoice.id)
     return (reason is None), (reason or "")
 
 
@@ -225,6 +265,7 @@ async def deliver_stars(db: AsyncSession, user: User, invoice) -> dict:
             await db.flush()
     except IntegrityError:
         pass
+    await db.execute(delete(CardOfferReservation).where(CardOfferReservation.invoice_id == invoice.id))
     offer.sold_count += 1
     db.add(offer)
     # Completing a collection may pay coins — on the locked user row.
@@ -248,7 +289,7 @@ def _admin_out(offer: CardOffer, stats: Optional[dict] = None) -> CardOfferAdmin
         item=_item_out(offer), stars_price=offer.stars_price, title=offer.title,
         starts_at=offer.starts_at, ends_at=offer.ends_at, stock=offer.stock, per_user_limit=offer.per_user_limit,
         sold_count=offer.sold_count, is_active=offer.is_active, sort_order=offer.sort_order, live=_live(offer),
-        announced_at=offer.announced_at, stars_total=stats.get("stars", 0), buyers=stats.get("buyers", 0),
+        numbered=bool(offer.player and offer.player.edition_size), announced_at=offer.announced_at, stars_total=stats.get("stars", 0), buyers=stats.get("buyers", 0),
         viewers=stats.get("viewers", 0),
     )
 
@@ -278,6 +319,26 @@ async def admin_list(db: AsyncSession) -> list[CardOfferAdminOut]:
     return [_admin_out(o, stats.get(o.id)) for o in offers]
 
 
+def _apply_edition(player: Player, data: CardOfferAdminIn) -> None:
+    """The numbered edition is set while no copy of the card exists: every
+    copy then carries its «№ из N», and the promised tirage never changes."""
+    minted = player.next_serial_number - 1
+    if not data.numbered:
+        if player.edition_size is not None and minted > 0:
+            raise ConflictError("Тираж уже продаётся — снять нумерацию нельзя")
+        player.edition_size = None
+        return
+    if not data.stock:
+        raise ConflictError("У номерной карты должен быть тираж")
+    if minted > 0 and player.edition_size != data.stock:
+        raise ConflictError(
+            f"Копии этой карты уже есть ({minted} шт.) — номерной нужна новая карта без копий"
+            if player.edition_size is None else "Тираж уже продаётся — менять его нельзя"
+        )
+    player.edition_size = data.stock
+    player.is_pack_droppable = False
+
+
 async def _apply(db: AsyncSession, offer: CardOffer, data: CardOfferAdminIn) -> None:
     chosen = [(key, model) for key, model in (
         ("player_id", Player), ("coach_id", Coach), ("stadium_id", Stadium), ("muse_id", Muse),
@@ -293,7 +354,11 @@ async def _apply(db: AsyncSession, offer: CardOffer, data: CardOfferAdminIn) -> 
         raise ConflictError("Карточка выключена (скрыта из игры) — сначала включи её")
     if data.starts_at and data.ends_at and data.ends_at <= data.starts_at:
         raise ConflictError("Конец продаж должен быть позже начала")
-    for field, value in data.model_dump().items():
+    if model is Player:
+        _apply_edition(target, data)
+    elif data.numbered:
+        raise ConflictError("Номерной тираж бывает только у футболистов")
+    for field, value in data.model_dump(exclude={"numbered"}).items():
         setattr(offer, field, value)
     offer.player = target if model is Player else None
     offer.coach = target if model is Coach else None
@@ -343,7 +408,9 @@ def _announce_text(offer: CardOffer) -> tuple[str, str]:
         lines.append("Из паков она больше не выпадает — купить можно только сейчас.")
     if offer.ends_at:
         lines.append(f"Продажа до {_local(offer.ends_at)}.")
-    if offer.stock:
+    if offer.player and offer.player.edition_size:
+        lines.append(f"Всего {offer.player.edition_size} номерных копий — больше не будет.")
+    elif offer.stock:
         lines.append(f"Всего {offer.stock} шт.")
     return title, " ".join(lines)
 

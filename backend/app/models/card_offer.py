@@ -47,6 +47,19 @@ class CardOffer(TimestampMixin, Base):
     resident = relationship("TownResident", lazy="joined")
 
 
+class CardOfferReservation(Base):
+    """A copy held for an invoice from pre-checkout until it is delivered or
+    `expires_at` passes: Telegram charges right after pre-checkout, so two
+    buyers can't both pay for the last copy of a limited offer."""
+
+    __tablename__ = "card_offer_reservations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    offer_id: Mapped[int] = mapped_column(ForeignKey("card_offers.id", ondelete="CASCADE"), nullable=False, index=True)
+    invoice_id: Mapped[int] = mapped_column(ForeignKey("stars_invoices.id", ondelete="CASCADE"), nullable=False, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class CardOfferView(Base):
     """A player opened «Карты ⭐» while this offer was on sale — who gets
     the reminder before it ends (unless they bought it)."""

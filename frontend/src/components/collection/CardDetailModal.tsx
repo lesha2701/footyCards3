@@ -12,7 +12,7 @@ import CardEquipmentPanel from "@/components/equipment/CardEquipmentPanel";
 import ShareButton from "@/components/common/ShareButton";
 import PathPanel from "@/components/path/PathPanel";
 import { staticUrl } from "@/lib/api";
-import { squadLabel } from "@/lib/cardLocks";
+import { isBoundForever, squadLabel } from "@/lib/cardLocks";
 import { formatGameError } from "@/lib/errors";
 import { planArenaPlacement } from "@/lib/lineupPlacement";
 import { useSwipeDownToClose } from "@/lib/useSwipe";
@@ -158,8 +158,13 @@ export default function CardDetailModal({
                 <p className="font-display text-lg font-bold leading-tight text-ink-chalk">{player.display_name}</p>
                 <p className="mt-0.5 text-sm text-ink-mist">{POSITION_LABELS[player.position]} · {player.club}</p>
                 <p className="mt-1 text-xs text-ink-mist">
-                  {isPath ? "🌱 Академия" : RARITY_LABELS[player.rarity]} · № {card.serial_number}
+                  {isPath ? "🌱 Академия" : RARITY_LABELS[player.rarity]} · № {card.serial_number}{player.edition_size != null && ` из ${player.edition_size}`}
                 </p>
+                {isBoundForever(card) && (
+                  <p className="mt-1 inline-block rounded-full bg-fuchsia-500/20 px-2 py-0.5 text-caption font-bold text-fuchsia-200">
+                    💜 Эксклюзив · навсегда твоя
+                  </p>
+                )}
                 {(card.prestige ?? 0) > 0 && (
                   <p className={`mt-1 inline-block rounded-full px-2 py-0.5 text-caption font-bold ${prestigeStyle(card.prestige!).chip}`}>
                     {prestigeMarks(card.prestige!)} Престиж
@@ -262,7 +267,7 @@ export default function CardDetailModal({
                     <input
                       type="checkbox"
                       checked={userLocked}
-                      disabled={lockMutation.isPending}
+                      disabled={lockMutation.isPending || isBoundForever(card)}
                       onChange={(e) => lockMutation.mutate(e.target.checked)}
                       className="h-5 w-5 shrink-0 accent-amber-400"
                       aria-label="Замок"

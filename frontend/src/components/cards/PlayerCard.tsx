@@ -36,6 +36,8 @@ interface Props {
   userLocked?: boolean;
   /** Press and hold (~0.45 s): quick actions without opening the card. */
   onLongPress?: () => void;
+  /** This copy's number: a numbered edition shows «№37/100». */
+  serial?: number | null;
 }
 
 const LONG_PRESS_MS = 450;
@@ -50,7 +52,7 @@ const NAME_TEXT = { sm: "text-caption", md: "text-xs", lg: "text-sm" } as const;
 
 function PlayerCard({
   player, size = "md", badge, footer, onClick, selected, dimmed, stars = 0, pathStage, prestige = 0, talentOverride,
-  animated = false, inSquad = false, userLocked = false, onLongPress,
+  animated = false, inSquad = false, userLocked = false, onLongPress, serial,
 }: Props) {
   // Long press: a timer started on pointer down; moving the finger (scroll)
   // or lifting it early cancels it, and the click that follows a fired long
@@ -106,6 +108,8 @@ function PlayerCard({
   // «Капитаны» of «Битва фанатов»: the frame wears the viewer's side colour.
   const fanColor = useFanColor();
   const fanSkin = !isPath && !hwSkin && player.collection_skin === "fans";
+  // «Клуб Центурионов» of «💯 Нам 100 дней!»: the gold anniversary frame.
+  const goldSkin = !isPath && !hwSkin && player.collection_skin === "gold100";
   const imageUrl = staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp");
 
   return (
@@ -119,7 +123,7 @@ function PlayerCard({
       }${inSquad ? ", в составе" : ""}${userLocked ? ", под замком" : ""}`}
       className={`group relative flex select-none [-webkit-touch-callout:none] aspect-[3/4] w-full flex-col overflow-hidden rounded-2xl bg-gradient-to-b ${frame} ${
         isPath ? "p-[3px]" : "p-[2px]"
-      }${hwSkin ? ` hw-frame-${hwSkin}` : ""}${fanSkin ? " fans-frame" : ""} transition-transform active:scale-[0.97] ${
+      }${hwSkin ? ` hw-frame-${hwSkin}` : ""}${fanSkin ? " fans-frame" : ""}${goldSkin ? " gold100-frame" : ""} transition-transform active:scale-[0.97] ${
         selected ? (player.rarity === "diamond" ? "ring-4 ring-rarity-diamond" : "ring-4 ring-accent-lime") : ""
       } ${dimmed ? "opacity-40 grayscale" : ""} ${onClick ? "cursor-pointer" : "cursor-default"}${
         skin && !selected ? ` ${skin}` : ""
@@ -183,6 +187,11 @@ function PlayerCard({
         </div>
         <div className="border-t border-white/10 bg-black/30 px-1.5 py-1 text-center">
           <p className={`truncate font-display font-semibold leading-tight text-ink-chalk ${NAME_TEXT[size]}`}>{player.display_name}</p>
+          {player.edition_size != null && (
+            <p className="truncate font-mono text-micro font-bold leading-tight text-amber-300">
+              {serial != null ? `№${serial}/${player.edition_size}` : `Тираж ${player.edition_size}`}
+            </p>
+          )}
           {size !== "sm" && (
             <p className="mt-0.5 truncate text-micro leading-tight text-ink-mist">
               {player.club} · <span className="font-mono text-accent-cyan">{player.attack_rating}/{player.defense_rating}</span>

@@ -8,6 +8,9 @@ from app.database import Base
 from app.models.enums import CardSource
 from app.models.mixins import utcnow
 
+# UserCard.bound_until for a card that stays its owner's for good.
+BOUND_FOREVER = datetime(2099, 12, 31, tzinfo=timezone.utc)
+
 
 class UserCard(Base):
     __tablename__ = "user_cards"
@@ -107,6 +110,11 @@ class UserCard(Base):
 
     def has_path_progress(self) -> bool:
         return bool(self.path_level or self.path_stage or self.prestige)
+
+    def is_bound_forever(self) -> bool:
+        """An exclusive keepsake (e.g. «Беккенбауэр Центурион» for 100 days in
+        a row, reward_bundle_service player_id): never traded, sold or burned."""
+        return self.bound_until is not None and self.bound_until.year >= BOUND_FOREVER.year
 
     def is_bound(self) -> bool:
         """A newcomer's gift (newbie_service): plays as usual, but can't be

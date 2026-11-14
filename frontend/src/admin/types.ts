@@ -609,7 +609,7 @@ export interface GameConfig {
   referral_referrer_reward: number;
   referral_active_days: number;
   referral_milestones: (RewardBundleInput & { count: number })[];
-  streak_rewards: (RewardBundleInput & { days: number })[];
+  streak_rewards: (RewardBundleInput & { days: number; player_id?: number | null })[];
   hangman_daily_limit: number;
   hangman_reward_correct: number;
   hangman_max_wrong: number;
@@ -970,6 +970,7 @@ export interface CardCollection {
   image_path: string | null;
   reward_coins: number;
   reward_pack_id: number | null;
+  reward_badge_id?: number | null;
 }
 
 export type AdminWheelPrizePool = "regular" | "golden" | "jackpot";

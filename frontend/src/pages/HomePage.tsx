@@ -5,9 +5,11 @@ import { fetchFeatureFlags } from "@/api/featureFlags";
 import { fetchLeagueStatus } from "@/api/leagues";
 import { fetchMyProfile } from "@/api/profile";
 import { fetchWheelStatus } from "@/api/wheel";
+import AnniversaryBanner from "@/components/anniversary/AnniversaryBanner";
 import FanBattleBanner from "@/components/fans/FanBattleBanner";
 import HalloweenBanner from "@/components/halloween/HalloweenBanner";
 import HomeHero from "@/components/home/HomeHero";
+import CenturionPath from "@/components/loyalty/CenturionPath";
 import ModesGrid from "@/components/home/ModesGrid";
 import ShowcaseCard from "@/components/home/ShowcaseCard";
 import TodayCard from "@/components/home/TodayCard";
@@ -30,6 +32,10 @@ export default function HomePage() {
       <HalloweenBanner />
 
       <FanBattleBanner />
+
+      <AnniversaryBanner />
+
+      <CenturionPath />
 
       <NewbieCard />
 

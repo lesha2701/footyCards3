@@ -6,6 +6,7 @@ import AdminCareerRivalries from "@/admin/pages/AdminCareerRivalries";
 import { fetchGameConfig, fetchNewbieFunnel, fetchSuspiciousMatches, fetchSuspiciousMemorySessions, updateGameConfig } from "@/admin/api";
 import AdminMagnateBoardEditor from "@/admin/pages/AdminMagnateBoardEditor";
 import ManagerFinanceFields from "@/admin/components/ManagerFinanceFields";
+import LoyaltySettingsPanel from "@/admin/components/LoyaltySettingsPanel";
 import RewardBundleEditor from "@/admin/components/RewardBundleEditor";
 import { EMPTY_BUNDLE, type GameConfig } from "@/admin/types";
 
@@ -1255,10 +1256,23 @@ export default function AdminGamesPage() {
                 value={m}
                 onChange={(next) => {
                   const rows = [...form.streak_rewards];
-                  rows[i] = { ...next, days: m.days };
+                  rows[i] = { ...m, ...next, days: m.days };
                   setForm({ ...form, streak_rewards: rows });
                 }}
               />
+              <label className="mt-1 flex items-center gap-2 text-xs text-slate-300">
+                ID эксклюзивного футболиста (навсегда у игрока, не продаётся)
+                <input
+                  type="number"
+                  value={m.player_id ?? ""}
+                  onChange={(e) => {
+                    const rows = [...form.streak_rewards];
+                    rows[i] = { ...m, player_id: e.target.value ? Number(e.target.value) : null };
+                    setForm({ ...form, streak_rewards: rows });
+                  }}
+                  className="w-24 rounded-lg bg-bg-surface px-2 py-1 outline-none"
+                />
+              </label>
             </div>
           ))}
           <button
@@ -1269,6 +1283,8 @@ export default function AdminGamesPage() {
           </button>
         </div>
       </section>
+
+      <LoyaltySettingsPanel />
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Memory Sequence</p>

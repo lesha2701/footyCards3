@@ -65,6 +65,8 @@ export interface Player {
   collection_name: string | null;
   /** The collection's special frame («Ночь живых Легенд»: "zombie" / "vampire"). */
   collection_skin?: string | null;
+  /** Numbered edition: copies that will ever exist; null = a regular card. */
+  edition_size?: number | null;
   /** «Академия»: set = a path card with this talent. */
   path_talent_code?: string | null;
   /** «Один футболист» key; null = by the display name. */
@@ -4184,6 +4186,8 @@ export interface CardOfferAdminInput {
   per_user_limit: number;
   is_active: boolean;
   sort_order: number;
+  /** Footballers only: `stock` is a numbered edition («№37 из 100»). */
+  numbered?: boolean;
 }
 
 export interface CardOfferAdmin extends Omit<CardOfferAdminInput, "player_id"> {
@@ -4415,4 +4419,111 @@ export interface FanClaimResult {
   cards: UserCard[];
   titles: string[];
   new_balance: number;
+}
+
+// «💯 Нам 100 дней!» (backend/app/schemas/anniversary.py)
+export interface AnniversaryCalendarDay {
+  n: number;
+  status: "claimed" | "today" | "locked";
+  reward: RewardBundle;
+}
+
+export interface AnniversaryTier {
+  pct: number;
+  target: number;
+  reached: boolean;
+  claimed: boolean;
+  reward: RewardBundle;
+}
+
+export interface AnniversaryCommunity {
+  total: number;
+  goal: number;
+  my_games: number;
+  min_games: number;
+  tiers: AnniversaryTier[];
+  claimable: boolean;
+}
+
+export interface AnniversaryState {
+  enabled: boolean;
+  active: boolean;
+  finished: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  claim_until: string | null;
+  teaser_days: number;
+  calendar: AnniversaryCalendarDay[];
+  calendar_claimed: number;
+  calendar_ready: boolean;
+  day_resets_at: string | null;
+  community: AnniversaryCommunity | null;
+  recap_coins: number;
+  recap_claimed: boolean;
+  collection: HalloweenState["collection"];
+  pack_id: number | null;
+}
+
+export interface AnniversaryRecap {
+  days_with_us: number;
+  active_days: number;
+  packs_opened: number;
+  cards: number;
+  unique_players: number;
+  coins_earned: number;
+  trades: number;
+  badges: number;
+  player_number: number;
+  games: number;
+  favourite_mode: string | null;
+  favourite_mode_games: number;
+  best_card_name: string | null;
+  best_card_rating: number | null;
+  best_card_rarity: Rarity | null;
+  best_card_image: string | null;
+  best_card_position: string | null;
+  cards_better_than_pct: number;
+}
+
+export interface AnniversaryClaimResult {
+  title: string;
+  rewards: GrantedRewards;
+  new_balance: number;
+}
+
+// --- Loyalty: «Путь к Центуриону», «Страховка серии», keepsakes (loyalty_service) ---
+
+export interface LoyaltyMilestone {
+  days: number;
+  reached: boolean;
+  /** An exclusive card bound forever (the «Центурион» at 100). */
+  exclusive: boolean;
+  coins: number;
+  card_rarity: Rarity | null;
+}
+
+export interface StreakSave {
+  saved_streak: number;
+  until: string;
+  restored_streak: number;
+  price_stars: number;
+  free_available: boolean;
+}
+
+export interface LoyaltyStatus {
+  enabled: boolean;
+  streak: number;
+  goal: number;
+  milestones: LoyaltyMilestone[];
+  centurion: Player | null;
+  centurion_owned: boolean;
+  streak_save: StreakSave | null;
+}
+
+export type LoyaltyCode = "oldtimer" | "pioneer" | "centurion";
+
+export interface LoyaltyReward {
+  id: number;
+  code: LoyaltyCode;
+  rewards: Partial<GrantedRewards>;
 }

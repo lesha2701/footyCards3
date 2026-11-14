@@ -1025,6 +1025,8 @@ class StreakRewardIn(BaseModel):
     card_rarity: Optional[Rarity] = None
     badge_id: Optional[int] = None
     cosmetic_id: Optional[int] = None
+    # An exclusive footballer bound forever (e.g. «Беккенбауэр Центурион»).
+    player_id: Optional[int] = None
 
 
 class NewbieTaskIn(BaseModel):

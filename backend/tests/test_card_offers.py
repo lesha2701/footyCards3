@@ -1,11 +1,16 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
 from sqlalchemy import func, select
 
 import app.core.rate_limit as rate_limit_module
+from app.core.exceptions import ConflictError
 from app.models.card import UserCard
+from app.models.card_offer import CardOfferReservation
+from app.models.enums import CardSource
 from app.models.pack import StarsInvoice
 from app.services import card_offer_service, shop_product_service
+from app.services.card_creation import create_user_card
 from tests.factories import create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
 
@@ -178,3 +183,113 @@ async def test_no_reminder_while_the_end_is_far(client, db_session, bot_token):
     headers, _ = await _user(client, db_session, bot_token, 990041)
     await client.post("/api/v1/card-offers/seen", headers=headers, json={"ids": [offer["id"]]})
     assert await card_offer_service.remind_due(db_session) == 0
+
+
+async def _numbered(client, admin, db_session, stock=2, **player):
+    card = await create_player(db_session, rating=91, display_name="Golden", **player)
+    await db_session.commit()
+    resp = await client.post(ADMIN, headers=admin, json={
+        "player_id": card.id, "stars_price": 300, "stock": stock, "per_user_limit": 1, "numbered": True,
+    })
+    return card, resp
+
+
+async def test_numbered_edition_gives_each_buyer_a_copy_of_n(client, db_session, bot_token):
+    admin = await _admin(client, bot_token)
+    card, resp = await _numbered(client, admin, db_session)
+    assert resp.status_code == 200, resp.text
+    offer = resp.json()
+    assert offer["numbered"] is True and offer["player"]["edition_size"] == 2
+    assert offer["player"]["is_pack_droppable"] is False  # packs never mint a copy
+
+    headers, user = await _user(client, db_session, bot_token, 990030)
+    shop = (await client.get("/api/v1/card-offers", headers=headers)).json()
+    assert shop[0]["left"] == 2 and shop[0]["player"]["edition_size"] == 2
+
+    invoice, ok, _ = await _pay(db_session, user, offer["id"], 300, "ed-1")
+    assert ok
+    await shop_product_service.deliver(db_session, user, invoice, "charge-ed-1")
+    await db_session.commit()
+    copy = (await db_session.execute(select(UserCard).where(UserCard.player_id == card.id))).scalar_one()
+    assert copy.serial_number == 1
+    assert (await db_session.execute(select(func.count()).select_from(CardOfferReservation))).scalar_one() == 0
+    shop = (await client.get("/api/v1/card-offers", headers=headers)).json()
+    assert shop[0]["left"] == 1
+
+
+async def test_two_buyers_cannot_both_pay_for_the_last_copy(client, db_session, bot_token):
+    admin = await _admin(client, bot_token)
+    _, resp = await _numbered(client, admin, db_session, stock=1)
+    offer = resp.json()
+    _, first = await _user(client, db_session, bot_token, 990031)
+    _, second = await _user(client, db_session, bot_token, 990032)
+
+    invoice, ok, _ = await _pay(db_session, first, offer["id"], 300, "last-1")
+    assert ok
+    _, ok, reason = await _pay(db_session, second, offer["id"], 300, "last-2")
+    assert not ok and "оплачивают" in reason
+
+    # The same invoice asking again keeps its copy.
+    assert (await shop_product_service.validate(db_session, invoice))[0]
+
+    # An abandoned payment gives the copy back.
+    held = (await db_session.execute(select(CardOfferReservation))).scalar_one()
+    held.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+    await db_session.commit()
+    _, ok, _ = await _pay(db_session, second, offer["id"], 300, "last-3")
+    assert ok
+
+
+async def test_a_plain_stock_offer_is_held_the_same_way(client, db_session, bot_token):
+    admin = await _admin(client, bot_token)
+    card = await create_player(db_session, rating=85)
+    await db_session.commit()
+    offer = (await client.post(ADMIN, headers=admin, json={"player_id": card.id, "stars_price": 40, "stock": 1})).json()
+    _, first = await _user(client, db_session, bot_token, 990033)
+    _, second = await _user(client, db_session, bot_token, 990034)
+    assert (await _pay(db_session, first, offer["id"], 40, "plain-1"))[1]
+    assert not (await _pay(db_session, second, offer["id"], 40, "plain-2"))[1]
+
+
+async def test_nothing_but_a_paid_order_passes_the_edition(client, db_session, bot_token):
+    admin = await _admin(client, bot_token)
+    card, resp = await _numbered(client, admin, db_session, stock=1)
+    _, user = await _user(client, db_session, bot_token, 990035)
+    await db_session.refresh(card)
+    card_id, user_id = card.id, user.id
+    await create_user_card(db_session, user_id, card_id, CardSource.seed)
+    await db_session.commit()
+    with pytest.raises(ConflictError):
+        await create_user_card(db_session, user_id, card_id, CardSource.seed)
+    await db_session.rollback()
+    # Already paid: delivered anyway, the shop just stops selling.
+    extra = await create_user_card(db_session, user_id, card_id, CardSource.stars_purchase)
+    assert extra.serial_number == 2
+
+
+async def test_edition_rules_for_the_admin(client, db_session, bot_token):
+    admin = await _admin(client, bot_token)
+    # A card that already has copies can't become numbered: its numbers would lie.
+    _, user = await _user(client, db_session, bot_token, 990036)
+    old = await create_player(db_session, rating=80)
+    await create_user_card(db_session, user.id, old.id, CardSource.seed)
+    await db_session.commit()
+    body = {"player_id": old.id, "stars_price": 100, "stock": 100, "numbered": True}
+    assert (await client.post(ADMIN, headers=admin, json=body)).status_code == 409
+
+    fresh = await create_player(db_session, rating=81)
+    await db_session.commit()
+    assert (await client.post(ADMIN, headers=admin, json={
+        "player_id": fresh.id, "stars_price": 100, "numbered": True,
+    })).status_code == 409  # no tirage
+
+    card, resp = await _numbered(client, admin, db_session)
+    offer = resp.json()
+    invoice, ok, _ = await _pay(db_session, user, offer["id"], 300, "rule-1")
+    assert ok
+    await shop_product_service.deliver(db_session, user, invoice, "charge-rule-1")
+    await db_session.commit()
+    change = {"player_id": card.id, "stars_price": 300, "stock": 500, "numbered": True}
+    assert (await client.put(f"{ADMIN}/{offer['id']}", headers=admin, json=change)).status_code == 409
+    drop = {"player_id": card.id, "stars_price": 300, "stock": 2, "numbered": False}
+    assert (await client.put(f"{ADMIN}/{offer['id']}", headers=admin, json=drop)).status_code == 409
