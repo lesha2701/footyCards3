@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Backdrop } from "@/components/magic/Backdrop";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 
@@ -187,8 +188,7 @@ export function MagicSkins({ faction, heroClass }: { faction: MagicFactionCode; 
 
       <AnimatePresence>
         {open && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setOpenId(null)}
-            className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 p-3 backdrop-blur-sm">
+          <Backdrop onClick={() => setOpenId(null)} className="fixed inset-0 z-[70] flex items-end justify-center bg-black/80 p-3">
             <motion.div initial={{ y: 60 }} animate={{ y: 0 }} exit={{ y: 60 }} onClick={(e) => e.stopPropagation()}
               className="safe-bottom w-full max-w-sm rounded-3xl bg-bg-surface p-4 ring-1 ring-white/10">
               <p className="text-center font-display text-xl font-black text-ink-chalk">{open.name}</p>
@@ -209,7 +209,7 @@ export function MagicSkins({ faction, heroClass }: { faction: MagicFactionCode; 
               <p className="mt-1 text-center text-micro text-ink-mist-dim">Виден на карте похода. На силу армии не влияет.</p>
               <div className="mt-3">{actions(open, true)}</div>
             </motion.div>
-          </motion.div>
+          </Backdrop>
         )}
       </AnimatePresence>
     </section>

@@ -22,7 +22,7 @@ export default function Coach({ open, steps, onClose, fixed = false }: {
     <AnimatePresence>
       {open && (
         <motion.div
-          className={`${fixed ? "fixed z-50 bg-black/60 backdrop-blur-[2px]" : "absolute z-40 bg-black/45"} inset-0 flex items-end justify-center p-3 pb-28`}
+          className={`${fixed ? "fixed z-50 bg-black/70" : "absolute z-40 bg-black/45"} inset-0 flex items-end justify-center p-3 pb-28`}
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
           onPointerDown={(e) => e.stopPropagation()}
         >

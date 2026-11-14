@@ -174,7 +174,7 @@ export default function MagicPage() {
       </header>
 
       {/* Tabs: a grid, every tab visible. */}
-      <nav className="sticky top-0 z-30 -mx-1 grid grid-cols-4 gap-1 rounded-2xl bg-bg-base/90 p-1 backdrop-blur">
+      <nav className="sticky top-0 z-30 -mx-1 grid grid-cols-4 gap-1 rounded-2xl bg-bg-base p-1">
         {TABS.map(([k, icon, label]) => (
           <button key={k} onClick={() => { hapticSelection(); setTab(k); }}
             className={`flex flex-col items-center rounded-xl py-1.5 text-[11px] font-bold active:scale-95 ${tab === k ? "bg-gradient-to-b from-amber-300 to-amber-500 text-black shadow-[0_0_14px_rgba(251,191,36,0.35)]" : "bg-white/5 text-ink-mist"}`}>
@@ -379,7 +379,7 @@ export default function MagicPage() {
 
           {/* The start, pinned above the bottom menu: always in reach. */}
           {!hub.active_run_id && (
-            <div className="sticky bottom-24 z-20 -mx-1 flex flex-col gap-1.5 rounded-3xl bg-bg-base/95 p-2 shadow-[0_-8px_30px_rgba(0,0,0,0.5)] ring-1 ring-white/10 backdrop-blur">
+            <div className="sticky bottom-24 z-20 -mx-1 flex flex-col gap-1.5 rounded-3xl bg-bg-base/95 p-2 shadow-[0_-8px_30px_rgba(0,0,0,0.5)] ring-1 ring-white/10">
               <LossWarning risk={hub.risk} mode={md?.code ?? "quick"} compact />
               <button disabled={!canStart} onClick={() => { hapticSelection(); setError(null); start.mutate(false); }}
                 className={`rounded-2xl py-3 font-display text-lg font-black text-white active:scale-[0.98] disabled:opacity-40 ${hard ? "bg-gradient-to-r from-red-600 via-orange-500 to-amber-500 shadow-[0_0_24px_rgba(249,115,22,0.45)]" : "bg-gradient-to-r from-fuchsia-500 via-indigo-500 to-sky-500 shadow-[0_0_24px_rgba(129,140,248,0.45)]"}`}>

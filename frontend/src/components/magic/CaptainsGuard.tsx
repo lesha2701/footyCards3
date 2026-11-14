@@ -1,4 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
+import { Backdrop } from "@/components/magic/Backdrop";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 
@@ -186,8 +187,7 @@ export function GuardPanel({ army, onArmy, hardcore }: { army: MagicArmy; onArmy
 
       <AnimatePresence>
         {picking && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setPicking(false)}
-            className="fixed inset-0 z-50 flex items-end justify-center bg-black/70">
+          <Backdrop onClick={() => setPicking(false)} className="fixed inset-0 z-[70] flex items-end justify-center bg-black/70">
             <motion.div initial={{ y: 60 }} animate={{ y: 0 }} exit={{ y: 60 }} onClick={(e) => e.stopPropagation()}
               className="max-h-[75vh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-bg-base p-4 pb-24">
               <p className="font-display text-base font-black text-ink-chalk">Футболист гвардии</p>
@@ -206,7 +206,7 @@ export function GuardPanel({ army, onArmy, hardcore }: { army: MagicArmy; onArmy
                 ))}
               </div>
             </motion.div>
-          </motion.div>
+          </Backdrop>
         )}
       </AnimatePresence>
     </section>
