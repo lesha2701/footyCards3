@@ -369,6 +369,7 @@ class GameLimitsOut(BaseModel):
     magnate: int
     mordoboi: int
     kontra: int = 0
+    magic: int = 0
     one_on_one: int = 0
     otvetka: int = 0
     fergie_time: int = 0

@@ -128,6 +128,8 @@ class TransactionType(str, enum.Enum):
     mordoboi_legend_reward = "mordoboi_legend_reward"
     kontra_reward = "kontra_reward"
     kontra_chest_purchase = "kontra_chest_purchase"
+    magic_reward = "magic_reward"
+    magic_purchase = "magic_purchase"
     free_kick_refill = "free_kick_refill"
     weekly_top_reward = "weekly_top_reward"
     newbie_reward = "newbie_reward"

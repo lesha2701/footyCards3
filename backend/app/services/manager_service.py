@@ -77,6 +77,8 @@ from app.models.my_player import MyPlayer
 from app.models.player import Player
 from app.models.user import User
 from app.services import club_base_service, my_player_service, player_career_clubs as pcc, tournament_match_engine
+from app.services import manager_staff as staff
+from app.services import manager_assistant as assistant, manager_press as press
 from app.services import manager_cup as cup, manager_events as events, manager_perks as perks, manager_exchange as exchange, manager_finance as finance, manager_tactics as tactics, trade_guard_service, wallet_service
 from app.services.manager_tactics import DEFAULT_FORMATION
 from app.services.career_service import standings
@@ -275,7 +277,7 @@ async def base_snapshot(db: AsyncSession, owner_id: int, config) -> dict:
     levels = club_base_service.effective_levels(base)
     effects = club_base_service.effects_from_levels(levels, config)
     academy = (await db.execute(select(UserAcademy.total_level).where(UserAcademy.user_id == owner_id))).scalar_one_or_none() or 0
-    return {
+    snap = {
         "level": sum(int(v) for v in levels.values()) + int(academy),
         "stadium": int(levels.get("stadium", 0)), "marketing": int(levels.get("marketing", 0)), "shop": int(levels.get("shop", 0)),
         **{code: int(levels.get(code, 0)) for code in ("hotel", "media", "accounting", "training", "medical")},
@@ -284,6 +286,8 @@ async def base_snapshot(db: AsyncSession, owner_id: int, config) -> dict:
         "capacity": club_base_service.value_at(config, "stadium", "capacity", int(levels.get("stadium", 0)))
         if levels.get("stadium") else 0,
     }
+    # «Штаб президента»: the club staff's effects on top, within the caps.
+    return staff.fold(snap, await staff.effects(db, owner_id, config), config)
 
 
 def season_grant(division: int, snap: dict, config) -> dict:
@@ -1118,7 +1122,7 @@ async def wage_bill(db: AsyncSession, club: ManagerClub, config, snap: Optional[
     wage_pct = _pct(config.manager_division_wage_pct, club.division)
     npcs = sum(n.wage * wage_pct // 100 * (100 - snap["discount_pct"]) // 100
                for n in await _npcs(db, club.id) if n.seasons_left > 0)
-    return live + npcs
+    return live + npcs + await staff.wages(db, club.id)
 
 
 async def start_bill(db: AsyncSession, club: ManagerClub, config, snap: Optional[dict] = None) -> int:
@@ -1135,9 +1139,10 @@ CATALOG_PAGE = 40
 
 
 async def _farm_loan_cut(db: AsyncSession, club: ManagerClub, now: Optional[datetime] = None) -> int:
-    """A farm club for the coming season makes loans cheaper («Кабинет президента»)."""
+    """A farm club for the coming season and the staff's scout make loans cheaper."""
     farm = await finance.farm_for(db, club.id, await finance.upcoming_key(db, now or datetime.now(timezone.utc)))
-    return int((farm or {}).get("loan_cut_pct", 0))
+    scout = (await base_snapshot(db, club.owner_id, await get_config(db))).get("scout_pct", 0)
+    return min(90, int((farm or {}).get("loan_cut_pct", 0)) + int(scout))
 
 
 def affordable_rating(budget: int, deal: str, config, division: Optional[int], discount_pct: int, loan_cut_pct: int = 0) -> int:
@@ -1381,7 +1386,7 @@ async def _prepare_club(db: AsyncSession, club: ManagerClub, key: str, now: date
     await _expire(db, club, now, key)
     await _grant_budget(db, club, key, config)
     snap = await base_snapshot(db, club.owner_id, config)
-    assistant_note = await perks.assistant_season_start(db, club, key, snap, config)  # «Аналитика Pro»: a forgotten sponsor
+    assistant_note = await perks.assistant_season_start(db, club, key, snap, config)  # «Аналитик» / «Помощник»: a forgotten sponsor
     money_state = await finance.season_start(db, club, key, snap, config)
     await exchange.bonds_start(db, club, key)
     await exchange.season_open(db, club, key, config)  # a listed club is re-valued
@@ -1425,6 +1430,7 @@ async def _prepare_club(db: AsyncSession, club: ManagerClub, key: str, now: date
             continue
         await finance.book(db, club, "wages", -pay, key)
         n.seasons_left -= 1
+    notes += await staff.pay(db, club, key, config)  # «Штаб президента»
     target = _division_rating(club.division, config)
     # A farm club's kids are stronger (up to the division's own rating).
     filler = target - max(0, FILLER_GAP - int(farm.get("kid_bonus", 0)))
@@ -1649,6 +1655,7 @@ async def _play_round(db: AsyncSession, league: ManagerLeague, round_index: int,
             mods = finance.fatigue_mods(mods, teams[idx].get("finance") or {}, round_index)  # a preseason tour's tired legs
             if teams[idx]["club_id"]:  # «Установка на матч» and the events' form
                 mods = events.match_mods(mods, clubs[teams[idx]["club_id"]], league.id, round_index, config)
+                mods = staff.coach_mods(mods, teams[idx].get("base") or {})  # the staff's head coach
             if idx == home and teams[idx]["club_id"]:
                 mods = finance.support_mods(mods, teams[idx].get("finance") or {}, config)  # the home crowd (ticket price)
             sides[idx] = _side_from(p["xi"], p["cards"], idx, p["name"], p["formation"], mods, config)
@@ -1680,6 +1687,8 @@ async def _play_round(db: AsyncSession, league: ManagerLeague, round_index: int,
     await perks.price_alerts(db, league, prices, config)  # «Аналитика Pro»
     for club in clubs.values():
         await events.after_round(db, club, league, config)  # «События клуба» after the set rounds
+        await press.after_round(db, club, league, config)  # «Пресс-конференция»
+        await assistant.after_round(db, club, league, config)  # «Помощник»: the next plan, answers left open
     if league.rounds_played >= len(state["fixtures"]):
         await _finish(db, league, config)
     elif _local_day(schedule, round_index) != _local_day(schedule, round_index + 1):
@@ -1957,6 +1966,7 @@ async def resolve_all_due(db: AsyncSession, now: Optional[datetime] = None) -> i
     ids = (await db.execute(select(ManagerLeague.id).where(ManagerLeague.status == "active"))).scalars().all()
     played = sum([await resolve_league(db, league_id, now) for league_id in ids])
     await perks.remind(db, now)
+    await assistant.window_sweep(db, now)  # «Помощник»: the window's chores before it closes
     return played + await cup.resolve(db, now)
 
 

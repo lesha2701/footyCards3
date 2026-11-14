@@ -50,6 +50,8 @@ import TodayPanel, { Timeline } from "@/components/manager/TodayPanel";
 import Emblem, { KitShirt } from "@/components/manager/Emblem";
 import ManagerPitch from "@/components/manager/ManagerPitch";
 import PresidentTab from "@/components/manager/PresidentTab";
+import DealCheck from "@/components/manager/DealCheck";
+import StaffTab from "@/components/manager/StaffTab";
 import StyleTab from "@/components/manager/StyleTab";
 import TacticsPanel from "@/components/manager/TacticsPanel";
 import GameHero from "@/components/common/GameHero";
@@ -76,7 +78,7 @@ function Trend({ pct }: { pct: number | null | undefined }) {
   return <span className={`text-micro font-bold ${pct >= 0 ? "text-emerald-400" : "text-red-400"}`}>{trend(pct)}</span>;
 }
 
-type Tab = "club" | "office" | "transfers" | "league" | "me" | "style";
+type Tab = "club" | "office" | "staff" | "transfers" | "league" | "me" | "style";
 
 /** «Менеджер»: your own club — your «Мой игрок» and an academy card always
  * start, other users' players (transfers, loans, contracts for seasons) and
@@ -115,6 +117,7 @@ export default function ManagerPage() {
   const tabs: [Tab, string, string, boolean][] = [
     ["club", "🏟️", "Мой клуб", !!club && club.incoming.length > 0],
     ...(club ? [["office", "💼", "Кабинет", false] as [Tab, string, string, boolean]] : []),
+    ...(club ? [["staff", "👥", "Штаб", false] as [Tab, string, string, boolean]] : []),
     ["transfers", "🔁", "Трансферы", false],
     ["league", "🏆", "Лига", false],
     ["me", "⚽", "Я игрок", data.offers.length > 0],
@@ -127,14 +130,14 @@ export default function ManagerPage() {
       <SeasonBanner view={data} summary={summary} />
       <TodayPanel onTab={setTab} onError={onError} />
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
-      <div className="grid grid-cols-3 gap-1.5">
+      <div className={`grid gap-1.5 ${tabs.length > 6 ? "grid-cols-4" : "grid-cols-3"}`}>
         {tabs.map(([id, icon, label, dot]) => (
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`relative truncate rounded-full px-2 py-2 text-xs font-semibold ${tab === id ? "bg-floodlight text-bg-base" : "bg-bg-surface text-ink-mist"}`}
+            className={`relative truncate font-semibold ${tabs.length > 6 ? "flex flex-col items-center gap-0.5 rounded-2xl px-1 py-1.5 text-[11px]" : "rounded-full px-2 py-2 text-xs"} ${tab === id ? "bg-floodlight text-bg-base" : "bg-bg-surface text-ink-mist"}`}
           >
-            <span aria-hidden="true">{icon} </span>{label}
+            <span aria-hidden="true" className={tabs.length > 6 ? "text-base leading-none" : ""}>{icon} </span>{label}
             {dot && tab !== id && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-accent-lime" />}
           </button>
         ))}
@@ -146,7 +149,8 @@ export default function ManagerPage() {
       {tab === "league" && <LeagueTab view={data} onError={onError} />}
       {tab === "me" && <MeTab {...props} />}
       {tab === "style" && club && <StyleTab {...props} club={club} />}
-      {tab === "office" && club && <PresidentTab onError={onError} />}
+      {tab === "office" && club && <PresidentTab onError={onError} onTab={setTab} />}
+      {tab === "staff" && club && <StaffTab onError={onError} />}
     </div>
   );
 }
@@ -504,7 +508,7 @@ function TransfersTab({ view, club, onView, onError }: TabProps & { club: Manage
       <BudgetBar club={club} />
       {club.trade_locked && <p className="rounded-xl bg-amber-400/10 px-3 py-2 text-caption text-amber-300">Идёт сезон — сделки откроются после последнего тура.</p>}
       {section === "users" && <UsersMarket view={view} club={club} onView={onView} onError={onError} />}
-      {section === "catalog" && <Catalog club={club} onView={onView} onError={onError} />}
+      {section === "catalog" && <Catalog club={club} analyst={!!view.shop.passes?.find((x) => x.code === "analytics")?.active} onView={onView} onError={onError} />}
       {section === "scout" && <Scout club={club} />}
       {section === "moves" && <Moves />}
     </div>
@@ -664,8 +668,10 @@ function OfferForm({ player, view, club, onDone, onError }: {
     onError,
   });
   const total = fee + wage * view.rules.wage_eur_per_coin;
+  const analyst = !!view.shop.passes?.find((p) => p.code === "analytics")?.active;
   return (
     <div className="flex flex-col gap-2.5 rounded-xl bg-bg-raised p-3">
+      <DealCheck key={`${kind}-${fee}-${wage}`} enabled={analyst} kind="live" targetId={player.user_id} fee={fee} wage={wage} onError={onError} />
       {inClub && (
         <div className="grid grid-cols-2 gap-1.5">
           {(["transfer", "loan"] as const).map((k) => (
@@ -720,7 +726,7 @@ function Scout({ club }: { club: ManagerClub }) {
 
 const AFFORD: [ManagerCatalogFilter["afford"], string][] = [["loan", "💶 По карману: аренда"], ["buy", "💶 По карману: покупка"], [null, "Все цены"]];
 
-function Catalog({ club, onView, onError }: { club: ManagerClub; onView: (v: ManagerView) => void; onError: (e: unknown) => void }) {
+function Catalog({ club, analyst = false, onView, onError }: { club: ManagerClub; analyst?: boolean; onView: (v: ManagerView) => void; onError: (e: unknown) => void }) {
   const queryClient = useQueryClient();
   const [line, setLine] = useState<ManagerLine | null>(null);
   const [q, setQ] = useState("");
@@ -780,6 +786,7 @@ function Catalog({ club, onView, onError }: { club: ManagerClub; onView: (v: Man
         <p className="py-6 text-center text-sm text-ink-mist">Никого не нашлось — смени фильтры</p>
       ) : players.map((p) => (
         <CatalogRow key={p.player_id} p={p} club={club} open={open === p.player_id} seasons={seasons} busy={sign.isPending}
+          analyst={analyst} onError={onError}
           onToggle={() => setOpen(open === p.player_id ? null : p.player_id)} onSeasons={setSeasons}
           onSign={(kind) => sign.mutate({ id: p.player_id, kind })} />
       ))}
@@ -793,8 +800,8 @@ function Catalog({ club, onView, onError }: { club: ManagerClub; onView: (v: Man
   );
 }
 
-function CatalogRow({ p, club, open, seasons, busy, onToggle, onSeasons, onSign }: {
-  p: ManagerCatalogPlayer; club: ManagerClub; open: boolean; seasons: number; busy: boolean;
+function CatalogRow({ p, club, open, seasons, busy, analyst, onError, onToggle, onSeasons, onSign }: {
+  p: ManagerCatalogPlayer; club: ManagerClub; open: boolean; seasons: number; busy: boolean; analyst: boolean; onError: (e: unknown) => void;
   onToggle: () => void; onSeasons: (n: number) => void; onSign: (kind: "buy" | "loan") => void;
 }) {
   const free = !p.taken_by;
@@ -834,6 +841,7 @@ function CatalogRow({ p, club, open, seasons, busy, onToggle, onSeasons, onSign 
             </button>
           </div>
           <p className="text-micro text-ink-mist">+ зарплата {eur(p.wage_now)} за каждый сезон, списывается при старте сезона.</p>
+          <DealCheck enabled={analyst} kind="npc" targetId={p.player_id} onError={onError} />
         </div>
       )}
     </div>

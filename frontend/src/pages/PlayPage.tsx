@@ -8,6 +8,7 @@ import { fetchMatchDay, fetchWeeklyCup } from "@/api/events";
 import { fetchGameLimits, fetchPenaltyStats } from "@/api/games";
 import { fetchArenaStats } from "@/api/matches";
 import { fetchKontraHub } from "@/api/kontra";
+import { fetchMagicHub } from "@/api/magic";
 import { fetchMordoboiInfo, fetchMordoboiMatches, fetchMordoboiStats } from "@/api/mordoboi";
 import { fetchPlayerTournamentCurrent } from "@/api/personalTournament";
 import { fetchStrategoStats } from "@/api/stratego";
@@ -27,6 +28,7 @@ import {
   IconPairs,
   IconParty,
   IconProfile,
+  IconSwords,
   IconTactics,
   IconTarget,
   IconTrophy,
@@ -113,6 +115,7 @@ export default function PlayPage() {
   const { data: blackjack } = useQuery({ queryKey: ["blackjack-status"], queryFn: fetchBlackjackStatus });
   const { data: mordoboi } = useQuery({ queryKey: ["mordoboi-info"], queryFn: fetchMordoboiInfo });
   const { data: kontra } = useQuery({ queryKey: ["kontra-hub"], queryFn: fetchKontraHub });
+  const { data: magic } = useQuery({ queryKey: ["magic-hub"], queryFn: fetchMagicHub });
   const { data: mordoboiStats } = useQuery({
     queryKey: ["mordoboi-stats"], queryFn: fetchMordoboiStats, enabled: !!mordoboi?.enabled,
   });
@@ -132,12 +135,12 @@ export default function PlayPage() {
   // Flag-gated tiles remember whether they were on last time, so the grid
   // doesn't jump when their (slower) status queries land.
   const [flags, setFlags] = usePersistentState<Record<string, boolean>>("play.flags", {});
-  const live = { blackjack: blackjack?.enabled, mordoboi: mordoboi?.enabled, kontra: kontra?.enabled };
+  const live = { blackjack: blackjack?.enabled, mordoboi: mordoboi?.enabled, kontra: kontra?.enabled, magic: magic?.enabled };
   const on = (k: keyof typeof live) => live[k] ?? !!flags[k];
   useEffect(() => {
     const known = Object.fromEntries(Object.entries(live).filter(([, v]) => v !== undefined)) as Record<string, boolean>;
     if (Object.entries(known).some(([k, v]) => flags[k] !== v)) setFlags({ ...flags, ...known });
-  }, [live.blackjack, live.mordoboi, live.kontra]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [live.blackjack, live.mordoboi, live.kontra, live.magic]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(preloadShotArt, []);
   const blackjackEntries = blackjack ? blackjack.free_remaining + blackjack.replay_entries + blackjack.paid_entries : 0;
   const games: GameDef[] = [
@@ -228,6 +231,14 @@ export default function PlayPage() {
         stat: `Арена ${kontra?.rating ?? "—"}`, limitKey: "kontra" as LimitKey,
       }]
       : []),
+    ...(on("magic")
+      ? [{
+        path: "/play/magic", art: artOf("magic"), Icon: IconSwords, tint: "bg-fuchsia-600", title: "Мяч и Магия", group: "tactics" as Group,
+        time: "5 мин", bot: true,
+        description: "Герой, карта приключений и армия из твоих дубликатов",
+        stat: `Герой ур. ${magic?.hero.level ?? 1} · рейтинг ${magic?.rating ?? 0}`, limitKey: "magic" as LimitKey, rightLabel: "Новое",
+      }]
+      : []),
     {
       path: "/play/magnate", art: artOf("magnate"), Icon: IconDice, tint: "bg-violet-500", title: "Футбольный магнат", group: "tactics", time: "15 мин", bot: true, friend: true,
       description: "Клубы, стадионы и аренда — 4 игрока, онлайн или с ботами", limitKey: "magnate",
@@ -293,6 +304,9 @@ export default function PlayPage() {
   }
   if (kontra?.active_battle_id) {
     now.push({ key: "k", kicker: "Бой идёт", title: "Контратака", tone: "bg-green-500/15 text-green-200 ring-green-400/30", to: `/play/kontra/battles/${kontra.active_battle_id}` });
+  }
+  if (magic?.active_run_id) {
+    now.push({ key: "mm", kicker: "Поход идёт", title: "Мяч и Магия", tone: "bg-fuchsia-500/15 text-fuchsia-200 ring-fuchsia-400/30", to: `/play/magic/runs/${magic.active_run_id}` });
   }
   if (career?.invite) {
     now.push({ key: "ci", kicker: "Приглашение", title: `Карьера · ${career.invite.from_name}`, tone: "bg-cyan-500/15 text-cyan-200 ring-cyan-400/30", to: "/play/career" });

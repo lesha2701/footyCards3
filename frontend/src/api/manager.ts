@@ -250,12 +250,12 @@ export interface ManagerShop {
   my_merch: { club_name: string; code: string; emoji: string; name: string }[];
   pro_stars: number;
   pro_days: number;
-  /** Stars passes: «Аналитика Pro». */
+  /** Stars passes: «Аналитик», «Помощник». */
   passes: ManagerPass[];
 }
 
 export interface ManagerPass {
-  code: "analytics";
+  code: "analytics" | "assistant";
   name: string;
   about: string;
   stars: number;
@@ -346,7 +346,7 @@ export async function fetchManager(): Promise<ManagerView> {
   return data;
 }
 
-export type ManagerTodayTab = "club" | "office" | "transfers" | "league" | "me";
+export type ManagerTodayTab = "club" | "office" | "staff" | "transfers" | "league" | "me";
 
 /** «Сегодня в клубе»: what to do now, most urgent first. */
 export interface ManagerTodayItem {
@@ -415,6 +415,10 @@ export interface ManagerClubEvent {
   choice: string | null;
   options: ManagerEventOption[];
   result: ManagerEventOption | null;
+  /** «Пресс-конференция» (an event after its round). */
+  press?: boolean;
+  /** Who decided: "assistant" = «Помощник» while the president was away. */
+  by?: string | null;
 }
 
 /** GET /manager/events: «Установка на матч» and «События клуба». */
@@ -516,6 +520,20 @@ export interface ManagerAnalytics {
     my_record: { form: ("W" | "D" | "L")[]; gf: number; ga: number; played: number };
     injuries: number;
   } | null;
+  /** «Аналитик»: the plan and the style for the next match. */
+  advice?: ManagerAdvice | null;
+  /** The club's last match and what decided it. */
+  review?: { opponent: string; home: boolean; for: number; against: number; result: "win" | "draw" | "loss"; notes: string[] } | null;
+  /** The place the squads' ratings give, of the league size. */
+  forecast?: { place: number; of: number } | null;
+}
+
+export interface ManagerAdvice {
+  plan: "press" | "bus" | "rotate" | null;
+  why: string;
+  style: string | null;
+  style_label: string | null;
+  style_why: string | null;
 }
 
 export async function fetchManagerAnalytics(): Promise<ManagerAnalytics> {
@@ -994,5 +1012,166 @@ export async function buyManagerBond(bondId: number, units: number): Promise<Man
 
 export async function repayManagerBond(bondId: number): Promise<ManagerExchange> {
   const { data } = await api.post<ManagerExchange>(`/manager/bonds/${bondId}/repay`, {});
+  return data;
+}
+
+
+// --- «Штаб президента»: the VIP assistant and analyst, the club staff, the president's status ---
+
+export type ManagerVipRole = "assistant" | "analyst";
+export type ManagerStaffRole = "coach" | "physio" | "agent" | "marketing" | "scout" | "press" | "driver";
+export type ManagerRarity = "common" | "rare" | "epic" | "legendary";
+
+/** How a skin, a car or a room is drawn (StaffPortrait / OfficeScene). */
+export interface ManagerItemArt {
+  skin?: string; hair?: string; hair_style?: "bun" | "long" | "bob" | "pony" | "curls" | "short" | "side";
+  outfit?: string; accent?: string; glasses?: boolean;
+  body?: string; shape?: "hatch" | "sedan" | "suv" | "sport" | "limo";
+  wall?: string; floor?: string; window?: string;
+}
+
+export interface ManagerStaffItem {
+  code: string;
+  kind: "skin" | "car" | "room";
+  role?: ManagerVipRole;
+  name: string;
+  about: string;
+  art: ManagerItemArt;
+  coins: number;
+  stars: number;
+  owned?: boolean;
+}
+
+export interface ManagerVip {
+  code: "analytics" | "assistant";
+  role: ManagerVipRole;
+  title: string;
+  emoji: string;
+  about: string;
+  name: string;
+  stars: number;
+  days: number;
+  active: boolean;
+  until: string | null;
+  skin: ManagerStaffItem | null;
+  trial: boolean;
+}
+
+export interface ManagerStaffMember {
+  id: number;
+  role: ManagerStaffRole;
+  role_name: string;
+  emoji: string;
+  resident_id: number;
+  name: string;
+  icon: string;
+  image: string | null;
+  rarity: ManagerRarity;
+  effect: number;
+  effect_text: string;
+  wage: number;
+}
+
+export interface ManagerStaffView {
+  vip: ManagerVip[];
+  bundle_stars: number;
+  staff: ManagerStaffMember[];
+  slots: number;
+  candidates: { resident_id: number; name: string; title: string | null; icon: string; image: string | null; rarity: ManagerRarity; wage: number }[];
+  roles: { code: ManagerStaffRole; name: string; emoji: string; effects: Record<ManagerRarity, string> }[];
+  wages: number;
+  window: boolean;
+  items: ManagerStaffItem[];
+  worn: { assistant: ManagerStaffItem | null; analyst: ManagerStaffItem | null; car: ManagerStaffItem | null; room: ManagerStaffItem | null };
+}
+
+export interface ManagerAssistantRules {
+  limit: number;
+  sponsor: boolean;
+  kit: boolean;
+  fill: boolean;
+  renew_min_rating: number;
+  renew_max_wage: number;
+  decline_below_pct: number;
+  events: "safe" | "balanced" | "bold" | "off";
+  plan: "auto" | "normal" | "off";
+}
+
+export interface ManagerAssistantLog { at: string; icon: string; text: string; eur: number }
+
+/** GET /manager/assistant: «Пока тебя не было». */
+export interface ManagerAssistantOffice {
+  active: boolean;
+  name: string;
+  rules: ManagerAssistantRules;
+  report: { entries: ManagerAssistantLog[]; unseen: number; spent: number; earned: number };
+  trial: boolean;
+  /** After these rounds a press conference comes («Ежедневник»). */
+  press_rounds: number[];
+}
+
+export interface ManagerDealCheck {
+  name: string;
+  rating: number;
+  position: string;
+  value: number;
+  cost: number;
+  free: number;
+  verdict: "ok" | "meh" | "bad";
+  lines: string[];
+}
+
+export async function fetchManagerStaff(): Promise<ManagerStaffView> {
+  const { data } = await api.get<ManagerStaffView>("/manager/staff");
+  return data;
+}
+
+export async function hireManagerStaff(residentId: number, role: ManagerStaffRole): Promise<ManagerStaffView> {
+  const { data } = await api.post<ManagerStaffView>("/manager/staff/hire", { resident_id: residentId, role });
+  return data;
+}
+
+export async function fireManagerStaff(staffId: number): Promise<ManagerStaffView> {
+  const { data } = await api.post<ManagerStaffView>(`/manager/staff/${staffId}/fire`);
+  return data;
+}
+
+export async function renameManagerVip(role: ManagerVipRole, name: string): Promise<ManagerStaffView> {
+  const { data } = await api.post<ManagerStaffView>("/manager/staff/name", { role, name });
+  return data;
+}
+
+export async function buyManagerStaffItem(code: string): Promise<ManagerStaffView> {
+  const { data } = await api.post<ManagerStaffView>(`/manager/staff/items/${code}/buy`);
+  return data;
+}
+
+export async function wearManagerStaffItem(code: string): Promise<ManagerStaffView> {
+  const { data } = await api.post<ManagerStaffView>(`/manager/staff/items/${code}/wear`);
+  return data;
+}
+
+export async function startManagerAssistantTrial(): Promise<ManagerStaffView> {
+  const { data } = await api.post<ManagerStaffView>("/manager/assistant/trial");
+  return data;
+}
+
+export async function setManagerAssistantRules(rules: Partial<ManagerAssistantRules>): Promise<ManagerStaffView> {
+  const { data } = await api.put<ManagerStaffView>("/manager/assistant/rules", rules);
+  return data;
+}
+
+export async function fetchManagerAssistant(): Promise<ManagerAssistantOffice> {
+  const { data } = await api.get<ManagerAssistantOffice>("/manager/assistant");
+  return data;
+}
+
+export async function markManagerAssistantSeen(): Promise<ManagerAssistantOffice["report"]> {
+  const { data } = await api.post<ManagerAssistantOffice["report"]>("/manager/assistant/seen");
+  return data;
+}
+
+export async function checkManagerDeal(body: { kind: "live" | "npc"; target_id: number; fee?: number; wage?: number }): Promise<ManagerDealCheck> {
+  const { data } = await api.post<ManagerDealCheck>("/manager/analytics/deal", body);
   return data;
 }
