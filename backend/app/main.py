@@ -55,8 +55,11 @@ from app.routers import (
     admin_trophies,
     admin_users,
     admin_wheel,
+    admin_anniversary,
+    admin_loyalty,
     admin_fan_battle,
     admin_halloween,
+    anniversary,
     fan_battle,
     halloween,
     announcement,
@@ -80,7 +83,9 @@ from app.routers import (
     free_pack,
     newbie,
     streak_rewards,
+    loyalty,
     comeback_gifts,
+    stars_patron,
     friends,
     games,
     gifts,
@@ -192,7 +197,9 @@ app.include_router(packs.router, prefix=API_PREFIX)
 app.include_router(free_pack.router, prefix=API_PREFIX)
 app.include_router(newbie.router, prefix=API_PREFIX)
 app.include_router(streak_rewards.router, prefix=API_PREFIX)
+app.include_router(loyalty.router, prefix=API_PREFIX)
 app.include_router(comeback_gifts.router, prefix=API_PREFIX)
+app.include_router(stars_patron.router, prefix=API_PREFIX)
 app.include_router(games.router, prefix=API_PREFIX)
 app.include_router(feature_flags.router, prefix=API_PREFIX)
 app.include_router(gifts.router, prefix=API_PREFIX)
@@ -262,6 +269,9 @@ app.include_router(admin_wheel.router, prefix=API_PREFIX)
 app.include_router(admin_halloween.router, prefix=API_PREFIX)
 app.include_router(admin_fan_battle.router, prefix=API_PREFIX)
 app.include_router(fan_battle.router, prefix=API_PREFIX)
+app.include_router(admin_anniversary.router, prefix=API_PREFIX)
+app.include_router(admin_loyalty.router, prefix=API_PREFIX)
+app.include_router(anniversary.router, prefix=API_PREFIX)
 app.include_router(halloween.router, prefix=API_PREFIX)
 app.include_router(admin_games.router, prefix=API_PREFIX)
 app.include_router(admin_career.router, prefix=API_PREFIX)

@@ -140,6 +140,10 @@ Main features:
 - tasks/achievements (a `played:<mode>` metric counts finished games of any mode
   from its own rows on reading the tasks, no hook in the game), referrals,
   leaderboards and profile;
+- благодарность покупателям Stars (`stars_patron_service.py`): по понедельникам топ недели
+  получает трофей «Покровитель недели», подарок и личное письмо (бот + окно в игре,
+  `related_object_type="stars_patron"`), от `stars_praetorian_threshold` ⭐ за всё время — значок и
+  трофей «Преторианец»; неделя закрывается один раз (строка place 0 в `stars_patron_awards`);
 - рекламные ссылки и «Подарок за возвращение»: `t.me/<bot>?startapp=penalty_vans` ведёт в
   игру (`lib/startLink.ts`) и пишет метку в `users.acquisition_source`, итоги —
   `backend/scripts/ad_source_stats.sql`; вернувшийся после `comeback_gift_days` получает

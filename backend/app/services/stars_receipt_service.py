@@ -28,7 +28,7 @@ from app.models.stars_payment_receipt import StarsPaymentReceipt
 from app.models.user import User
 from app.schemas.admin import StarsPaymentReceiptOut
 from app.schemas.stars import StarsInvoiceStatusOut, StarsPaymentDeliverIn
-from app.services import stars_payment_service
+from app.services import stars_patron_service, stars_payment_service
 from app.services.notification_service import notify
 
 settings = get_settings()
@@ -129,6 +129,14 @@ async def deliver_with_receipt(db: AsyncSession, payload: StarsPaymentDeliverIn)
         raise
 
     await _mark_delivered(db, charge_id)
+    # Thanks at the moment it is earned: «Преторианец» at the Stars bar.
+    try:
+        user = await _user_by_telegram_id(db, payload.telegram_user_id)
+        if user is not None:
+            await stars_patron_service.check_praetorian(db, user.id)
+    except Exception:  # noqa: BLE001 — the purchase is delivered either way
+        logger.exception("praetorian check failed for charge %s", charge_id)
+        await db.rollback()
     return result
 
 

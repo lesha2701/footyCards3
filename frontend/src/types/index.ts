@@ -65,6 +65,8 @@ export interface Player {
   collection_name: string | null;
   /** The collection's special frame («Ночь живых Легенд»: "zombie" / "vampire"). */
   collection_skin?: string | null;
+  /** Numbered edition: copies that will ever exist; null = a regular card. */
+  edition_size?: number | null;
   /** «Академия»: set = a path card with this talent. */
   path_talent_code?: string | null;
   /** «Один футболист» key; null = by the display name. */
@@ -3865,6 +3867,7 @@ export interface KontraAbility {
   cooldown: number;
   cd: number;
   ready: boolean;
+  ult?: boolean;
 }
 
 export interface KontraPassive {
@@ -3895,6 +3898,64 @@ export interface KontraSquad {
   leader_aura: string | null;
   options: KontraFighter[];
   size: number;
+  tactic: KontraTacticCode | null;
+  tactics: KontraTactic[];
+  tactic_edge_pct: number;
+  leader_ult: KontraAbility | null;
+}
+
+export type KontraTacticCode = "pressing" | "tiki" | "bus";
+
+export interface KontraTactic {
+  code: KontraTacticCode;
+  name: string;
+  bonus: string;
+  beats: KontraTacticCode;
+  beats_name: string;
+}
+
+export interface KontraLeagueTier {
+  name: string;
+  icon: string;
+  at: number;
+  coins: number;
+}
+
+export interface KontraLeague {
+  index: number;
+  name: string;
+  icon: string;
+  week_best: number;
+  coins: number;
+  next_name: string | null;
+  next_at: number | null;
+  next_coins: number | null;
+  week_ends: string;
+  tiers: KontraLeagueTier[];
+}
+
+export interface KontraLeagueReward {
+  name: string;
+  icon: string;
+  coins: number;
+  best: number;
+}
+
+export interface KontraDefenseItem {
+  battle_id: number;
+  attacker_name: string;
+  attacker_rating: number;
+  result: "win" | "loss";
+  survivors: number;
+  created_at: string;
+  is_new: boolean;
+  can_revenge: boolean;
+}
+
+export interface KontraDefense {
+  items: KontraDefenseItem[];
+  wins: number;
+  losses: number;
 }
 
 export interface KontraUnit {
@@ -3928,6 +3989,12 @@ export interface KontraEvent {
   amount?: number;
   effect?: string;
   winner?: string;
+  pct?: number;
+  passive?: string;
+  /** an ability event: the leader's ultimate */
+  ult?: boolean;
+  /** a hit: the attacker's tactic beats the target's */
+  edge?: boolean;
 }
 
 export interface KontraGear {
@@ -3964,7 +4031,14 @@ export interface KontraBattle {
   gear_drop: KontraGear | null;
   boss_name: string | null;
   boss_tagline: string | null;
+  boss_code: string | null;
   created_at: string;
+  tactic_me: KontraTactic | null;
+  tactic_foe: KontraTactic | null;
+  tactic_edge_pct: number;
+  charge_me: number;
+  charge_foe: number;
+  revenge: boolean;
 }
 
 export interface KontraOffer {
@@ -3974,6 +4048,8 @@ export interface KontraOffer {
   power: number;
   is_bot: boolean;
   cards: KontraCard[];
+  tactic: KontraTactic | null;
+  revenge: boolean;
 }
 
 export interface KontraArena {
@@ -3986,6 +4062,11 @@ export interface KontraArena {
   reward_loss: number;
   rating_win: number;
   rating_loss: number;
+  tactic: KontraTactic | null;
+  tactics: KontraTactic[];
+  tactic_edge_pct: number;
+  league: KontraLeague | null;
+  defense_unread: number;
 }
 
 export interface KontraBoss {
@@ -4014,6 +4095,9 @@ export interface KontraHub {
   boss_name: string;
   boss_attempts_left: number;
   gear_count: number;
+  defense_unread: number;
+  league: KontraLeague | null;
+  league_reward: KontraLeagueReward | null;
 }
 
 export interface KontraGearList {
@@ -4106,6 +4190,8 @@ export interface CardOfferAdminInput {
   per_user_limit: number;
   is_active: boolean;
   sort_order: number;
+  /** Footballers only: `stock` is a numbered edition («№37 из 100»). */
+  numbered?: boolean;
 }
 
 export interface CardOfferAdmin extends Omit<CardOfferAdminInput, "player_id"> {
@@ -4337,6 +4423,113 @@ export interface FanClaimResult {
   cards: UserCard[];
   titles: string[];
   new_balance: number;
+}
+
+// «💯 Нам 100 дней!» (backend/app/schemas/anniversary.py)
+export interface AnniversaryCalendarDay {
+  n: number;
+  status: "claimed" | "today" | "locked";
+  reward: RewardBundle;
+}
+
+export interface AnniversaryTier {
+  pct: number;
+  target: number;
+  reached: boolean;
+  claimed: boolean;
+  reward: RewardBundle;
+}
+
+export interface AnniversaryCommunity {
+  total: number;
+  goal: number;
+  my_games: number;
+  min_games: number;
+  tiers: AnniversaryTier[];
+  claimable: boolean;
+}
+
+export interface AnniversaryState {
+  enabled: boolean;
+  active: boolean;
+  finished: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  claim_until: string | null;
+  teaser_days: number;
+  calendar: AnniversaryCalendarDay[];
+  calendar_claimed: number;
+  calendar_ready: boolean;
+  day_resets_at: string | null;
+  community: AnniversaryCommunity | null;
+  recap_coins: number;
+  recap_claimed: boolean;
+  collection: HalloweenState["collection"];
+  pack_id: number | null;
+}
+
+export interface AnniversaryRecap {
+  days_with_us: number;
+  active_days: number;
+  packs_opened: number;
+  cards: number;
+  unique_players: number;
+  coins_earned: number;
+  trades: number;
+  badges: number;
+  player_number: number;
+  games: number;
+  favourite_mode: string | null;
+  favourite_mode_games: number;
+  best_card_name: string | null;
+  best_card_rating: number | null;
+  best_card_rarity: Rarity | null;
+  best_card_image: string | null;
+  best_card_position: string | null;
+  cards_better_than_pct: number;
+}
+
+export interface AnniversaryClaimResult {
+  title: string;
+  rewards: GrantedRewards;
+  new_balance: number;
+}
+
+// --- Loyalty: «Путь к Центуриону», «Страховка серии», keepsakes (loyalty_service) ---
+
+export interface LoyaltyMilestone {
+  days: number;
+  reached: boolean;
+  /** An exclusive card bound forever (the «Центурион» at 100). */
+  exclusive: boolean;
+  coins: number;
+  card_rarity: Rarity | null;
+}
+
+export interface StreakSave {
+  saved_streak: number;
+  until: string;
+  restored_streak: number;
+  price_stars: number;
+  free_available: boolean;
+}
+
+export interface LoyaltyStatus {
+  enabled: boolean;
+  streak: number;
+  goal: number;
+  milestones: LoyaltyMilestone[];
+  centurion: Player | null;
+  centurion_owned: boolean;
+  streak_save: StreakSave | null;
+}
+
+export type LoyaltyCode = "oldtimer" | "pioneer" | "centurion";
+
+export interface LoyaltyReward {
+  id: number;
+  code: LoyaltyCode;
+  rewards: Partial<GrantedRewards>;
 }
 
 export * from "./magic";

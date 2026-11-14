@@ -36,7 +36,9 @@ from app.models.my_player import MyPlayer, MyPlayerDuel
 from app.models.my_player_extras import MyPlayerEdition, MyPlayerGift, MyPlayerSponsorContract
 from app.models.newbie import NewbieProgress
 from app.models.comeback_gift import ComebackGift
+from app.models.stars_patron import StarsPatronAward
 from app.models.streak_reward import StreakReward
+from app.models.loyalty import LoyaltyReward
 from app.models.player_career import (
     PlayerCareerCup,
     PlayerCareerGoldenBall,
@@ -94,12 +96,13 @@ from app.models.player_tournament import (
 from app.models.player import Player
 from app.models.stratego import StrategoMatch, StrategoQueueEntry
 from app.models.mordoboi import MordoboiMatch, MordoboiQueueEntry
+from app.models.anniversary import AnniversaryClaim, AnniversaryMember
 from app.models.fan_battle import FanBattleLedger, FanBattleMember
 from app.models.halloween import HalloweenLedger, HalloweenWallet
 from app.models.kontra import KontraBattle, KontraGear
 from app.models.magic import MagicRun
 from app.models.weekly_top import WeeklyTopAward, WeeklyTopRun
-from app.models.card_offer import CardOffer, CardOfferPurchase, CardOfferView
+from app.models.card_offer import CardOffer, CardOfferPurchase, CardOfferReservation, CardOfferView
 from app.models.server_error import ServerError
 from app.models.magnate import MagnateMatch, MagnateSeat
 from app.models.task import TaskActivity, TaskChestClaim, TaskDefinition, UserTask
@@ -139,6 +142,8 @@ from app.models.user_stadium_card import UserStadiumCard
 from app.models.club_stadium_card import ClubStadiumCard
 
 __all__ = [
+    "AnniversaryClaim",
+    "AnniversaryMember",
     "ArenaCupRun",
     "FanBattleLedger",
     "FanBattleMember",
@@ -174,6 +179,7 @@ __all__ = [
     "WeeklyTopRun",
     "CardOffer",
     "CardOfferPurchase",
+    "CardOfferReservation",
     "CardOfferView",
     "ServerError",
     "MordoboiQueueEntry",
@@ -330,6 +336,7 @@ __all__ = [
     "MyPlayerDuel",
     "NewbieProgress",
     "StreakReward",
+    "LoyaltyReward",
     "LifestyleItem",
     "UserLifestyleItem",
     "PlayerCareerSeason",

@@ -367,6 +367,13 @@ export interface GameConfig {
   comeback_gift_cooldown_days: number;
   comeback_gift_coins: number;
   comeback_gift_pack_slug: string;
+  stars_patron_enabled: boolean;
+  stars_patron_week_min: number;
+  stars_patron_week_places: number;
+  stars_patron_week_card_rarity: string;
+  stars_patron_week_coins: number;
+  stars_praetorian_threshold: number;
+  stars_praetorian_badge_id: number | null;
   shop_daily_offer_enabled: boolean;
   shop_daily_offer_discount_pct: number;
   shop_daily_offer_pack_id: number | null;
@@ -602,7 +609,7 @@ export interface GameConfig {
   referral_referrer_reward: number;
   referral_active_days: number;
   referral_milestones: (RewardBundleInput & { count: number })[];
-  streak_rewards: (RewardBundleInput & { days: number })[];
+  streak_rewards: (RewardBundleInput & { days: number; player_id?: number | null })[];
   hangman_daily_limit: number;
   hangman_reward_correct: number;
   hangman_max_wrong: number;
@@ -725,6 +732,8 @@ export interface GameConfig {
   kontra_boss_max_rounds: number;
   kontra_boss_week_hp: number;
   kontra_boss_reward_tiers: [number, number][];
+  kontra_leagues: [number, number][];
+  kontra_tactic_edge_pct: number;
   kontra_gear_drop_boss_pct: number;
   kontra_gear_drop_arena_pct: number;
   kontra_chest_coins: number;
@@ -1007,6 +1016,7 @@ export interface CardCollection {
   image_path: string | null;
   reward_coins: number;
   reward_pack_id: number | null;
+  reward_badge_id?: number | null;
 }
 
 export type AdminWheelPrizePool = "regular" | "golden" | "jackpot";

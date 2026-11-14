@@ -26,6 +26,10 @@ class CardCollection(TimestampMixin, Base):
     reward_pack_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("packs.id", ondelete="SET NULL"), nullable=True
     )
+    # A badge granted with the coins when the collection is complete.
+    reward_badge_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("badges.id", ondelete="SET NULL"), nullable=True
+    )
     # Special frame of every card of this collection ("zombie" / "vampire" —
     # the «Ночь живых Легенд»); null = the regular rarity frame.
     card_skin: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)

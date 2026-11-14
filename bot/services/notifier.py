@@ -44,6 +44,7 @@ _MATCH_PATH_PREFIXES = {
 # tournaments have a single hub page, and the lineup reminder carries no
 # related object at all, so these are keyed on the notification type.
 _TYPE_PATHS = {
+    "trophy_granted": "/profile",
     "player_tournament_match": "/player-tournament",
     "player_tournament_results_ready": "/player-tournament",
     "player_tournament_reminder": "/player-tournament",

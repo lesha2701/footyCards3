@@ -106,7 +106,9 @@ function OfferTile({ offer, now }: { offer: CardOffer; now: number }) {
       {/* Every tile keeps the label row (even empty) so the cards line up across the grid. */}
       <div className="flex h-5 min-w-0 items-center gap-1">
         {offer.retired && (
-          <span className="shrink-0 rounded-full bg-amber-400 px-2 py-0.5 text-micro font-black uppercase text-bg-base">Лимитка</span>
+          <span className="shrink-0 rounded-full bg-amber-400 px-2 py-0.5 text-micro font-black uppercase text-bg-base">
+            {offer.player?.edition_size != null ? "Номерная" : "Лимитка"}
+          </span>
         )}
         {offer.title && <span className="min-w-0 truncate text-micro font-semibold text-amber-200">{offer.title}</span>}
       </div>

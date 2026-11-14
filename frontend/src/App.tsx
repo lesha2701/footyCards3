@@ -11,6 +11,7 @@ import ComebackGiftPopup from "@/components/common/ComebackGiftPopup";
 import StreakRewardPopup from "@/components/common/StreakRewardPopup";
 import NewbieWelcome from "@/components/newbie/NewbieWelcome";
 import NewbieGiftPopup from "@/components/newbie/NewbieGiftPopup";
+import StarsPatronLetter from "@/components/common/StarsPatronLetter";
 import NewbieNextPage from "@/pages/NewbieNextPage";
 import { createSession } from "@/api/auth";
 import { joinByInvite } from "@/api/clubs";
@@ -167,6 +168,8 @@ const HalloweenPage = lazy(() => import("@/pages/HalloweenPage"));
 const AdminHalloweenPage = lazy(() => import("@/admin/pages/AdminHalloweenPage"));
 const FanBattlePage = lazy(() => import("@/pages/FanBattlePage"));
 const AdminFanBattlePage = lazy(() => import("@/admin/pages/AdminFanBattlePage"));
+const AnniversaryPage = lazy(() => import("@/pages/AnniversaryPage"));
+const AdminAnniversaryPage = lazy(() => import("@/admin/pages/AdminAnniversaryPage"));
 const UpgradePage = lazy(() => import("@/pages/UpgradePage"));
 const BingoPage = lazy(() => import("@/pages/BingoPage"));
 const RankingPage = lazy(() => import("@/pages/RankingPage"));
@@ -279,6 +282,7 @@ export default function App() {
     {!window.location.pathname.startsWith("/admin") && <StreakRewardPopup />}
     {!window.location.pathname.startsWith("/admin") && <ComebackGiftPopup />}
     {!window.location.pathname.startsWith("/admin") && <NewbieGiftPopup />}
+    {!window.location.pathname.startsWith("/admin") && <StarsPatronLetter />}
     <Routes>
       <Route path="/admin" element={<AdminGuard><AdminLayout /></AdminGuard>}>
         <Route index element={<AdminDashboardPage />} />
@@ -303,6 +307,7 @@ export default function App() {
         <Route path="wheel" element={<AdminWheelPage />} />
         <Route path="halloween" element={<AdminHalloweenPage />} />
         <Route path="fan-battle" element={<AdminFanBattlePage />} />
+        <Route path="anniversary" element={<AdminAnniversaryPage />} />
         <Route path="daily-rewards" element={<AdminDailyRewardsPage />} />
         <Route path="games" element={<AdminGamesPage />} />
         <Route path="economy" element={<AdminEconomyPage />} />
@@ -429,6 +434,7 @@ export default function App() {
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/halloween" element={<HalloweenPage />} />
         <Route path="/fans" element={<FanBattlePage />} />
+        <Route path="/anniversary" element={<AnniversaryPage />} />
         <Route path="/wheel" element={<WheelPage />} />
         <Route path="/club-pass" element={<ClubPassPage />} />
         <Route path="/season" element={<SeasonPassPage />} />

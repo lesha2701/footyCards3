@@ -22,12 +22,22 @@ class KontraAbilityOut(BaseModel):
     cooldown: int
     cd: int = 0
     ready: bool = True
+    # The leader's ultimate: ready when the squad's charge is full.
+    ult: bool = False
 
 
 class KontraPassiveOut(BaseModel):
     code: str
     name: str
     description: str
+
+
+class KontraTacticOut(BaseModel):
+    code: str
+    name: str
+    bonus: str
+    beats: str
+    beats_name: str
 
 
 class KontraFighterOut(BaseModel):
@@ -54,6 +64,10 @@ class KontraSquadOut(BaseModel):
     leader_aura: Optional[str] = None
     options: list[KontraFighterOut]
     size: int
+    tactic: Optional[str] = None
+    tactics: list[KontraTacticOut] = []
+    tactic_edge_pct: int = 0
+    leader_ult: Optional[KontraAbilityOut] = None
 
 
 class KontraSquadSetRequest(BaseModel):
@@ -120,7 +134,15 @@ class KontraBattleOut(BaseModel):
     gear_drop: Optional[KontraGearOut] = None
     boss_name: Optional[str] = None
     boss_tagline: Optional[str] = None
+    boss_code: Optional[str] = None
     created_at: datetime
+    tactic_me: Optional[KontraTacticOut] = None
+    tactic_foe: Optional[KontraTacticOut] = None
+    tactic_edge_pct: int = 0
+    # Ultimate charge of each side, 0..100.
+    charge_me: int = 0
+    charge_foe: int = 0
+    revenge: bool = False
 
 
 class KontraActRequest(BaseModel):
@@ -149,6 +171,58 @@ class KontraOfferOut(BaseModel):
     power: int
     is_bot: bool
     cards: list[KontraCardOut]
+    tactic: Optional[KontraTacticOut] = None
+    revenge: bool = False
+
+
+class KontraLeagueTierOut(BaseModel):
+    name: str
+    icon: str
+    at: int
+    coins: int
+
+
+class KontraLeagueOut(BaseModel):
+    """The weekly arena league, by the best rating of the week."""
+
+    index: int
+    name: str
+    icon: str
+    week_best: int
+    coins: int
+    next_name: Optional[str] = None
+    next_at: Optional[int] = None
+    next_coins: Optional[int] = None
+    week_ends: datetime
+    tiers: list[KontraLeagueTierOut] = []
+
+
+class KontraLeagueRewardOut(BaseModel):
+    name: str
+    icon: str
+    coins: int
+    best: int
+
+
+class KontraDefenseItemOut(BaseModel):
+    battle_id: int
+    attacker_name: str
+    attacker_rating: int
+    result: str  # win | loss — from the defender's side
+    survivors: int
+    created_at: datetime
+    is_new: bool
+    can_revenge: bool
+
+
+class KontraDefenseOut(BaseModel):
+    items: list[KontraDefenseItemOut]
+    wins: int
+    losses: int
+
+
+class KontraTacticRequest(BaseModel):
+    tactic: Optional[str] = None
 
 
 class KontraArenaOut(BaseModel):
@@ -161,6 +235,11 @@ class KontraArenaOut(BaseModel):
     reward_loss: int
     rating_win: int
     rating_loss: int
+    tactic: Optional[KontraTacticOut] = None
+    tactics: list[KontraTacticOut] = []
+    tactic_edge_pct: int = 0
+    league: Optional[KontraLeagueOut] = None
+    defense_unread: int = 0
 
 
 class KontraBossOut(BaseModel):
@@ -189,6 +268,9 @@ class KontraHubOut(BaseModel):
     boss_name: str
     boss_attempts_left: int
     gear_count: int
+    defense_unread: int = 0
+    league: Optional[KontraLeagueOut] = None
+    league_reward: Optional[KontraLeagueRewardOut] = None
 
 
 class KontraGearListOut(BaseModel):

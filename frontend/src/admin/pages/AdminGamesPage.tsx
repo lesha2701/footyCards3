@@ -6,6 +6,7 @@ import AdminCareerRivalries from "@/admin/pages/AdminCareerRivalries";
 import { fetchGameConfig, fetchNewbieFunnel, fetchSuspiciousMatches, fetchSuspiciousMemorySessions, updateGameConfig } from "@/admin/api";
 import AdminMagnateBoardEditor from "@/admin/pages/AdminMagnateBoardEditor";
 import ManagerFinanceFields from "@/admin/components/ManagerFinanceFields";
+import LoyaltySettingsPanel from "@/admin/components/LoyaltySettingsPanel";
 import RewardBundleEditor from "@/admin/components/RewardBundleEditor";
 import { EMPTY_BUNDLE, type GameConfig } from "@/admin/types";
 
@@ -222,6 +223,7 @@ export default function AdminGamesPage() {
       | "bot_daily_digest_enabled"
       | "bot_comeback_enabled"
       | "comeback_gift_enabled"
+      | "stars_patron_enabled"
       | "shop_daily_offer_enabled"
       | "club_league_enabled"
       | "career_enabled"
@@ -976,6 +978,34 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Покровители (Stars)</p>
+        <p className="mb-3 text-sm text-ink-mist">
+          Каждый понедельник лучший покупатель звёзд прошлой недели получает трофей «Покровитель недели», карту и письмо;
+          следующие места — письмо и монеты. За покупки на сумму от порога — значок и трофей «Преторианец».
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {toggle("stars_patron_enabled", "Включено")}
+          {field("stars_patron_week_min", "Мин. ⭐ за неделю")}
+          {field("stars_patron_week_places", "Мест с благодарностью")}
+          {field("stars_patron_week_coins", "Монеты за 2-е и далее")}
+          <label className="block text-sm">
+            <span className="mb-1 block text-ink-mist">Карта за 1-е место</span>
+            <select
+              value={form.stars_patron_week_card_rarity ?? ""}
+              onChange={(e) => setForm({ ...form, stars_patron_week_card_rarity: e.target.value })}
+              className="w-full rounded-xl bg-bg-base px-3 py-2 text-ink-chalk"
+            >
+              <option value="">без карты</option>
+              <option value="epic">эпическая</option>
+              <option value="legendary">легендарная</option>
+              <option value="diamond">алмазная</option>
+            </select>
+          </label>
+          {field("stars_praetorian_threshold", "«Преторианец» от ⭐")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-1 font-display text-base font-bold">Подарок за возвращение</p>
         <p className="mb-3 text-sm text-ink-mist">
           Игрок, которого не было дольше порога, получает подарок при входе. Бот заранее пишет о нём вечером.
@@ -1227,10 +1257,23 @@ export default function AdminGamesPage() {
                 value={m}
                 onChange={(next) => {
                   const rows = [...form.streak_rewards];
-                  rows[i] = { ...next, days: m.days };
+                  rows[i] = { ...m, ...next, days: m.days };
                   setForm({ ...form, streak_rewards: rows });
                 }}
               />
+              <label className="mt-1 flex items-center gap-2 text-xs text-slate-300">
+                ID эксклюзивного футболиста (навсегда у игрока, не продаётся)
+                <input
+                  type="number"
+                  value={m.player_id ?? ""}
+                  onChange={(e) => {
+                    const rows = [...form.streak_rewards];
+                    rows[i] = { ...m, player_id: e.target.value ? Number(e.target.value) : null };
+                    setForm({ ...form, streak_rewards: rows });
+                  }}
+                  className="w-24 rounded-lg bg-bg-surface px-2 py-1 outline-none"
+                />
+              </label>
             </div>
           ))}
           <button
@@ -1241,6 +1284,8 @@ export default function AdminGamesPage() {
           </button>
         </div>
       </section>
+
+      <LoyaltySettingsPanel />
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Memory Sequence</p>
@@ -1605,7 +1650,23 @@ export default function AdminGamesPage() {
           {field("kontra_gear_drop_arena_pct", "Комплект за победу на арене, %")}
           {field("kontra_chest_coins", "Сундук комплекта, монет (0 — нет)")}
           {field("kontra_chest_stars", "Сундук комплекта, ⭐ (0 — нет)")}
+          {field("kontra_tactic_edge_pct", "Тактика: % урона, если твоя бьёт тактику соперника")}
         </div>
+        <label className="mt-3 flex flex-col gap-1">
+          <span className="text-xs text-slate-400">
+            Лиги недели (Бронза, Серебро, Золото, Платина, Легенда) — строки «лучший рейтинг недели монеты», до 5 строк
+          </span>
+          <textarea
+            rows={5}
+            value={(form.kontra_leagues ?? []).map(([r, c]) => `${r} ${c}`).join("\n")}
+            onChange={(e) => setForm({
+              ...form,
+              kontra_leagues: e.target.value.split("\n").map((l) => l.trim().split(/\s+/).map(Number))
+                .filter((p) => p.length === 2 && p.every(Number.isFinite)).slice(0, 5) as [number, number][],
+            })}
+            className="rounded-lg bg-bg-surface px-3 py-2 font-mono text-xs outline-none"
+          />
+        </label>
         <label className="mt-3 flex flex-col gap-1">
           <span className="text-xs text-slate-400">Босс: награда за урон попытки — строки «урон монеты»</span>
           <textarea

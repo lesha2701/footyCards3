@@ -2,14 +2,18 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { autoKontraSquad, fetchKontraHub, fetchKontraSquad, saveKontraSquad } from "@/api/kontra";
+import { autoKontraSquad, claimKontraLeague, fetchKontraHub, fetchKontraSquad, saveKontraSquad, setKontraTactic } from "@/api/kontra";
+import { fetchMyProfile } from "@/api/profile";
+import { IconCoin } from "@/components/icons";
+import TacticPicker from "@/components/kontra/TacticPicker";
+import { useAuthStore } from "@/store/authStore";
 import { Skeleton } from "@/components/common/Skeleton";
 import FighterCard from "@/components/kontra/FighterCard";
 import { ROLE_FILTERS, TIER_LABELS } from "@/components/kontra/kontraMeta";
 import GameHero from "@/components/common/GameHero";
 import { formatGameError } from "@/lib/errors";
-import { hapticSelection } from "@/lib/telegram";
-import type { KontraFighter, KontraSquad } from "@/types";
+import { hapticNotify, hapticSelection } from "@/lib/telegram";
+import type { KontraFighter, KontraSquad, KontraTacticCode } from "@/types";
 
 /** «Контратака»: the squad (also the arena defence) as a stage of five
  *  with the leader in the middle, the collection below, and the two modes. */
@@ -32,6 +36,20 @@ export default function KontraPage() {
     onError: (err) => setError(formatGameError(err, "Не удалось сохранить отряд")),
   });
   const auto = useMutation({ mutationFn: autoKontraSquad, onSuccess: apply });
+  const tactic = useMutation({
+    mutationFn: (code: KontraTacticCode | null) => setKontraTactic(code),
+    onSuccess: (sq) => { apply(sq); queryClient.invalidateQueries({ queryKey: ["kontra-arena"] }); },
+  });
+  const updateBalance = useAuthStore((s) => s.updateBalance);
+  const claim = useMutation({
+    mutationFn: claimKontraLeague,
+    onSuccess: (h) => {
+      hapticNotify("success");
+      queryClient.setQueryData(["kontra-hub"], h);
+      fetchMyProfile().then((p) => updateBalance(p.balance)).catch(() => undefined);
+    },
+    onError: (err) => setError(formatGameError(err, "Не удалось забрать награду")),
+  });
 
   if (!squad) {
     return (
@@ -71,6 +89,19 @@ export default function KontraPage() {
         <span className="rounded-full bg-black/35 px-2.5 py-1 font-mono text-sm font-bold text-ink-chalk">⚡ {squad.power.toLocaleString("ru-RU")}</span>
       </GameHero>
       {hub && !hub.enabled && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">Режим сейчас выключен.</p>}
+      {hub?.league_reward && (
+        <section className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-amber-500/25 to-fuchsia-500/20 p-3 ring-1 ring-amber-300/50">
+          <span className="text-3xl">{hub.league_reward.icon}</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-black text-ink-chalk">Итоги недели: лига «{hub.league_reward.name}»</p>
+            <p className="text-micro text-ink-mist">Лучший рейтинг недели — {hub.league_reward.best}</p>
+          </div>
+          <button onClick={() => claim.mutate()} disabled={claim.isPending}
+            className="flex shrink-0 items-center gap-1 rounded-xl bg-amber-400 px-3 py-2 text-xs font-black text-bg-base active:scale-95 disabled:opacity-50">
+            +{hub.league_reward.coins} <IconCoin size={12} />
+          </button>
+        </section>
+      )}
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
 
       <section className="rounded-3xl bg-gradient-to-b from-emerald-900/70 to-emerald-950 px-2 pb-3 pt-5 ring-1 ring-emerald-700/40">
@@ -94,6 +125,11 @@ export default function KontraPage() {
         <div className="mt-2 flex flex-wrap justify-center gap-1">
           {squad.leader_aura && <span className="rounded-full bg-white/10 px-2 py-0.5 text-micro text-ink-chalk">👑 {squad.leader_aura}</span>}
           {squad.chemistry_label && <span className="rounded-full bg-white/10 px-2 py-0.5 text-micro text-ink-chalk">Химия {squad.chemistry_label}: +{squad.chemistry_pct}% атаки</span>}
+          {squad.leader_ult && (
+            <span className="rounded-full bg-gradient-to-r from-amber-400/30 to-orange-500/30 px-2 py-0.5 text-micro text-amber-100" title={squad.leader_ult.description}>
+              🔥 Суперудар лидера: {squad.leader_ult.name}
+            </span>
+          )}
         </div>
       </section>
 
@@ -141,10 +177,13 @@ export default function KontraPage() {
           <button
             onClick={() => (hub?.active_battle_id ? navigate(`/play/kontra/battles/${hub.active_battle_id}`) : navigate("/play/kontra/arena"))}
             disabled={hub ? !hub.enabled : true}
-            className="rounded-2xl bg-amber-400 px-3 py-3 text-left text-bg-base active:scale-95 disabled:opacity-50"
+            className="relative rounded-2xl bg-amber-400 px-3 py-3 text-left text-bg-base active:scale-95 disabled:opacity-50"
           >
             <span className="block font-display text-base font-black">{hub?.active_battle_id ? "Доиграть бой" : "Арена"}</span>
-            <span className="block text-micro font-semibold">Рейтинг {hub?.rating ?? "—"}</span>
+            <span className="block text-micro font-semibold">{hub?.league ? `${hub.league.icon} ${hub.league.name} · ` : ""}рейтинг {hub?.rating ?? "—"}</span>
+            {hub?.defense_unread ? (
+              <span className="absolute -right-1 -top-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-black text-white">🛡 {hub.defense_unread}</span>
+            ) : null}
           </button>
           <button
             onClick={() => navigate("/play/kontra/boss")}
@@ -161,6 +200,10 @@ export default function KontraPage() {
             🧤 Тактические комплекты{hub?.gear_count ? ` · ${hub.gear_count}` : ""}
           </button>
         </div>
+      )}
+
+      {!focus && (
+        <TacticPicker tactics={squad.tactics} current={squad.tactic} edge={squad.tactic_edge_pct} busy={tactic.isPending} onPick={(code) => tactic.mutate(code)} />
       )}
 
       <div className="flex flex-wrap gap-1.5">

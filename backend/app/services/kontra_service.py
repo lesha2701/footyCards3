@@ -38,7 +38,13 @@ from app.schemas.kontra import (
     KontraFighterOut,
     KontraGearListOut,
     KontraGearOut,
+    KontraDefenseItemOut,
+    KontraDefenseOut,
     KontraHubOut,
+    KontraLeagueOut,
+    KontraLeagueRewardOut,
+    KontraLeagueTierOut,
+    KontraTacticOut,
     KontraOfferOut,
     KontraPassiveOut,
     KontraSquadOut,
@@ -245,7 +251,8 @@ def _chemistry(cards: list) -> tuple[int, Optional[str]]:
     return pct, (f"{club} ×{n}" if pct else None)
 
 
-def _build_side(side: str, prefix: str, cards: list, leader: Optional[int], gear: dict[int, list]) -> list[dict]:
+def _build_side(side: str, prefix: str, cards: list, leader: Optional[int], gear: dict[int, list],
+                tactic: Optional[str] = None) -> list[dict]:
     units = [_unit(f"{prefix}{i}", side, c, gear.get(c.id, [])) for i, c in enumerate(cards, 1)]
     leader_uid = next((u["id"] for u, c in zip(units, cards) if c.id == leader), None)
     chem, _ = _chemistry(cards)
@@ -253,7 +260,25 @@ def _build_side(side: str, prefix: str, cards: list, leader: Optional[int], gear
     if any("captain" in u["sets"] for u in units):
         for u in units:
             u["atk"] = u["atk"] * 104 // 100
+    engine.apply_tactic(units, tactic)
     return units
+
+
+def _saved_tactic(user: User) -> Optional[str]:
+    tactic = (user.kontra_squad or {}).get("tactic")
+    return tactic if tactic in engine.TACTICS else None
+
+
+def _tactic_out(code: Optional[str]) -> Optional[KontraTacticOut]:
+    if code not in engine.TACTICS:
+        return None
+    name, bonus, _, _, beaten = engine.TACTICS[code]
+    return KontraTacticOut(code=code, name=name, bonus=bonus, beats=beaten, beats_name=engine.TACTICS[beaten][0])
+
+
+def _ult_out(role: str) -> Optional[KontraAbilityOut]:
+    code = f"ult_{role}"
+    return _abilities_out([code])[0] if code in engine.ABILITIES else None
 
 
 def _power(units: list[dict]) -> int:
@@ -276,9 +301,11 @@ def _options(cards: list, squad: list) -> list:
 
 
 async def get_squad(db: AsyncSession, user: User) -> KontraSquadOut:
+    config = await get_config(db)
     squad, leader, cards = await _squad_cards(db, user)
     gear = await _gear_by_card(db, user.id)
-    units = _build_side("me", "m", squad, leader, gear)
+    tactic = _saved_tactic(user)
+    units = _build_side("me", "m", squad, leader, gear, tactic)
     chem, chem_label = _chemistry(squad)
     leader_card = next((c for c in squad if c.id == leader), None)
     leader_role = engine.ROLE_BY_POSITION.get(_position(leader_card), "midfielder") if leader_card else None
@@ -286,7 +313,9 @@ async def get_squad(db: AsyncSession, user: User) -> KontraSquadOut:
         fighters=[_fighter_out(c, gear.get(c.id, [])) for c in squad], leader_id=leader, power=_power(units),
         chemistry_pct=chem, chemistry_label=chem_label, leader_aura=LEADER_AURA.get(leader_role) if leader_role else None,
         options=[_fighter_out(c, gear.get(c.id, [])) for c in _options(cards, squad)],
-        size=SQUAD_SIZE,
+        size=SQUAD_SIZE, tactic=tactic, tactics=[_tactic_out(code) for code in engine.TACTICS],
+        tactic_edge_pct=config.kontra_tactic_edge_pct,
+        leader_ult=_ult_out(leader_role) if leader_role else None,
     )
 
 
@@ -300,7 +329,7 @@ async def set_squad(db: AsyncSession, user: User, card_ids: list[int], leader: i
         raise ConflictError("Один и тот же игрок не может стоять в отряде дважды")
     if leader not in card_ids:
         raise ConflictError("Лидер должен быть в отряде")
-    user.kontra_squad = {"cards": list(card_ids), "leader": leader}
+    user.kontra_squad = {"cards": list(card_ids), "leader": leader, "tactic": _saved_tactic(user)}
     flag_modified(user, "kontra_squad")
     db.add(user)
     await db.commit()
@@ -308,7 +337,20 @@ async def set_squad(db: AsyncSession, user: User, card_ids: list[int], leader: i
 
 
 async def auto_squad(db: AsyncSession, user: User) -> KontraSquadOut:
-    user.kontra_squad = None
+    tactic = _saved_tactic(user)
+    user.kontra_squad = {"tactic": tactic} if tactic else None
+    flag_modified(user, "kontra_squad")
+    db.add(user)
+    await db.commit()
+    return await get_squad(db, user)
+
+
+async def set_tactic(db: AsyncSession, user: User, tactic: Optional[str]) -> KontraSquadOut:
+    """The squad's tactic — for attacks and for the arena defence alike."""
+    if tactic is not None and tactic not in engine.TACTICS:
+        raise ConflictError("Нет такой тактики")
+    user.kontra_squad = {**(user.kontra_squad or {}), "tactic": tactic}
+    flag_modified(user, "kontra_squad")
     db.add(user)
     await db.commit()
     return await get_squad(db, user)
@@ -362,11 +404,188 @@ async def get_hub(db: AsyncSession, user: User) -> KontraHubOut:
         select(UserCard.id).where(UserCard.owner_id == user.id).limit(1)
     )).first() is not None
     gear_count = (await db.execute(select(func.count(KontraGear.id)).where(KontraGear.user_id == user.id))).scalar_one()
+    user = await _roll_week(db, user, config)
     return KontraHubOut(
         enabled=config.kontra_enabled, squad_ready=squad_ready, rating=user.kontra_rating,
         active_battle_id=await _active_battle(db, user.id), boss_name=_current_boss(config, local_today())["name"],
         boss_attempts_left=_boss_attempts_left(user, config), gear_count=gear_count,
+        defense_unread=await _defense_unread(db, user), league=_league_out(user, config),
+        league_reward=_league_reward_out(user),
     )
+
+
+# ---------------------------------------------------------------------------
+# Weekly leagues: the best arena rating of the week sets the league; the
+# league's coins for a finished week wait in users.kontra_league_reward.
+# ---------------------------------------------------------------------------
+
+LEAGUE_NAMES = ("Бронза", "Серебро", "Золото", "Платина", "Легенда")
+LEAGUE_ICONS = ("🥉", "🥈", "🥇", "💠", "👑")
+
+
+def _leagues(config: GameConfig) -> list[tuple[int, int]]:
+    rows = sorted((int(t), int(c)) for t, c in (config.kontra_leagues or [[0, 0]]))
+    return rows[: len(LEAGUE_NAMES)]
+
+
+def league_index(rating: int, config: GameConfig) -> int:
+    index = 0
+    for i, (threshold, _) in enumerate(_leagues(config)):
+        if rating >= threshold:
+            index = i
+    return index
+
+
+def _league_out(user: User, config: GameConfig) -> KontraLeagueOut:
+    week = catalog.week_start(local_today())
+    best = user.kontra_week_best if user.kontra_week == week else 0
+    leagues = _leagues(config)
+    i = league_index(best, config)
+    nxt = leagues[i + 1] if i + 1 < len(leagues) else None
+    return KontraLeagueOut(
+        index=i, name=LEAGUE_NAMES[i], icon=LEAGUE_ICONS[i], week_best=best, coins=leagues[i][1],
+        next_name=LEAGUE_NAMES[i + 1] if nxt else None, next_at=nxt[0] if nxt else None, next_coins=nxt[1] if nxt else None,
+        week_ends=datetime.combine(week + timedelta(days=7), datetime.min.time(), tzinfo=timezone.utc),
+        tiers=[KontraLeagueTierOut(name=LEAGUE_NAMES[k], icon=LEAGUE_ICONS[k], at=t, coins=c) for k, (t, c) in enumerate(leagues)],
+    )
+
+
+def _league_reward_out(user: User) -> Optional[KontraLeagueRewardOut]:
+    r = user.kontra_league_reward
+    if not r:
+        return None
+    i = min(int(r.get("league", 0)), len(LEAGUE_NAMES) - 1)
+    return KontraLeagueRewardOut(name=LEAGUE_NAMES[i], icon=LEAGUE_ICONS[i], coins=int(r.get("coins", 0)),
+                                 best=int(r.get("best", 0)))
+
+
+def _bank_week(user: User, config: GameConfig) -> bool:
+    """A locked user whose stored week is over: the finished week's league
+    reward is put aside to claim (one at a time), the week's best starts
+    over. Returns whether anything changed."""
+    week = catalog.week_start(local_today())
+    if user.kontra_week == week:
+        return False
+    if user.kontra_week is not None and user.kontra_week_best > 0 and not user.kontra_league_reward:
+        i = league_index(user.kontra_week_best, config)
+        coins = _leagues(config)[i][1]
+        if coins > 0:
+            user.kontra_league_reward = {"week": user.kontra_week.isoformat(), "league": i, "coins": coins,
+                                         "best": user.kontra_week_best}
+    user.kontra_week = week
+    user.kontra_week_best = 0
+    return True
+
+
+async def _roll_week(db: AsyncSession, user: User, config: GameConfig) -> User:
+    """On the first visit of a new week, banks the last one — under the user
+    lock, so it happens once."""
+    if user.kontra_week == catalog.week_start(local_today()):
+        return user
+    locked = await lock_user_for_update(db, user.id)
+    if _bank_week(locked, config):
+        db.add(locked)
+        await db.commit()
+        await db.refresh(locked)
+    return locked
+
+
+async def claim_league_reward(db: AsyncSession, user: User) -> KontraHubOut:
+    locked = await lock_user_for_update(db, user.id)
+    reward = locked.kontra_league_reward
+    if not reward:
+        raise ConflictError("Награды за лигу нет")
+    coins = int(reward.get("coins", 0))
+    locked.kontra_league_reward = None
+    if coins > 0 and not locked.game_rewards_blocked:
+        i = min(int(reward.get("league", 0)), len(LEAGUE_NAMES) - 1)
+        await credit_coins(db, locked, coins, TransactionType.kontra_reward,
+                           f"«Контратака»: лига недели «{LEAGUE_NAMES[i]}»", "kontra_league", None)
+    db.add(locked)
+    await db.commit()
+    await db.refresh(locked)
+    return await get_hub(db, locked)
+
+
+# ---------------------------------------------------------------------------
+# Defence log and revenge
+# ---------------------------------------------------------------------------
+
+DEFENSE_DAYS = 7
+
+
+async def _defense_unread(db: AsyncSession, user: User) -> int:
+    since = user.kontra_defense_seen_at or datetime.now(timezone.utc) - timedelta(days=DEFENSE_DAYS)
+    return int(await db.scalar(
+        select(func.count(KontraBattle.id)).where(
+            KontraBattle.opponent_user_id == user.id, KontraBattle.mode == "arena",
+            KontraBattle.status == "finished", KontraBattle.resolved_at > since,
+        )
+    ) or 0)
+
+
+async def defense_log(db: AsyncSession, user: User, limit: int = 20) -> KontraDefenseOut:
+    """Who attacked your squad lately, from your side: the attacker's win is
+    your loss (revenge once per loss)."""
+    since = datetime.now(timezone.utc) - timedelta(days=DEFENSE_DAYS)
+    rows = (await db.execute(
+        select(KontraBattle, User).join(User, User.id == KontraBattle.user_id)
+        .where(KontraBattle.opponent_user_id == user.id, KontraBattle.mode == "arena",
+               KontraBattle.status == "finished", KontraBattle.resolved_at >= since)
+        .order_by(KontraBattle.resolved_at.desc()).limit(limit)
+    )).all()
+    seen = user.kontra_defense_seen_at
+    items = []
+    for battle, attacker in rows:
+        state = battle.server_state or {}
+        lost = battle.result == "win"
+        alive = sum(1 for u in state.get("units", []) if u.get("side") == "foe" and u.get("alive"))
+        items.append(KontraDefenseItemOut(
+            battle_id=battle.id, attacker_name=attacker.full_display_name(), attacker_rating=attacker.kontra_rating,
+            result="loss" if lost else "win", survivors=alive, created_at=battle.resolved_at or battle.created_at,
+            is_new=seen is None or ensure_aware(battle.resolved_at or battle.created_at) > ensure_aware(seen),
+            can_revenge=lost and not state.get("revenged") and not attacker.is_banned,
+        ))
+    wins = sum(1 for i in items if i.result == "win")
+    return KontraDefenseOut(items=items, wins=wins, losses=len(items) - wins)
+
+
+async def mark_defense_seen(db: AsyncSession, user: User) -> None:
+    locked = await lock_user_for_update(db, user.id)
+    locked.kontra_defense_seen_at = datetime.now(timezone.utc)
+    db.add(locked)
+    await db.commit()
+
+
+async def take_revenge(db: AsyncSession, user: User, battle_id: int) -> KontraArenaOut:
+    """Whoever beat your defence goes to the top of your arena list, once
+    per defeat; a revenge win gives more rating (kontra_service._finish)."""
+    source = (await db.execute(
+        select(KontraBattle).where(KontraBattle.id == battle_id).with_for_update().execution_options(populate_existing=True)
+    )).scalar_one_or_none()
+    if source is None or source.opponent_user_id != user.id or source.mode != "arena" or source.status != "finished":
+        raise NotFoundError("Бой не найден")
+    state = dict(source.server_state or {})
+    if source.result != "win" or state.get("revenged"):
+        raise ConflictError("Реванш за этот бой уже недоступен")
+    attacker = await db.get(User, source.user_id)
+    if attacker is None or attacker.is_banned:
+        raise ConflictError("Этот игрок больше не играет")
+    locked = await lock_user_for_update(db, user.id)
+    offers = [o for o in (locked.kontra_arena_offers or []) if not o.get("revenge") and o.get("user_id") != attacker.id]
+    if not offers:
+        offers = await _make_offers(db, locked)
+    revenge = {"kind": "user", "user_id": attacker.id, "name": attacker.full_display_name(),
+               "rating": attacker.kontra_rating, "revenge": True}
+    locked.kontra_arena_offers = [revenge, *[o for o in offers if o.get("user_id") != attacker.id][:2]]
+    flag_modified(locked, "kontra_arena_offers")
+    db.add(locked)
+    state["revenged"] = True
+    source.server_state = state
+    flag_modified(source, "server_state")
+    db.add(source)
+    await db.commit()
+    return await get_arena(db, locked)
 
 
 async def _bot_offer(db: AsyncSession, user: User, power_rating: int, r: random.Random) -> dict:
@@ -378,7 +597,7 @@ async def _bot_offer(db: AsyncSession, user: User, power_rating: int, r: random.
         rows = (await db.execute(select(Player.id).where(Player.is_active.is_(True)).order_by(Player.id))).scalars().all()
     ids = r.sample(list(rows), min(SQUAD_SIZE, len(rows)))
     return {"kind": "bot", "name": r.choice(BOT_NAMES), "rating": max(0, user.kontra_rating + r.randint(-60, 60)),
-            "player_ids": ids}
+            "player_ids": ids, "tactic": r.choice(list(engine.TACTICS))}
 
 
 async def _make_offers(db: AsyncSession, user: User) -> list[dict]:
@@ -396,25 +615,27 @@ async def _make_offers(db: AsyncSession, user: User) -> list[dict]:
     return offers
 
 
-async def _offer_cards(db: AsyncSession, offer: dict) -> tuple[list, Optional[int], dict]:
-    """(cards, leader, gear by card) of an offer's defence squad."""
+async def _offer_cards(db: AsyncSession, offer: dict) -> tuple[list, Optional[int], dict, Optional[str]]:
+    """(cards, leader, gear by card, tactic) of an offer's defence squad."""
     if offer["kind"] == "user":
         rival = await db.get(User, offer["user_id"])
         if rival is None:
-            return [], None, {}
+            return [], None, {}, None
         squad, leader, _ = await _squad_cards(db, rival)
-        return squad, leader, await _gear_by_card(db, rival.id)
+        return squad, leader, await _gear_by_card(db, rival.id), _saved_tactic(rival)
     rows = (await db.execute(select(Player).where(Player.id.in_(offer["player_ids"])))).scalars().all()
     by_id = {p.id: p for p in rows}
     from types import SimpleNamespace
 
     cards = [SimpleNamespace(id=-(pid), player_id=pid, player=by_id[pid], is_my_player=False) for pid in offer["player_ids"] if pid in by_id]
     cards = _best_copies(cards)
-    return cards, (cards[0].id if cards else None), {}
+    tactic = offer.get("tactic")
+    return cards, (cards[0].id if cards else None), {}, (tactic if tactic in engine.TACTICS else None)
 
 
 async def get_arena(db: AsyncSession, user: User, refresh: bool = False) -> KontraArenaOut:
     config = await get_config(db)
+    user = await _roll_week(db, user, config)
     if refresh or not user.kontra_arena_offers:
         user.kontra_arena_offers = await _make_offers(db, user)
         flag_modified(user, "kontra_arena_offers")
@@ -422,11 +643,11 @@ async def get_arena(db: AsyncSession, user: User, refresh: bool = False) -> Kont
         await db.commit()
     offers = []
     for i, offer in enumerate(user.kontra_arena_offers or []):
-        cards, leader, gear = await _offer_cards(db, offer)
-        units = _build_side("foe", "e", cards, leader, gear)
+        cards, leader, gear, tactic = await _offer_cards(db, offer)
+        units = _build_side("foe", "e", cards, leader, gear, tactic)
         offers.append(KontraOfferOut(
             index=i, name=offer["name"], rating=offer["rating"], power=_power(units), is_bot=offer["kind"] == "bot",
-            cards=[_card_out(c) for c in cards],
+            cards=[_card_out(c) for c in cards], tactic=_tactic_out(tactic), revenge=bool(offer.get("revenge")),
         ))
     _ensure_daily_reset(user)
     ranking = await ranking_service.get_ranking(db, RankingMetric.kontra_rating, user)
@@ -435,6 +656,9 @@ async def get_arena(db: AsyncSession, user: User, refresh: bool = False) -> Kont
         rewarded_today=user.kontra_rewarded_attempts_today, daily_limit=config.kontra_daily_limit,
         reward_win=config.kontra_arena_reward_win, reward_loss=config.kontra_arena_reward_loss,
         rating_win=config.kontra_rating_win, rating_loss=config.kontra_rating_loss,
+        tactic=_tactic_out(_saved_tactic(user)), tactics=[_tactic_out(code) for code in engine.TACTICS],
+        tactic_edge_pct=config.kontra_tactic_edge_pct, league=_league_out(user, config),
+        defense_unread=await _defense_unread(db, user),
     )
 
 
@@ -456,14 +680,18 @@ async def start_arena(db: AsyncSession, user: User, offer_index: int, manual: bo
     if not squad:
         raise ConflictError("Для «Контратаки» нужна хотя бы одна карточка")
     offer = offers[offer_index]
-    foe_cards, foe_leader, foe_gear = await _offer_cards(db, offer)
+    foe_cards, foe_leader, foe_gear, foe_tactic = await _offer_cards(db, offer)
     if not foe_cards:
         raise ConflictError("Этот соперник больше недоступен — обнови список")
     locked.kontra_hourly_attempts += 1
-    me = _build_side("me", "m", squad, leader, await _gear_by_card(db, locked.id))
-    foe = _build_side("foe", "e", foe_cards, foe_leader, foe_gear)
+    my_tactic = _saved_tactic(locked)
+    me = _build_side("me", "m", squad, leader, await _gear_by_card(db, locked.id), my_tactic)
+    foe = _build_side("foe", "e", foe_cards, foe_leader, foe_gear, foe_tactic)
     state = engine.new_battle(secrets.token_hex(8), me, foe, mode="arena",
-                              max_rounds=config.kontra_arena_max_rounds, manual=manual)
+                              max_rounds=config.kontra_arena_max_rounds, manual=manual,
+                              tactics={"me": my_tactic, "foe": foe_tactic}, edge=config.kontra_tactic_edge_pct)
+    if offer.get("revenge"):
+        state["revenge"] = True
     # The offer is used up: a fresh list next time (no re-rolling one fight).
     locked.kontra_arena_offers = None
     db.add(locked)
@@ -558,9 +786,10 @@ async def start_boss(db: AsyncSession, user: User, manual: bool) -> KontraBattle
     atk = info["atk"] * (100 + 15 * (phase - 1)) // 100
     boss = engine.make_boss("boss", name=info["name"], max_hp=config.kontra_boss_week_hp, atk=atk,
                             defense=info["def"], spd=info["spd"], abilities=info["abilities"])
-    me = _build_side("me", "m", squad, leader, await _gear_by_card(db, locked.id))
+    my_tactic = _saved_tactic(locked)
+    me = _build_side("me", "m", squad, leader, await _gear_by_card(db, locked.id), my_tactic)
     state = engine.new_battle(secrets.token_hex(8), me, [boss], mode="boss",
-                              max_rounds=config.kontra_boss_max_rounds, manual=manual)
+                              max_rounds=config.kontra_boss_max_rounds, manual=manual, tactics={"me": my_tactic})
     state["boss"] = {"code": info["code"], "name": info["name"], "tagline": info["tagline"], "phase": phase}
     battle = KontraBattle(user_id=locked.id, mode="boss", opponent_name=info["name"], boss_week=week, server_state=state)
     db.add(battle)
@@ -699,10 +928,15 @@ async def _finish(db: AsyncSession, battle: KontraBattle, state: dict, config: G
         delta = config.kontra_rating_win if won else -config.kontra_rating_loss
         if battle.opponent_user_id is None:
             delta = anti_bot_service.bot_win_delta(delta, config)
+        elif won and state.get("revenge"):
+            delta = delta * 3 // 2  # a revenge win counts half as much again
         if not anti_bot_service.take_ranked_slot(user, config, "kontra"):
             delta = 0  # daily ranked limit / resting (anti_bot_service)
         user.kontra_rating = max(0, user.kontra_rating + delta)
         battle.rating_delta = delta
+        _bank_week(user, config)
+        if delta:
+            user.kontra_week_best = max(user.kontra_week_best, user.kontra_rating)
         _ensure_daily_reset(user)
         reward = 0
         if not state.get("forfeit") and not user.game_rewards_blocked and user.kontra_rewarded_attempts_today < config.kontra_daily_limit:
@@ -730,15 +964,20 @@ def _gear_out(g: KontraGear) -> KontraGearOut:
     )
 
 
-def _unit_out(u: dict) -> KontraUnitOut:
+def _unit_out(u: dict, state: dict) -> KontraUnitOut:
+    full = engine.charge(state, u["side"]) >= engine.ULT_FULL
+    abilities = _abilities_out([a["code"] for a in u["abilities"]], {a["code"]: a["cd"] for a in u["abilities"]})
+    for a in abilities:
+        if engine.is_ult(a.code):
+            a.ult = True
+            a.ready = a.ready and full
     return KontraUnitOut(
         id=u["id"], side=u["side"], name=u["name"], card=KontraCardOut(**u["card"]) if u.get("card") else None,
         role=u["role"], tier=u["tier"], hp=u["hp"], max_hp=u["max_hp"],
         meter_pct=max(0, min(100, u["meter"] * 100 // engine.TURN_METER)), alive=u["alive"], leader=bool(u.get("leader")),
         effects=[KontraEffectOut(code=e["code"], label=engine.EFFECT_LABELS.get(e["code"], e["code"]), turns=e["turns"])
                  for e in u["effects"]],
-        abilities=_abilities_out([a["code"] for a in u["abilities"]], {a["code"]: a["cd"] for a in u["abilities"]}),
-        passive=_passive_out(u.get("passive")),
+        abilities=abilities, passive=_passive_out(u.get("passive")),
     )
 
 
@@ -755,11 +994,16 @@ async def _hydrate(db: AsyncSession, battle: KontraBattle, events: list[dict]) -
         id=battle.id, version=battle.version, mode=battle.mode, status=battle.status, result=battle.result,
         opponent_name=battle.opponent_name, manual=bool(state.get("manual")), auto=bool(state.get("auto")),
         turn_of=turn_of, can_act=can_act, round=state.get("round", 0), max_rounds=state.get("max_rounds", 0),
-        units=[_unit_out(u) for u in state.get("units", [])], events=events,
+        units=[_unit_out(u, state) for u in state.get("units", [])], events=events,
         damage=battle.damage if battle.status == "finished" else state.get("damage_to_foe", 0),
         reward_coins=battle.reward_coins, rating_delta=battle.rating_delta,
         gear_drop=_gear_out(drop) if drop else None, boss_name=boss.get("name"), boss_tagline=boss.get("tagline"),
         created_at=battle.created_at,
+        tactic_me=_tactic_out((state.get("tactics") or {}).get("me")),
+        tactic_foe=_tactic_out((state.get("tactics") or {}).get("foe")),
+        tactic_edge_pct=int(state.get("edge") or 0),
+        charge_me=engine.charge(state, "me"), charge_foe=engine.charge(state, "foe"),
+        revenge=bool(state.get("revenge")), boss_code=boss.get("code"),
     )
 
 

@@ -406,6 +406,17 @@ class GameConfig(TimestampMixin, Base):
     comeback_gift_cooldown_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     comeback_gift_coins: Mapped[int] = mapped_column(Integer, default=3000, nullable=False)
     comeback_gift_pack_slug: Mapped[str] = mapped_column(String, default="elite", nullable=False)
+    # Thanks to Stars buyers (stars_patron_service): «Покровитель недели» —
+    # the previous week's top buyers (at least week_min Stars): #1 gets the
+    # trophy and a card of week_card_rarity, places 2..week_places get coins;
+    # «Преторианец» — the badge + trophy at praetorian_threshold Stars in all.
+    stars_patron_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    stars_patron_week_min: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    stars_patron_week_places: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    stars_patron_week_card_rarity: Mapped[str] = mapped_column(String(16), default="legendary", nullable=False)
+    stars_patron_week_coins: Mapped[int] = mapped_column(Integer, default=5000, nullable=False)
+    stars_praetorian_threshold: Mapped[int] = mapped_column(Integer, default=10000, nullable=False)
+    stars_praetorian_badge_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Shop "предложение дня" (services/shop_offer_service.py): one coin pack a
     # day at a discount, once per player per day. pack_id = None rotates
     # through the active coin packs by date. Off by default.
@@ -1023,6 +1034,13 @@ class GameConfig(TimestampMixin, Base):
     kontra_boss_reward_tiers: Mapped[list] = mapped_column(
         JSON, default=lambda: [[0, 20], [20000, 50], [60000, 100], [150000, 200], [400000, 400]], nullable=False,
     )
+    # Weekly arena leagues: [[peak rating of the week, coins], ...] — the
+    # names (Бронза … Легенда) go by index (kontra_service.LEAGUE_NAMES).
+    kontra_leagues: Mapped[list] = mapped_column(
+        JSON, default=lambda: [[0, 0], [1060, 150], [1140, 300], [1240, 600], [1360, 1000]], nullable=False,
+    )
+    # Squad tactics: % more damage against the tactic yours counters.
+    kontra_tactic_edge_pct: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     kontra_gear_drop_boss_pct: Mapped[int] = mapped_column(Integer, default=35, nullable=False)
     kontra_gear_drop_arena_pct: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     kontra_chest_coins: Mapped[int] = mapped_column(Integer, default=1500, nullable=False)
@@ -1100,6 +1118,15 @@ class GameConfig(TimestampMixin, Base):
     fan_battle_starts_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     fan_battle_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     fan_battle_settings: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # «💯 Нам 100 дней!» (services/anniversary_service.py): the same shape —
+    # calendar gifts, the community goal «Сотня», the recap gift, the ids.
+    anniversary_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    anniversary_starts_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    anniversary_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    anniversary_settings: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # Loyalty keepsakes (services/loyalty_service.py): «Старожил», «Основатель»,
+    # the «Центурион» card and «Страховка серии» — over loyalty_service.DEFAULTS.
+    loyalty_settings: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
 
     # «Топ недели» (weekly_top_service.py): every Monday the top places of
     # each ranking get the reward of their place. weekly_top_rewards is one

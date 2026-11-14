@@ -579,12 +579,19 @@ async def grant_collection_rewards_for_new_cards(
                 source=CardSource.collection_reward,
             )
 
+        badge_note = ""
+        if collection.reward_badge_id:
+            from app.services.reward_bundle_service import grant_badge
+
+            badge = await grant_badge(db, user, collection.reward_badge_id)
+            badge_note = f" и значок «{badge.name}»" if badge else ""
+
         pack_note = f" и бонусный пак «{granted_pack.pack.name}»" if granted_pack else ""
         await notification_service.notify(
             db, user.id, NotificationType.collection_completed,
             "🎉 Коллекция собрана!",
             f"Ты собрал(а) всех футболистов коллекции «{collection.name}»! "
-            f"Получено {collection.reward_coins} монет{pack_note}.",
+            f"Получено {collection.reward_coins} монет{pack_note}{badge_note}.",
             related_object_type="card_collection", related_object_id=collection_id,
         )
 

@@ -200,7 +200,9 @@ async def create_invoice(db: AsyncSession, user: User, pack_id: int) -> StarsInv
         raise NotFoundError("Pack not found")
     if pack.stars_price is None:
         raise ConflictError("This pack is not purchasable with Telegram Stars")
-    if not pack.is_active:
+    from app.services.pack_service import is_on_sale
+
+    if not pack.is_active or not is_on_sale(pack):
         raise ConflictError("This pack is not currently available")
     from sqlalchemy.orm import selectinload
 
@@ -318,7 +320,9 @@ async def validate_pre_checkout(db: AsyncSession, payload_token: str, total_amou
 
     if invoice.pack_id is not None:
         pack = await db.get(Pack, invoice.pack_id)
-        if pack is None or not pack.is_active or pack.stars_price != total_amount:
+        from app.services.pack_service import is_on_sale
+
+        if pack is None or not pack.is_active or pack.stars_price != total_amount or not is_on_sale(pack):
             return False, "This pack is no longer available"
         if pack.daily_limit_per_user:
             from app.services.pack_service import today_count

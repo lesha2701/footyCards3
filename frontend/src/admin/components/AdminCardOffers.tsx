@@ -229,6 +229,12 @@ function OfferForm({ draft, onChange, onSave, onCancel, busy }: {
         <label className="col-span-2 flex flex-col gap-0.5"><span className="text-micro text-slate-500">Подпись на карточке (необязательно)</span>
           <input maxLength={64} value={draft.title ?? ""} onChange={(e) => set({ title: e.target.value || null })} placeholder="Например: Переиздание" className={input} /></label>
       </div>
+      {draft.kind === "player" && (
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={!!draft.numbered} onChange={(e) => set({ numbered: e.target.checked })} />
+          Номерной тираж: у каждой копии «№ из N» (N — тираж выше, только для карты без копий; из паков выпадать не будет)
+        </label>
+      )}
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={draft.is_active} onChange={(e) => set({ is_active: e.target.checked })} /> Включено
       </label>
