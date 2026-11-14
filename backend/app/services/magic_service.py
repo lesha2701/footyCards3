@@ -1157,7 +1157,8 @@ async def _spares(db: AsyncSession, user_id: int, player_ids: Optional[set] = No
     if player_ids is not None:
         q = q.where(UserCard.player_id.in_(player_ids))
     cards = list((await db.execute(q)).scalars())
-    in_squad = await collection_service.personal_squad_card_ids(db, [c.id for c in cards])
+    # By owner, not by id list: a big collection overflows Postgres's 32767 query arguments.
+    in_squad = await collection_service._owner_personal_squad_ids(db, user_id)
     by: dict[int, list[UserCard]] = {}
     for c in cards:
         by.setdefault(c.player_id, []).append(c)
