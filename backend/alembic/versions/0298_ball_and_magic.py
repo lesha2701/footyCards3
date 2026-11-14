@@ -1,5 +1,5 @@
 """«Мяч и Магия»: magic_runs, users' rating / hero XP / wins / army and the
-hourly and daily counters, GameConfig settings (off by default) and the
+hourly and daily counters, GameConfig settings (on by default) and the
 transaction type.
 
 Revision ID: 0298
@@ -131,7 +131,7 @@ def upgrade() -> None:
         for k, n, d, key, c, st, o in SKINS
     ])
 
-    op.add_column("game_config", sa.Column("magic_enabled", sa.Boolean(), nullable=False, server_default=sa.false()))
+    op.add_column("game_config", sa.Column("magic_enabled", sa.Boolean(), nullable=False, server_default=sa.true()))
     op.add_column("game_config", sa.Column("magic_pack_id", sa.Integer(), nullable=True))
     for name, default in CONFIG_INT_COLUMNS:
         op.add_column("game_config", sa.Column(name, sa.Integer(), nullable=False, server_default=default))

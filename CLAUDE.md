@@ -48,7 +48,7 @@ Main features:
   with PNG overrides registered in `components/magic/art/pngArt.ts`; the army is creature cards (`users.magic_creatures`, «Магический пак» of every race) led by footballer captains, limited by hero leadership; the fallen leave the collection after a run (half die for essence, half wounded for a day; hardcore: all die); essence buys packs, +leadership, +mana and skins; captains level up from runs and spare duplicates, a guard stack of one footballer's duplicates marches beside the army; one free revival per account — see `docs/magic-army.md`;
   `magic_engine.py` is the pure seeded
   rules engine + bot, `magic_service.py` the runs/limits/rewards, actions
-  carry the run `version`; off until `GameConfig.magic_enabled`);
+  carry the run `version`; on by default, switched off with `GameConfig.magic_enabled`);
 - «Атака 1 на 1» (`one_on_one_service.py`, deterministic episodes: the TS engine
   `lib/oneOnOne/engine.ts` and its port `one_on_one_engine.py`, team episodes
   `lib/oneOnOne/team.ts` ↔ `team_attack_engine.py` — change both in lockstep, a

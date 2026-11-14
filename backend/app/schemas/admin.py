@@ -751,7 +751,7 @@ class GameConfigOut(BaseModel):
     kontra_gear_drop_arena_pct: int = 15
     kontra_chest_coins: int = 1500
     kontra_chest_stars: int = 25
-    magic_enabled: bool = False
+    magic_enabled: bool = True
     magic_reward_win: int = 150
     magic_reward_loss: int = 30
     magic_daily_limit: int = 3

@@ -1046,7 +1046,7 @@ class GameConfig(TimestampMixin, Base):
     kontra_chest_coins: Mapped[int] = mapped_column(Integer, default=1500, nullable=False)
     kontra_chest_stars: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
     # «Мяч и Магия» (magic_service.py): adventure map + stack battles vs a bot hero. Off by default.
-    magic_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    magic_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     magic_reward_win: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
     magic_reward_loss: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     # Free runs a day (each is rewarded); more are bought: the day's first extra for coins, the rest for Stars.
