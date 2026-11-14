@@ -1,10 +1,10 @@
 """«Менеджер» — «Штаб президента»: club staff hired from the owner's
 «Жители города» (`manager_staff`), and the president's office state
 (`manager_clubs.office`: the VIP staff names and skins, the assistant's
-rules and log, the board of directors, the car and the office worn).
+rules and log, the car and the office worn).
 
-Revision ID: 0292
-Revises: 0291
+Revision ID: 0298
+Revises: 0297
 Create Date: 2026-11-13
 """
 from typing import Sequence, Union
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 from alembic import op
 
 
-revision: str = "0292"
-down_revision: Union[str, None] = "0291"
+revision: str = "0298"
+down_revision: Union[str, None] = "0297"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
