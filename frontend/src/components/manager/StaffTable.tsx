@@ -33,6 +33,13 @@ const SHORT: Record<string, string> = {
   transport: "Транспорт", stadium: "Стадион", press: "Пресса", marketing: "Коммерция", finance: "Финансы",
 };
 
+/** The chairs of `council_table.webp` (1536², % of its side): the
+ * president's, then the ten departments clockwise. */
+const TABLE_SEATS: [number, number][] = [
+  [50, 22], [68.4, 28], [82.7, 40], [85.3, 56], [74.9, 72], [59.9, 79],
+  [40.1, 79], [25.1, 72], [14.7, 56], [17.3, 40], [31.6, 28],
+];
+
 /** Seat `i` of `n` around the table, the president's at the top. */
 function seatAt(i: number, n: number, r = 41): { left: string; top: string } {
   const a = -Math.PI / 2 + (2 * Math.PI * i) / n;
@@ -41,7 +48,7 @@ function seatAt(i: number, n: number, r = 41): { left: string; top: string } {
 
 function Face({ m, size }: { m: { image: string | null; icon: string; name: string }; size: number }) {
   return m.image
-    ? <img src={staticUrl(m.image)} alt={m.name} className="h-full w-full object-cover" style={{ width: size, height: size }} />
+    ? <img src={staticUrl(m.image)} alt={m.name} className="h-full w-full object-cover" />
     : <span className="flex h-full w-full items-center justify-center bg-bg-raised" style={{ fontSize: size * 0.48 }}>{m.icon}</span>;
 }
 
@@ -59,6 +66,8 @@ export default function StaffTable({ data, onDone, onError, extra }: {
   const n = data.roles.length + 1;
   const table = staffArt("council_table");
   const chair = staffArt("seat_empty");
+  const at = (i: number) => (table && n === TABLE_SEATS.length
+    ? { left: `${TABLE_SEATS[i][0]}%`, top: `${TABLE_SEATS[i][1]}%` } : seatAt(i, n));
   return (
     <section className="flex flex-col gap-3 rounded-3xl bg-gradient-to-b from-[#16120c] to-bg-surface p-3 ring-1 ring-amber-200/15" data-testid="club-staff">
       <div className="flex items-center justify-between gap-2 px-1">
@@ -79,29 +88,35 @@ export default function StaffTable({ data, onDone, onError, extra }: {
           </div>
         )}
         {/* The president */}
-        <div className="absolute -translate-x-1/2 -translate-y-1/2 text-center" style={seatAt(0, n)} data-testid="seat-president">
-          <span className="mx-auto block h-[58px] w-[58px] overflow-hidden rounded-full ring-[3px] ring-amber-300 shadow-[0_0_20px_-2px_rgba(252,211,77,0.9)]">
+        <div className="absolute -translate-x-1/2 -translate-y-1/2 text-center" style={{ ...at(0), width: "19%" }} data-testid="seat-president">
+          <span className="mx-auto block aspect-square w-[72%] overflow-hidden rounded-full ring-[3px] ring-amber-300 shadow-[0_0_20px_-2px_rgba(252,211,77,0.9)]">
             {user?.avatar_url
               ? <img src={user.avatar_url} alt="" className="h-full w-full object-cover" />
               : <span className="flex h-full w-full items-center justify-center bg-amber-300 font-display text-xl font-black text-bg-base">{(user?.first_name || "П")[0]}</span>}
           </span>
-          <span className="mt-0.5 block text-[9px] font-black uppercase tracking-wide text-amber-200">Президент</span>
+          <span className="mt-0.5 inline-block rounded-full bg-black/55 px-1.5 text-[9px] font-black uppercase tracking-wide text-amber-200">Президент</span>
         </div>
         {data.roles.map((r, i) => {
           const m = byRole.get(r.code);
-          const pos = seatAt(i + 1, n);
+          const pos = at(i + 1);
+          const icon = staffArt(`dept_${r.code}`);
           return (
             <button key={r.code} onClick={() => { hapticSelection(); setOpen(r.code); }} data-testid={`seat-${r.code}`}
-              className="absolute w-[64px] -translate-x-1/2 -translate-y-1/2 text-center active:scale-95" style={pos}>
-              <span className={`relative mx-auto block h-[48px] w-[48px] rounded-full ${m ? `ring-2 ${RARITY[m.rarity].ring} ${RARITY[m.rarity].glow}` : "border border-dashed border-white/30"}`}>
+              className="absolute -translate-x-1/2 -translate-y-1/2 text-center active:scale-95" style={{ ...pos, width: "17%" }}>
+              <span className={`relative mx-auto block aspect-square w-[66%] rounded-full ${m ? `ring-2 ${RARITY[m.rarity].ring} ${RARITY[m.rarity].glow}` : table ? "" : "border border-dashed border-white/30"}`}>
                 <span className="block h-full w-full overflow-hidden rounded-full">
-                  {m ? <Face m={m} size={48} /> : chair
+                  {m ? <Face m={m} size={34} /> : table
+                    // The real chair of the picture stays empty: just a «+» on it.
+                    ? <span className={`flex h-full w-full items-center justify-center text-lg font-black ${full ? "text-white/30" : "text-amber-100 drop-shadow-[0_0_6px_rgba(252,211,77,0.9)]"}`}>{full ? "🔒" : "＋"}</span>
+                    : chair
                     ? <img src={chair} alt="" className={`h-full w-full object-cover ${full ? "opacity-30" : "opacity-70"}`} />
                     : <span className={`flex h-full w-full items-center justify-center bg-black/50 text-lg ${full ? "text-white/20" : "text-white/50"}`}>{full ? "🔒" : "＋"}</span>}
                 </span>
-                <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-bg-base text-[11px] ring-1 ring-white/15">{r.emoji}</span>
+                {icon
+                  ? <img src={icon} alt="" className="absolute -bottom-1.5 -right-2 h-[52%] w-[52%] drop-shadow" />
+                  : <span className="absolute -bottom-1 -right-1.5 flex h-[45%] w-[45%] items-center justify-center rounded-full bg-bg-base text-[11px] ring-1 ring-white/15">{r.emoji}</span>}
               </span>
-              <span className={`mt-0.5 block truncate text-[9px] font-bold leading-tight ${m ? "text-ink-chalk" : "text-ink-mist"}`}>{SHORT[r.code] ?? r.dept}</span>
+              <span className={`mt-0.5 block truncate rounded-full bg-black/55 px-1 text-[9px] font-bold leading-tight ${m ? "text-ink-chalk" : "text-ink-mist"}`}>{SHORT[r.code] ?? r.dept}</span>
             </button>
           );
         })}
@@ -144,7 +159,9 @@ function SeatSheet({ role, data, member, full, onClose, onDone, onError, extra }
         <div className="mx-auto h-1 w-10 rounded-full bg-white/20" />
         <div className="flex items-center gap-3">
           <span className={`h-20 w-20 shrink-0 overflow-hidden rounded-2xl ${member ? `ring-2 ${RARITY[member.rarity].ring} ${RARITY[member.rarity].glow}` : "ring-1 ring-white/15"}`}>
-            {member ? <Face m={member} size={80} /> : <span className="flex h-full w-full items-center justify-center bg-bg-raised text-4xl">{info.emoji}</span>}
+            {member ? <Face m={member} size={80} /> : staffArt(`dept_${role}`)
+              ? <img src={staffArt(`dept_${role}`)} alt="" className="h-full w-full bg-bg-raised object-contain p-1" />
+              : <span className="flex h-full w-full items-center justify-center bg-bg-raised text-4xl">{info.emoji}</span>}
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-micro font-bold uppercase tracking-[0.16em] text-amber-200">{info.emoji} {info.dept}</p>
