@@ -85,6 +85,8 @@ const TownResidentsPage = lazy(() => import("@/pages/TownResidentsPage"));
 const TownGuestsPage = lazy(() => import("@/pages/TownGuestsPage"));
 const TownVisitPage = lazy(() => import("@/pages/TownVisitPage"));
 const TownWeekPage = lazy(() => import("@/pages/TownWeekPage"));
+const TownVillaPage = lazy(() => import("@/pages/TownVillaPage"));
+const TownVillaVisitPage = lazy(() => import("@/pages/TownVillaVisitPage"));
 const ClubBasePage = lazy(() => import("@/pages/ClubBasePage"));
 const TacticoMatchesPage = lazy(() => import("@/pages/TacticoMatchesPage"));
 const TacticoMatchPage = lazy(() => import("@/pages/TacticoMatchPage"));
@@ -343,6 +345,8 @@ export default function App() {
         <Route path="/town/guests" element={<TownGuestsPage />} />
         <Route path="/town/visit/:ownerId" element={<TownVisitPage />} />
         <Route path="/town/week" element={<TownWeekPage />} />
+        <Route path="/town/villa" element={<TownVillaPage />} />
+        <Route path="/town/visit/:ownerId/villa" element={<TownVillaVisitPage />} />
         <Route path="/town/:district" element={<TownPage />} />
         <Route path="/play/tactico" element={<TacticoMatchesPage />} />
         <Route path="/play/career" element={<CareerPage />} />

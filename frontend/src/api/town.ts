@@ -89,6 +89,8 @@ export interface TownState {
   price_growth_pct: number;
   districts: TownDistrictState[];
   mood: TownMoodConfig;
+  /** «Моя вилла»: its prestige and the +% it adds to the houses' rent; level and car once opened. */
+  villa?: TownVillaSummary;
   /** pending includes the guests' gifts (gifts), paid with the rent. */
   income: { rate_per_day: number; pending: number; cap: number; max_hours: number; gifts?: number };
   /** Present on a purchase / a claim. */
@@ -271,6 +273,8 @@ export interface TownVisitView {
   districts: { code: string; name: string; owned: number; total: number; mood: number }[];
   places: string[];
   season_items?: TownSeasonOwned[];
+  /** null — the owner has no villa yet. */
+  villa?: { villa_level: number; prestige: number; car: string | null } | null;
   hotel: boolean;
   population: number;
   likes_today: number;
@@ -370,5 +374,151 @@ export async function fetchTownSeason(): Promise<TownSeasonShop> {
 
 export async function createTownSeasonInvoice(code: string): Promise<StarsInvoiceCreate> {
   const { data } = await api.post<StarsInvoiceCreate>(`/town/season/${code}/invoice`);
+  return data;
+}
+
+// --- «Моя вилла» -------------------------------------------------------------------------------
+
+export interface TownVillaSummary {
+  prestige: number;
+  rent_pct: number;
+  villa_level?: number;
+  car?: string | null;
+}
+
+export type VillaKind = "villa" | "garage" | "car" | "yard" | "premium";
+
+export interface VillaItem {
+  id: number;
+  code: string;
+  name: string;
+  emoji: string;
+  kind: VillaKind;
+  w: number;
+  h: number;
+  /** Both null — in storage. */
+  x: number | null;
+  y: number | null;
+  /** 1 — turned: w and h swapped. */
+  rot: number;
+  serial: number | null;
+  /** The villa's / the garage's level. */
+  level: number | null;
+}
+
+export interface VillaStaff {
+  post: string;
+  name: string;
+  emoji: string;
+  resident: { id: number; name: string; title: string | null; icon: string; image_path: string | null; rarity: string };
+}
+
+/** What anyone may see of a villa. */
+export interface VillaPlotView {
+  villa_level: number;
+  garage_level: number;
+  /** Cells a side of the plot. */
+  grid: number;
+  items: VillaItem[];
+  car: { id: number; code: string; name: string; emoji: string } | null;
+  staff: VillaStaff[];
+  prestige: number;
+  prestige_pct: number;
+  user_id: number;
+  likes_total: number;
+}
+
+export interface VillaShopItem {
+  code: string;
+  name: string;
+  emoji: string;
+  kind: VillaKind;
+  w: number;
+  h: number;
+  coins: number;
+  stars: number;
+  prestige: number;
+  owned: number;
+  /** > 0 — limited, numbered copies. */
+  supply: number;
+  sold: number;
+  can_buy: boolean;
+  reason: string;
+}
+
+export interface VillaState extends VillaPlotView {
+  next_villa: { level: number; price: number; grid: number } | null;
+  next_garage: { level: number; price: number; slots: number } | null;
+  garage_slots: number;
+  cars: number;
+  shop: VillaShopItem[];
+  posts: { post: string; name: string; emoji: string }[];
+  candidates: { id: number; name: string; title: string | null; icon: string; image_path: string | null; rarity: string; posts: string[] }[];
+  prestige_per_pct: number;
+  prestige_max_pct: number;
+  max_items: number;
+  new_balance?: number;
+}
+
+export interface VillaGuestView extends VillaPlotView {
+  liked: boolean;
+  likes_week: number;
+}
+
+export interface VillaWeek {
+  ends_on: string;
+  rewards: { place: number; coins: number }[];
+  top: { user_id: number; owner: string; likes: number; villa_level: number; place: number; reward: number }[];
+  me: { place: number; likes: number } | null;
+  last_week: { place: number; user_id: number; owner: string; likes: number; coins: number }[];
+}
+
+export async function fetchVilla(): Promise<VillaState> {
+  const { data } = await api.get<VillaState>("/town/villa");
+  return data;
+}
+
+export async function upgradeVilla(target: "villa" | "garage", idempotencyKey: string): Promise<VillaState> {
+  const { data } = await api.post<VillaState>("/town/villa/upgrade", { target, idempotency_key: idempotencyKey });
+  return data;
+}
+
+export async function buyVillaItem(code: string, idempotencyKey: string): Promise<VillaState> {
+  const { data } = await api.post<VillaState>(`/town/villa/items/${code}/buy`, { idempotency_key: idempotencyKey });
+  return data;
+}
+
+export async function createVillaInvoice(code: string): Promise<StarsInvoiceCreate> {
+  const { data } = await api.post<StarsInvoiceCreate>(`/town/villa/items/${code}/invoice`);
+  return data;
+}
+
+export async function saveVillaLayout(items: { id: number; x: number | null; y: number | null; rot: number }[]): Promise<VillaState> {
+  const { data } = await api.put<VillaState>("/town/villa/layout", { items });
+  return data;
+}
+
+export async function chooseVillaCar(itemId: number | null): Promise<VillaState> {
+  const { data } = await api.post<VillaState>("/town/villa/car", { item_id: itemId });
+  return data;
+}
+
+export async function setVillaStaff(post: string, residentId: number | null): Promise<VillaState> {
+  const { data } = await api.post<VillaState>("/town/villa/staff", { post, resident_id: residentId });
+  return data;
+}
+
+export async function visitVilla(ownerId: number): Promise<VillaGuestView> {
+  const { data } = await api.get<VillaGuestView>(`/town/visit/${ownerId}/villa`);
+  return data;
+}
+
+export async function likeVilla(ownerId: number): Promise<VillaGuestView> {
+  const { data } = await api.post<VillaGuestView>(`/town/visit/${ownerId}/villa/like`);
+  return data;
+}
+
+export async function fetchVillaWeek(): Promise<VillaWeek> {
+  const { data } = await api.get<VillaWeek>("/town/villa/week");
   return data;
 }
