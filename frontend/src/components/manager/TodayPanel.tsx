@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { claimManagerOnboarding, fetchManagerSummary, type ManagerSummary, type ManagerTodayTab } from "@/api/manager";
+import { goTo } from "@/lib/managerFocus";
 import { eur } from "@/lib/managerMoney";
 import { hapticNotify } from "@/lib/telegram";
 
@@ -53,7 +54,7 @@ export default function TodayPanel({ onTab, onError }: { onTab: (tab: ManagerTod
           {data.today.slice(0, 4).map((item) => (
             <button
               key={`${item.code}-${item.text}`}
-              onClick={() => onTab(item.tab)}
+              onClick={() => { onTab(item.tab); goTo(item.target); }}
               className={`flex items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs active:scale-[0.98] ${item.urgent ? "bg-accent-lime/15 font-semibold text-ink-chalk ring-1 ring-accent-lime/40" : "bg-bg-raised text-ink-chalk"}`}
             >
               <span className="text-base leading-none">{item.icon}</span>
@@ -70,7 +71,7 @@ export default function TodayPanel({ onTab, onError }: { onTab: (tab: ManagerTod
             <span className="text-micro font-semibold text-amber-200">бонус {eur(list.bonus)}</span>
           </p>
           {list.steps.map((s) => (
-            <button key={s.code} disabled={s.done} onClick={() => onTab(s.tab)}
+            <button key={s.code} disabled={s.done} onClick={() => { onTab(s.tab); goTo(s.target); }}
               className={`flex items-center gap-2 text-left text-xs ${s.done ? "text-ink-mist line-through" : "text-ink-chalk"}`}>
               <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] ${s.done ? "bg-accent-lime text-bg-base" : "ring-1 ring-white/30"}`}>{s.done ? "✓" : ""}</span>
               {s.title}

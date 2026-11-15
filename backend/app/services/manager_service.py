@@ -78,7 +78,8 @@ from app.models.player import Player
 from app.models.user import User
 from app.services import club_base_service, my_player_service, player_career_clubs as pcc, tournament_match_engine
 from app.services import manager_staff as staff
-from app.services import manager_assistant as assistant, manager_press as press
+from app.services import manager_assistant as assistant, manager_conflicts as conflicts, manager_press as press
+from app.services import manager_budget
 from app.services import manager_cup as cup, manager_events as events, manager_perks as perks, manager_exchange as exchange, manager_finance as finance, manager_tactics as tactics, trade_guard_service, wallet_service
 from app.services.manager_tactics import DEFAULT_FORMATION
 from app.services.career_service import standings
@@ -809,6 +810,7 @@ async def renew_offer(db: AsyncSession, user: User, contract_id: int, wage: int,
         f"{wage} монет за сезон, {seasons} сез. (сейчас {contract.wage} монет, осталось {contract.seasons_left} сез.)",
         related_object_type=RELATED, related_object_id=club.id,
     )
+    manager_budget.act(club, await finance.upcoming_key(db, datetime.now(timezone.utc)))
     await db.commit()
     return await get_view(db, user)
 
@@ -1232,6 +1234,7 @@ async def sign_npc(db: AsyncSession, user: User, player_id: int, kind: str, seas
     except IntegrityError:
         raise ConflictError("Его только что забрал другой клуб")
     await _move(db, club, "in", kind, _npc_who(player), datetime.now(timezone.utc), fee=fee)
+    manager_budget.act(club, await finance.upcoming_key(db, datetime.now(timezone.utc)))
     await db.commit()
     return await get_view(db, user)
 
@@ -1274,6 +1277,7 @@ async def extend_npc(db: AsyncSession, user: User, npc_id: int, seasons: int = 1
     npc.seasons_left = seasons
     npc.auto = False
     await _move(db, club, "in", "extend", _npc_who(player), now, fee=fee)
+    manager_budget.act(club, await finance.upcoming_key(db, now))
     await db.commit()
     return await get_view(db, user)
 
@@ -1688,6 +1692,7 @@ async def _play_round(db: AsyncSession, league: ManagerLeague, round_index: int,
     for club in clubs.values():
         await events.after_round(db, club, league, config)  # «События клуба» after the set rounds
         await press.after_round(db, club, league, config)  # «Пресс-конференция»
+        await conflicts.after_round(db, club, league, config)  # «Конфликты в штабе»
         await assistant.after_round(db, club, league, config)  # «Помощник»: the next plan, answers left open
     if league.rounds_played >= len(state["fixtures"]):
         await _finish(db, league, config)
@@ -1940,6 +1945,7 @@ async def _settle(db: AsyncSession, key: str, config) -> None:
     for club in clubs.values():
         # Sponsors' season results, deposits, the venture fund («Кабинет президента»).
         await finance.season_end(db, club, key, rank[club.id][0] if club.id in rank else None, club.id in relegated, config)
+        await manager_budget.season_end(db, club, key, config)  # the budget plan and the hands-on bonus
     season.depth = depth
     season.settled_at = now
 

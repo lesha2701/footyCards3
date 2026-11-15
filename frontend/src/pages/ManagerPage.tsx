@@ -1,6 +1,6 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import {
   cancelManagerOffer,
@@ -56,6 +56,7 @@ import StyleTab from "@/components/manager/StyleTab";
 import TacticsPanel from "@/components/manager/TacticsPanel";
 import GameHero from "@/components/common/GameHero";
 import { formatGameError } from "@/lib/errors";
+import { goTo, parseGo, useFocusTarget } from "@/lib/managerFocus";
 import { themeClass } from "@/lib/managerLook";
 import { eur, trend } from "@/lib/managerMoney";
 import { hapticNotify } from "@/lib/telegram";
@@ -99,6 +100,17 @@ export default function ManagerPage() {
     updateBalance(v.balance);
   };
   const onError = (err: unknown) => setError(formatGameError(err, "Не получилось"));
+  const location = useLocation();
+  const ready = !!data?.club;
+  useEffect(() => {
+    // `?go=<tab>:<target>` from the home tile: open the tab, then the action.
+    const go = parseGo(location.search);
+    if (!go || !ready) return;
+    const tabs: Tab[] = ["club", "office", "staff", "transfers", "league", "me", "style"];
+    if (tabs.includes(go.tab as Tab)) setTab(go.tab as Tab);
+    goTo(go.target);
+    navigate(location.pathname, { replace: true });
+  }, [location.search, location.pathname, ready, navigate]);
 
   if (isLoading || !data) return <ListSkeleton />;
   if (!data.enabled) return <EmptyState icon={IconTrophy} title="«Менеджер» скоро вернётся" />;
@@ -298,7 +310,7 @@ function ClubTab({ view, club, onView, onError }: TabProps & { club: ManagerClub
       )}
 
       {club.incoming.length > 0 && (
-        <section className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4 ring-1 ring-accent-lime/50">
+        <section className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4 ring-1 ring-accent-lime/50" data-focus="incoming">
           <h2 className="font-display text-base font-bold text-ink-chalk">💰 Запросы на твоих игроков</h2>
           {club.incoming.map((o) => (
             <div key={o.id} className="flex flex-col gap-2 rounded-xl bg-bg-raised p-3">
@@ -488,6 +500,7 @@ function Stat({ label, value }: { label: string; value: ReactNode }) {
 
 function TransfersTab({ view, club, onView, onError }: TabProps & { club: ManagerClub }) {
   const [section, setSection] = useState<"users" | "catalog" | "scout" | "moves">("users");
+  useFocusTarget((t) => { if (t === "market") setSection("catalog"); });
   const sections: [typeof section, string][] = [
     ["users", `🤝 Игроки (${club.live_count}/${view.rules.max_live})`], ["catalog", "📋 Футболисты"], ["moves", "📜 Сделки"], ["scout", "🔭 Скаут"],
   ];
@@ -754,7 +767,7 @@ function Catalog({ club, analyst = false, onView, onError }: { club: ManagerClub
   const maxRating = data?.pages[0]?.max_rating;
   const chip = (on: boolean) => `shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${on ? "bg-accent-cyan text-bg-base" : "bg-bg-surface text-ink-mist"}`;
   return (
-    <div className="flex flex-col gap-2" data-testid="catalog">
+    <div className="flex flex-col gap-2" data-testid="catalog" data-focus="market">
       <label className="flex items-center gap-2 rounded-xl bg-bg-surface px-3 py-2">
         <IconSearch className="h-4 w-4 text-ink-mist" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Имя футболиста"
@@ -858,7 +871,7 @@ function LeagueTab({ view, onError }: { view: ManagerView; onError: (e: unknown)
     <div className="flex flex-col gap-3">
       <NewsPanel />
       <CupPanel />
-      {league ? <LeagueTable league={league} onClub={setClubId} /> : (
+      {league ? <div data-focus="table" className="rounded-2xl"><LeagueTable league={league} onClub={setClubId} /></div> : (
         <EmptyState icon={IconTrophy} title="Лиги пока нет" description="Лиги собираются, когда закрывается трансферное окно." />
       )}
       <section className="flex flex-col gap-1.5 rounded-2xl bg-bg-surface p-4" data-testid="pyramid">
@@ -1056,8 +1069,8 @@ function MeTab({ view, onView, onError }: TabProps) {
           </label>
         </section>
       )}
-      {view.offers.map((o) => (
-        <section key={o.id} className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4 ring-1 ring-accent-lime/40">
+      {view.offers.map((o, i) => (
+        <section key={o.id} data-focus={i === 0 ? "offers" : undefined} className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4 ring-1 ring-accent-lime/40">
           <p className="text-sm text-ink-chalk">
             ✍️ <b>{o.club_name}</b> ({o.club_owner}) — {o.kind === "sign" ? "контракт" : o.kind === "renew" ? "новый контракт с твоим клубом" : o.kind === "loan" ? "аренда на сезон" : "переход"}
           </p>

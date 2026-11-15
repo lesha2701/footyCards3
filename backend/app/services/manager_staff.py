@@ -14,6 +14,8 @@
     scout     — % off the catalog loan fees;
     press     — more fans from press conferences (manager_press);
     driver    — the president's car with a driver (status only).
+    director  — the sporting director: replacements for the empty places and
+                the leaving footballers within his budget (`director`).
 - The VIP staff for Stars: «Аналитик» (the «Аналитика Pro» pass, code
   "analytics") and «Помощник» (code "assistant", manager_assistant), one
   bundle "staff_bundle" extends both; their names and skins.
@@ -48,6 +50,7 @@ ROLES: dict[str, dict] = {
     "scout": {"name": "Скаут", "emoji": "🔭", "sign": "−", "unit": "% к цене аренды из каталога"},
     "press": {"name": "Пресс-атташе", "emoji": "🎙", "sign": "+", "unit": "% к итогам пресс-конференций"},
     "driver": {"name": "Шофёр", "emoji": "🚘", "sign": "", "unit": "Возит президента на матчи — статус"},
+    "director": {"name": "Спортивный директор", "emoji": "🧭", "sign": "", "unit": "вар. замены на каждое место"},
 }
 VIP = {
     "analytics": {"role": "analyst", "name": "Аналитик", "emoji": "📊",
@@ -364,6 +367,8 @@ def worn(club: Optional[ManagerClub], config) -> dict:
 
 def effect_text(role: str, value: int) -> str:
     r = ROLES[role]
+    if role == "director":
+        return f"{value} {r['unit']}"
     return f"{r['sign']}{value}{r['unit']}" if r["sign"] else r["unit"]
 
 
@@ -413,3 +418,67 @@ async def view(db: AsyncSession, user: User) -> dict:
         "items": [{**i, "owned": _free(i) or i["code"] in have} for i in items(config)],
         "worn": wear_now,
     }
+
+
+# --- the sporting director -------------------------------------------------------------------
+
+DIRECTOR_NEEDS = 4
+
+
+async def director(db: AsyncSession, user: User, budget: Optional[int] = None) -> dict:
+    """The sporting director's picks: for each empty place of the XI and each
+    footballer whose contract runs out, `effect` catalog footballers the club
+    can loan or buy within the president's budget for him (`office["director_budget"]`)."""
+    from app.services import manager_service as ms
+    from app.services.club_formation_service import get_formation_slots
+    from app.services.lineup_service import on_ideal_position
+
+    config = await get_config(db)
+    club = await _club(db, user, lock=budget is not None)
+    row = next((s for s in await staff_of(db, club.id) if s.role == "director"), None)
+    owned = await _owned_residents(db, user.id)
+    if row is None or row.resident_id not in owned:
+        raise ConflictError("Назначь спортивного директора в штабе")
+    grant = finance.grant_of(club.division, config)
+    data = office(club)
+    if budget is not None:
+        data["director_budget"] = max(0, min(grant * 2, int(budget)))
+        save(club, data)
+        await db.commit()
+    limit = int(data.get("director_budget") or grant // 4)
+    count = max(1, effect_of("director", row.rarity, config))
+    squad = await ms.squad_view(db, club, config)
+    slots = {sl.code: sl for sl in get_formation_slots(ms.tactics.clean_formation(club.formation))}
+    needs = []
+    for kid in [p for p in squad["xi"] if p["kind"] == "kid"]:
+        slot = slots.get(kid["slot"])
+        if slot is not None:
+            needs.append({"why": "empty", "title": f"Пустое место: {slot.ideal_position.value}", "line": slot.category,
+                          "position": slot.ideal_position})
+    for n in await ms._npcs(db, club.id):
+        if n.seasons_left <= 0 and not n.auto:
+            p = await db.get(ms.Player, n.player_id)
+            if p is not None:
+                needs.append({"why": "leaving", "title": f"Уходит {p.display_name} ({p.position.value}, {p.rating})",
+                              "line": ms._category(p.position), "position": p.position})
+    out = []
+    seen: set[int] = set()
+    for need in needs[:DIRECTOR_NEEDS]:
+        page = await ms.npc_catalog(db, user, need["line"], None, 0, None, "rating", True)
+        options = []
+        for p in page["players"]:
+            if p["taken_by"] or p["player_id"] in seen:
+                continue
+            loan, buy = p["loan_fee"] + p["wage_now"] <= limit, p["value"] + p["wage_now"] <= limit
+            if loan or buy:
+                options.append({**{k: p[k] for k in ("player_id", "name", "position", "rating", "club", "loan_fee", "value", "wage_now")},
+                                "can_loan": loan, "can_buy": buy,
+                                "fits": on_ideal_position(ms.Position(p["position"]), need["position"])})
+        options.sort(key=lambda o: (not o["fits"], -o["rating"]))
+        picks = options[:count]
+        seen.update(o["player_id"] for o in picks)
+        out.append({"why": need["why"], "title": need["title"], "options": picks})
+    resident = owned[row.resident_id]
+    return {"name": resident.name, "icon": resident.icon, "image": resident.image_path, "rarity": row.rarity, "count": count,
+            "budget": limit, "grant": grant, "window": await ms.window_open(db, datetime.now(timezone.utc)) and not await ms.is_playing(db, club),
+            "needs": out}

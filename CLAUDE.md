@@ -132,7 +132,13 @@ Main features:
   «Пока тебя не было»; a free week once). Skins of both, cars and office
   rooms (`staff_items`, coins or Stars), gifts of style items to another
   club and the stadium skins (`manager_perks.py`, cosmetics kinds
-  "stands" / "poster") — convenience and style only. Numbers: GameConfig.manager_finance
+  "stands" / "poster") — convenience and style only. «Решения президента»
+  (`manager_budget.py`: the season budget by articles, the hands-on bonus,
+  achievements, the analyst's finance review), the assistant's fine rules and
+  «только советовать» mode, the sporting director (`manager_staff.director`)
+  and staff conflicts (`manager_conflicts.py`, slot CONFLICT_SLOT + round) —
+  see docs/president-office.md; «Сегодня в клубе» tips carry a `target`
+  (`lib/managerFocus.ts`). Numbers: GameConfig.manager_finance
   over `manager_finance.DEFAULTS`;
 - «Мой игрок» extras (`my_player_extras.py`): a weekly «Спонсор» (one of
   three brands of `my_player_sponsors`, goals counted by hooks in the

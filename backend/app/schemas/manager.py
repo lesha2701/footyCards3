@@ -133,6 +133,19 @@ class ManagerAssistantRulesIn(BaseModel):
     decline_below_pct: Optional[int] = Field(default=None, ge=0, le=300)
     events: Optional[Literal["safe", "balanced", "bold", "off"]] = None
     plan: Optional[Literal["auto", "normal", "off"]] = None
+    transfer_limit: Optional[int] = Field(default=None, ge=0)
+    renew_limit: Optional[int] = Field(default=None, ge=0)
+    min_sale: Optional[int] = Field(default=None, ge=0)
+    keep: Optional[list[str]] = Field(default=None, max_length=20)
+    mode: Optional[Literal["act", "advise"]] = None
+
+
+class ManagerBudgetIn(BaseModel):
+    alloc: dict[str, int] = Field(default_factory=dict, max_length=10)
+
+
+class ManagerDirectorBudgetIn(BaseModel):
+    budget: int = Field(ge=0)
 
 
 class ManagerDealCheckIn(BaseModel):

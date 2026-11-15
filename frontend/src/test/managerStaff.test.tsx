@@ -18,6 +18,13 @@ const api = vi.hoisted(() => ({
   setManagerAssistantRules: vi.fn(),
   buyManagerStaffItem: vi.fn(),
   wearManagerStaffItem: vi.fn(),
+  doManagerAdvice: vi.fn(),
+  fetchManagerDecisions: vi.fn(),
+  fetchManagerDirector: vi.fn(),
+  setManagerDirectorBudget: vi.fn(),
+  signManagerNpc: vi.fn(),
+  setManagerBudget: vi.fn(),
+  claimManagerAchievement: vi.fn(),
 }));
 vi.mock("@/api/manager", () => api);
 vi.mock("@/lib/myPlayerStars", () => ({ payMyPlayerWithStars: vi.fn() }));
@@ -40,8 +47,9 @@ const STAFF: ManagerStaffView = {
 };
 const OFFICE: ManagerAssistantOffice = {
   active: true, name: "Алиса", trial: false, press_rounds: [2, 5],
-  rules: { limit: 500_000, sponsor: true, kit: true, fill: true, renew_min_rating: 60, renew_max_wage: 600, decline_below_pct: 80, events: "balanced", plan: "auto" },
-  report: { entries: [{ at: new Date().toISOString(), icon: "🤝", text: "Подписала спонсора «Atlas»", eur: 300_000 }], unseen: 1, spent: 0, earned: 300_000 },
+  rules: { limit: 500_000, transfer_limit: 500_000, renew_limit: 500_000, min_sale: 0, keep: [], mode: "act", sponsor: true, kit: true, fill: true, renew_min_rating: 60, renew_max_wage: 600, decline_below_pct: 80, events: "balanced", plan: "auto" },
+  report: { entries: [{ at: new Date().toISOString(), icon: "🤝", text: "Подписала спонсора «Atlas»", eur: 300_000 }], unseen: 1, spent: 0, earned: 300_000, todo: 0 },
+  squad: [{ key: "npc:5", name: "Иванов", rating: 77, kind: "npc" }],
 };
 
 function wrap(ui: React.ReactNode) {
@@ -69,6 +77,7 @@ describe("StaffTab", () => {
 
   it("hires a town resident into a free role", async () => {
     wrap(<StaffTab onError={() => {}} />);
+    fireEvent.click(await screen.findByTestId("desk-team"));
     fireEvent.click(await screen.findByText(/Физиотерапевт/));
     expect(screen.getByTestId("hire-sheet")).toHaveTextContent("эпический · −30% к шансу травмы");
     fireEvent.click(screen.getByText("Доктор Айболит"));
@@ -86,5 +95,25 @@ describe("Кабинет: the assistant at the desk", () => {
     await waitFor(() => expect(api.markManagerAssistantSeen).toHaveBeenCalled());
     fireEvent.click(screen.getByTestId("desk-assistant"));
     expect(onTab).toHaveBeenCalledWith("staff");
+  });
+});
+
+describe("«Помощница»: advice in one tap", () => {
+  it("does what she advised and edits the fine rules", async () => {
+    const active = { ...STAFF, vip: STAFF.vip.map((v) => (v.role === "assistant" ? { ...v, active: true, trial: false } : v)) };
+    api.fetchManagerStaff.mockResolvedValue(active);
+    api.fetchManagerAssistant.mockResolvedValue({
+      ...OFFICE,
+      rules: { ...OFFICE.rules, mode: "advise" },
+      report: { ...OFFICE.report, todo: 1, entries: [{ id: "ab12", at: new Date().toISOString(), icon: "📋", text: "Советую взять в аренду Петрова", eur: -50_000, action: { kind: "loan", ref: "loan:1" } }] },
+    });
+    api.doManagerAdvice.mockResolvedValue(OFFICE);
+    api.setManagerAssistantRules.mockResolvedValue(active);
+    wrap(<StaffTab onError={() => {}} />);
+    expect(await screen.findByTestId("assistant-desk")).toHaveTextContent("Советую взять в аренду Петрова");
+    fireEvent.click(screen.getByTestId("advice-do"));
+    await waitFor(() => expect(api.doManagerAdvice).toHaveBeenCalledWith("ab12", expect.anything()));
+    fireEvent.click(await screen.findByText("Иванов 77"));
+    await waitFor(() => expect(api.setManagerAssistantRules).toHaveBeenCalledWith({ keep: ["npc:5"] }));
   });
 });

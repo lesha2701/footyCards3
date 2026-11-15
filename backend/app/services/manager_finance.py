@@ -160,7 +160,61 @@ DEFAULTS: dict = {
         "scout": {"common": 5, "rare": 10, "epic": 15, "legendary": 20},
         "press": {"common": 25, "rare": 50, "epic": 75, "legendary": 100},
         "driver": {"common": 0, "rare": 0, "epic": 0, "legendary": 0},
+        # how many replacements the sporting director brings for each need
+        "director": {"common": 1, "rare": 2, "epic": 3, "legendary": 4},
     },
+    # «Конфликты в штабе» (manager_conflicts, a «События клуба» event): after these
+    # rounds, when both roles of a template are hired, they argue and the president decides.
+    "conflict_rounds": [4, 10],
+    "staff_conflicts": [
+        {"code": "conflict_injury", "roles": ["physio", "coach"], "emoji": "🩺", "title": "Врач против тренера",
+         "text": "{physio} не пускает лидера на поле после ушиба, {coach} требует его в старт: «Это ключевой матч!»",
+         "options": [{"code": "physio", "label": "Прав врач — пусть восстановится", "form_pct": -1, "form_rounds": 1, "fans": -50},
+                     {"code": "coach", "label": "Прав тренер — играем", "form_pct": 3, "form_rounds": 1, "money_pct": -2}]},
+        {"code": "conflict_money", "roles": ["agent", "marketing"], "emoji": "💼", "title": "Агент против маркетолога",
+         "text": "{marketing} хочет потратить деньги на рекламу с игроками, {agent} — сэкономить и сбить зарплаты.",
+         "options": [{"code": "marketing", "label": "Рекламная кампания", "money_pct": -2, "fans": 350},
+                     {"code": "agent", "label": "Экономим", "money_pct": 2, "fans": -100}]},
+        {"code": "conflict_youth", "roles": ["scout", "coach"], "emoji": "🔭", "title": "Скаут против тренера",
+         "text": "{scout} нашёл молодого таланта и просит дать ему матч, {coach} не хочет рисковать результатом.",
+         "options": [{"code": "scout", "label": "Дать шанс молодому", "form_pct": -1, "form_rounds": 1, "fans": 200},
+                     {"code": "coach", "label": "Играют проверенные", "form_pct": 2, "form_rounds": 1}]},
+        {"code": "conflict_press", "roles": ["press", "coach"], "emoji": "🎙", "title": "Пресс-атташе против тренера",
+         "text": "{press} устроил открытую тренировку для журналистов, {coach} возмущён: «Соперник всё увидит!»",
+         "options": [{"code": "press", "label": "Открытая тренировка", "fans": 300, "form_pct": -1, "form_rounds": 1},
+                     {"code": "coach", "label": "Закрыть тренировку", "form_pct": 2, "form_rounds": 1, "fans": -50}]},
+        {"code": "conflict_trip", "roles": ["driver", "physio"], "emoji": "🚘", "title": "Шофёр против врача",
+         "text": "{driver} предлагает ехать на выезд ночью, чтобы сэкономить на отеле, {physio} против: игроки не выспятся.",
+         "options": [{"code": "driver", "label": "Едем ночью", "money_pct": 2, "form_pct": -2, "form_rounds": 1},
+                     {"code": "physio", "label": "Ночуем в отеле", "money_pct": -1, "form_pct": 1, "form_rounds": 1}]},
+    ],
+    # «Бюджет сезона» (manager_budget): the president splits the season's money by
+    # articles (ledger kinds); spending an article more than `budget_tolerance_pct` over
+    # its plan costs `budget_fans_penalty` fans, a season inside every article pays
+    # `budget_bonus_pct` % of the unspent plan (capped at `budget_bonus_max_pct` % of the grant).
+    "budget_articles": [
+        {"code": "wages", "name": "Зарплаты", "emoji": "💼", "kinds": ["wages", "staff_wages"]},
+        {"code": "transfers", "name": "Трансферы и аренды", "emoji": "🔁", "kinds": ["transfer_out", "npc_buy", "npc_loan"]},
+        {"code": "club", "name": "Клуб и матчдей", "emoji": "🏟", "kinds": ["injury", "insurance", "tour_cost", "farm", "event_out"]},
+    ],
+    "budget_tolerance_pct": 10, "budget_fans_penalty": 150, "budget_bonus_pct": 10, "budget_bonus_max_pct": 5,
+    # «Стиль управления»: decisions made by the president himself vs the assistant in a
+    # season; at its end a club with `hands_on_min` decisions or more gets up to
+    # `hands_on_fans` fans and `hands_on_bonus_pct` % of the grant — by the share made by hand.
+    "hands_on_min": 5, "hands_on_fans": 300, "hands_on_bonus_pct": 3,
+    # «Достижения президента» (manager_budget): claimed once, the reward = % of the grant.
+    "president_achievements": [
+        {"code": "first_profit", "emoji": "📈", "name": "Первая прибыль", "about": "Закончи сезон в плюсе", "goal": 1, "reward_pct": 3},
+        {"code": "profit_3", "emoji": "💰", "name": "Три сезона в плюс", "about": "Три прибыльных сезона", "goal": 3, "reward_pct": 8},
+        {"code": "no_loan", "emoji": "🛡", "name": "Без долгов", "about": "Сыграй 3 сезона и ни разу не возьми кредит", "goal": 3, "reward_pct": 6},
+        {"code": "ipo", "emoji": "🔔", "name": "Звонок на бирже", "about": "Выведи клуб на IPO", "goal": 1, "reward_pct": 5},
+        {"code": "budget_keeper", "emoji": "📒", "name": "Бюджет под контролем", "about": "Уложись в план бюджета 3 сезона", "goal": 3, "reward_pct": 8},
+        {"code": "hands_on", "emoji": "✋", "name": "Сам себе помощник", "about": "Сезон, где все решения принял сам (от 5)", "goal": 1, "reward_pct": 4},
+        {"code": "full_staff", "emoji": "👥", "name": "Полный штаб", "about": "Займи все места в штабе клуба", "goal": 1, "reward_pct": 3},
+        {"code": "promotion", "emoji": "⬆️", "name": "Вверх по лестнице", "about": "Выйди в дивизион выше", "goal": 1, "reward_pct": 5},
+        {"code": "investor", "emoji": "🏦", "name": "Инвестор", "about": "Получи депозит с процентами или доход венчура", "goal": 1, "reward_pct": 3},
+        {"code": "big_sale", "emoji": "🤑", "name": "Сделка века", "about": "Продай игрока за 1 млн € или дороже", "goal": 1000000, "reward_pct": 5},
+    ],
     "staff_wage_pct": {"common": 1, "rare": 2, "epic": 3, "legendary": 5},
     "staff_caps": {"matchday_pct": 40, "discount_pct": 40, "injury_pct": 80, "coach_pct": 5, "scout_pct": 30},
     # The VIP staff for Stars: «Помощник» (manager_assistant; «Аналитик» = analytics_*),
@@ -312,6 +366,9 @@ KINDS: dict[str, tuple[str, str]] = {
     "cup": ("income", "Кубок менеджеров"),
     "event_out": ("expense", "События клуба"),
     "staff_wages": ("expense", "Зарплаты штаба"),
+    "budget_bonus": ("income", "Бонус за бюджет сезона"),
+    "hands_on": ("income", "Бонус ручного управления"),
+    "achievement": ("income", "Достижения президента"),
 }
 REPORT_SEASONS = 6
 
@@ -1005,6 +1062,9 @@ async def sign(db: AsyncSession, user: User, kind: str, option: Optional[str] = 
         deal.data = {"keys": [key], "loan_cut_pct": terms["loan_cut_pct"], "kid_bonus": terms["kid_bonus"]}
         await _add_deal(db, deal)
         await book(db, club, "farm", -terms["fee"], key, ref=f"farm:{deal.id}")
+    from app.services import manager_budget
+
+    manager_budget.act(club, key)
     await db.commit()
     return await view(db, user, now)
 
