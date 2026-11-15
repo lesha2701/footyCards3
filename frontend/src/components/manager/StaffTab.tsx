@@ -8,8 +8,6 @@ import {
   fetchManagerDecisions,
   fetchManagerDirector,
   fetchManagerStaff,
-  fireManagerStaff,
-  hireManagerStaff,
   renameManagerVip,
   setManagerAssistantRules,
   setManagerDirectorBudget,
@@ -20,7 +18,6 @@ import {
   type ManagerDirectorOption,
   type ManagerRarity,
   type ManagerStaffItem,
-  type ManagerStaffRole,
   type ManagerStaffView,
   type ManagerVip,
 } from "@/api/manager";
@@ -29,6 +26,7 @@ import { ListSkeleton } from "@/components/common/Skeleton";
 import { FinanceReview } from "@/components/manager/PresidentDecisions";
 import OfficeScene, { CarArt } from "@/components/manager/OfficeScene";
 import StaffPortrait from "@/components/manager/StaffPortrait";
+import StaffTable from "@/components/manager/StaffTable";
 import { staticUrl } from "@/lib/api";
 import { useFocusTarget } from "@/lib/managerFocus";
 import { eur } from "@/lib/managerMoney";
@@ -154,8 +152,8 @@ export default function StaffTab({ onError }: { onError: (e: unknown) => void })
       )}
       {desk === "team" && (
         <>
-          <ClubStaff data={data} onDone={done} onError={onError} />
-          <DirectorPanel data={data} onError={onError} />
+          <StaffTable data={data} onDone={done} onError={onError}
+            extra={(role) => (role === "director" ? <DirectorPanel data={data} onError={onError} /> : null)} />
         </>
       )}
       {desk === "garage" && <Status data={data} onItem={takeItem} busy={item.isPending || !!busy} />}
@@ -503,81 +501,6 @@ function Choice<T extends string>({ label, value, options, onPick }: { label: st
         ))}
       </div>
     </div>
-  );
-}
-
-// --- the club staff from «Жители города» -------------------------------------------------------
-
-function ClubStaff({ data, onDone, onError }: { data: ManagerStaffView; onDone: (v: ManagerStaffView) => void; onError: (e: unknown) => void }) {
-  const [role, setRole] = useState<ManagerStaffRole | null>(null);
-  const [fire, setFire] = useState<number | null>(null);
-  const hire = useMutation({
-    mutationFn: ({ resident, r }: { resident: number; r: ManagerStaffRole }) => hireManagerStaff(resident, r),
-    onSuccess: (v) => { setRole(null); onDone(v); }, onError,
-  });
-  const out = useMutation({ mutationFn: (id: number) => fireManagerStaff(id), onSuccess: onDone, onError });
-  const taken = new Set(data.staff.map((s) => s.role));
-  const free = data.roles.filter((r) => !taken.has(r.code));
-  const roleInfo = data.roles.find((r) => r.code === role);
-  return (
-    <section className="flex flex-col gap-3 rounded-2xl bg-bg-surface p-4" data-testid="club-staff">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="font-display text-base font-bold text-ink-chalk">🏢 Штат клуба</h2>
-        <span className="rounded-full bg-bg-raised px-2 py-0.5 text-micro font-bold text-ink-mist">{data.staff.length}/{data.slots} · {eur(data.wages)}/сезон</span>
-      </div>
-      <p className="-mt-2 text-micro text-ink-mist">Жители твоего города на должностях. Чем реже житель, тем сильнее эффект и выше зарплата.</p>
-      <div className="grid grid-cols-2 gap-2">
-        {data.staff.map((s) => (
-          <div key={s.id} className={`flex flex-col gap-1 rounded-xl bg-bg-raised p-2.5 ring-1 ${RARITY[s.rarity].ring}`}>
-            <div className="flex items-center gap-2">
-              {s.image ? <img src={staticUrl(s.image)} alt="" className="h-9 w-9 rounded-lg object-cover" /> : <span className="text-2xl">{s.icon}</span>}
-              <span className="min-w-0">
-                <span className="block truncate text-xs font-bold text-ink-chalk">{s.name}</span>
-                <span className="block truncate text-[10px] text-ink-mist">{s.emoji} {s.role_name}</span>
-              </span>
-            </div>
-            <span className="text-[10px] font-semibold text-accent-lime">{s.effect_text}</span>
-            <div className="flex items-center justify-between text-[10px] text-ink-mist">
-              <span>{eur(s.wage)}/сезон</span>
-              <button onClick={() => setFire(s.id)} className="font-bold text-red-300">Уволить</button>
-            </div>
-          </div>
-        ))}
-        {data.staff.length < data.slots && free.map((r) => (
-          <button key={r.code} disabled={!data.window} onClick={() => setRole(r.code)}
-            className="flex flex-col items-start gap-0.5 rounded-xl border border-dashed border-white/15 p-2.5 text-left disabled:opacity-50">
-            <span className="text-xs font-bold text-ink-chalk">{r.emoji} {r.name}</span>
-            <span className="text-[10px] text-ink-mist">{r.effects.common === r.effects.legendary ? r.effects.common : `${r.effects.common} … ${r.effects.legendary}`}</span>
-            <span className="text-[10px] font-bold text-violet-200">+ Нанять</span>
-          </button>
-        ))}
-      </div>
-      {!data.window && <p className="text-micro text-amber-200">⏳ Нанимать — в межсезонье.</p>}
-      {role && roleInfo && (
-        <div className="flex flex-col gap-2 rounded-xl bg-black/25 p-3" data-testid="hire-sheet">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-bold text-ink-chalk">{roleInfo.emoji} {roleInfo.name}: кого назначить?</p>
-            <button onClick={() => setRole(null)} className="text-micro text-ink-mist">Закрыть</button>
-          </div>
-          {data.candidates.length === 0 && <p className="text-micro text-ink-mist">Нет свободных жителей — выбивай их в паках «Жители города».</p>}
-          <div className="flex flex-col gap-1.5">
-            {data.candidates.map((c) => (
-              <button key={c.resident_id} disabled={hire.isPending} onClick={() => hire.mutate({ resident: c.resident_id, r: role })}
-                className={`flex items-center gap-2 rounded-xl bg-bg-raised p-2 text-left ring-1 ${RARITY[c.rarity].ring}`}>
-                {c.image ? <img src={staticUrl(c.image)} alt="" className="h-8 w-8 rounded-lg object-cover" /> : <span className="text-xl">{c.icon}</span>}
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-bold text-ink-chalk">{c.name}</span>
-                  <span className={`block text-[10px] font-semibold ${RARITY[c.rarity].text}`}>{RARITY[c.rarity].label} · {roleInfo.effects[c.rarity]}</span>
-                </span>
-                <span className="shrink-0 text-[10px] text-ink-mist">{eur(c.wage)}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      <ConfirmDialog open={fire !== null} title="Уволить сотрудника?" description="Житель останется в городе, должность освободится."
-        confirmLabel="Уволить" onConfirm={() => { if (fire !== null) out.mutate(fire); setFire(null); }} onCancel={() => setFire(null)} />
-    </section>
   );
 }
 

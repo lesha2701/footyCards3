@@ -129,6 +129,11 @@ async def test_assistant_fine_rules_and_advise_mode(client, db_session, bot_toke
     assert rules["keep"] == ["npc:1", "live:2"] and isinstance(office["squad"], list)
     assert (await client.put(f"{API}/manager/assistant/rules", headers=headers, json={"mode": "auto"})).status_code == 422
 
+    # The next window may close more than the free week away (by the weekday).
+    club = await _club_row(db_session, club_id)
+    perks.extend(club, "assistant", 14)
+    await db_session.commit()
+    db_session.expunge(club)  # the sweep's own sessions write the office
     near = _next_season_start(config) - timedelta(minutes=30)
     assert await assistant.window_sweep(db_session, near) == 1
     key = await finance.upcoming_key(db_session, near)

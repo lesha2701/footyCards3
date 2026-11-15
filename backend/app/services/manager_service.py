@@ -1641,7 +1641,7 @@ async def _play_round(db: AsyncSession, league: ManagerLeague, round_index: int,
             for e in roster:
                 if e.get("key") in live:
                     e["rating"] = live[e["key"]].player.rating
-            xi, _bench = pick_xi(roster, club.name, t.get("filler", 50), club.formation)
+            xi, _bench = pick_xi(roster, club.name, t.get("filler", 50) + int((t.get("base") or {}).get("academy_pts", 0)), club.formation)
             t["xi"] = xi
             plan[t["index"]] = {"xi": xi, "cards": live, "formation": tactics.clean_formation(club.formation),
                                 "style": tactics.clean_style(club.style), "name": club.name}
@@ -1659,7 +1659,7 @@ async def _play_round(db: AsyncSession, league: ManagerLeague, round_index: int,
             mods = finance.fatigue_mods(mods, teams[idx].get("finance") or {}, round_index)  # a preseason tour's tired legs
             if teams[idx]["club_id"]:  # «Установка на матч» and the events' form
                 mods = events.match_mods(mods, clubs[teams[idx]["club_id"]], league.id, round_index, config)
-                mods = staff.coach_mods(mods, teams[idx].get("base") or {})  # the staff's head coach
+                mods = staff.coach_mods(mods, teams[idx].get("base") or {}, idx == home)  # head coach, stadium / transport
             if idx == home and teams[idx]["club_id"]:
                 mods = finance.support_mods(mods, teams[idx].get("finance") or {}, config)  # the home crowd (ticket price)
             sides[idx] = _side_from(p["xi"], p["cards"], idx, p["name"], p["formation"], mods, config)

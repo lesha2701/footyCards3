@@ -1023,7 +1023,9 @@ export async function repayManagerBond(bondId: number): Promise<ManagerExchange>
 // --- «Штаб президента»: the VIP assistant and analyst, the club staff, the president's status ---
 
 export type ManagerVipRole = "assistant" | "analyst";
-export type ManagerStaffRole = "coach" | "physio" | "agent" | "marketing" | "scout" | "press" | "driver" | "director";
+/** The ten seats of the round table, clockwise from the president. */
+export type ManagerStaffRole =
+  | "coach" | "director" | "scout" | "academy" | "physio" | "transport" | "stadium" | "press" | "marketing" | "finance";
 export type ManagerRarity = "common" | "rare" | "epic" | "legendary";
 
 /** How a skin, a car or a room is drawn (StaffPortrait / OfficeScene). */
@@ -1065,6 +1067,7 @@ export interface ManagerStaffMember {
   id: number;
   role: ManagerStaffRole;
   role_name: string;
+  dept?: string;
   emoji: string;
   resident_id: number;
   name: string;
@@ -1082,11 +1085,55 @@ export interface ManagerStaffView {
   staff: ManagerStaffMember[];
   slots: number;
   candidates: { resident_id: number; name: string; title: string | null; icon: string; image: string | null; rarity: ManagerRarity; wage: number }[];
-  roles: { code: ManagerStaffRole; name: string; emoji: string; effects: Record<ManagerRarity, string> }[];
+  roles: { code: ManagerStaffRole; name: string; dept: string; emoji: string; effects: Record<ManagerRarity, string> }[];
   wages: number;
   window: boolean;
   items: ManagerStaffItem[];
   worn: { assistant: ManagerStaffItem | null; analyst: ManagerStaffItem | null; car: ManagerStaffItem | null; room: ManagerStaffItem | null };
+  /** «Поручения»: one a season per department. */
+  orders: Partial<Record<ManagerStaffRole, ManagerStaffOrder>>;
+  /** «Транспортный департамент»: the bus and the plane. */
+  fleet: { kinds: ManagerFleetKind[] };
+}
+
+export interface ManagerStaffOrder {
+  emoji: string;
+  title: string;
+  about: string;
+  cost: number;
+  fans: number;
+  form_pct: number;
+  form_rounds: number;
+  /** Only between rounds of a running season. */
+  season: boolean;
+  done: boolean;
+}
+
+export interface ManagerFleetItem {
+  code: string;
+  name: string;
+  emoji: string;
+  price: number;
+  upkeep: number;
+  away_pct: number;
+  injury_pct: number;
+}
+
+export interface ManagerFleetKind {
+  kind: "bus" | "plane";
+  title: string;
+  level: number;
+  items: ManagerFleetItem[];
+}
+
+export async function buyManagerFleet(kind: "bus" | "plane"): Promise<ManagerStaffView> {
+  const { data } = await api.post<ManagerStaffView>(`/manager/staff/fleet/${kind}/buy`);
+  return data;
+}
+
+export async function orderManagerStaff(role: ManagerStaffRole): Promise<ManagerStaffView> {
+  const { data } = await api.post<ManagerStaffView>(`/manager/staff/orders/${role}`);
+  return data;
 }
 
 export interface ManagerAssistantRules {

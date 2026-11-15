@@ -138,7 +138,9 @@ Main features:
   «только советовать» mode, the sporting director (`manager_staff.director`)
   and staff conflicts (`manager_conflicts.py`, slot CONFLICT_SLOT + round) —
   see docs/president-office.md; «Сегодня в клубе» tips carry a `target`
-  (`lib/managerFocus.ts`). Numbers: GameConfig.manager_finance
+  (`lib/managerFocus.ts`). «Штат» is a round table of ten departments
+  (`manager_staff.ROLES`) with a sheet per seat, «поручения» `staff_orders` and
+  the transport department's fleet (`fleet`). Numbers: GameConfig.manager_finance
   over `manager_finance.DEFAULTS`;
 - «Мой игрок» extras (`my_player_extras.py`): a weekly «Спонсор» (one of
   three brands of `my_player_sponsors`, goals counted by hooks in the

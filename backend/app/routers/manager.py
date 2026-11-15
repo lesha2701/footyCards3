@@ -464,6 +464,20 @@ async def staff_director_budget(payload: ManagerDirectorBudgetIn, db: AsyncSessi
     return await manager_staff.director(db, user, payload.budget)
 
 
+@router.post("/staff/fleet/{kind}/buy")
+async def staff_fleet_buy(kind: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """«Транспортный департамент»: the next bus or plane for club euros."""
+    await check_rate_limit(f"manager_staff:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_staff.buy_fleet(db, user, kind[:16])
+
+
+@router.post("/staff/orders/{role}")
+async def staff_order(role: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """A department's «поручение» of the season."""
+    await check_rate_limit(f"manager_staff:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_staff.order(db, user, role[:16])
+
+
 @router.get("/decisions")
 async def president_decisions(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     """«Решения президента»: the season budget, the hands-on meter, achievements, the analyst's finance review."""

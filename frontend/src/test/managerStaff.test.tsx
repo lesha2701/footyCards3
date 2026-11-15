@@ -18,6 +18,8 @@ const api = vi.hoisted(() => ({
   setManagerAssistantRules: vi.fn(),
   buyManagerStaffItem: vi.fn(),
   wearManagerStaffItem: vi.fn(),
+  buyManagerFleet: vi.fn(),
+  orderManagerStaff: vi.fn(),
   doManagerAdvice: vi.fn(),
   fetchManagerDecisions: vi.fn(),
   fetchManagerDirector: vi.fn(),
@@ -39,11 +41,23 @@ const STAFF: ManagerStaffView = {
   staff: [],
   slots: 3,
   candidates: [{ resident_id: 7, name: "Доктор Айболит", title: null, icon: "🩺", image: null, rarity: "epic", wage: 90_000 }],
-  roles: [{ code: "physio", name: "Физиотерапевт", emoji: "🩺", effects: { common: "−10%", rare: "−20%", epic: "−30% к шансу травмы", legendary: "−40%" } }],
+  roles: [
+    { code: "transport", name: "Начальник транспорта", dept: "Транспортный департамент", emoji: "🚌", effects: { common: "+1%", rare: "+1%", epic: "+2% к силе в гостях", legendary: "+2%" } },
+    { code: "physio", name: "Главный врач", dept: "Медицинский центр", emoji: "🩺", effects: { common: "−10%", rare: "−20%", epic: "−30% к шансу травмы", legendary: "−40%" } },
+  ],
   wages: 0,
   window: true,
   items: [SKIN, { code: "car_hatch", kind: "car", name: "Хэтчбек", about: "", art: {}, coins: 0, stars: 0, owned: true }],
   worn: { assistant: SKIN, analyst: null, car: null, room: null },
+  orders: {
+    transport: { emoji: "🛫", title: "Чартер на выезд", about: "Без усталости", cost: 60_000, fans: 0, form_pct: 2, form_rounds: 1, season: true, done: false },
+  },
+  fleet: { kinds: [
+    { kind: "bus", title: "Автобус", level: 1, items: [
+      { code: "minibus", name: "Микроавтобус", emoji: "🚐", price: 100_000, upkeep: 20_000, away_pct: 1, injury_pct: 0 },
+      { code: "coach_bus", name: "Клубный автобус", emoji: "🚌", price: 240_000, upkeep: 40_000, away_pct: 2, injury_pct: 0 },
+    ] },
+  ] },
 };
 const OFFICE: ManagerAssistantOffice = {
   active: true, name: "Алиса", trial: false, press_rounds: [2, 5],
@@ -78,7 +92,9 @@ describe("StaffTab", () => {
   it("hires a town resident into a free role", async () => {
     wrap(<StaffTab onError={() => {}} />);
     fireEvent.click(await screen.findByTestId("desk-team"));
-    fireEvent.click(await screen.findByText(/Физиотерапевт/));
+    expect(await screen.findByTestId("seat-president")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("seat-physio"));
+    expect(screen.getByTestId("seat-sheet")).toHaveTextContent("Медицинский центр");
     expect(screen.getByTestId("hire-sheet")).toHaveTextContent("эпический · −30% к шансу травмы");
     fireEvent.click(screen.getByText("Доктор Айболит"));
     await waitFor(() => expect(api.hireManagerStaff).toHaveBeenCalledWith(7, "physio"));
@@ -115,5 +131,24 @@ describe("«Помощница»: advice in one tap", () => {
     await waitFor(() => expect(api.doManagerAdvice).toHaveBeenCalledWith("ab12", expect.anything()));
     fireEvent.click(await screen.findByText("Иванов 77"));
     await waitFor(() => expect(api.setManagerAssistantRules).toHaveBeenCalledWith({ keep: ["npc:5"] }));
+  });
+});
+
+describe("«Штат»: the round table", () => {
+  it("opens a hired head's sheet: the order and the fleet", async () => {
+    const head = { id: 3, role: "transport" as const, role_name: "Начальник транспорта", dept: "Транспортный департамент", emoji: "🚌",
+      resident_id: 9, name: "Валера", icon: "🚌", image: null, rarity: "epic" as const, effect: 2, effect_text: "+2% к силе в гостях", wage: 50_000 };
+    api.fetchManagerStaff.mockResolvedValue({ ...STAFF, staff: [head] });
+    api.orderManagerStaff.mockResolvedValue({ ...STAFF, staff: [head] });
+    api.buyManagerFleet.mockResolvedValue({ ...STAFF, staff: [head] });
+    wrap(<StaffTab onError={() => {}} />);
+    fireEvent.click(await screen.findByTestId("desk-team"));
+    fireEvent.click(await screen.findByTestId("seat-transport"));
+    const sheet = screen.getByTestId("seat-sheet");
+    expect(sheet).toHaveTextContent("Валера");
+    expect(sheet).toHaveTextContent("+2% к силе в гостях");
+    expect(screen.getByTestId("fleet")).toHaveTextContent("Автобус: Микроавтобус");
+    fireEvent.click(screen.getByTestId("order-do"));
+    await waitFor(() => expect(api.orderManagerStaff).toHaveBeenCalledWith("transport"));
   });
 });

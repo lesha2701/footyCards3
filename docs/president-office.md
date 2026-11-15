@@ -174,3 +174,24 @@ frontend `components/manager/ExchangePanel.tsx` («📈 Биржа» section).
 - **Tips lead to the action**: every «Сегодня в клубе» item carries a
   `target`; the frontend (`lib/managerFocus.ts`) opens its tab and sub-section
   and lights `[data-focus=<target>]`; the home tile links `?go=<tab>:<target>`.
+
+## «Штат»: the round table (migration `0302_manager_staff_departments`)
+
+Ten departments sit around the table with the president at its head (his
+Telegram photo): coach, sporting director, scout, academy director (rating
+points to the academy kids — `academy_pts` on the filler), physio, transport
+(`away_pct` to every line away), stadium director (`stadium_pct` at home),
+press, marketing, finance director (`finance_pts` off the loan rate, half on
+deposits). `staff_slots` by division limits the taken seats. The old
+`driver` became `transport`, the old `agent` became `academy`.
+
+- **Fleet** (`fleet`, office `fleet`): a bus and a plane bought level by level
+  for club euros (`price_pct` of the grant, window only, needs the head of
+  transport), `upkeep_pct` booked at the season start (`fleet_upkeep`, can't
+  pay → sold), `away_pct` / `injury_pct` folded into the snapshot.
+- **Orders** (`staff_orders`, `POST /manager/staff/orders/{role}`): once a
+  season per department (ledger ref `order:<role>:<key>`): fans now, form for
+  the next rounds of the running league, or an injured footballer back.
+- Art drops into `frontend/src/assets/manager/staff/<code>.webp`:
+  `council_table`, `seat_empty` and the fleet codes (`minibus`, `coach_bus`,
+  `liner`, `charter`, `jet`); without a file the UI draws its own.

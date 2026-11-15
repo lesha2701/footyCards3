@@ -54,7 +54,7 @@ async def test_staff_from_the_town_effects_caps_and_wages(client, db_session, bo
     assert len(hired) == 1 and hired[0]["role"] == "coach" and hired[0]["effect"] == staff.effect_of("coach", "epic", config)
     # A role and a resident are taken once.
     assert (await client.post(f"{API}/manager/staff/hire", headers=headers, json={"resident_id": marketer, "role": "coach"})).status_code == 409
-    assert (await client.post(f"{API}/manager/staff/hire", headers=headers, json={"resident_id": coach, "role": "agent"})).status_code == 409
+    assert (await client.post(f"{API}/manager/staff/hire", headers=headers, json={"resident_id": coach, "role": "finance"})).status_code == 409
     assert (await client.post(f"{API}/manager/staff/hire", headers=headers, json={"resident_id": marketer, "role": "marketing"})).status_code == 200
 
     club = await _club_row(db_session, club_id)
@@ -80,7 +80,7 @@ async def test_staff_from_the_town_effects_caps_and_wages(client, db_session, bo
 async def test_fire_frees_the_role(client, db_session, bot_token):
     uid, headers, _club_id = await _setup(client, db_session, bot_token, 899702)
     rid = await _resident(db_session, uid, "common", "Шофёр Гена")
-    view = (await client.post(f"{API}/manager/staff/hire", headers=headers, json={"resident_id": rid, "role": "driver"})).json()
+    view = (await client.post(f"{API}/manager/staff/hire", headers=headers, json={"resident_id": rid, "role": "transport"})).json()
     sid = view["staff"][0]["id"]
     assert (await client.post(f"{API}/manager/staff/{sid}/fire", headers=headers)).json()["staff"] == []
     assert (await db_session.execute(select(ManagerStaff))).scalars().all() == []
@@ -137,6 +137,11 @@ async def test_assistant_trial_rules_and_window_chores(client, db_session, bot_t
     assert rules["events"] == "safe" and rules["renew_min_rating"] == 70
     assert (await client.put(f"{API}/manager/assistant/rules", headers=headers, json={"events": "crazy"})).status_code == 422
 
+    # The next window may close more than the free week away (by the weekday).
+    club = await _club_row(db_session, club_id)
+    perks.extend(club, "assistant", 14)
+    await db_session.commit()
+    db_session.expunge(club)  # the sweep's own sessions write the office
     start = _next_season_start(config)
     # Not yet: only assistant_hours before the window closes.
     assert await assistant.window_sweep(db_session, start - timedelta(hours=30)) == 0
@@ -196,3 +201,54 @@ async def test_analyst_checks_a_deal_and_gives_advice(client, db_session, bot_to
     with pytest.raises(ForbiddenError):
         await perks.check_deal(db_session, await _user(db_session, (await _setup(client, db_session, bot_token, 899707, name="Барсы"))[0]),
                                "npc", target.id)
+
+
+async def test_departments_fleet_and_orders(client, db_session, bot_token):
+    """Ten departments: the transport head with the fleet (away %, upkeep at
+    the season start), the stadium at home, the academy kids, the finance
+    director's rate; «поручения» once a season."""
+    config = await get_config(db_session)
+    await _squad(db_session, config.manager_division_rating[-1])
+    uid, headers, club_id = await _setup(client, db_session, bot_token, 899709)
+    view = (await client.get(f"{API}/manager/staff", headers=headers)).json()
+    assert [r["code"] for r in view["roles"]] == list(staff.ROLES) and len(view["roles"]) == 10
+    assert "agent" not in staff.ROLES and "driver" not in staff.ROLES
+    assert view["fleet"]["kinds"][0]["kind"] == "bus" and view["fleet"]["kinds"][0]["level"] == 0
+
+    # No head of transport → no fleet.
+    assert (await client.post(f"{API}/manager/staff/fleet/bus/buy", headers=headers)).status_code == 409
+    for role, name in (("transport", "Начальник Валера"), ("stadium", "Директор Арены"), ("academy", "Наставник"),
+                       ("marketing", "Маркетолог")):  # the bottom division's 4 places
+        rid = await _resident(db_session, uid, "epic", name)
+        assert (await client.post(f"{API}/manager/staff/hire", headers=headers, json={"resident_id": rid, "role": role})).status_code == 200
+    r = await client.post(f"{API}/manager/staff/fleet/bus/buy", headers=headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["fleet"]["kinds"][0]["level"] == 1
+    bus = finance.DEFAULTS["fleet"]["bus"][0]
+    club = await _club_row(db_session, club_id)
+    grant = finance.grant_of(club.division, config)
+    assert await _ledger_sum(db_session, club_id, "fleet") == -int(grant * bus["price_pct"] / 100)
+    assert (await client.post(f"{API}/manager/staff/fleet/rocket/buy", headers=headers)).status_code == 404
+
+    snap = await manager_service.base_snapshot(db_session, uid, config)
+    assert snap["away_pct"] == staff.effect_of("transport", "epic", config) + bus["away_pct"]
+    assert snap["stadium_pct"] == staff.effect_of("stadium", "epic", config)
+    assert snap["academy_pts"] == staff.effect_of("academy", "epic", config)
+    assert finance.loan_rate_bp({**snap, "finance_pts": 2}, config) == finance.loan_rate_bp(snap, config) - 200
+    assert finance.deposit_rate_bp({**snap, "finance_pts": 2}, config) == finance.deposit_rate_bp(snap, config) + 100
+    base = {"coach_pct": 1, "stadium_pct": 2, "away_pct": 3}
+    assert staff.coach_mods({}, base, True)["MID"] == 3 and staff.coach_mods({}, base, False)["MID"] == 4
+    assert staff.coach_mods({}, base)["MID"] == 1
+
+    # A fans order: once a season; a form order waits for the season.
+    fans = (await _club_row(db_session, club_id)).fans_bonus or 0
+    r = await client.post(f"{API}/manager/staff/orders/marketing", headers=headers)
+    assert r.status_code == 200, r.text and r.json()["orders"]["marketing"]["done"]
+    assert (await _club_row(db_session, club_id)).fans_bonus == fans + finance.DEFAULTS["staff_orders"]["marketing"]["fans"]
+    assert (await client.post(f"{API}/manager/staff/orders/marketing", headers=headers)).status_code == 409
+    assert (await client.post(f"{API}/manager/staff/orders/transport", headers=headers)).status_code == 409  # no season
+    assert (await client.post(f"{API}/manager/staff/orders/coach", headers=headers)).status_code == 409  # no coach
+
+    # The season start takes the bus's upkeep.
+    assert await manager_service.ensure_season(db_session, _next_season_start(config))
+    assert await _ledger_sum(db_session, club_id, "fleet_upkeep") == -int(grant * bus["upkeep_pct"] / 100)
