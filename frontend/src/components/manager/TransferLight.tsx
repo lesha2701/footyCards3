@@ -25,7 +25,7 @@ export default function TransferLight({ open, until, compact = false, className 
     <span
       data-testid="transfer-light"
       aria-label={open ? "Трансферное окно открыто" : "Трансферное окно закрыто"}
-      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full bg-black/50 py-1 pl-1 pr-2 ring-1 backdrop-blur ${open ? "ring-emerald-400/50" : "ring-red-500/40"} ${className}`}
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full bg-black/60 py-1 pl-1 pr-2 ring-1${open ? "ring-emerald-400/50" : "ring-red-500/40"} ${className}`}
     >
       {!compact && <img src={icon} alt="" className="h-6 w-6 rounded-full object-cover" />}
       <span className={`relative flex h-2 w-2 ${compact ? "ml-1" : ""}`}>
