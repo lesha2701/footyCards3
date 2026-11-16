@@ -141,12 +141,9 @@ export default function ManagerPage() {
   return (
     <div className="flex flex-col gap-4" data-testid="manager-page">
       <GameHero game="manager" title="Менеджер" subtitle={
-        <span className="mt-1 flex items-center gap-2">
-          <button onClick={() => setTab("transfers")} className="active:scale-95" data-testid="hero-transfers">
-            <TransferLight open={windowOpen(data.season, club)} until={data.season.preseason_ends_at} />
-          </button>
-          {club && <span className="min-w-0 truncate">{club.name}</span>}
-        </span>
+        <button onClick={() => setTab("transfers")} className="mt-1 active:scale-95" data-testid="hero-transfers">
+          <TransferLight open={windowOpen(data.season, club)} until={data.season.preseason_ends_at} />
+        </button>
       } />
       <TodayPanel onTab={setTab} onError={onError} />
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
