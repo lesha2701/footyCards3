@@ -165,6 +165,7 @@ async def update_club(payload: ManagerClubUpdateIn, db: AsyncSession = Depends(g
     await check_rate_limit(f"manager_club:{user.id}", max_calls=20, window_seconds=60)
     return await manager_service.update_club(
         db, user, payload.name, payload.formation, payload.style, payload.academy_card_id, payload.clear_academy,
+        payload.academy_slot, payload.coach_auto,
     )
 
 

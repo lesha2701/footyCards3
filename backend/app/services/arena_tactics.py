@@ -62,8 +62,11 @@ FORMATION_SHIFT: dict[str, tuple[int, int]] = {
     "4-2-3-1": (-1, 1),
     "4-3-3H": (-2, 2),
     "5-3-2": (-4, 4),
+    # «Менеджер» only (not in ARENA_FORMATIONS).
+    "4-1-4-1": (-3, 3),
+    "4-3-1-2": (2, -1),
 }
-FORMATION_LABELS = {"4-3-3H": "4-3-3 (опорник)"}
+FORMATION_LABELS = {"4-3-3H": "4-3-3 (опорник)", "4-3-1-2": "4-3-1-2 (ромб)"}
 
 
 def formation_label(formation: Optional[str]) -> str:

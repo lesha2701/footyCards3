@@ -17,6 +17,8 @@ export interface ManagerSquadPlayer {
   position: string;
   rating: number;
   value?: number;
+  /** On the bench of the match day (comes on for a tired starter). */
+  sub?: boolean;
   user_id?: number;
   owner_name?: string;
   player_id?: number;
@@ -124,7 +126,8 @@ export interface ManagerClub {
   base: ManagerBase;
   next_grant: { grant: number; bonus: number; bonus_raw: number; total: number };
   ticket_per_home_match: number;
-  squad: { xi: ManagerSquadPlayer[]; bench: ManagerSquadPlayer[]; rating: number; kids: number; formation: string };
+  /** bench: the matchday substitutes first (`sub`), then the ones left out of the squad. */
+  squad: { xi: ManagerSquadPlayer[]; bench: ManagerSquadPlayer[]; rating: number; kids: number; formation: string; bench_size?: number; subs_max?: number; sub_from?: number };
   contracts: ManagerContract[];
   offers_sent: ManagerContract[];
   /** Other clubs asking for my players. */
@@ -141,6 +144,9 @@ export interface ManagerClub {
   next_match: ManagerNextMatch | null;
   live_count: number;
   academy_card_id: number | null;
+  /** Every «Академия» slot, the chosen card or null. */
+  academy_card_ids?: (number | null)[];
+  coach?: ManagerCoach | null;
   /** The brand on the shirt («Кабинет президента», this or the coming season). */
   kit_sponsor: string | null;
   academy_options: { card_id: number; name: string; position: string; rating: number }[];
@@ -164,6 +170,27 @@ export interface ManagerNextMatch {
   edge: "win" | "lose" | "even";
   /** % on my lines' ratings in that match (style + formation + edge). */
   mods: Record<ManagerLine, number>;
+  /** The style my side plays it with (the coach's when he sets the tactics). */
+  my_style?: ManagerStyle;
+  by_coach?: boolean;
+}
+
+/** «Главный тренер» with a character (manager_coach). */
+export interface ManagerCoach {
+  trait: string;
+  name: string;
+  /** The character: «Испанец», «Стратег», … */
+  nation: string;
+  title: string;
+  emoji: string;
+  about: string;
+  quote: string;
+  /** He sets the formation, style and «Установка на матч» (else the president). */
+  auto: boolean;
+  formation: string;
+  style: string;
+  /** The line he asks to strengthen. */
+  ask?: { line: string; text: string } | null;
 }
 
 export interface ManagerTacticsRules {
@@ -659,7 +686,7 @@ export async function foundManagerClub(name: string): Promise<ManagerView> {
 }
 
 export async function updateManagerClub(patch: {
-  name?: string; formation?: string; style?: ManagerStyle; academy_card_id?: number; clear_academy?: boolean;
+  name?: string; formation?: string; style?: ManagerStyle; academy_card_id?: number; clear_academy?: boolean; academy_slot?: number; coach_auto?: boolean;
 }): Promise<ManagerView> {
   const { data } = await api.patch<ManagerView>("/manager/club", patch);
   return data;
@@ -1077,6 +1104,8 @@ export interface ManagerStaffMember {
   effect: number;
   effect_text: string;
   wage: number;
+  /** The head coach's character. */
+  coach?: ManagerCoach;
 }
 
 export interface ManagerStaffView {

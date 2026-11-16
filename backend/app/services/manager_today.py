@@ -111,6 +111,24 @@ async def _office_items(db: AsyncSession, club: ManagerClub, season: dict, now: 
     return items
 
 
+async def _coach_ask(db: AsyncSession, club: ManagerClub, config) -> Optional[dict]:
+    """The head coach asks for the player his team lacks (in the window):
+    through the sporting director when there is one."""
+    from app.services import manager_coach as coach, manager_staff as staff
+
+    boss = await coach.coach_of(db, club)
+    if boss is None:
+        return None
+    squad = await ms.squad_view(db, club, config)
+    ask = coach.request(boss["trait"], squad["xi"], lambda p: ms._category(ms.Position(p["position"])))
+    if ask is None:
+        return None
+    director = any(s.role == "director" for s in await staff.staff_of(db, club.id))
+    text = f"{boss['person']}: «{ask['text']}»" + (" — поручи спортивному директору" if director else "")
+    return {"code": "coach_ask", "icon": "🧢", "text": text, "tab": "staff" if director else "transfers",
+            "target": "director" if director else "market", "urgent": bool(squad["kids"])}
+
+
 async def _today(db: AsyncSession, user: User, club: Optional[ManagerClub], season: dict, league: Optional[dict],
                  next_match: Optional[dict], now: datetime, config) -> list[dict]:
     """What to do now, most urgent first: {code, icon, text, tab, urgent}."""
@@ -150,6 +168,9 @@ async def _today(db: AsyncSession, user: User, club: Optional[ManagerClub], seas
         if left is not None and 0 < left <= 48:
             text = f"Окно закрывается через {max(1, round(left))} ч" if left >= 1 else "Окно закрывается меньше чем через час"
             items.append({"code": "window", "icon": "⏳", "text": text, "tab": "transfers", "target": "market", "urgent": left <= 12})
+        ask = await _coach_ask(db, club, config)
+        if ask:
+            items.append(ask)
         key = await finance.upcoming_key(db, now)
         if not await finance._taken(db, club.id, "sponsor", key):
             items.append({"code": "sponsor", "icon": "🤝", "text": "Спонсор на сезон не выбран", "tab": "office", "target": "sponsor", "urgent": False})
@@ -166,7 +187,9 @@ async def _today(db: AsyncSession, user: User, club: Optional[ManagerClub], seas
             day = "" if local.date() == now.astimezone(app_timezone()).date() else f"{WEEKDAYS[local.weekday()]} "
             clock = f"{day}{local:%H:%M}"
         text = f"Матч {where} с «{next_match['opponent']}»{f' в {clock}' if clock else ''}"
-        if next_match.get("edge") == "lose":
+        if next_match.get("by_coach"):
+            items.append({"code": "match", "icon": "🧢", "text": f"{text}: тактику ставит тренер", "tab": "club", "target": "tactics", "urgent": False})
+        elif next_match.get("edge") == "lose":
             items.append({"code": "edge", "icon": "⚠️", "text": f"{text}: его стиль бьёт твой — проверь тактику", "tab": "club", "target": "tactics", "urgent": True})
         else:
             items.append({"code": "match", "icon": "⚽", "text": text, "tab": "club", "target": "tactics", "urgent": False})

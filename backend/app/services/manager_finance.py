@@ -50,6 +50,14 @@ from app.services.notification_service import notify
 
 DEFAULTS: dict = {
     "enabled": True,
+    # Squad: the season grant is grant_pct % of the division budget (the
+    # division budget G itself stays the base of every other %); up to
+    # academy_slots «Академия» cards start; a matchday squad is the XI plus
+    # bench_size; from each of sub_minutes the starters are tired by tired_pct
+    # (same index) % and the coach brings on a fresher one of the same line,
+    # at most subs_max a match.
+    "grant_pct": 125, "academy_slots": 2, "bench_size": 5, "subs_max": 3,
+    "sub_minutes": [60, 70, 80], "tired_pct": [3, 5, 7],
     # Sponsors: % of G. place_pct = by place (index 0 = champion); rest_pct =
     # any other place that is not relegated; relegated_pct = relegated.
     "sponsors": [
@@ -452,7 +460,7 @@ def validate(raw: dict) -> dict:
             if not isinstance(value, list) or not value or not all(isinstance(x, dict) and x.get("code") for x in value):
                 raise ValueError(f"{key}: нужен список объектов с code")
             out[key] = value
-        elif key in ("cup_round_hours", "cup_prizes_pct"):
+        elif key in ("cup_round_hours", "cup_prizes_pct", "sub_minutes", "tired_pct"):
             if not isinstance(value, list) or not value or not all(isinstance(x, (int, float)) and x >= 0 for x in value):
                 raise ValueError(f"{key}: нужен список неотрицательных чисел")
             out[key] = value

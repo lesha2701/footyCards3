@@ -78,11 +78,37 @@ CLUB_FORMATIONS: dict[str, list[FormationSlot]] = {
     ],
 }
 
+# «Менеджер» only: not offered by clubs, the draft or the career (they list
+# CLUB_FORMATIONS), but get_formation_slots knows them.
+EXTRA_FORMATIONS: dict[str, list[FormationSlot]] = {
+    # One holding midfielder behind a line of four, a lone striker.
+    "4-1-4-1": [
+        FormationSlot("GK", "GK", Position.GK),
+        FormationSlot("DEF1", "DEF", Position.LB), FormationSlot("DEF2", "DEF", Position.CB),
+        FormationSlot("DEF3", "DEF", Position.CB), FormationSlot("DEF4", "DEF", Position.RB),
+        FormationSlot("MID1", "MID", Position.CDM),
+        FormationSlot("MID2", "MID", Position.LM), FormationSlot("MID3", "MID", Position.CM),
+        FormationSlot("MID4", "MID", Position.CM), FormationSlot("MID5", "MID", Position.RM),
+        FormationSlot("FWD1", "FWD", Position.ST),
+    ],
+    # The diamond: a holder, two central midfielders, a playmaker, two strikers.
+    "4-3-1-2": [
+        FormationSlot("GK", "GK", Position.GK),
+        FormationSlot("DEF1", "DEF", Position.LB), FormationSlot("DEF2", "DEF", Position.CB),
+        FormationSlot("DEF3", "DEF", Position.CB), FormationSlot("DEF4", "DEF", Position.RB),
+        FormationSlot("MID1", "MID", Position.CDM),
+        FormationSlot("MID2", "MID", Position.CM), FormationSlot("MID3", "MID", Position.CM),
+        FormationSlot("MID4", "MID", Position.CAM),
+        FormationSlot("FWD1", "FWD", Position.ST), FormationSlot("FWD2", "FWD", Position.ST),
+    ],
+}
+
 
 def get_formation_slots(formation: str) -> list[FormationSlot]:
-    if formation not in CLUB_FORMATIONS:
+    slots = CLUB_FORMATIONS.get(formation) or EXTRA_FORMATIONS.get(formation)
+    if slots is None:
         raise ConflictError(f"Unknown formation: {formation}")
-    return CLUB_FORMATIONS[formation]
+    return slots
 
 
 def get_slots_by_code(formation: str) -> dict[str, FormationSlot]:

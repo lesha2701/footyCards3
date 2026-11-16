@@ -173,10 +173,16 @@ describe("ManagerPage", () => {
     expect(pitch).toHaveTextContent("Академия");
     expect(pitch).toHaveTextContent("€9,8 млн");
     expect(screen.getByText(/8 мест пустует/)).toBeInTheDocument();
-    // The budget breakdown is on «Клуб» → «Финансы».
-    expect(screen.queryByText(/Бюджет на сезон: €2,3 млн/)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Финансы" }));
-    expect(screen.getByText(/Бюджет на сезон: €2,3 млн/)).toBeInTheDocument();
+    // The top is the match day: the club in one line with its budget, then what comes next.
+    expect(screen.getByTestId("matchday")).toHaveTextContent(club.name);
+    expect(screen.getByTestId("matchday-budget")).toHaveTextContent("€");
+    expect(screen.getByTestId("matchday-next")).toHaveTextContent(/Первый тур/);
+    expect(screen.getByTestId("bench")).toBeInTheDocument();
+    // «Клуб»: Состав · Тактика · Лига · Стиль (no «Финансы» — the budget is in «Кабинет»).
+    const subs = screen.getByTestId("club-subtabs");
+    expect([...subs.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Состав", "Тактика", "Лига", "Стиль"]);
+    fireEvent.click(screen.getByRole("button", { name: "Лига" }));
+    expect(screen.getByTestId("pyramid")).toBeInTheDocument();
   });
 
   it("a newcomer sees one screen: no tabs, the steps and the rules folded", async () => {
@@ -189,18 +195,18 @@ describe("ManagerPage", () => {
     expect(screen.getByText(/«Моих игроков» других пользователей/)).toBeInTheDocument();
   });
 
-  it("five tabs; «Штаб» stays shut until the club has played, «Я игрок» is in «Трансферы»", async () => {
+  it("four tabs; «Персонал» stays shut until the club has played, «Я игрок» is in «Трансферы»", async () => {
     fetchManager.mockResolvedValue({ ...base, club });
     renderPage();
     const tabs = await screen.findByTestId("manager-tabs");
-    expect(tabs.querySelectorAll("button")).toHaveLength(5);
+    expect([...tabs.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Клуб", "Трансферы", "Кабинет", "🔒 Персонал"]);
     fireEvent.click(screen.getByTestId("tab-staff"));
     expect(screen.getByTestId("staff-locked")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("tab-transfers"));
     expect(screen.getByRole("button", { name: /Я игрок/ })).toBeInTheDocument();
   });
 
-  it("a club with seasons behind it has «Штаб» open", async () => {
+  it("a club with seasons behind it has «Персонал» open", async () => {
     fetchManager.mockResolvedValue({ ...base, club: { ...club, seasons_played: 2 } });
     renderPage();
     fireEvent.click(await screen.findByTestId("tab-staff"));
@@ -362,6 +368,35 @@ describe("ManagerPage", () => {
     await waitFor(() => expect(updateManagerClub.mock.calls.map((c) => c[0])).toContainEqual({ formation: "3-4-3" }));
     fireEvent.click(screen.getByRole("button", { name: "Как считается матч?" }));
     expect(screen.getByTestId("match-help")).toHaveTextContent("Как считается матч");
+  });
+
+  it("the head coach runs the tactics until the president takes them back", async () => {
+    const coach = {
+      trait: "iron", name: "Петрович", nation: "Железный", title: "Дисциплина", emoji: "🛡️", about: "Сначала не пропустить.",
+      quote: "Ноль в своих воротах — уже половина победы.", auto: true, formation: "4-1-4-1", style: "Оборона",
+      ask: { line: "FWD", text: "Нужен нападающий: в старте играет воспитанник" },
+    };
+    fetchManager.mockResolvedValue({ ...base, club: { ...club, coach } });
+    updateManagerClub.mockResolvedValue({ ...base, club: { ...club, coach: { ...coach, auto: false } } });
+    renderPage();
+    expect(await screen.findByTestId("matchday-next")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Тактика" }));
+    const card = await screen.findByTestId("coach-card");
+    expect(card).toHaveTextContent("Петрович");
+    expect(card).toHaveTextContent("Нужен нападающий");
+    fireEvent.click(screen.getByRole("button", { name: "Ставлю сам" }));
+    await waitFor(() => expect(updateManagerClub.mock.calls.map((c) => c[0])).toContainEqual({ coach_auto: false }));
+  });
+
+  it("two academy places, each with its own pick", async () => {
+    const options = [{ card_id: 11, name: "Воспитанник А", position: "CB", rating: 55 }, { card_id: 12, name: "Воспитанник Б", position: "CM", rating: 54 }];
+    fetchManager.mockResolvedValue({ ...base, club: { ...club, academy_options: options, academy_card_id: 11, academy_card_ids: [11, null] } });
+    updateManagerClub.mockResolvedValue({ ...base, club });
+    renderPage();
+    expect(await screen.findByText("Место 2")).toBeInTheDocument();
+    // The second place lists only the card not taken by the first.
+    fireEvent.click(screen.getByText("Воспитанник Б"));
+    await waitFor(() => expect(updateManagerClub.mock.calls.map((c) => c[0])).toContainEqual({ academy_card_id: 12, academy_slot: 2 }));
   });
 
   it("draws faces on the pitch: card photos and initials of academy kids", async () => {

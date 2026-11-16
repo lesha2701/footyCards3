@@ -244,6 +244,12 @@ async def hire(db: AsyncSession, user: User, resident_id: int, role: str) -> dic
                                 hired_at=datetime.now(timezone.utc)))
     except IntegrityError:
         raise ConflictError("Эта должность только что занята")
+    if role == "coach":  # «Главный тренер»: his character is rolled at the hiring
+        from app.services import manager_coach as coach
+
+        data = office(club)
+        data["coach"] = {"resident_id": resident_id, "trait": coach.roll()}
+        save(club, data)
     await db.commit()
     return await view(db, user)
 
@@ -253,6 +259,10 @@ async def fire(db: AsyncSession, user: User, staff_id: int) -> dict:
     row = await db.get(ManagerStaff, staff_id)
     if row is None or row.club_id != club.id:
         raise NotFoundError("Такого сотрудника нет")
+    if row.role == "coach":
+        data = office(club)
+        data.pop("coach", None)
+        save(club, data)
     await db.delete(row)
     await db.commit()
     return await view(db, user)
@@ -413,6 +423,13 @@ def effect_text(role: str, value: int) -> str:
     return f"{r['sign']}{value}{r['unit']}" if r["sign"] else r["unit"]
 
 
+def coach_card(club: ManagerClub, resident: TownResident) -> dict:
+    from app.services import manager_coach as coach
+
+    trait = coach.trait_for(club, resident.id)
+    return coach.out({**coach.TRAITS[trait], "trait": trait, "person": resident.name, "auto": coach.auto(club)})
+
+
 async def view(db: AsyncSession, user: User) -> dict:
     from app.services import manager_assistant as assistant, manager_service as ms
 
@@ -445,7 +462,8 @@ async def view(db: AsyncSession, user: User) -> dict:
             continue
         staff.append({"id": s.id, "role": s.role, "role_name": ROLES[s.role]["name"], "dept": ROLES[s.role]["dept"], "emoji": ROLES[s.role]["emoji"],
                       "resident_id": r.id, "name": r.name, "icon": r.icon, "image": r.image_path, "rarity": s.rarity,
-                      "effect": value, "effect_text": effect_text(s.role, value), "wage": s.wage})
+                      "effect": value, "effect_text": effect_text(s.role, value), "wage": s.wage,
+                      **({"coach": coach_card(club, r)} if s.role == "coach" else {})})
     candidates = [
         {"resident_id": r.id, "name": r.name, "title": r.title, "icon": r.icon, "image": r.image_path, "rarity": r.rarity,
          "wage": wage_of(r.rarity, club.division, config)}

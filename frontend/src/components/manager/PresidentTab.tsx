@@ -85,7 +85,7 @@ export default function PresidentTab({ onError, onTab = () => {} }: { onError: (
                   className={`flex min-w-0 flex-col items-center gap-0.5 rounded-2xl px-0.5 py-2 text-[10px] font-bold transition ${section === id
                     ? "bg-gradient-to-b from-amber-300 to-amber-500 text-bg-base shadow-[0_6px_18px_-6px_rgba(251,191,36,0.8)]"
                     : "bg-bg-surface text-ink-mist"}`}>
-                  <MIcon code={`pres_${id}`} emoji={icon} className="h-8 w-8" emojiClass="text-lg" /><span className="w-full truncate text-center">{label}</span>
+                  <MIcon code={`pres_${id}`} emoji={icon} className="h-10 w-10" emojiClass="text-xl" /><span className="w-full truncate text-center">{label}</span>
                 </button>
               ))}
             </div>

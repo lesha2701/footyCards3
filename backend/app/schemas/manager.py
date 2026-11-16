@@ -13,6 +13,10 @@ class ManagerClubUpdateIn(BaseModel):
     style: Optional[str] = Field(default=None, max_length=16)
     academy_card_id: Optional[int] = None
     clear_academy: bool = False
+    # Which «Академия» slot academy_card_id / clear_academy is for (1 or 2).
+    academy_slot: int = Field(default=1, ge=1, le=4)
+    # The head coach sets the tactics (True) or the president himself (False).
+    coach_auto: Optional[bool] = None
 
 
 class ManagerOfferIn(BaseModel):

@@ -93,7 +93,6 @@ describe("StaffTab", () => {
 
   it("hires a town resident into a free role", async () => {
     wrap(<StaffTab onError={() => {}} />);
-    fireEvent.click(await screen.findByTestId("desk-team"));
     expect(await screen.findByTestId("seat-president")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("seat-physio"));
     expect(screen.getByTestId("seat-sheet")).toHaveTextContent("Медицинский центр");
@@ -128,7 +127,8 @@ describe("«Помощница»: advice in one tap", () => {
     api.doManagerAdvice.mockResolvedValue(OFFICE);
     api.setManagerAssistantRules.mockResolvedValue(active);
     wrap(<StaffTab onError={() => {}} />);
-    fireEvent.click(await screen.findByTestId("desk-assistant"));
+    // The round table is the tab; her desk opens from her corner.
+    fireEvent.click(await screen.findByTestId("corner-assistant"));
     expect(await screen.findByTestId("assistant-desk")).toHaveTextContent("Советую взять в аренду Петрова");
     fireEvent.click(screen.getByTestId("advice-do"));
     await waitFor(() => expect(api.doManagerAdvice).toHaveBeenCalledWith("ab12", expect.anything()));
@@ -145,7 +145,6 @@ describe("«Персонал»: the round table", () => {
     api.orderManagerStaff.mockResolvedValue({ ...STAFF, staff: [head] });
     api.buyManagerFleet.mockResolvedValue({ ...STAFF, staff: [head] });
     wrap(<StaffTab onError={() => {}} />);
-    fireEvent.click(await screen.findByTestId("desk-team"));
     fireEvent.click(await screen.findByTestId("seat-transport"));
     const sheet = screen.getByTestId("seat-sheet");
     expect(sheet).toHaveTextContent("Валера");

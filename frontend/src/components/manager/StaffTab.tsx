@@ -23,6 +23,7 @@ import {
 } from "@/api/manager";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
+import CoachCard from "@/components/manager/CoachCard";
 import { FinanceReview } from "@/components/manager/PresidentDecisions";
 import OfficeScene, { CarArt } from "@/components/manager/OfficeScene";
 import StaffPortrait from "@/components/manager/StaffPortrait";
@@ -43,10 +44,10 @@ const RARITY: Record<ManagerRarity, { label: string; ring: string; text: string 
 
 const until = (iso: string | null) => iso ? new Date(iso).toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) : "";
 
-type Desk = "assistant" | "analyst" | "team" | "garage";
+type Vip = "assistant" | "analyst";
 
 /** Where a «Сегодня в клубе» target lives. */
-const FOCUS: Record<string, Desk> = { advice: "assistant", director: "team", staff: "team", analyst: "analyst" };
+const FOCUS: Record<string, Vip> = { advice: "assistant", analyst: "analyst" };
 
 /** «👥 Штаб» of «Менеджер»: a hero with the office and both VIP, then four
  * desks — «Помощница» (her report with one-tap advice and the fine rules),
@@ -55,7 +56,8 @@ const FOCUS: Record<string, Desk> = { advice: "assistant", director: "team", sta
 export default function StaffTab({ onError }: { onError: (e: unknown) => void }) {
   const queryClient = useQueryClient();
   const { data } = useQuery({ queryKey: ["manager", "staff"], queryFn: fetchManagerStaff });
-  const [desk, setDesk] = useState<Desk>("team");
+  // The round table is the tab; a VIP's desk opens under it from their corner.
+  const [desk, setDesk] = useState<Vip | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   useFocusTarget((t) => { if (FOCUS[t]) setDesk(FOCUS[t]); });
   const done = (v: ManagerStaffView) => {
@@ -97,9 +99,6 @@ export default function StaffTab({ onError }: { onError: (e: unknown) => void })
         onTrial={() => trial.mutate()} onDone={done} onError={onError} onItem={takeItem} itemBusy={item.isPending || !!busy} />
     );
   };
-  const desks: [Desk, string, string][] = [
-    ["team", "🏢", "Персонал"], ["assistant", "🗂", vipOf("assistant").name], ["analyst", "📊", vipOf("analyst").name], ["garage", "🚘", "Гараж"],
-  ];
 
   return (
     <div className="flex flex-col gap-4" data-testid="staff-tab">
@@ -107,8 +106,8 @@ export default function StaffTab({ onError }: { onError: (e: unknown) => void })
         <OfficeScene room={data.worn.room?.art} code={data.worn.room?.code} className="absolute inset-0 h-full w-full opacity-45" />
         <div className="absolute inset-0 bg-gradient-to-b from-[#120d24]/70 via-[#0e1622]/85 to-[#0b1410]" />
         <div className="relative p-4">
-          <p className="text-micro font-bold uppercase tracking-[0.2em] text-violet-200">👥 Штаб президента</p>
-          <p className="mt-1 text-xs text-ink-mist">Персонал из жителей города усиливает клуб, двое VIP работают на тебя — их столы у шкафов.</p>
+          <p className="text-micro font-bold uppercase tracking-[0.2em] text-violet-200">👥 Персонал</p>
+          <p className="mt-1 text-xs text-ink-mist">Жители города за круглым столом усиливают клуб. {vipOf("assistant").name} и {vipOf("analyst").name} — у шкафов: нажми на них.</p>
           <HeroChips data={data} />
           {none && data.bundle_stars > 0 && (
             <button disabled={busy === "staff_bundle"} onClick={() => void stars("staff_bundle")} data-testid="staff-bundle"
@@ -123,17 +122,21 @@ export default function StaffTab({ onError }: { onError: (e: unknown) => void })
         </div>
       </section>
 
-      <div className="grid grid-cols-4 gap-1.5" role="tablist">
-        {desks.map(([id, icon, label]) => (
-          <button key={id} role="tab" aria-selected={desk === id} onClick={() => { hapticSelection(); setDesk(id); }} data-testid={`desk-${id}`}
-            className={`flex min-w-0 flex-col items-center gap-0.5 rounded-2xl px-1 py-2 text-micro font-bold transition ${desk === id
-              ? "bg-gradient-to-b from-violet-300 to-violet-500 text-bg-base shadow-[0_6px_18px_-6px_rgba(167,139,250,0.8)]"
-              : "bg-bg-surface text-ink-mist"}`}>
-            <MIcon code={`desk_${id}`} emoji={icon} className="h-8 w-8" emojiClass="text-lg" /><span className="w-full truncate text-center">{label}</span>
-          </button>
-        ))}
-      </div>
+      <StaffTable data={data} onDone={done} onError={onError}
+        extra={(role) => (role === "director" ? <DirectorPanel data={data} onError={onError} />
+          : role === "coach" ? (() => { const c = data.staff.find((s) => s.role === "coach")?.coach; return c ? <CoachCard coach={c} compact /> : null; })()
+          : null)}
+        corners={data.vip.map((v) => <VipCorner key={v.code} vip={v} on={desk === v.role}
+          onPick={() => { hapticSelection(); setDesk(desk === v.role ? null : v.role); }} />)} />
 
+      {desk && (
+        <div className="flex items-center justify-between px-1">
+          <p className="flex items-center gap-2 font-display text-base font-bold text-ink-chalk">
+            <MIcon code={`desk_${desk}`} emoji={desk === "assistant" ? "🗂" : "📊"} className="h-7 w-7" /> Стол: {vipOf(desk).name}
+          </p>
+          <button onClick={() => setDesk(null)} className="rounded-full bg-bg-surface px-3 py-1 text-micro text-ink-mist" data-testid="desk-close">Закрыть ✕</button>
+        </div>
+      )}
       {desk === "assistant" && (
         <>
           {vipOf("assistant").active && <AssistantDesk onError={onError} />}
@@ -146,16 +149,44 @@ export default function StaffTab({ onError }: { onError: (e: unknown) => void })
           {vipOf("analyst").active && <AnalystReview />}
         </>
       )}
-      {desk === "team" && (
-        <>
-          <StaffTable data={data} onDone={done} onError={onError}
-            extra={(role) => (role === "director" ? <DirectorPanel data={data} onError={onError} /> : null)}
-            corners={data.vip.map((v) => <VipCorner key={v.code} vip={v} onPick={() => { hapticSelection(); setDesk(v.role); }} />)} />
-        </>
-      )}
-      {desk === "garage" && <Status data={data} onItem={takeItem} busy={item.isPending || !!busy} />}
       <p className="px-1 text-micro text-ink-mist">VIP-персонал, скины, машины и кабинеты — удобство и стиль. Сила клуба зависит от штата из жителей и решений президента.</p>
     </div>
+  );
+}
+
+/** «Гараж»: the president's car and office room — in «Клуб» → «Стиль». */
+export function StaffGarage({ onError }: { onError: (e: unknown) => void }) {
+  const queryClient = useQueryClient();
+  const { data } = useQuery({ queryKey: ["manager", "staff"], queryFn: fetchManagerStaff });
+  const [busy, setBusy] = useState(false);
+  const item = useMutation({
+    mutationFn: ({ code, buy }: { code: string; buy: boolean }) => (buy ? buyManagerStaffItem(code) : wearManagerStaffItem(code)),
+    onSuccess: (v) => { hapticNotify("success"); queryClient.setQueryData(["manager", "staff"], v); },
+    onError,
+  });
+  if (!data) return null;
+  const take = async (i: ManagerStaffItem) => {
+    if (i.owned) return item.mutate({ code: i.code, buy: false });
+    if (i.stars <= 0) return item.mutate({ code: i.code, buy: true });
+    setBusy(true);
+    try {
+      if ((await payMyPlayerWithStars({ purchase: "manager", code: i.code })) === "paid") {
+        hapticNotify("success");
+        await queryClient.invalidateQueries({ queryKey: ["manager"] });
+      }
+    } catch (err) {
+      onError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="flex flex-col gap-2" data-testid="style-garage">
+      <h2 className="flex items-center gap-2 px-1 font-display text-base font-bold text-ink-chalk">
+        <MIcon code="desk_garage" emoji="🚘" className="h-7 w-7" /> Гараж и кабинет
+      </h2>
+      <Status data={data} onItem={(i) => void take(i)} busy={item.isPending || busy} />
+    </section>
   );
 }
 
@@ -313,12 +344,12 @@ function DirectorPanel({ data, onError }: { data: ManagerStaffView; onError: (e:
 }
 
 /** A VIP at their own desk by the trophy cabinets of the boardroom: the assistant on the left, the analyst on the right. */
-function VipCorner({ vip, onPick }: { vip: ManagerVip; onPick: () => void }) {
+function VipCorner({ vip, on, onPick }: { vip: ManagerVip; on: boolean; onPick: () => void }) {
   const left = vip.role === "assistant";
   return (
     <button onClick={onPick} data-testid={`corner-${vip.role}`}
       className="absolute -translate-x-1/2 -translate-y-1/2 text-center active:scale-95" style={{ left: left ? "11%" : "89%", top: "17%", width: "19%" }}>
-      <span className={`relative mx-auto block aspect-square w-[78%] overflow-hidden rounded-2xl ring-2 ${vip.active ? "ring-violet-300 shadow-[0_0_18px_-2px_rgba(167,139,250,0.9)]" : "ring-white/20"}`}>
+      <span className={`relative mx-auto block aspect-square w-[78%] overflow-hidden rounded-2xl ring-2 ${on ? "ring-amber-300 shadow-[0_0_20px_-2px_rgba(251,191,36,0.95)]" : vip.active ? "ring-violet-300 shadow-[0_0_18px_-2px_rgba(167,139,250,0.9)]" : "ring-white/20"}`}>
         <StaffPortrait role={vip.role} art={vip.skin?.art} code={vip.skin?.code} size={56} className={vip.active ? "" : "opacity-60 grayscale-[45%]"} />
         {!vip.active && <span className="absolute inset-x-0 bottom-0 bg-black/70 text-[8px] font-black uppercase text-amber-200">{vip.trial ? "неделя 0 ⭐" : "нанять"}</span>}
       </span>

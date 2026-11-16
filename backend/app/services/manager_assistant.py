@@ -487,7 +487,10 @@ async def after_round(db: AsyncSession, club: ManagerClub, league: ManagerLeague
             log(club, icon, f"{e.data.get('title')}: «{pick.get('label')}»", config,
                 events._option_out(pick, grant, boost)["money"], now)
     nxt = league.rounds_played
-    if rules["plan"] != "off" and nxt < len((league.state or {}).get("fixtures") or []) and events._active_plan(club, league.id, nxt, config) is None:
+    chosen = club.match_plan or {}
+    by_coach = chosen.get("by") == "coach" and chosen.get("league_id") == league.id and chosen.get("round") == nxt
+    if (rules["plan"] != "off" and not by_coach and nxt < len((league.state or {}).get("fixtures") or [])
+            and events._active_plan(club, league.id, nxt, config) is None):
         code, why = None, None
         if rules["plan"] == "auto" and perks.active(club, "analytics", now):
             advice = await perks.advice_for(db, league, club, config)
