@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 
 import {
@@ -34,6 +35,7 @@ import { MIcon } from "@/lib/managerIcons";
 import { eur } from "@/lib/managerMoney";
 import { payMyPlayerWithStars } from "@/lib/myPlayerStars";
 import { hapticNotify, hapticSelection } from "@/lib/telegram";
+import { usePersistentState } from "@/lib/usePersistentState";
 
 const RARITY: Record<ManagerRarity, { label: string; ring: string; text: string }> = {
   common: { label: "обычный", ring: "ring-white/15", text: "text-ink-mist" },
@@ -58,6 +60,10 @@ export default function StaffTab({ onError }: { onError: (e: unknown) => void })
   const { data } = useQuery({ queryKey: ["manager", "staff"], queryFn: fetchManagerStaff });
   // The round table is the tab; a VIP's desk opens under it from their corner.
   const [desk, setDesk] = useState<Vip | null>(null);
+  const [introSeen, setIntroSeen] = usePersistentState<boolean>("manager.staffIntro", false);
+  const [help, setHelp] = useState(false);
+  const intro = help || !introSeen;
+  const closeIntro = () => { setIntroSeen(true); setHelp(false); };
   const [busy, setBusy] = useState<string | null>(null);
   useFocusTarget((t) => { if (FOCUS[t]) setDesk(FOCUS[t]); });
   const done = (v: ManagerStaffView) => {
@@ -102,7 +108,15 @@ export default function StaffTab({ onError }: { onError: (e: unknown) => void })
 
   return (
     <div className="flex flex-col gap-4" data-testid="staff-tab">
-      <section className="relative overflow-hidden rounded-3xl ring-1 ring-violet-300/30" data-testid="staff-hero">
+      {/* What the tab is: a popup on the first visit, then behind «?» by the table's title. */}
+      <AnimatePresence>
+        {intro && (
+          <>
+            <motion.div key="intro-shade" className="fixed inset-0 z-[60] bg-black/60" onClick={closeIntro}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+            <motion.section key="intro" data-testid="staff-hero" role="dialog" aria-label="Персонал"
+              className="fixed inset-x-4 top-[14vh] z-[61] mx-auto max-h-[72vh] max-w-[440px] overflow-y-auto rounded-3xl bg-[#0e1622] shadow-2xl ring-1 ring-violet-300/30"
+              initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.92 }}>
         <OfficeScene room={data.worn.room?.art} code={data.worn.room?.code} className="absolute inset-0 h-full w-full opacity-45" />
         <div className="absolute inset-0 bg-gradient-to-b from-[#120d24]/70 via-[#0e1622]/85 to-[#0b1410]" />
         <div className="relative p-4">
@@ -120,36 +134,61 @@ export default function StaffTab({ onError }: { onError: (e: unknown) => void })
             </button>
           )}
         </div>
-      </section>
+              <div className="relative flex flex-col gap-2 px-4 pb-4">
+                <p className="text-micro leading-snug text-ink-mist">Сила клуба — от персонала из жителей города и твоих решений. {vipOf("assistant").name}, {vipOf("analyst").name} и их образы — удобство и стиль. Машины и кабинеты — в «Клуб» → «Стиль».</p>
+                <button onClick={closeIntro} className="w-full rounded-2xl bg-floodlight py-2.5 text-sm font-bold text-bg-base" data-testid="staff-intro-ok">Понятно</button>
+              </div>
+            </motion.section>
+          </>
+        )}
+      </AnimatePresence>
 
       <StaffTable data={data} onDone={done} onError={onError}
         extra={(role) => (role === "director" ? <DirectorPanel data={data} onError={onError} />
           : role === "coach" ? (() => { const c = data.staff.find((s) => s.role === "coach")?.coach; return c ? <CoachCard coach={c} compact /> : null; })()
           : null)}
+        onHelp={() => setHelp(true)}
         corners={data.vip.map((v) => <VipCorner key={v.code} vip={v} on={desk === v.role}
           onPick={() => { hapticSelection(); setDesk(desk === v.role ? null : v.role); }} />)} />
 
-      {desk && (
-        <div className="flex items-center justify-between px-1">
-          <p className="flex items-center gap-2 font-display text-base font-bold text-ink-chalk">
-            <MIcon code={`desk_${desk}`} emoji={desk === "assistant" ? "🗂" : "📊"} className="h-7 w-7" /> Стол: {vipOf(desk).name}
-          </p>
-          <button onClick={() => setDesk(null)} className="rounded-full bg-bg-surface px-3 py-1 text-micro text-ink-mist" data-testid="desk-close">Закрыть ✕</button>
-        </div>
-      )}
-      {desk === "assistant" && (
-        <>
-          {vipOf("assistant").active && <AssistantDesk onError={onError} />}
-          {details("assistant")}
-        </>
-      )}
-      {desk === "analyst" && (
-        <>
-          {details("analyst")}
-          {vipOf("analyst").active && <AnalystReview />}
-        </>
-      )}
-      <p className="px-1 text-micro text-ink-mist">VIP-персонал, скины, машины и кабинеты — удобство и стиль. Сила клуба зависит от штата из жителей и решений президента.</p>
+      {/* A VIP's desk opens as a sheet from the bottom, like the seats at the table. */}
+      <AnimatePresence>
+        {desk && (
+          <>
+            <motion.div key="shade" className="fixed inset-0 z-[60] bg-black/60" onClick={() => setDesk(null)}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+            <motion.section key="sheet"
+              className="fixed inset-x-0 bottom-0 z-[61] mx-auto flex max-h-[86vh] max-w-[480px] flex-col gap-3 overflow-y-auto rounded-t-3xl bg-bg-surface p-4 pb-8 ring-1 ring-violet-300/25"
+              initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 30, stiffness: 320 }}
+              data-testid="vip-sheet" role="dialog" aria-label={vipOf(desk).name}>
+              <div className="mx-auto h-1 w-10 rounded-full bg-white/20" />
+              <div className="flex items-center gap-3">
+                <span className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl ring-2 ring-violet-300">
+                  <StaffPortrait role={desk} art={vipOf(desk).skin?.art} code={vipOf(desk).skin?.code} size={64} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-micro font-bold uppercase tracking-[0.16em] text-violet-200">{desk === "assistant" ? "🗂 Помощница" : "📊 Аналитик"}</p>
+                  <p className="font-display text-lg font-black leading-tight text-ink-chalk">{vipOf(desk).name}</p>
+                  <p className="text-caption text-ink-mist">{vipOf(desk).active ? "Работает на тебя" : "Пока не нанят"}</p>
+                </div>
+                <button onClick={() => setDesk(null)} aria-label="Закрыть" className="self-start rounded-full bg-bg-raised px-2.5 py-1 text-sm text-ink-mist" data-testid="desk-close">✕</button>
+              </div>
+              {desk === "assistant" && (
+                <>
+                  {vipOf("assistant").active && <AssistantDesk onError={onError} />}
+                  {details("assistant")}
+                </>
+              )}
+              {desk === "analyst" && (
+                <>
+                  {details("analyst")}
+                  {vipOf("analyst").active && <AnalystReview />}
+                </>
+              )}
+            </motion.section>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -343,12 +382,12 @@ function DirectorPanel({ data, onError }: { data: ManagerStaffView; onError: (e:
   );
 }
 
-/** A VIP at their own desk by the trophy cabinets of the boardroom: the assistant on the left, the analyst on the right. */
+/** A VIP at their own desk by the trophy cabinets of the boardroom: the assistant at the laptop on the left, the analyst at the monitors on the right. */
 function VipCorner({ vip, on, onPick }: { vip: ManagerVip; on: boolean; onPick: () => void }) {
   const left = vip.role === "assistant";
   return (
     <button onClick={onPick} data-testid={`corner-${vip.role}`}
-      className="absolute -translate-x-1/2 -translate-y-1/2 text-center active:scale-95" style={{ left: left ? "11%" : "89%", top: "17%", width: "19%" }}>
+      className="absolute -translate-x-1/2 -translate-y-1/2 text-center active:scale-95" style={{ left: left ? "12%" : "89%", top: left ? "22%" : "29%", width: "16%" }}>
       <span className={`relative mx-auto block aspect-square w-[78%] overflow-hidden rounded-2xl ring-2 ${on ? "ring-amber-300 shadow-[0_0_20px_-2px_rgba(251,191,36,0.95)]" : vip.active ? "ring-violet-300 shadow-[0_0_18px_-2px_rgba(167,139,250,0.9)]" : "ring-white/20"}`}>
         <StaffPortrait role={vip.role} art={vip.skin?.art} code={vip.skin?.code} size={56} className={vip.active ? "" : "opacity-60 grayscale-[45%]"} />
         {!vip.active && <span className="absolute inset-x-0 bottom-0 bg-black/70 text-[8px] font-black uppercase text-amber-200">{vip.trial ? "неделя 0 ⭐" : "нанять"}</span>}

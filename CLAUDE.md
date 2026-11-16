@@ -99,7 +99,7 @@ Main features:
   match is the XI plus a bench of `bench_size` (`matchday_bench`): played
   phase by phase (`_Subs`, `simulate_match_controlled`), starters tire by
   `tired_pct` from `sub_minutes` and fresher subs of the same line come on
-  (`subs_max`). «Главный тренер» (`manager_coach.py`): a character of ten
+  (`subs_max`). «Главный тренер» (`manager_coach.py`): a character of twelve
   rolled at the hiring (`office["coach"]`) runs the match day — formation,
   style, «Установка на матч», substitutions — unless the president takes the
   tactics back (`office["coach_auto"]`), and asks for the player the XI lacks

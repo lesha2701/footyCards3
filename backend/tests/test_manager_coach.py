@@ -29,9 +29,9 @@ def _cat(p):
     return manager_service._category(manager_service.Position(p["position"]))
 
 
-def test_ten_characters_and_their_rules():
-    assert len(coach.TRAITS) == 10
-    assert {"spaniard", "portuguese", "frenchman", "englishman"} <= set(coach.TRAITS)
+def test_twelve_characters_and_their_rules():
+    assert len(coach.TRAITS) == 12
+    assert {"spaniard", "portuguese", "frenchman", "englishman", "german", "italian"} <= set(coach.TRAITS)
     for t in coach.TRAITS.values():
         assert t["formation"] == "fit" or t["formation"] in manager_tactics.FORMATIONS
         assert t["style"] in ("read", *manager_tactics.STYLES)

@@ -33,11 +33,12 @@ const SHORT: Record<string, string> = {
   transport: "Транспорт", stadium: "Стадион", press: "Пресса", marketing: "Коммерция", finance: "Финансы",
 };
 
-/** The chairs of `council_table.webp` (1536², % of its side): the
- * president's, then the ten departments clockwise. */
+/** The chairs of `council_table.webp` (square, % of its side): the
+ * president's, then the ten departments clockwise. The VIP desks are by
+ * the cabinets in its top corners (StaffTab's VipCorner). */
 const TABLE_SEATS: [number, number][] = [
-  [50, 22], [68.4, 28], [82.7, 40], [85.3, 56], [74.9, 72], [59.9, 79],
-  [40.1, 79], [25.1, 72], [14.7, 56], [17.3, 40], [31.6, 28],
+  [50, 33], [68.6, 37.5], [79.7, 47], [85.5, 58], [79.7, 74], [60.6, 85],
+  [39.9, 85], [20.7, 74], [14.5, 58], [20.3, 47], [31.5, 37.5],
 ];
 
 /** Seat `i` of `n` around the table, the president's at the top. */
@@ -54,12 +55,14 @@ function Face({ m, size }: { m: { image: string | null; icon: string; name: stri
 
 /** «Штат»: a round table — the president at its head (his Telegram photo),
  * a seat for each of the ten departments. A tap opens the seat's sheet. */
-export default function StaffTable({ data, onDone, onError, extra, corners }: {
+export default function StaffTable({ data, onDone, onError, extra, corners, onHelp }: {
   data: ManagerStaffView; onDone: (v: ManagerStaffView) => void; onError: (e: unknown) => void;
   /** Department-specific panel inside its sheet (the sporting director). */
   extra?: (role: ManagerStaffRole) => ReactNode;
   /** The VIP desks by the cabinets (absolutely placed over the table). */
   corners?: ReactNode;
+  /** «?» by the title: how the staff works. */
+  onHelp?: () => void;
 }) {
   const user = useAuthStore((s) => s.user);
   const [open, setOpen] = useState<ManagerStaffRole | null>(null);
@@ -73,7 +76,13 @@ export default function StaffTable({ data, onDone, onError, extra, corners }: {
   return (
     <section className="flex flex-col gap-3 rounded-3xl bg-gradient-to-b from-[#16120c] to-bg-surface p-3 ring-1 ring-amber-200/15" data-testid="club-staff">
       <div className="flex items-center justify-between gap-2 px-1">
-        <h2 className="font-display text-base font-bold text-ink-chalk">🏢 Персонал клуба</h2>
+        <h2 className="flex items-center gap-2 font-display text-base font-bold text-ink-chalk">
+          🏢 Персонал клуба
+          {onHelp && (
+            <button onClick={onHelp} aria-label="Как работает персонал" data-testid="staff-help"
+              className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-xs font-black text-amber-100 active:scale-90">?</button>
+          )}
+        </h2>
         <span className="rounded-full bg-black/40 px-2 py-0.5 text-micro font-bold text-amber-100">
           {data.staff.length}/{data.slots} мест · {eur(data.wages)}/сезон
         </span>
