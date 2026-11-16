@@ -254,11 +254,13 @@ function FleetPanel({ kinds, window, onDone, onError }: {
       {kinds.map((k) => {
         const now = k.level > 0 ? k.items[k.level - 1] : null;
         const up = k.items[k.level];
-        const art = staffArt(now?.code ?? up?.code);
+        // Nothing bought yet: the empty hangar, else the next item greyed out.
+        const hangar = now ? undefined : staffArt("hangar");
+        const art = hangar ?? staffArt(now?.code ?? up?.code);
         return (
           <div key={k.kind} className="overflow-hidden rounded-xl bg-bg-raised ring-1 ring-white/5">
             <div className="relative h-24 bg-gradient-to-br from-slate-800 to-black">
-              {art ? <img src={art} alt="" className={`h-full w-full object-cover ${now ? "" : "opacity-40 grayscale"}`} />
+              {art ? <img src={art} alt="" className={`h-full w-full object-cover ${now || hangar ? "" : "opacity-40 grayscale"}`} />
                 : <span className={`flex h-full items-center justify-center text-5xl ${now ? "" : "opacity-30 grayscale"}`}>{(now ?? up)?.emoji}</span>}
               <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-micro font-bold text-ink-chalk">{k.title}: {now ? now.name : "нет"}</span>
             </div>
