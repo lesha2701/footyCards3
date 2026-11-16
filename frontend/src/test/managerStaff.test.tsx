@@ -80,12 +80,14 @@ beforeEach(() => {
 });
 
 describe("StaffTab", () => {
-  it("shows both VIP, the bundle and the free week", async () => {
+  it("opens on «Персонал»: both VIP at their desks by the cabinets, the bundle and the free week", async () => {
     wrap(<StaffTab onError={() => {}} />);
-    expect(await screen.findByTestId("vip-assistant")).toHaveTextContent("Алиса");
-    expect(screen.getByTestId("vip-analyst")).toHaveTextContent("Марк");
+    expect(await screen.findByTestId("seat-president")).toBeInTheDocument();
+    expect(screen.getByTestId("corner-assistant")).toHaveTextContent("Алиса");
+    expect(screen.getByTestId("corner-analyst")).toHaveTextContent("Марк");
     expect(screen.getByTestId("staff-bundle")).toHaveTextContent("229 ⭐");
-    fireEvent.click(screen.getByTestId("assistant-trial"));
+    fireEvent.click(screen.getByTestId("corner-assistant"));
+    fireEvent.click(await screen.findByTestId("assistant-trial"));
     await waitFor(() => expect(api.startManagerAssistantTrial).toHaveBeenCalled());
   });
 
@@ -126,6 +128,7 @@ describe("«Помощница»: advice in one tap", () => {
     api.doManagerAdvice.mockResolvedValue(OFFICE);
     api.setManagerAssistantRules.mockResolvedValue(active);
     wrap(<StaffTab onError={() => {}} />);
+    fireEvent.click(await screen.findByTestId("desk-assistant"));
     expect(await screen.findByTestId("assistant-desk")).toHaveTextContent("Советую взять в аренду Петрова");
     fireEvent.click(screen.getByTestId("advice-do"));
     await waitFor(() => expect(api.doManagerAdvice).toHaveBeenCalledWith("ab12", expect.anything()));
@@ -134,7 +137,7 @@ describe("«Помощница»: advice in one tap", () => {
   });
 });
 
-describe("«Штат»: the round table", () => {
+describe("«Персонал»: the round table", () => {
   it("opens a hired head's sheet: the order and the fleet", async () => {
     const head = { id: 3, role: "transport" as const, role_name: "Начальник транспорта", dept: "Транспортный департамент", emoji: "🚌",
       resident_id: 9, name: "Валера", icon: "🚌", image: null, rarity: "epic" as const, effect: 2, effect_text: "+2% к силе в гостях", wage: 50_000 };

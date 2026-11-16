@@ -55,7 +55,7 @@ const FOCUS: Record<string, Desk> = { advice: "assistant", director: "team", sta
 export default function StaffTab({ onError }: { onError: (e: unknown) => void }) {
   const queryClient = useQueryClient();
   const { data } = useQuery({ queryKey: ["manager", "staff"], queryFn: fetchManagerStaff });
-  const [desk, setDesk] = useState<Desk>("assistant");
+  const [desk, setDesk] = useState<Desk>("team");
   const [busy, setBusy] = useState<string | null>(null);
   useFocusTarget((t) => { if (FOCUS[t]) setDesk(FOCUS[t]); });
   const done = (v: ManagerStaffView) => {
@@ -98,7 +98,7 @@ export default function StaffTab({ onError }: { onError: (e: unknown) => void })
     );
   };
   const desks: [Desk, string, string][] = [
-    ["assistant", "🗂", vipOf("assistant").name], ["analyst", "📊", vipOf("analyst").name], ["team", "🏢", "Штат"], ["garage", "🚘", "Гараж"],
+    ["team", "🏢", "Персонал"], ["assistant", "🗂", vipOf("assistant").name], ["analyst", "📊", vipOf("analyst").name], ["garage", "🚘", "Гараж"],
   ];
 
   return (
@@ -108,12 +108,7 @@ export default function StaffTab({ onError }: { onError: (e: unknown) => void })
         <div className="absolute inset-0 bg-gradient-to-b from-[#120d24]/70 via-[#0e1622]/85 to-[#0b1410]" />
         <div className="relative p-4">
           <p className="text-micro font-bold uppercase tracking-[0.2em] text-violet-200">👥 Штаб президента</p>
-          <p className="mt-1 text-xs text-ink-mist">Двое VIP работают на тебя, а штат из жителей города усиливает клуб.</p>
-          <div className="mt-3 grid grid-cols-2 gap-2.5">
-            {data.vip.map((v) => (
-              <VipCard key={v.code} vip={v} on={desk === v.role} onPick={() => { hapticSelection(); setDesk(v.role); }} />
-            ))}
-          </div>
+          <p className="mt-1 text-xs text-ink-mist">Персонал из жителей города усиливает клуб, двое VIP работают на тебя — их столы у шкафов.</p>
           <HeroChips data={data} />
           {none && data.bundle_stars > 0 && (
             <button disabled={busy === "staff_bundle"} onClick={() => void stars("staff_bundle")} data-testid="staff-bundle"
@@ -154,7 +149,8 @@ export default function StaffTab({ onError }: { onError: (e: unknown) => void })
       {desk === "team" && (
         <>
           <StaffTable data={data} onDone={done} onError={onError}
-            extra={(role) => (role === "director" ? <DirectorPanel data={data} onError={onError} /> : null)} />
+            extra={(role) => (role === "director" ? <DirectorPanel data={data} onError={onError} /> : null)}
+            corners={data.vip.map((v) => <VipCorner key={v.code} vip={v} onPick={() => { hapticSelection(); setDesk(v.role); }} />)} />
         </>
       )}
       {desk === "garage" && <Status data={data} onItem={takeItem} busy={item.isPending || !!busy} />}
@@ -165,7 +161,7 @@ export default function StaffTab({ onError }: { onError: (e: unknown) => void })
 
 function HeroChips({ data }: { data: ManagerStaffView }) {
   const { data: office } = useQuery({ queryKey: ["manager", "assistant"], queryFn: fetchManagerAssistant, enabled: data.vip.some((v) => v.role === "assistant" && v.active) });
-  const chips = [`🏢 Штат ${data.staff.length}/${data.slots}`, `💶 ${eur(data.wages)}/сезон`];
+  const chips = [`🏢 Персонал ${data.staff.length}/${data.slots}`, `💶 ${eur(data.wages)}/сезон`];
   if (office?.active) chips.push(office.rules.mode === "advise" ? "🗒 Только советует" : "⚙️ Действует сама");
   if (office?.report.todo) chips.push(`💡 Советов: ${office.report.todo}`);
   return (
@@ -316,17 +312,17 @@ function DirectorPanel({ data, onError }: { data: ManagerStaffView; onError: (e:
   );
 }
 
-function VipCard({ vip, on, onPick }: { vip: ManagerVip; on: boolean; onPick: () => void }) {
+/** A VIP at their own desk by the trophy cabinets of the boardroom: the assistant on the left, the analyst on the right. */
+function VipCorner({ vip, onPick }: { vip: ManagerVip; onPick: () => void }) {
+  const left = vip.role === "assistant";
   return (
-    <button onClick={onPick} data-testid={`vip-${vip.role}`}
-      className={`relative flex flex-col items-center overflow-hidden rounded-2xl px-2 pb-2.5 pt-1 text-center transition ${on
-        ? "bg-white/10 ring-2 ring-violet-300" : "bg-black/25 ring-1 ring-white/10"}`}>
-      <StaffPortrait role={vip.role} art={vip.skin?.art} code={vip.skin?.code} size={92} className={vip.active ? "" : "opacity-70 grayscale-[35%]"} />
-      <span className="-mt-1 text-sm font-black text-ink-chalk">{vip.name}</span>
-      <span className="text-micro font-semibold text-ink-mist">{vip.emoji} {vip.title}</span>
-      <span className={`mt-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${vip.active ? "bg-accent-lime/15 text-accent-lime" : "bg-amber-400/15 text-amber-200"}`}>
-        {vip.active ? `работает до ${until(vip.until)}` : vip.trial ? "неделя бесплатно" : `${vip.stars} ⭐ / ${vip.days} дн.`}
+    <button onClick={onPick} data-testid={`corner-${vip.role}`}
+      className="absolute -translate-x-1/2 -translate-y-1/2 text-center active:scale-95" style={{ left: left ? "11%" : "89%", top: "17%", width: "19%" }}>
+      <span className={`relative mx-auto block aspect-square w-[78%] overflow-hidden rounded-2xl ring-2 ${vip.active ? "ring-violet-300 shadow-[0_0_18px_-2px_rgba(167,139,250,0.9)]" : "ring-white/20"}`}>
+        <StaffPortrait role={vip.role} art={vip.skin?.art} code={vip.skin?.code} size={56} className={vip.active ? "" : "opacity-60 grayscale-[45%]"} />
+        {!vip.active && <span className="absolute inset-x-0 bottom-0 bg-black/70 text-[8px] font-black uppercase text-amber-200">{vip.trial ? "неделя 0 ⭐" : "нанять"}</span>}
       </span>
+      <span className="mt-0.5 block truncate rounded-full bg-violet-950/80 px-1 text-[9px] font-bold leading-tight text-violet-100">{vip.name}</span>
     </button>
   );
 }
@@ -350,6 +346,7 @@ function VipDetails({ vip, data, busy, itemBusy, onStars, onTrial, onDone, onErr
         <div className="min-w-0 flex-1">
           <p className="font-display text-base font-bold text-ink-chalk">{vip.emoji} {vip.title}</p>
           <p className="text-micro text-ink-mist">{vip.about}</p>
+          {vip.active && vip.until && <p className="mt-1 inline-block rounded-full bg-accent-lime/15 px-2 py-0.5 text-[10px] font-bold text-accent-lime">работает до {until(vip.until)}</p>}
         </div>
       </div>
       <ul className="grid grid-cols-1 gap-1 text-caption text-ink-chalk">

@@ -188,9 +188,8 @@ export default function ManagerPage() {
   return (
     <div className="flex flex-col gap-4" data-testid="manager-page">
       {hero}
-      <TodayPanel onTab={setTab} onError={onError} />
       {errorLine}
-      <nav className="sticky z-20 -mx-1 grid grid-cols-5 gap-1 rounded-2xl bg-bg-base/95 p-1 ring-1 ring-white/5" style={{ top: stickTop }} data-testid="manager-tabs">
+      <nav className="sticky z-20 -mx-1 grid grid-cols-5 gap-1 rounded-2xl bg-bg-base p-1 shadow-[0_8px_16px_-8px_rgba(0,0,0,0.9)] ring-1 ring-white/5" style={{ top: stickTop }} data-testid="manager-tabs">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -204,6 +203,8 @@ export default function ManagerPage() {
           </button>
         ))}
       </nav>
+      {/* «Сейчас главное» lives on the club's own tab, under the tabs. */}
+      {tab === "club" && <TodayPanel onTab={setTab} onError={onError} />}
       {tab === "club" && <ClubTab {...props} club={club} onTab={setTab} />}
       {tab === "transfers" && <SeasonBanner view={data} summary={summary} />}
       {tab === "transfers" && <TransfersTab {...props} club={club} />}

@@ -54,10 +54,12 @@ function Face({ m, size }: { m: { image: string | null; icon: string; name: stri
 
 /** «Штат»: a round table — the president at its head (his Telegram photo),
  * a seat for each of the ten departments. A tap opens the seat's sheet. */
-export default function StaffTable({ data, onDone, onError, extra }: {
+export default function StaffTable({ data, onDone, onError, extra, corners }: {
   data: ManagerStaffView; onDone: (v: ManagerStaffView) => void; onError: (e: unknown) => void;
   /** Department-specific panel inside its sheet (the sporting director). */
   extra?: (role: ManagerStaffRole) => ReactNode;
+  /** The VIP desks by the cabinets (absolutely placed over the table). */
+  corners?: ReactNode;
 }) {
   const user = useAuthStore((s) => s.user);
   const [open, setOpen] = useState<ManagerStaffRole | null>(null);
@@ -71,7 +73,7 @@ export default function StaffTable({ data, onDone, onError, extra }: {
   return (
     <section className="flex flex-col gap-3 rounded-3xl bg-gradient-to-b from-[#16120c] to-bg-surface p-3 ring-1 ring-amber-200/15" data-testid="club-staff">
       <div className="flex items-center justify-between gap-2 px-1">
-        <h2 className="font-display text-base font-bold text-ink-chalk">🏢 Штат клуба</h2>
+        <h2 className="font-display text-base font-bold text-ink-chalk">🏢 Персонал клуба</h2>
         <span className="rounded-full bg-black/40 px-2 py-0.5 text-micro font-bold text-amber-100">
           {data.staff.length}/{data.slots} мест · {eur(data.wages)}/сезон
         </span>
@@ -87,6 +89,7 @@ export default function StaffTable({ data, onDone, onError, extra }: {
             </div>
           </div>
         )}
+        {corners}
         {/* The president */}
         <div className="absolute -translate-x-1/2 -translate-y-1/2 text-center" style={{ ...at(0), width: "19%" }} data-testid="seat-president">
           <span className="mx-auto block aspect-square w-[72%] overflow-hidden rounded-full ring-[3px] ring-amber-300 shadow-[0_0_20px_-2px_rgba(252,211,77,0.9)]">
