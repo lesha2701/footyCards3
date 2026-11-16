@@ -154,7 +154,9 @@ describe("ManagerPage", () => {
     fetchManager.mockResolvedValue(base);
     foundManagerClub.mockResolvedValue({ ...base, club });
     renderPage();
-    expect(await screen.findByText("Трансферное окно открыто")).toBeInTheDocument();
+    // The window lives in the hero as a light; its details are on «Трансферы».
+    expect(await screen.findByLabelText("Трансферное окно открыто")).toBeInTheDocument();
+    expect(screen.queryByTestId("season-banner")).toBeNull();
     const button = await screen.findByRole("button", { name: /Основать за 1/ });
     expect(button).toBeDisabled();
     fireEvent.change(screen.getByPlaceholderText("Название клуба"), { target: { value: "Ночные Совы" } });
@@ -179,6 +181,8 @@ describe("ManagerPage", () => {
       ...base, season: { ...base.season, phase: "season", transfers_open: false }, club: { ...club, playing: false, trade_locked: true },
     });
     renderPage();
+    expect(await screen.findByLabelText("Трансферное окно закрыто")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("hero-transfers"));
     expect(await screen.findByText(/Твой клуб сыграет со следующего сезона/)).toBeInTheDocument();
     expect(screen.queryByText("Межсезонье")).toBeNull();
     expect(screen.queryByText("Трансферное окно открыто")).toBeNull();

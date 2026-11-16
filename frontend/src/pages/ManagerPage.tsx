@@ -54,6 +54,8 @@ import DealCheck from "@/components/manager/DealCheck";
 import StaffTab from "@/components/manager/StaffTab";
 import StyleTab from "@/components/manager/StyleTab";
 import TacticsPanel from "@/components/manager/TacticsPanel";
+import TransferLight, { windowOpen } from "@/components/manager/TransferLight";
+import { MIcon } from "@/lib/managerIcons";
 import GameHero from "@/components/common/GameHero";
 import { formatGameError } from "@/lib/errors";
 import { goTo, parseGo, useFocusTarget } from "@/lib/managerFocus";
@@ -138,8 +140,11 @@ export default function ManagerPage() {
   const props = { view: data, onView, onError };
   return (
     <div className="flex flex-col gap-4" data-testid="manager-page">
-      <GameHero game="manager" title="Менеджер" />
-      <SeasonBanner view={data} summary={summary} />
+      <GameHero game="manager" title="Менеджер" subtitle={club ? club.name : undefined}>
+        <button onClick={() => setTab("transfers")} className="active:scale-95" data-testid="hero-transfers">
+          <TransferLight open={windowOpen(data.season, club)} until={data.season.preseason_ends_at} />
+        </button>
+      </GameHero>
       <TodayPanel onTab={setTab} onError={onError} />
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
       <div className={`grid gap-1.5 ${tabs.length > 6 ? "grid-cols-4" : "grid-cols-3"}`}>
@@ -149,12 +154,13 @@ export default function ManagerPage() {
             onClick={() => setTab(id)}
             className={`relative truncate font-semibold ${tabs.length > 6 ? "flex flex-col items-center gap-0.5 rounded-2xl px-1 py-1.5 text-[11px]" : "rounded-full px-2 py-2 text-xs"} ${tab === id ? "bg-floodlight text-bg-base" : "bg-bg-surface text-ink-mist"}`}
           >
-            <span aria-hidden="true" className={tabs.length > 6 ? "text-base leading-none" : ""}>{icon} </span>{label}
+            <MIcon code={`tab_${id}`} emoji={icon} className="h-7 w-7" emojiClass={tabs.length > 6 ? "text-base" : ""} />{label}
             {dot && tab !== id && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-accent-lime" />}
           </button>
         ))}
       </div>
       {tab === "club" && (club ? <ClubTab {...props} club={club} /> : <FoundClub {...props} />)}
+      {tab === "transfers" && <SeasonBanner view={data} summary={summary} />}
       {tab === "transfers" && (club ? <TransfersTab {...props} club={club} /> : (
         <EmptyState icon={IconProfile} title="Сначала основай клуб" description="На рынке — «Мои игроки» других пользователей и футболисты игры." />
       ))}
@@ -508,9 +514,7 @@ function TransfersTab({ view, club, onView, onError }: TabProps & { club: Manage
     <div className="flex flex-col gap-3" data-testid="manager-transfers">
       <div className="flex items-center justify-between gap-2 px-1">
         <h2><SectionTitle art={transfersArt}>Трансферы</SectionTitle></h2>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-micro font-bold ${club.trade_locked ? "bg-amber-400/15 text-amber-300" : "bg-accent-lime/15 text-accent-lime"}`}>
-          {club.trade_locked ? "окно закрыто" : "окно открыто"}
-        </span>
+        <TransferLight compact open={windowOpen(view.season, club)} />
       </div>
       <div className="grid grid-cols-2 gap-1 rounded-xl bg-bg-surface p-1">
         {sections.map(([id, label]) => (

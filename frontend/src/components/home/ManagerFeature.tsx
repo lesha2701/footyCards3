@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { fetchManagerSummary, type ManagerSummary } from "@/api/manager";
 import officeArt from "@/assets/manager/office.webp";
 import Emblem from "@/components/manager/Emblem";
+import TransferLight, { windowOpen } from "@/components/manager/TransferLight";
 import { eur } from "@/lib/managerMoney";
 
 function clock(iso: string | null): string {
@@ -78,6 +79,7 @@ export default function ManagerFeature() {
         alt=""
         className="pointer-events-none absolute -right-3 top-1/2 h-32 w-32 -translate-y-1/2 object-cover [mask-image:radial-gradient(circle,black_52%,transparent_72%)]"
       />
+      <TransferLight compact open={windowOpen(data.season, data.club)} className="absolute right-2.5 top-2.5 z-10" />
       {data.club && <Emblem look={data.club.look} size={44} className="relative shrink-0" />}
       <span className="relative min-w-0 flex-1">
         <span className="flex items-center gap-1.5 text-micro font-bold uppercase tracking-[0.18em] text-amber-200">

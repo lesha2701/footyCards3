@@ -255,7 +255,7 @@ function FleetPanel({ kinds, window, onDone, onError }: {
         const now = k.level > 0 ? k.items[k.level - 1] : null;
         const up = k.items[k.level];
         // Nothing bought yet: the empty hangar, else the next item greyed out.
-        const hangar = now ? undefined : staffArt("hangar");
+        const hangar = now ? undefined : staffArt(`hangar_${k.kind}`) ?? staffArt("hangar");
         const art = hangar ?? staffArt(now?.code ?? up?.code);
         return (
           <div key={k.kind} className="overflow-hidden rounded-xl bg-bg-raised ring-1 ring-white/5">

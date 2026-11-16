@@ -23,6 +23,7 @@ import OfficeScene from "@/components/manager/OfficeScene";
 import PresidentRating from "@/components/manager/PresidentRating";
 import { AchievementsPanel, BudgetPanel } from "@/components/manager/PresidentDecisions";
 import { useFocusTarget } from "@/lib/managerFocus";
+import { MIcon } from "@/lib/managerIcons";
 import { eur } from "@/lib/managerMoney";
 import { hapticNotify } from "@/lib/telegram";
 
@@ -80,7 +81,7 @@ export default function PresidentTab({ onError, onTab = () => {} }: { onError: (
             className={`flex flex-col items-center gap-0.5 rounded-2xl py-2 text-micro font-bold transition ${section === id
               ? "bg-gradient-to-b from-amber-300 to-amber-500 text-bg-base shadow-[0_6px_18px_-6px_rgba(251,191,36,0.8)]"
               : "bg-bg-surface text-ink-mist"}`}>
-            <span className="text-lg leading-none">{icon}</span>{label}
+            <MIcon code={`pres_${id}`} emoji={icon} className="h-8 w-8" emojiClass="text-lg" />{label}
           </button>
         ))}
       </div>

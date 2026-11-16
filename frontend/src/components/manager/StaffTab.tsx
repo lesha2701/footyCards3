@@ -29,6 +29,7 @@ import StaffPortrait from "@/components/manager/StaffPortrait";
 import StaffTable from "@/components/manager/StaffTable";
 import { staticUrl } from "@/lib/api";
 import { useFocusTarget } from "@/lib/managerFocus";
+import { MIcon } from "@/lib/managerIcons";
 import { eur } from "@/lib/managerMoney";
 import { payMyPlayerWithStars } from "@/lib/myPlayerStars";
 import { hapticNotify, hapticSelection } from "@/lib/telegram";
@@ -133,7 +134,7 @@ export default function StaffTab({ onError }: { onError: (e: unknown) => void })
             className={`flex min-w-0 flex-col items-center gap-0.5 rounded-2xl px-1 py-2 text-micro font-bold transition ${desk === id
               ? "bg-gradient-to-b from-violet-300 to-violet-500 text-bg-base shadow-[0_6px_18px_-6px_rgba(167,139,250,0.8)]"
               : "bg-bg-surface text-ink-mist"}`}>
-            <span className="text-lg leading-none">{icon}</span><span className="w-full truncate text-center">{label}</span>
+            <MIcon code={`desk_${id}`} emoji={icon} className="h-8 w-8" emojiClass="text-lg" /><span className="w-full truncate text-center">{label}</span>
           </button>
         ))}
       </div>
