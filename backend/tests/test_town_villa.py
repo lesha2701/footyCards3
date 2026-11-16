@@ -38,6 +38,23 @@ def test_layout_check_and_settings():
         pass
 
 
+def test_combos_and_workplaces():
+    from types import SimpleNamespace as Item
+
+    pool = Item(id=1, code="pool", x=2, y=2, rot=0)          # 3×2: cells x 2..4, y 2..3
+    palm = Item(id=2, code="palm", x=5, y=4, rot=0)          # touches diagonally
+    umbrella = Item(id=3, code="sun_umbrella", x=7, y=7, rot=0)
+    kept = Item(id=4, code="sun_umbrella", x=None, y=None, rot=0)
+    combos = town_villa_service.combos_of([pool, palm, umbrella, kept])
+    assert [(c["a"], c["b"], c["ids"]) for c in combos] == [("pool", "palm", [1, 2])]
+    umbrella.x, umbrella.y = 2, 4  # right under the pool
+    assert len(town_villa_service.combos_of([pool, palm, umbrella])) == 2
+    # The lifeguard works only by a pool on the plot; security always.
+    assert town_villa_service.working_posts([pool], ["pool", "security", "kitchen"]) == ["pool", "security"]
+    pool.x = pool.y = None
+    assert town_villa_service.working_posts([pool], ["pool"]) == []
+
+
 async def test_villa_levels_items_layout_and_prestige_rent(client, db_session, bot_token):
     await _setup(db_session)
     headers, user = await _login(client, db_session, bot_token, 990401, balance=10_000)
@@ -45,6 +62,7 @@ async def test_villa_levels_items_layout_and_prestige_rent(client, db_session, b
 
     state = (await client.get(f"{API}/town/villa", headers=headers)).json()
     assert state["villa_level"] == 1 and state["grid"] == 8 and state["garage_level"] == 0
+    assert state["grid_max"] == 12 and state["combos"] == []
     villa = next(i for i in state["items"] if i["code"] == "villa")
     assert (villa["x"], villa["y"], villa["w"]) == (1, 1, 3)
     assert state["prestige"] == 20 and state["prestige_pct"] == 2
@@ -122,6 +140,11 @@ async def test_staff_takes_fitting_residents_and_adds_prestige(client, db_sessio
     hired = await client.post(f"{API}/town/villa/staff", headers=headers, json={"post": "security", "resident_id": cop.id})
     assert hired.status_code == 200, hired.text
     assert [s["post"] for s in hired.json()["staff"]] == ["security"] and hired.json()["prestige"] == 35
+    # The singer's party post needs a fire pit or a gazebo on the plot: hired, but not working yet.
+    party = await client.post(f"{API}/town/villa/staff", headers=headers, json={"post": "party", "resident_id": singer.id})
+    assert party.status_code == 200 and party.json()["prestige"] == 35
+    assert {s["post"]: s["working"] for s in party.json()["staff"]} == {"security": True, "party": False}
+    freed = await client.post(f"{API}/town/villa/staff", headers=headers, json={"post": "party", "resident_id": None})
     freed = await client.post(f"{API}/town/villa/staff", headers=headers, json={"post": "security", "resident_id": None})
     assert freed.json()["staff"] == [] and freed.json()["prestige"] == 20
 

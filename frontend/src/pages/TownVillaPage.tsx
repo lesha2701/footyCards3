@@ -82,6 +82,7 @@ function PlotEditor({ data, onSaved, onError }: { data: VillaState; onSaved: (re
   const [draft, setDraft] = useState<Draft>({});
   const [selected, setSelected] = useState<number | null>(null);
   const [hint, setHint] = useState<string | null>(null);
+  const [popped, setPopped] = useState<number | null>(null);
   const items: VillaItem[] = useMemo(
     () => data.items.map((i) => (draft[i.id] ? { ...i, ...draft[i.id] } : i)),
     [data.items, draft],
@@ -101,8 +102,17 @@ function PlotEditor({ data, onSaved, onError }: { data: VillaState; onSaved: (re
     if (why) { hapticNotify("error"); setHint(why); return false; }
     setDraft((d) => ({ ...d, [id]: patch }));
     setHint(null);
+    if (patch.x != null) setPopped(id);
     return true;
   };
+  const canPlace = (id: number, x: number, y: number) =>
+    checkLayout(data.grid, items.map((i) => (i.id === id ? { ...i, x, y } : i))) === null;
+  const onDrop = (id: number, x: number, y: number) => {
+    const item = items.find((i) => i.id === id);
+    setSelected(id);
+    if (item && tryMove(id, { x, y, rot: item.rot })) hapticNotify("success");
+  };
+  const comboIds = useMemo(() => new Set((data.combos ?? []).flatMap((c) => c.ids)), [data.combos]);
   const onCell = (x: number, y: number) => {
     if (!current) { setHint("Выбери предмет на участке или на складе"); return; }
     if (tryMove(current.id, { x, y, rot: current.rot })) hapticNotify("success");
@@ -121,15 +131,22 @@ function PlotEditor({ data, onSaved, onError }: { data: VillaState; onSaved: (re
       <div className="overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-sky-400/25 to-sky-900/10">
         <VillaPlot
           grid={data.grid}
+          gridMax={data.grid_max ?? data.grid}
           items={items}
           selectedId={selected}
           onCell={onCell}
           onItem={onItem}
+          onDrop={onDrop}
+          canPlace={canPlace}
+          poppedId={popped}
+          comboIds={dirty ? undefined : comboIds}
           label={`Участок ${data.grid}×${data.grid}`}
         />
       </div>
       <p className="px-1 text-center text-[11px] text-ink-mist">
-        {hint ?? (current ? `«${current.name}» — нажми на клетку, куда поставить` : `Участок ${data.grid}×${data.grid}. Нажми на предмет, потом на клетку`)}
+        {hint ?? (current
+          ? current.x == null ? `«${current.name}» — нажми на клетку, куда поставить` : `«${current.name}» — тащи пальцем или нажми на клетку`
+          : `Открыто ${data.grid}×${data.grid} из ${data.grid_max ?? data.grid}. Тащи предмет пальцем на новое место. Два пальца — зум`)}
       </p>
       {current && (
         <div className="grid grid-cols-3 gap-2">
@@ -166,6 +183,7 @@ function PlotEditor({ data, onSaved, onError }: { data: VillaState; onSaved: (re
           </button>
         </div>
       )}
+      <Combos data={data} />
       <div className="rounded-2xl border border-white/10 bg-bg-surface p-3" aria-label="Склад">
         <p className="mb-2 text-xs font-bold text-ink-chalk">📦 Склад {stored.length ? `· ${stored.length}` : ""}</p>
         {stored.length === 0 ? (
@@ -187,6 +205,37 @@ function PlotEditor({ data, onSaved, onError }: { data: VillaState; onSaved: (re
         )}
       </div>
     </section>
+  );
+}
+
+/** Combos standing now and the ones still to build (two things side by side). */
+function Combos({ data }: { data: VillaState }) {
+  const [open, setOpen] = useState(false);
+  const done = new Set((data.combos ?? []).map((c) => `${c.a}:${c.b}`));
+  const all = data.all_combos ?? [];
+  return (
+    <div className="rounded-2xl border border-white/10 bg-bg-surface p-3" aria-label="Комбо">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between text-left">
+        <span className="text-xs font-bold text-ink-chalk">✨ Комбо · {done.size} из {all.length}</span>
+        <span className="text-[10px] text-ink-mist">+{data.prestige_combo} престижа за каждое {open ? "▲" : "▼"}</span>
+      </button>
+      {(data.combos ?? []).length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {data.combos.map((c) => (
+            <span key={`${c.a}:${c.b}`} className="rounded-full bg-accent-lime/15 px-2 py-0.5 text-[11px] font-semibold text-accent-lime">{c.emoji} {c.name}</span>
+          ))}
+        </div>
+      )}
+      {open && (
+        <ul className="mt-2 flex flex-col gap-1">
+          {all.map((c) => (
+            <li key={`${c.a}:${c.b}`} className={`text-[11px] ${done.has(`${c.a}:${c.b}`) ? "text-accent-lime" : "text-ink-mist"}`}>
+              {done.has(`${c.a}:${c.b}`) ? "✓" : "·"} {c.emoji} {c.name}: {c.a_name} рядом с «{c.b_name}»
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -291,7 +340,7 @@ function Staff({ data, onDone, onError }: Handlers) {
   return (
     <section className="flex flex-col gap-2">
       <p className="px-1 text-[11px] text-ink-mist">
-        Жители работают на вилле по профессии. Каждый на посту даёт престиж. Жителей собирают в паках и в магазине города.
+        Жители работают на вилле по профессии. Каждый работающий даёт +{data.prestige_staff} престижа — но только если на участке стоит его рабочее место. Жителей собирают в паках и в магазине города.
       </p>
       {data.posts.map((p) => {
         const on = data.staff.find((s) => s.post === p.post);
@@ -302,7 +351,11 @@ function Staff({ data, onDone, onError }: Handlers) {
               {on?.resident.image_path ? <img src={staticUrl(on.resident.image_path)} alt="" className="h-full w-full object-cover" /> : p.emoji}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-bold text-ink-chalk">{p.emoji} {p.name}</p>
+              <p className="truncate text-xs font-bold text-ink-chalk">
+                {p.emoji} {p.name}
+                {on && <span className={`ml-1 text-[10px] font-semibold ${on.working ? "text-accent-lime" : "text-amber-300"}`}>{on.working ? "· работает" : "· нет рабочего места"}</span>}
+              </p>
+              <p className="truncate text-[10px] text-ink-mist">{p.workplace?.length ? `Рабочее место: ${p.workplace.join(" / ")}` : "Работает всегда"}</p>
               <select
                 aria-label={`Пост: ${p.name}`}
                 value={on?.resident.id ?? ""}

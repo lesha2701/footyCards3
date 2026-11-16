@@ -15,7 +15,13 @@ post takes residents of its professions (POSTS, matched on the title).
 
 «Престиж» = villa level × prestige_villa_level + garage level ×
 prestige_garage_level + every kind of thing owned once × prestige_<code> +
-staff × prestige_staff. Every prestige_per_pct of it adds 1 % to the rent of
+working staff × prestige_staff + every combo × prestige_combo. A post
+works only while its workplace stands on the plot (POST_WORKPLACE: the
+garage for the mechanic, the pool for the lifeguard…; security and the
+concierge always). A combo (COMBOS) is two things standing side by side
+(their footprints touch, diagonals too) — each combo counts once. So the
+layout itself moves the prestige: save_layout settles the rent first.
+Every prestige_per_pct of it adds 1 % to the rent of
 the town's houses, at most prestige_max_pct (town_service._income_parts) —
 so the rent so far is settled before the prestige changes.
 
@@ -95,12 +101,39 @@ POSTS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "concierge": ("Дворецкий", "🎩", ("консьерж", "отел", "экскурсовод")),
 }
 
+# post -> things any one of which on the plot makes it work (empty = always works)
+POST_WORKPLACE: dict[str, tuple[str, ...]] = {
+    "security": (), "concierge": (),
+    "garden": ("palm", "olive", "cypress", "flowers", "hedge"),
+    "garage": ("garage",),
+    "kitchen": ("gazebo_bbq",),
+    "party": ("firepit", "gazebo_bbq"),
+    "health": ("pool", "pitch_mini"),
+    "pool": ("pool",),
+}
+
+# (a, b, name, emoji): a and b standing side by side
+COMBOS: tuple[tuple[str, str, str, str], ...] = (
+    ("pool", "sun_umbrella", "Пляж у бассейна", "🏖️"),
+    ("pool", "palm", "Тропики", "🌴"),
+    ("gazebo_bbq", "lamp", "Вечер у гриля", "🍖"),
+    ("bench", "flowers", "Тихий уголок", "🌸"),
+    ("goal_practice", "pitch_mini", "Тренировочная база", "⚽"),
+    ("garage", "path", "Подъезд к гаражу", "🛣️"),
+    ("villa", "fountain_ball", "Парадный вход", "⛲"),
+    ("firepit", "olive", "Средиземноморский вечер", "🔥"),
+    ("statue_gold", "hedge", "Аллея славы", "🗿"),
+    ("helipad", "lamp", "Ночная посадка", "🚁"),
+    ("trophy_pavilion", "flowers", "Зал трофеев", "🏆"),
+    ("villa", "pool", "Бассейн у дома", "🏊"),
+)
+
 VILLA_DEFAULTS: dict[str, int] = {
     "villa_price_2": 15000, "villa_price_3": 40000, "villa_price_4": 90000, "villa_price_5": 180000,
     "grid_1": 8, "grid_2": 9, "grid_3": 10, "grid_4": 11, "grid_5": 12,
     "garage_price_1": 8000, "garage_price_2": 25000, "garage_price_3": 60000,
     "garage_slots_1": 1, "garage_slots_2": 3, "garage_slots_3": 6,
-    "prestige_villa_level": 20, "prestige_garage_level": 10, "prestige_staff": 15,
+    "prestige_villa_level": 20, "prestige_garage_level": 10, "prestige_staff": 15, "prestige_combo": 5,
     "prestige_per_pct": 60, "prestige_max_pct": 5,
     "max_items": 120,
     "villa_week_reward_1": 2000, "villa_week_reward_2": 1000, "villa_week_reward_3": 500,
@@ -214,11 +247,44 @@ def staff_posts_for(title: Optional[str]) -> list[str]:
     return [post for post, (_, _, words) in POSTS.items() if any(w in lowered for w in words)]
 
 
-def prestige_of(v: dict, villa: Optional[UserTownVilla], codes: set[str], staff: int) -> int:
+def _cells(item) -> Optional[tuple[int, int, int, int]]:
+    """(x0, y0, x1, y1) inclusive of a placed thing, None in storage."""
+    if item.x is None or item.y is None:
+        return None
+    w, h = footprint(item.code, item.rot)
+    return item.x, item.y, item.x + w - 1, item.y + h - 1
+
+
+def _touch(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> bool:
+    return a[0] - 1 <= b[2] and b[0] - 1 <= a[2] and a[1] - 1 <= b[3] and b[1] - 1 <= a[3]
+
+
+def combos_of(items) -> list[dict]:
+    """The combos standing on the plot, each once, with the ids that make it."""
+    placed = [(i, c) for i in items if (c := _cells(i)) is not None]
+    out = []
+    for a, b, name, emoji in COMBOS:
+        pair = next(((x.id, y.id) for x, cx in placed if x.code == a
+                     for y, cy in placed if y.code == b and _touch(cx, cy)), None)
+        if pair:
+            out.append({"a": a, "b": b, "name": name, "emoji": emoji, "ids": list(pair)})
+    return out
+
+
+def working_posts(items, posts) -> list[str]:
+    """Staffed posts whose workplace stands on the plot."""
+    placed = {i.code for i in items if i.x is not None and i.y is not None}
+    return [p for p in posts if p in POST_WORKPLACE and (not POST_WORKPLACE[p] or placed & set(POST_WORKPLACE[p]))]
+
+
+def prestige_of(v: dict, villa: Optional[UserTownVilla], items, posts) -> int:
     if villa is None:
         return 0
+    codes = {i.code for i in items}
     return (villa.villa_level * v["prestige_villa_level"] + villa.garage_level * v["prestige_garage_level"]
-            + sum(v.get(f"prestige_{c}", 0) for c in codes if c in ITEMS) + staff * v["prestige_staff"])
+            + sum(v.get(f"prestige_{c}", 0) for c in codes if c in ITEMS)
+            + len(working_posts(items, posts)) * v["prestige_staff"]
+            + len(combos_of(items)) * v["prestige_combo"])
 
 
 def prestige_pct(v: dict, prestige: int) -> int:
@@ -259,9 +325,9 @@ async def prestige_for(db: AsyncSession, config, user_id: int) -> tuple[int, int
     if villa is None:
         return 0, 0
     v = villa_config(config)
-    codes = {i.code for i in await _items(db, user_id)}
-    staff = len(await _staff_rows(db, user_id, villa)) if config.town_residents_enabled else 0
-    prestige = prestige_of(v, villa, codes, staff)
+    items = [i for i in await _items(db, user_id) if i.code in ITEMS or i.code in ("villa", "garage")]
+    staff = await _staff_rows(db, user_id, villa) if config.town_residents_enabled else {}
+    prestige = prestige_of(v, villa, items, list(staff))
     return prestige, prestige_pct(v, prestige)
 
 
@@ -283,15 +349,17 @@ def _item_out(item: UserTownVillaItem, villa: UserTownVilla) -> dict:
 def _plot(v: dict, villa: UserTownVilla, items: list[UserTownVillaItem], staff: dict[str, TownResident]) -> dict:
     """What anyone may see of a villa: the grid and what stands on it."""
     known = [i for i in items if i.code in ITEMS or i.code in ("villa", "garage")]
-    codes = {i.code for i in known}
-    prestige = prestige_of(v, villa, codes, len(staff))
+    prestige = prestige_of(v, villa, known, list(staff))
+    working = set(working_posts(known, list(staff)))
     car = next((i for i in known if i.id == villa.car_item_id and i.code in ITEMS), None)
     return {
         "villa_level": villa.villa_level, "garage_level": villa.garage_level,
         "grid": grid_size(v, villa.villa_level),
+        "grid_max": grid_size(v, MAX_VILLA_LEVEL),
+        "combos": combos_of(known),
         "items": [_item_out(i, villa) for i in known],
         "car": {"id": car.id, "code": car.code, "name": ITEMS[car.code][0], "emoji": ITEMS[car.code][1]} if car else None,
-        "staff": [{"post": p, "name": POSTS[p][0], "emoji": POSTS[p][1], "resident": {
+        "staff": [{"post": p, "name": POSTS[p][0], "emoji": POSTS[p][1], "working": p in working, "resident": {
             "id": r.id, "name": r.name, "title": r.title, "icon": r.icon, "image_path": r.image_path, "rarity": r.rarity,
         }} for p, r in staff.items()],
         "prestige": prestige, "prestige_pct": prestige_pct(v, prestige),
@@ -390,7 +458,13 @@ async def _state(db: AsyncSession, config, user: User, villa: UserTownVilla) -> 
         if ng <= MAX_GARAGE_LEVEL else None,
         "garage_slots": slots, "cars": cars,
         "shop": shop,
-        "posts": [{"post": p, "name": n, "emoji": e} for p, (n, e, _) in POSTS.items()],
+        "posts": [{"post": p, "name": n, "emoji": e, "workplace": [ITEMS[c][0] if c in ITEMS else "Гараж" for c in POST_WORKPLACE[p]]}
+                  for p, (n, e, _) in POSTS.items()],
+        "all_combos": [{"a": a, "b": b, "name": n, "emoji": e,
+                        "a_name": ITEMS[a][0] if a in ITEMS else {"villa": "Вилла", "garage": "Гараж"}[a],
+                        "b_name": ITEMS[b][0] if b in ITEMS else {"villa": "Вилла", "garage": "Гараж"}[b]}
+                       for a, b, n, e in COMBOS],
+        "prestige_combo": v["prestige_combo"], "prestige_staff": v["prestige_staff"],
         "candidates": candidates,
         "prestige_per_pct": v["prestige_per_pct"], "prestige_max_pct": v["prestige_max_pct"],
         "max_items": v["max_items"],
@@ -523,8 +597,10 @@ async def save_layout(db: AsyncSession, user: User, moves: list[dict]) -> dict:
     """Moves things: [{id, x, y, rot}] (x/y None = to storage). Things not
     named stay where they are; the result as a whole must fit."""
     config = await get_config(db)
+    await lock_user_for_update(db, user.id)
     villa = await _open(db, config, user.id)
     v = villa_config(config)
+    await town_service._settle_before_population_change(db, config, user.id)  # combos and workplaces move the prestige
     items = {i.id: i for i in await _items(db, user.id)}
     for move in moves:
         item = items.get(move.get("id"))

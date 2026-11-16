@@ -410,15 +410,29 @@ export interface VillaStaff {
   post: string;
   name: string;
   emoji: string;
+  /** Its workplace stands on the plot — only then the post adds prestige. */
+  working: boolean;
   resident: { id: number; name: string; title: string | null; icon: string; image_path: string | null; rarity: string };
+}
+
+/** Two things standing side by side. */
+export interface VillaCombo {
+  a: string;
+  b: string;
+  name: string;
+  emoji: string;
+  ids: number[];
 }
 
 /** What anyone may see of a villa. */
 export interface VillaPlotView {
   villa_level: number;
   garage_level: number;
-  /** Cells a side of the plot. */
+  /** Cells a side open at this villa level (from the back corner). */
   grid: number;
+  /** Cells a side of the whole lawn (the last level). */
+  grid_max: number;
+  combos: VillaCombo[];
   items: VillaItem[];
   car: { id: number; code: string; name: string; emoji: string } | null;
   staff: VillaStaff[];
@@ -452,7 +466,10 @@ export interface VillaState extends VillaPlotView {
   garage_slots: number;
   cars: number;
   shop: VillaShopItem[];
-  posts: { post: string; name: string; emoji: string }[];
+  posts: { post: string; name: string; emoji: string; workplace: string[] }[];
+  all_combos: { a: string; b: string; name: string; emoji: string; a_name: string; b_name: string }[];
+  prestige_combo: number;
+  prestige_staff: number;
   candidates: { id: number; name: string; title: string | null; icon: string; image_path: string | null; rarity: string; posts: string[] }[];
   prestige_per_pct: number;
   prestige_max_pct: number;

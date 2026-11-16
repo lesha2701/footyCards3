@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { saveVillaLayout, type VillaItem, type VillaState } from "@/api/town";
-import { checkLayout, drawOrder, footprint } from "@/lib/villa";
+import { checkLayout, corner, drawOrder, footprint, pathKerbs, unproject, zoomView, HOME_VIEW, PLOT_W } from "@/lib/villa";
 import TownVillaPage from "@/pages/TownVillaPage";
 
 const item = (over: Partial<VillaItem>): VillaItem => ({
@@ -12,13 +12,15 @@ const item = (over: Partial<VillaItem>): VillaItem => ({
 });
 
 const villa = (): VillaState => ({
-  villa_level: 1, garage_level: 0, grid: 8,
+  villa_level: 1, garage_level: 0, grid: 8, grid_max: 12,
+  combos: [], all_combos: [{ a: "pool", b: "palm", name: "Тропики", emoji: "🌴", a_name: "Бассейн", b_name: "Пальма" }],
+  prestige_combo: 5, prestige_staff: 15,
   items: [item({}), item({ id: 2, code: "palm", name: "Пальма", emoji: "🌴", kind: "yard", w: 1, h: 1, x: null, y: null, level: null })],
   car: null, staff: [], prestige: 21, prestige_pct: 0, user_id: 1, likes_total: 4,
   next_villa: { level: 2, price: 15000, grid: 9 }, next_garage: { level: 1, price: 8000, slots: 1 },
   garage_slots: 0, cars: 0,
   shop: [{ code: "palm", name: "Пальма", emoji: "🌴", kind: "yard", w: 1, h: 1, coins: 600, stars: 0, prestige: 1, owned: 1, supply: 0, sold: 0, can_buy: true, reason: "" }],
-  posts: [{ post: "security", name: "Охрана", emoji: "🛡️" }], candidates: [],
+  posts: [{ post: "security", name: "Охрана", emoji: "🛡️", workplace: [] }], candidates: [],
   prestige_per_pct: 60, prestige_max_pct: 5, max_items: 120,
 });
 
@@ -40,6 +42,24 @@ describe("villa grid", () => {
     expect(footprint({ w: 3, h: 2, rot: 1 })).toEqual([2, 3]);
     const order = drawOrder([item({ id: 5, x: 4, y: 4 }), item({ id: 6, x: 0, y: 0 }), item({ id: 7, x: null, y: null })]);
     expect(order.map((i) => i.id)).toEqual([6, 5]);
+  });
+
+  it("maps the lawn both ways and joins paths", () => {
+    for (const [gx, gy] of [[0, 0], [3.5, 7.25], [12, 12], [12, 0]]) {
+      const [px, py] = corner(12, gx, gy);
+      const [bx, by] = unproject(12, px, py);
+      expect(bx).toBeCloseTo(gx, 3);
+      expect(by).toBeCloseTo(gy, 3);
+    }
+    // The back corner lies above the front one, the grid inside the picture.
+    expect(corner(12, 0, 0)[1]).toBeLessThan(corner(12, 12, 12)[1]);
+    expect(corner(12, 0, 12)[0]).toBeGreaterThan(0);
+    expect(corner(12, 12, 0)[0]).toBeLessThan(PLOT_W);
+    const cells = new Set(["2:2", "3:2"]);
+    expect(pathKerbs(cells, 2, 2)).toEqual({ n: true, e: false, s: true, w: true });
+    const near = zoomView(HOME_VIEW, 2, 450, 600);
+    expect(near.w).toBe(450);
+    expect(zoomView(near, 0.1, 450, 600).w).toBe(PLOT_W);  // never past the whole picture
   });
 });
 

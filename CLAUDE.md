@@ -19,8 +19,11 @@ Main features:
   docs/club-base.md);
 - «Моя вилла» in the town (`town_villa_service.py`): an isometric plot laid
   out by the player (villa / garage levels, cars, yard and Stars things on a
-  grid checked by `check_layout` and its TS twin `lib/villa.ts`), residents on
-  staff posts by profession, prestige → capped +% to the town's house rent,
+  grid checked by `check_layout` and its TS twin `lib/villa.ts`; the grid lies
+  on the lawn of `assets/town/villa/plot.webp` — `corner`/`unproject`, the
+  level opens grid × grid of grid_max), residents on staff posts by profession
+  (a post works only with its workplace placed, `POST_WORKPLACE`), side-by-side
+  `COMBOS`, prestige → capped +% to the town's house rent,
   the chosen car on the town map, guests' villa likes and «Вилла недели»;
 - game currency, daily rewards and a free periodic pack;
 - Card Arena (`match_service.py`, `arena_moments.py`, `arena_cup_service.py`): divisions, a live

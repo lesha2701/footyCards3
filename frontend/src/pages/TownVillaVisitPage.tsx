@@ -51,8 +51,18 @@ export default function TownVillaVisitPage() {
             {data.liked ? `❤️ Лайк есть · за неделю ${fmt(data.likes_week)}` : "❤️ Лайк вилле"}
           </button>
           <div className="overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-sky-400/25 to-sky-900/10">
-            <VillaPlot grid={data.grid} items={data.items.filter((i) => i.x != null)} label="Вилла хозяина" />
+            <VillaPlot
+              grid={data.grid} gridMax={data.grid_max ?? data.grid} items={data.items.filter((i) => i.x != null)}
+              comboIds={new Set((data.combos ?? []).flatMap((c) => c.ids))} label="Вилла хозяина"
+            />
           </div>
+          {(data.combos ?? []).length > 0 && (
+            <div className="flex flex-wrap justify-center gap-1">
+              {data.combos.map((c) => (
+                <span key={`${c.a}:${c.b}`} className="rounded-full bg-accent-lime/15 px-2 py-0.5 text-[11px] font-semibold text-accent-lime">{c.emoji} {c.name}</span>
+              ))}
+            </div>
+          )}
           {data.car && <p className="px-1 text-center text-xs text-ink-mist">В городе ездит: {data.car.emoji} {data.car.name}</p>}
           {data.staff.length > 0 && (
             <div className="flex flex-wrap justify-center gap-2">
