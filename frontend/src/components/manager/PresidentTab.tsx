@@ -66,23 +66,30 @@ export default function PresidentTab({ onError, onTab = () => {} }: { onError: (
   });
   if (!data) return <ListSkeleton />;
   const ask = (title: string, text: string, run: () => void) => setConfirm({ title, text, run });
-  const sections: [Section, string, string][] = [
-    ["report", "📊", "Отчёт"], ["budget", "📒", "Бюджет"], ["awards", "🏅", "Награды"], ["sponsor", "🤝", "Спонсор"], ["bank", "🏦", "Банк"], ["deals", "💼", "Сделки"],
-    ["matchday", "🏟️", "Матчдей"], ["exchange", "📈", "Биржа"], ["rating", "🏆", "Рейтинг"],
+  // Three groups instead of nine equal buttons: money, the stadium, prestige.
+  const groups: { title: string; cols: string; items: [Section, string, string][] }[] = [
+    { title: "Финансы", cols: "col-span-4 grid-cols-5", items: [["report", "📊", "Отчёт"], ["budget", "📒", "Бюджет"], ["bank", "🏦", "Банк"], ["deals", "💼", "Сделки"], ["sponsor", "🤝", "Спонсор"]] },
+    { title: "Матчдей", cols: "col-span-1 grid-cols-1", items: [["matchday", "🏟️", "Стадион"]] },
+    { title: "Престиж", cols: "col-span-3 grid-cols-3", items: [["awards", "🏅", "Награды"], ["rating", "🏆", "Рейтинг"], ["exchange", "📈", "Биржа"]] },
   ];
   return (
     <div className="flex flex-col gap-4" data-testid="president-tab">
       <OfficeHero office={data} onTab={onTab} />
-      <AwayReport onTab={onTab} />
-      <Diary onTab={onTab} />
-      <div className="grid grid-cols-3 gap-1.5">
-        {sections.map(([id, icon, label]) => (
-          <button key={id} onClick={() => setSection(id)}
-            className={`flex flex-col items-center gap-0.5 rounded-2xl py-2 text-micro font-bold transition ${section === id
-              ? "bg-gradient-to-b from-amber-300 to-amber-500 text-bg-base shadow-[0_6px_18px_-6px_rgba(251,191,36,0.8)]"
-              : "bg-bg-surface text-ink-mist"}`}>
-            <MIcon code={`pres_${id}`} emoji={icon} className="h-8 w-8" emojiClass="text-lg" />{label}
-          </button>
+      <div className="grid grid-cols-4 gap-x-1.5 gap-y-2" data-testid="office-sections">
+        {groups.map((g) => (
+          <div key={g.title} className={`flex flex-col gap-1 ${g.cols.split(" ")[0]}`}>
+            <p className="px-1 text-[10px] font-bold uppercase tracking-wide text-ink-mist">{g.title}</p>
+            <div className={`grid gap-1 ${g.cols.split(" ")[1]}`}>
+              {g.items.map(([id, icon, label]) => (
+                <button key={id} onClick={() => setSection(id)}
+                  className={`flex min-w-0 flex-col items-center gap-0.5 rounded-2xl px-0.5 py-2 text-[10px] font-bold transition ${section === id
+                    ? "bg-gradient-to-b from-amber-300 to-amber-500 text-bg-base shadow-[0_6px_18px_-6px_rgba(251,191,36,0.8)]"
+                    : "bg-bg-surface text-ink-mist"}`}>
+                  <MIcon code={`pres_${id}`} emoji={icon} className="h-8 w-8" emojiClass="text-lg" /><span className="w-full truncate text-center">{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
       {!data.window_open && !["report", "budget", "awards", "exchange", "rating"].includes(section) && (
@@ -102,6 +109,8 @@ export default function PresidentTab({ onError, onTab = () => {} }: { onError: (
           () => deal.mutate({ kind: "insurance" }))} />}
       {section === "rating" && <PresidentRating />}
       {section === "deals" && <div data-focus="deals"><Deals office={data} busy={deal.isPending} ask={ask} sign={(kind, body) => deal.mutate({ kind, ...body })} /></div>}
+      <AwayReport onTab={onTab} />
+      <Diary onTab={onTab} />
       <ConfirmDialog
         open={!!confirm} title={confirm?.title ?? ""} description={confirm?.text} confirmLabel="Подписать"
         onConfirm={() => { confirm?.run(); setConfirm(null); }} onCancel={() => setConfirm(null)}

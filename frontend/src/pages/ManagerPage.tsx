@@ -59,6 +59,7 @@ import { MIcon } from "@/lib/managerIcons";
 import GameHero from "@/components/common/GameHero";
 import { formatGameError } from "@/lib/errors";
 import { goTo, parseGo, useFocusTarget } from "@/lib/managerFocus";
+import { usePersistentState } from "@/lib/usePersistentState";
 import { themeClass } from "@/lib/managerLook";
 import { eur, trend } from "@/lib/managerMoney";
 import { hapticNotify } from "@/lib/telegram";
@@ -81,7 +82,16 @@ function Trend({ pct }: { pct: number | null | undefined }) {
   return <span className={`text-micro font-bold ${pct >= 0 ? "text-emerald-400" : "text-red-400"}`}>{trend(pct)}</span>;
 }
 
-type Tab = "club" | "office" | "staff" | "transfers" | "league" | "me" | "style";
+type Tab = "club" | "transfers" | "league" | "office" | "staff";
+
+/** «Штаб» opens once the club has started playing (a round, a season) or the
+ * president already took a VIP — a newcomer isn't shown everything at once. */
+function staffOpen(view: ManagerView, summary?: ManagerSummary): boolean {
+  const club = view.club;
+  if (!club) return false;
+  const rounds = summary?.league?.status === "active" ? summary.league.rounds_played : summary?.league?.status === "finished" ? 1 : 0;
+  return club.seasons_played > 0 || rounds > 0 || (view.shop.passes ?? []).some((p) => p.active);
+}
 
 /** «Менеджер»: your own club — your «Мой игрок» and an academy card always
  * start, other users' players (transfers, loans, contracts for seasons) and
@@ -93,7 +103,15 @@ export default function ManagerPage() {
   const updateBalance = useAuthStore((s) => s.updateBalance);
   const { data, isLoading } = useQuery({ queryKey: ["manager"], queryFn: fetchManager, refetchInterval: 60_000 });
   const { data: summary } = useQuery({ queryKey: ["manager", "summary"], queryFn: fetchManagerSummary, refetchInterval: 60_000 });
-  const [tab, setTab] = useState<Tab>("club");
+  const [tab, setTabRaw] = useState<Tab>("club");
+  const [seen, setSeen] = usePersistentState<string[]>("manager.seenTabs", []);
+  // Old tab codes from tips and the home tile: «Я игрок» lives in «Трансферы», «Стиль» in «Клуб».
+  const setTab = (t: string) => {
+    if (t === "me") { setTabRaw("transfers"); goTo("offers"); return; }
+    if (t === "style") { setTabRaw("club"); goTo("style"); return; }
+    setTabRaw(t as Tab);
+    if (!seen.includes(t)) setSeen([...seen, t]);
+  };
   const [error, setError] = useState<string | null>(null);
   const onView = (v: ManagerView) => {
     setError(null);
@@ -104,15 +122,26 @@ export default function ManagerPage() {
   const onError = (err: unknown) => setError(formatGameError(err, "Не получилось"));
   const location = useLocation();
   const ready = !!data?.club;
+  // The tabs stick right under the app's top bar (its height moves with Telegram's safe area).
+  const [stickTop, setStickTop] = useState(0);
+  useEffect(() => {
+    const bar = document.querySelector<HTMLElement>("header.safe-top");
+    if (!bar) return;
+    const set = () => setStickTop(bar.getBoundingClientRect().height);
+    set();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(set);
+    ro.observe(bar);
+    return () => ro.disconnect();
+  }, []);
   useEffect(() => {
     // `?go=<tab>:<target>` from the home tile: open the tab, then the action.
     const go = parseGo(location.search);
     if (!go || !ready) return;
-    const tabs: Tab[] = ["club", "office", "staff", "transfers", "league", "me", "style"];
-    if (tabs.includes(go.tab as Tab)) setTab(go.tab as Tab);
+    if (["club", "office", "staff", "transfers", "league", "me", "style"].includes(go.tab)) setTab(go.tab);
     goTo(go.target);
     navigate(location.pathname, { replace: true });
-  }, [location.search, location.pathname, ready, navigate]);
+  }, [location.search, location.pathname, ready, navigate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isLoading || !data) return <ListSkeleton />;
   if (!data.enabled) return <EmptyState icon={IconTrophy} title="«Менеджер» скоро вернётся" />;
@@ -128,47 +157,66 @@ export default function ManagerPage() {
   }
 
   const club = data.club;
-  const tabs: [Tab, string, string, boolean][] = [
-    ["club", "🏟️", "Мой клуб", !!club && club.incoming.length > 0],
-    ...(club ? [["office", "💼", "Кабинет", false] as [Tab, string, string, boolean]] : []),
-    ...(club ? [["staff", "👥", "Штаб", false] as [Tab, string, string, boolean]] : []),
-    ["transfers", "🔁", "Трансферы", false],
-    ["league", "🏆", "Лига", false],
-    ["me", "⚽", "Я игрок", data.offers.length > 0],
-    ...(club ? [["style", "🎨", "Стиль", false] as [Tab, string, string, boolean]] : []),
-  ];
   const props = { view: data, onView, onError };
+  const hero = (
+    <GameHero game="manager" title="Менеджер" subtitle={
+      <button onClick={() => (club ? setTab("transfers") : undefined)} className="mt-1 active:scale-95" data-testid="hero-transfers">
+        <TransferLight open={windowOpen(data.season, club)} until={data.season.preseason_ends_at} />
+      </button>
+    } />
+  );
+  const errorLine = error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>;
+  if (!club) {
+    // A newcomer: one screen, one button. The rest opens after the club is founded.
+    return (
+      <div className="flex flex-col gap-4" data-testid="manager-page">
+        {hero}
+        {errorLine}
+        <FoundClub {...props} />
+        <MeCorner {...props} />
+      </div>
+    );
+  }
+  const staff = staffOpen(data, summary);
+  const tabs: { id: Tab; icon: string; label: string; dot?: boolean; locked?: boolean }[] = [
+    { id: "club", icon: "🏟️", label: "Клуб", dot: club.incoming.length > 0 },
+    { id: "transfers", icon: "🔁", label: "Трансферы", dot: data.offers.length > 0 },
+    { id: "league", icon: "🏆", label: "Лига" },
+    { id: "office", icon: "💼", label: "Кабинет" },
+    { id: "staff", icon: "👥", label: "Штаб", locked: !staff, dot: staff && !seen.includes("staff") && club.seasons_played === 0 },
+  ];
   return (
     <div className="flex flex-col gap-4" data-testid="manager-page">
-      <GameHero game="manager" title="Менеджер" subtitle={
-        <button onClick={() => setTab("transfers")} className="mt-1 active:scale-95" data-testid="hero-transfers">
-          <TransferLight open={windowOpen(data.season, club)} until={data.season.preseason_ends_at} />
-        </button>
-      } />
+      {hero}
       <TodayPanel onTab={setTab} onError={onError} />
-      {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
-      <div className={`grid gap-1.5 ${tabs.length > 6 ? "grid-cols-4" : "grid-cols-3"}`}>
-        {tabs.map(([id, icon, label, dot]) => (
+      {errorLine}
+      <nav className="sticky z-20 -mx-1 grid grid-cols-5 gap-1 rounded-2xl bg-bg-base/95 p-1 ring-1 ring-white/5" style={{ top: stickTop }} data-testid="manager-tabs">
+        {tabs.map((t) => (
           <button
-            key={id}
-            onClick={() => setTab(id)}
-            className={`relative truncate font-semibold ${tabs.length > 6 ? "flex flex-col items-center gap-0.5 rounded-2xl px-1 py-1.5 text-[11px]" : "rounded-full px-2 py-2 text-xs"} ${tab === id ? "bg-floodlight text-bg-base" : "bg-bg-surface text-ink-mist"}`}
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            data-testid={`tab-${t.id}`}
+            className={`relative flex min-w-0 flex-col items-center gap-0.5 rounded-xl px-0.5 py-1.5 text-[10px] font-bold ${tab === t.id ? "bg-floodlight text-bg-base" : "text-ink-mist"} ${t.locked ? "opacity-50" : ""}`}
           >
-            <MIcon code={`tab_${id}`} emoji={icon} className="h-7 w-7" emojiClass={tabs.length > 6 ? "text-base" : ""} />{label}
-            {dot && tab !== id && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-accent-lime" />}
+            <MIcon code={`tab_${t.id}`} emoji={t.icon} className="h-7 w-7" emojiClass="text-lg" />
+            <span className="w-full truncate text-center">{t.locked ? "🔒 " : ""}{t.label}</span>
+            {t.dot && tab !== t.id && <span className="absolute right-1.5 top-1 h-2 w-2 rounded-full bg-accent-lime" />}
           </button>
         ))}
-      </div>
-      {tab === "club" && (club ? <ClubTab {...props} club={club} /> : <FoundClub {...props} />)}
+      </nav>
+      {tab === "club" && <ClubTab {...props} club={club} onTab={setTab} />}
       {tab === "transfers" && <SeasonBanner view={data} summary={summary} />}
-      {tab === "transfers" && (club ? <TransfersTab {...props} club={club} /> : (
-        <EmptyState icon={IconProfile} title="Сначала основай клуб" description="На рынке — «Мои игроки» других пользователей и футболисты игры." />
-      ))}
+      {tab === "transfers" && <TransfersTab {...props} club={club} />}
       {tab === "league" && <LeagueTab view={data} onError={onError} />}
-      {tab === "me" && <MeTab {...props} />}
-      {tab === "style" && club && <StyleTab {...props} club={club} />}
-      {tab === "office" && club && <PresidentTab onError={onError} onTab={setTab} />}
-      {tab === "staff" && club && <StaffTab onError={onError} />}
+      {tab === "office" && <PresidentTab onError={onError} onTab={setTab} />}
+      {tab === "staff" && (staff ? <StaffTab onError={onError} /> : (
+        <section className="flex flex-col items-center gap-2 rounded-2xl bg-bg-surface p-6 text-center" data-testid="staff-locked">
+          <MIcon code="tab_staff" emoji="👥" className="h-14 w-14" emojiClass="text-4xl" />
+          <p className="font-display text-base font-bold text-ink-chalk">Штаб откроется после первого тура</p>
+          <p className="text-caption text-ink-mist">Помощник и аналитик, штат клуба за круглым столом, машины и кабинеты. Пока собери состав и выбери тактику.</p>
+          <button onClick={() => setTab("transfers")} className="mt-1 rounded-xl bg-floodlight px-4 py-2 text-sm font-bold text-bg-base">К трансферам</button>
+        </section>
+      ))}
     </div>
   );
 }
@@ -207,47 +255,93 @@ function SeasonBanner({ view, summary }: { view: ManagerView; summary?: ManagerS
 
 function FoundClub({ view, onView, onError }: TabProps) {
   const [name, setName] = useState("");
+  const [rules, setRules] = useState(false);
   const found = useMutation({ mutationFn: () => foundManagerClub(name), onSuccess: (v) => { hapticNotify("success"); onView(v); }, onError });
-  const rules = view.rules;
-  const canFound = view.level >= rules.min_level;
+  const r = view.rules;
+  const canFound = view.level >= r.min_level;
   const bottom = view.pyramid[view.pyramid.length - 1];
+  const steps: [string, string, string][] = [
+    ["tab_club", "🏟️", "Назови клуб"],
+    ["tab_transfers", "🔁", "Собери состав"],
+    ["tab_league", "🏆", `Первый тур — ${when(view.season.first_round_at)}`],
+  ];
   return (
-    <div className="flex flex-col gap-4">
-      <section className="rounded-2xl bg-gradient-to-br from-accent-lime/20 via-bg-surface to-bg-surface p-4">
-        <p className="font-display text-lg font-bold text-ink-chalk">🏟 Свой клуб</p>
-        <ul className="mt-2 flex flex-col gap-1.5 text-caption text-ink-mist">
-          <li>⭐ Твой «Мой игрок» и игрок академии — всегда в стартовом составе.</li>
-          <li>🤝 До {rules.max_live} «Моих игроков» других пользователей: подписывай свободных, покупай и бери в аренду у других клубов.</li>
-          <li>📋 Остальных ищи среди футболистов игры: покупка на 1–3 сезона или аренда на сезон.</li>
-          <li>💶 Бюджет в евро: грант дивизиона + «Клубная база» (стадион, маркетинг, магазин, бухгалтерия).</li>
-          <li>🏆 {rules.divisions} дивизионов. Старт — {bottom?.name}, за сезон можно подняться на один. Сезон — неделя, {rules.rounds} туров.</li>
-        </ul>
-      </section>
-      <section className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4">
-        <h2 className="font-display text-base font-bold text-ink-chalk">Основать клуб</h2>
+    <div className="flex flex-col gap-3" data-testid="found-club">
+      <section className="flex flex-col gap-3 rounded-3xl bg-gradient-to-br from-accent-lime/20 via-bg-surface to-bg-surface p-4 ring-1 ring-accent-lime/30">
+        <div>
+          <h2 className="font-display text-xl font-black text-ink-chalk">Свой клуб</h2>
+          <p className="text-caption text-ink-mist">Ты президент: собираешь состав, выбираешь тактику и ведёшь клуб наверх. Старт — {bottom?.name ?? "низший дивизион"}.</p>
+        </div>
+        <ol className="grid grid-cols-3 gap-2">
+          {steps.map(([code, emoji, title], i) => (
+            <li key={code} className="flex flex-col items-center gap-1.5 rounded-2xl bg-bg-base/40 p-2 text-center">
+              <span className="relative">
+                <MIcon code={code} emoji={emoji} className="h-11 w-11" emojiClass="text-3xl" />
+                <span className="absolute -left-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-accent-lime text-[10px] font-black text-bg-base">{i + 1}</span>
+              </span>
+              <span className="text-[11px] font-semibold leading-tight text-ink-chalk">{title}</span>
+            </li>
+          ))}
+        </ol>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           maxLength={32}
           placeholder="Название клуба"
-          className="rounded-xl bg-bg-raised px-3 py-2.5 text-sm text-ink-chalk outline-none placeholder:text-ink-mist-dim"
+          className="rounded-xl bg-bg-raised px-3 py-3 text-sm text-ink-chalk outline-none placeholder:text-ink-mist-dim"
         />
-        {!canFound && <p className="text-caption text-amber-300">Нужен {rules.min_level} уровень «Моего игрока» (сейчас {view.level})</p>}
+        {!canFound && <p className="text-caption text-amber-300">Нужен {r.min_level} уровень «Моего игрока» (сейчас {view.level})</p>}
         <button
           disabled={!canFound || name.trim().length < 3 || found.isPending}
           onClick={() => found.mutate()}
-          className="flex items-center justify-center gap-1.5 rounded-2xl bg-floodlight py-3 text-sm font-bold text-bg-base disabled:opacity-40"
+          className="flex items-center justify-center gap-1.5 rounded-2xl bg-floodlight py-3.5 text-sm font-bold text-bg-base disabled:opacity-40"
         >
-          Основать за <Coins n={rules.found_cost} />
+          Основать за <Coins n={r.found_cost} />
         </button>
       </section>
+      <button onClick={() => setRules(!rules)} className="flex items-center justify-between rounded-2xl bg-bg-surface px-4 py-3 text-sm font-semibold text-ink-chalk" data-testid="found-rules">
+        <span>❓ Как это работает?</span>
+        <span className={`text-ink-mist transition ${rules ? "rotate-90" : ""}`}>›</span>
+      </button>
+      {rules && (
+        <ul className="-mt-1 flex flex-col gap-1.5 rounded-2xl bg-bg-surface p-4 text-caption text-ink-mist">
+          <li>⭐ Твой «Мой игрок» и игрок академии — всегда в стартовом составе.</li>
+          <li>🤝 До {r.max_live} «Моих игроков» других пользователей: подписывай свободных, покупай и бери в аренду у других клубов.</li>
+          <li>📋 Остальных ищи среди футболистов игры: покупка на 1–3 сезона или аренда на сезон.</li>
+          <li>💶 Бюджет в евро: грант дивизиона + «Клубная база» (стадион, маркетинг, магазин, бухгалтерия).</li>
+          <li>🏆 {r.divisions} дивизионов. Старт — {bottom?.name}, за сезон можно подняться на один. Сезон — неделя, {r.rounds} туров.</li>
+        </ul>
+      )}
     </div>
+  );
+}
+
+/** Without a club the player still has his «Мой игрок» on the market: offers and his value, folded. */
+function MeCorner(props: TabProps) {
+  const [open, setOpen] = useState(false);
+  const n = props.view.offers.length;
+  return (
+    <>
+      <button onClick={() => setOpen(!open)} className="flex items-center justify-between rounded-2xl bg-bg-surface px-4 py-3 text-sm font-semibold text-ink-chalk" data-testid="me-corner">
+        <span className="flex items-center gap-2"><MIcon code="tab_me" emoji="⚽" className="h-6 w-6" /> Я игрок{n > 0 && <span className="rounded-full bg-accent-lime px-1.5 text-micro font-black text-bg-base">{n}</span>}</span>
+        <span className={`text-ink-mist transition ${open ? "rotate-90" : ""}`}>›</span>
+      </button>
+      {open && <MeTab {...props} />}
+    </>
   );
 }
 
 // --- club ---------------------------------------------------------------------------
 
-function ClubTab({ view, club, onView, onError }: TabProps & { club: ManagerClub }) {
+type ClubSub = "squad" | "tactics" | "finance" | "style";
+
+function ClubTab({ view, club, onView, onError, onTab }: TabProps & { club: ManagerClub; onTab: (t: string) => void }) {
+  const [sub, setSub] = useState<ClubSub>("squad");
+  useFocusTarget((t) => {
+    if (t === "incoming") setSub("squad");
+    if (t === "tactics" || t === "events") setSub("tactics");
+    if (t === "style") setSub("style");
+  });
   const [confirm, setConfirm] = useState<{ title: string; text: string; run: () => void } | null>(null);
   const patch = useMutation({ mutationFn: updateManagerClub, onSuccess: onView, onError });
   const release = useMutation({ mutationFn: (id: number) => endManagerContract(id), onSuccess: onView, onError });
@@ -278,13 +372,24 @@ function ClubTab({ view, club, onView, onError }: TabProps & { club: ManagerClub
           </span>
           <KitShirt look={club.look} size={44} sponsor={club.kit_sponsor} />
         </div>
-        <div className="mt-3"><Stadium look={club.look} label={club.stadium_name ?? "Стадион клуба"} /></div>
+        {sub === "squad" && <div className="mt-3"><Stadium look={club.look} label={club.stadium_name ?? "Стадион клуба"} /></div>}
         <div className="mt-3 grid grid-cols-3 gap-2 text-center">
           <Stat label="бюджет" value={<span className="text-accent-lime">{eur(club.budget)}</span>} />
           <Stat label="рейтинг состава" value={club.squad.rating} />
           <Stat label="стоимость состава" value={eur(club.squad_value)} />
         </div>
-        <div className="mt-3 rounded-xl bg-bg-base/40 p-3 text-micro text-ink-mist">
+      </section>
+
+      <div className="grid grid-cols-4 gap-1 rounded-xl bg-bg-surface p-1" data-testid="club-subtabs">
+        {([["squad", "Состав"], ["tactics", "Тактика"], ["finance", "Финансы"], ["style", "Стиль"]] as [ClubSub, string][]).map(([id, label]) => (
+          <button key={id} onClick={() => setSub(id)}
+            className={`rounded-lg py-2 text-xs font-semibold ${sub === id ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}>{label}</button>
+        ))}
+      </div>
+
+      {sub === "finance" && (
+        <section className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4" data-testid="club-finance">
+        <div className="rounded-xl bg-bg-base/40 p-3 text-micro text-ink-mist">
           <p className="mb-1 text-xs font-bold text-ink-chalk">Бюджет на сезон: {eur(club.next_grant.total)}</p>
           <p>Грант {club.division_name.toLowerCase()} {eur(club.next_grant.grant)} + «Клубная база» {eur(club.next_grant.bonus)}
             {club.next_grant.bonus < club.next_grant.bonus_raw && " (потолок)"}</p>
@@ -292,17 +397,31 @@ function ClubTab({ view, club, onView, onError }: TabProps & { club: ManagerClub
             {base.discount_pct > 0 && ` · 🧮 −${base.discount_pct}% к зарплатам`}</p>
           <p>Зарплаты состава на старте сезона: {eur(club.wages_per_season)} — отложены, на трансферы свободно {eur(club.free_budget)}. Мерч болельщиков в этом сезоне: {eur(club.merch.eur_season)}.</p>
         </div>
-      </section>
+          <button onClick={() => onTab("office")} className="rounded-xl bg-bg-raised py-2.5 text-xs font-semibold text-ink-chalk">💼 Отчёт, бюджет по статьям и сделки — в «Кабинете» ›</button>
+        </section>
+      )}
+      {sub === "style" && <StyleTab view={view} onView={onView} onError={onError} club={club} />}
 
+      {sub === "squad" && <>
       <div className="-mb-2 flex items-center justify-between gap-2 px-1">
         <h2><SectionTitle art={squadArt}>Состав · {club.squad.formation}</SectionTitle></h2>
         <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-micro font-bold text-ink-chalk">рейтинг {club.squad.rating}</span>
       </div>
       <ManagerPitch xi={club.squad.xi} formation={club.squad.formation} />
-      {club.squad.kids > 0 && (
-        <p className="-mt-2 rounded-xl bg-amber-400/10 px-3 py-2 text-caption text-amber-300">
-          {club.squad.kids} мест пустует. Не успеешь — при старте сезона система сама возьмёт в аренду средних футболистов на эти места.
-        </p>
+      {(club.squad.kids > 0 || club.live_count < rules.max_live) && (
+        <section className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4 ring-1 ring-amber-300/25" data-testid="refill">
+          <h2 className="font-display text-base font-bold text-ink-chalk">➕ Пополнить состав</h2>
+          <p className="-mt-1 text-caption text-ink-mist">
+            {club.squad.kids > 0
+              ? <><b className="text-amber-300">{club.squad.kids} мест пустует.</b> Не успеешь — при старте сезона система сама возьмёт в аренду средних футболистов.</>
+              : `Ещё ${rules.max_live - club.live_count} мест для «Моих игроков» других пользователей.`}
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => { onTab("transfers"); goTo("users"); }} className="rounded-xl bg-floodlight py-2.5 text-xs font-bold text-bg-base">🤝 Игроки ({club.live_count}/{rules.max_live})</button>
+            <button onClick={() => { onTab("transfers"); goTo("market"); }} className="rounded-xl bg-bg-raised py-2.5 text-xs font-bold text-ink-chalk">📋 Футболисты</button>
+          </div>
+          {club.academy_options.length === 0 && <p className="text-micro text-ink-mist">🎓 Игрок академии выпадает в паке «Академия» — он всегда в старте.</p>}
+        </section>
       )}
       {club.squad.bench.length > 0 && (
         <section className="rounded-2xl bg-bg-surface p-3">
@@ -341,41 +460,18 @@ function ClubTab({ view, club, onView, onError }: TabProps & { club: ManagerClub
         </section>
       )}
 
-      <AnalyticsPanel pass={view.shop.passes?.find((p) => p.code === "analytics")} onError={onError} />
-      <MatchPlanPanel onError={onError} />
-
-      <TacticsPanel
-        style={club.style} formation={club.formation} rules={rules.tactics} busy={patch.isPending} onChange={(p) => patch.mutate(p)}
-        next={club.next_match && {
-          ...club.next_match,
-          detail: [club.next_match.owner_name, club.next_match.rating != null ? `рейтинг ${club.next_match.rating}` : null].filter(Boolean).join(" · "),
-        }}
-        note="Тактику можно менять и во время сезона — она действует со следующего тура."
-        help={<>
-          <p>1. <b className="text-ink-chalk">Состав.</b> 11 игроков по схеме: твой «Мой игрок» и игрок академии всегда в старте, остальные — сильнейшие по позиции. Игрок не на своей позиции играет слабее.</p>
-          <p>2. <b className="text-ink-chalk">Тактика.</b> Стиль даёт % к рейтингу своих линий, схема — небольшой крен в атаку или защиту. Если твой стиль бьёт стиль соперника, все твои игроки получают +{rules.tactics.edge_pct}%.</p>
-          <p>3. <b className="text-ink-chalk">Игра.</b> Движок разыгрывает владение и моменты: полузащита борется за мяч, нападающие — с защитниками в дуэлях, удары — против вратаря. Чем выше рейтинги в нужной зоне, тем больше и опаснее моменты. Навыки и артефакты «Моих игроков» тоже работают.</p>
-          <p>4. <b className="text-ink-chalk">Случай.</b> Футбол есть футбол: слабый иногда побеждает, но на дистанции сезона решает сила и тактика.</p>
-          <p>5. <b className="text-ink-chalk">Итог.</b> 3 очка за победу, 1 за ничью. Клуб получает € за результат и билеты на домашних матчах, «Мои игроки» — опыт и статистику для «Золотого мяча».</p>
-        </>}
-      />
-
-      <section className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4">
-        <h2 className="font-display text-base font-bold text-ink-chalk">🎓 Игрок академии</h2>
-        <p className="-mt-1 text-micro text-ink-mist">Всегда в стартовом составе, как и твой «Мой игрок».</p>
-        {club.academy_options.length === 0 ? (
-          <p className="text-caption text-ink-mist">В коллекции нет карточек «Академии». Они выпадают в паке «Академия».</p>
-        ) : (
+      {club.academy_options.length > 0 && (
+        <section className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4">
+          <h2 className="font-display text-base font-bold text-ink-chalk">🎓 Игрок академии</h2>
+          <p className="-mt-1 text-micro text-ink-mist">Всегда в стартовом составе, как и твой «Мой игрок».</p>
           <AcademyPicker options={club.academy_options} selected={club.academy_card_id} locked={locked} busy={patch.isPending}
             onPick={(id) => patch.mutate({ academy_card_id: id })} onClear={() => patch.mutate({ clear_academy: true })} />
-        )}
-      </section>
+        </section>
+      )}
 
+      {(club.contracts.length > 0 || club.offers_sent.length > 0) && (
       <section className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4">
         <h2 className="font-display text-base font-bold text-ink-chalk">🤝 Игроки пользователей · {club.live_count}/{rules.max_live}</h2>
-        {club.contracts.length === 0 && club.offers_sent.length === 0 && (
-          <p className="text-caption text-ink-mist">Пока никого. Ищи во вкладке «Трансферы».</p>
-        )}
         {club.contracts.map((c) => (
           <div key={c.id} className="flex flex-col gap-2 rounded-xl bg-bg-raised p-2.5">
             <div className="flex items-start gap-2">
@@ -423,9 +519,11 @@ function ClubTab({ view, club, onView, onError }: TabProps & { club: ManagerClub
         ))}
       </section>
 
+      )}
+
+      {club.npcs.length > 0 && (
       <section className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4">
         <h2 className="font-display text-base font-bold text-ink-chalk">📋 Футболисты</h2>
-        {club.npcs.length === 0 && <p className="text-caption text-ink-mist">Купи или арендуй во вкладке «Трансферы».</p>}
         {club.npcs.map((n) => {
           const ends = n.seasons_left <= 0;
           const canExtend = !locked && (n.kind === "loan" ? ends : n.seasons_left < 3);
@@ -464,6 +562,30 @@ function ClubTab({ view, club, onView, onError }: TabProps & { club: ManagerClub
           );
         })}
       </section>
+      )}
+      </>}
+
+      {sub === "tactics" && <>
+      <AnalyticsPanel pass={view.shop.passes?.find((p) => p.code === "analytics")} onError={onError} />
+      <MatchPlanPanel onError={onError} />
+
+      <TacticsPanel
+        style={club.style} formation={club.formation} rules={rules.tactics} busy={patch.isPending} onChange={(p) => patch.mutate(p)}
+        next={club.next_match && {
+          ...club.next_match,
+          detail: [club.next_match.owner_name, club.next_match.rating != null ? `рейтинг ${club.next_match.rating}` : null].filter(Boolean).join(" · "),
+        }}
+        note="Тактику можно менять и во время сезона — она действует со следующего тура."
+        help={<>
+          <p>1. <b className="text-ink-chalk">Состав.</b> 11 игроков по схеме: твой «Мой игрок» и игрок академии всегда в старте, остальные — сильнейшие по позиции. Игрок не на своей позиции играет слабее.</p>
+          <p>2. <b className="text-ink-chalk">Тактика.</b> Стиль даёт % к рейтингу своих линий, схема — небольшой крен в атаку или защиту. Если твой стиль бьёт стиль соперника, все твои игроки получают +{rules.tactics.edge_pct}%.</p>
+          <p>3. <b className="text-ink-chalk">Игра.</b> Движок разыгрывает владение и моменты: полузащита борется за мяч, нападающие — с защитниками в дуэлях, удары — против вратаря. Чем выше рейтинги в нужной зоне, тем больше и опаснее моменты. Навыки и артефакты «Моих игроков» тоже работают.</p>
+          <p>4. <b className="text-ink-chalk">Случай.</b> Футбол есть футбол: слабый иногда побеждает, но на дистанции сезона решает сила и тактика.</p>
+          <p>5. <b className="text-ink-chalk">Итог.</b> 3 очка за победу, 1 за ничью. Клуб получает € за результат и билеты на домашних матчах, «Мои игроки» — опыт и статистику для «Золотого мяча».</p>
+        </>}
+      />
+
+      </>}
 
       <ConfirmDialog
         open={!!confirm}
@@ -505,10 +627,15 @@ function Stat({ label, value }: { label: string; value: ReactNode }) {
 // --- transfers ------------------------------------------------------------------------
 
 function TransfersTab({ view, club, onView, onError }: TabProps & { club: ManagerClub }) {
-  const [section, setSection] = useState<"users" | "catalog" | "scout" | "moves">("users");
-  useFocusTarget((t) => { if (t === "market") setSection("catalog"); });
+  const [section, setSection] = useState<"users" | "catalog" | "scout" | "moves" | "me">("users");
+  useFocusTarget((t) => {
+    if (t === "market") setSection("catalog");
+    if (t === "users") setSection("users");
+    if (t === "offers") setSection("me");
+  });
   const sections: [typeof section, string][] = [
     ["users", `🤝 Игроки (${club.live_count}/${view.rules.max_live})`], ["catalog", "📋 Футболисты"], ["moves", "📜 Сделки"], ["scout", "🔭 Скаут"],
+    ["me", `⚽ Я игрок${view.offers.length > 0 ? ` · предложений ${view.offers.length}` : ""}`],
   ];
   return (
     <div className="flex flex-col gap-3" data-testid="manager-transfers">
@@ -519,15 +646,16 @@ function TransfersTab({ view, club, onView, onError }: TabProps & { club: Manage
       <div className="grid grid-cols-2 gap-1 rounded-xl bg-bg-surface p-1">
         {sections.map(([id, label]) => (
           <button key={id} onClick={() => setSection(id)}
-            className={`rounded-lg py-2 text-xs font-semibold ${section === id ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}>{label}</button>
+            className={`rounded-lg py-2 text-xs font-semibold ${id === "me" ? "col-span-2" : ""} ${section === id ? "bg-floodlight text-bg-base" : "text-ink-mist"}`}>{label}</button>
         ))}
       </div>
-      <BudgetBar club={club} />
-      {club.trade_locked && <p className="rounded-xl bg-amber-400/10 px-3 py-2 text-caption text-amber-300">Идёт сезон — сделки откроются после последнего тура.</p>}
+      {section !== "me" && <BudgetBar club={club} />}
+      {club.trade_locked && section !== "me" && <p className="rounded-xl bg-amber-400/10 px-3 py-2 text-caption text-amber-300">Идёт сезон — сделки откроются после последнего тура.</p>}
       {section === "users" && <UsersMarket view={view} club={club} onView={onView} onError={onError} />}
       {section === "catalog" && <Catalog club={club} analyst={!!view.shop.passes?.find((x) => x.code === "analytics")?.active} onView={onView} onError={onError} />}
       {section === "scout" && <Scout club={club} />}
       {section === "moves" && <Moves />}
+      {section === "me" && <MeTab view={view} onView={onView} onError={onError} />}
     </div>
   );
 }

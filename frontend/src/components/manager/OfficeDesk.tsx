@@ -102,7 +102,7 @@ export function Diary({ onTab }: { onTab: (t: ManagerTodayTab) => void }) {
   if (!data?.club) return null;
   const rows: { icon: string; title: string; when?: string; tab?: ManagerTodayTab; target?: string; hot?: boolean }[] = [];
   const s = data.season;
-  if (s.transfers_open) rows.push({ icon: "🔁", title: "Закрытие трансферного окна", when: at(s.preseason_ends_at), tab: "transfers", target: "market", hot: true });
+  // The window's countdown is the hero's light and the tips are «Сегодня в клубе»: the diary is only the schedule.
   const nm = data.club.next_match;
   if (nm) rows.push({ icon: "⚽", title: `${nm.home ? "Дома" : "В гостях"}: «${nm.opponent}»`, when: at(nm.at), tab: "club", target: "tactics" });
   else rows.push({ icon: "🏁", title: data.league?.status === "active" ? "Первый тур нового сезона" : "Твой первый тур в лиге", when: at(s.first_round_at), tab: "league" });
@@ -110,7 +110,6 @@ export function Diary({ onTab }: { onTab: (t: ManagerTodayTab) => void }) {
   const played = data.league?.status === "active" ? data.league.rounds_played : 0;
   const press = (assistant?.press_rounds ?? []).find((r) => r > played);
   if (press && data.league?.status === "active") rows.push({ icon: "🎙", title: `Пресс-конференция после ${press}-го тура`, when: `через ${press - played} тур.` });
-  for (const t of data.today.slice(0, 3)) rows.push({ icon: t.icon, title: t.text, tab: t.tab, target: t.target, hot: t.urgent });
   if (rows.length === 0) return null;
   return (
     <section className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4" data-testid="diary">

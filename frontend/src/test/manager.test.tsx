@@ -173,7 +173,38 @@ describe("ManagerPage", () => {
     expect(pitch).toHaveTextContent("Академия");
     expect(pitch).toHaveTextContent("€9,8 млн");
     expect(screen.getByText(/8 мест пустует/)).toBeInTheDocument();
+    // The budget breakdown is on «Клуб» → «Финансы».
+    expect(screen.queryByText(/Бюджет на сезон: €2,3 млн/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Финансы" }));
     expect(screen.getByText(/Бюджет на сезон: €2,3 млн/)).toBeInTheDocument();
+  });
+
+  it("a newcomer sees one screen: no tabs, the steps and the rules folded", async () => {
+    fetchManager.mockResolvedValue(base);
+    renderPage();
+    expect(await screen.findByTestId("found-club")).toBeInTheDocument();
+    expect(screen.queryByTestId("manager-tabs")).toBeNull();
+    expect(screen.queryByText(/До 5 «Моих игроков»|«Моих игроков» других пользователей/)).toBeNull();
+    fireEvent.click(screen.getByTestId("found-rules"));
+    expect(screen.getByText(/«Моих игроков» других пользователей/)).toBeInTheDocument();
+  });
+
+  it("five tabs; «Штаб» stays shut until the club has played, «Я игрок» is in «Трансферы»", async () => {
+    fetchManager.mockResolvedValue({ ...base, club });
+    renderPage();
+    const tabs = await screen.findByTestId("manager-tabs");
+    expect(tabs.querySelectorAll("button")).toHaveLength(5);
+    fireEvent.click(screen.getByTestId("tab-staff"));
+    expect(screen.getByTestId("staff-locked")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("tab-transfers"));
+    expect(screen.getByRole("button", { name: /Я игрок/ })).toBeInTheDocument();
+  });
+
+  it("a club with seasons behind it has «Штаб» open", async () => {
+    fetchManager.mockResolvedValue({ ...base, club: { ...club, seasons_played: 2 } });
+    renderPage();
+    fireEvent.click(await screen.findByTestId("tab-staff"));
+    expect(screen.queryByTestId("staff-locked")).toBeNull();
   });
 
   it("a club out of this season's leagues still waits for the common window", async () => {
@@ -321,6 +352,7 @@ describe("ManagerPage", () => {
     });
     updateManagerClub.mockResolvedValue({ ...base, club: { ...club, style: "attacking" } });
     renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Тактика" }));
     const panel = await screen.findByTestId("tactics");
     expect(panel).toHaveTextContent("твой стиль бьёт их (+4% ко всем)");
     expect(panel).toHaveTextContent("Атака +10%");
