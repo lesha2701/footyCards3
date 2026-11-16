@@ -128,6 +128,15 @@ export function pathKerbs(cells: Set<string>, x: number, y: number): { n: boolea
   };
 }
 
+/** The free spot nearest the open plot's middle for thing `id` (as turned), or null. */
+export function freeSpot(grid: number, items: Placed[], id: number): [number, number] | null {
+  const mid = (grid - 1) / 2;
+  const spots: [number, number][] = [];
+  for (let y = 0; y < grid; y++) for (let x = 0; x < grid; x++) spots.push([x, y]);
+  spots.sort((a, b) => Math.hypot(a[0] - mid, a[1] - mid) - Math.hypot(b[0] - mid, b[1] - mid));
+  return spots.find(([x, y]) => checkLayout(grid, items.map((i) => (i.id === id ? { ...i, x, y } : i))) === null) ?? null;
+}
+
 /** Back things first: by the front corner, then left to right. */
 export function drawOrder<T extends Placed>(items: T[]): T[] {
   return items

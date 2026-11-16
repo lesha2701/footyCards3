@@ -24,8 +24,12 @@ type Drag = { id: number; dx: number; dy: number; x: number; y: number; moved: b
  * given (the owner's editor): a thing is dragged to a new spot with a green
  * / red ghost under it (onDrop), or tapped (selected) and a cell tapped. */
 export default function VillaPlot({
-  grid, gridMax, items, selectedId, onCell, onItem, onDrop, canPlace, poppedId, comboIds, label,
+  grid, gridMax, items, selectedId, onCell, onItem, onDrop, canPlace, poppedId, comboIds, mark, showGrid = true, label,
 }: {
+  /** A spot to show green / red (a thing waiting to be placed). */
+  mark?: { x: number; y: number; w: number; h: number; ok: boolean } | null;
+  /** The cell lines (cells stay tappable without them). */
+  showGrid?: boolean;
   /** Cells a side open now (from the back corner). */
   grid: number;
   /** Cells a side of the whole lawn. */
@@ -202,7 +206,7 @@ export default function VillaPlot({
               key={i}
               points={rhombus(gridMax, x, y, 1, 1)}
               fill="transparent"
-              stroke="rgba(255,255,255,0.3)"
+              stroke={showGrid || drag ? "rgba(255,255,255,0.3)" : "transparent"}
               strokeWidth={1.2}
               onClick={() => onCell?.(x, y)}
               data-testid={`villa-cell-${x}-${y}`}
@@ -239,6 +243,16 @@ export default function VillaPlot({
             strokeWidth={3}
             pointerEvents="none"
             data-testid="villa-ghost"
+          />
+        )}
+        {mark && !dragged && (
+          <polygon
+            points={rhombus(gridMax, mark.x, mark.y, mark.w, mark.h)}
+            fill={mark.ok ? "rgba(132,255,120,0.3)" : "rgba(255,80,80,0.38)"}
+            stroke={mark.ok ? "#84ff78" : "#ff5050"}
+            strokeWidth={3}
+            pointerEvents="none"
+            data-testid="villa-mark"
           />
         )}
         {NIGHT[sky] && <rect x={0} y={0} width={PLOT_W} height={PLOT_H} fill={NIGHT[sky]!} pointerEvents="none" />}

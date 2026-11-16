@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import {
@@ -11,12 +11,11 @@ import VillaPlot from "@/components/town/VillaPlot";
 import { staticUrl } from "@/lib/api";
 import { formatGameError } from "@/lib/errors";
 import { hapticNotify, openTelegramInvoice } from "@/lib/telegram";
-import { KIND_LABEL, checkLayout, footprint } from "@/lib/villa";
+import { KIND_LABEL, checkLayout, footprint, freeSpot, spriteOf } from "@/lib/villa";
 import { useAuthStore } from "@/store/authStore";
 
 const fmt = (n: number) => n.toLocaleString("ru-RU");
 type Tab = "plot" | "shop" | "staff" | "garage";
-type Draft = Record<number, { x: number | null; y: number | null; rot: number }>;
 
 /** «Моя вилла» (/town/villa): the player's own plot — place, turn and store
  * things, buy them, level the villa and the garage, hire residents. */
@@ -67,7 +66,7 @@ export default function TownVillaPage() {
               </button>
             ))}
           </div>
-          {tab === "plot" && <PlotEditor key={JSON.stringify(data.items)} data={data} onSaved={apply("Участок сохранён ✨")} onError={fail} />}
+          {tab === "plot" && <PlotEditor data={data} onSaved={apply()} onError={fail} />}
           {tab === "shop" && <Shop data={data} onDone={apply} onError={fail} />}
           {tab === "staff" && <Staff data={data} onDone={apply} onError={fail} />}
           {tab === "garage" && <Garage data={data} onDone={apply} onError={fail} />}
@@ -77,134 +76,215 @@ export default function TownVillaPage() {
   );
 }
 
-/** The plot in edit mode: tap a thing (or one in storage), then a cell. */
+type Placement = { id: number; x: number; y: number; rot: number };
+type TrayTab = "home" | "yard" | "car" | "premium";
+
+/** The plot, SimCity-like: the «Строить» tray under it (buy or take from
+ * storage → the thing lands on a free spot, drag it, ↻ turn, ✓ put), a tap on
+ * a standing thing → ↻ / 📦 / drag. Every move is saved at once. */
 function PlotEditor({ data, onSaved, onError }: { data: VillaState; onSaved: (res: VillaState) => void; onError: (e: unknown) => void }) {
-  const [draft, setDraft] = useState<Draft>({});
   const [selected, setSelected] = useState<number | null>(null);
+  const [pending, setPending] = useState<Placement | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [popped, setPopped] = useState<number | null>(null);
+  const [tray, setTray] = useState<TrayTab>("yard");
   const items: VillaItem[] = useMemo(
-    () => data.items.map((i) => (draft[i.id] ? { ...i, ...draft[i.id] } : i)),
-    [data.items, draft],
+    () => data.items.map((i) => (pending?.id === i.id ? { ...i, x: pending.x, y: pending.y, rot: pending.rot } : i)),
+    [data.items, pending],
   );
-  const dirty = Object.keys(draft).length > 0;
-  const current = items.find((i) => i.id === selected) ?? null;
-  const stored = items.filter((i) => i.x == null);
+  const comboIds = useMemo(() => new Set((data.combos ?? []).flatMap((c) => c.ids)), [data.combos]);
+  const current = items.find((i) => i.id === (pending?.id ?? selected)) ?? null;
+  const fits = (id: number, x: number, y: number, rot: number) =>
+    checkLayout(data.grid, items.map((i) => (i.id === id ? { ...i, x, y, rot } : i))) === null;
+
   const save = useMutation({
-    mutationFn: () => saveVillaLayout(Object.entries(draft).map(([id, v]) => ({ id: Number(id), ...v }))),
-    onSuccess: (res) => { setDraft({}); setSelected(null); onSaved(res); },
+    mutationFn: (move: Placement | { id: number; x: null; y: null; rot: number }) => saveVillaLayout([move]),
+    onSuccess: (res, move) => {
+      setPending(null);
+      if (move.x != null) setPopped(move.id);
+      onSaved(res);
+    },
     onError,
   });
-
-  const tryMove = (id: number, patch: { x: number | null; y: number | null; rot: number }) => {
-    const next = items.map((i) => (i.id === id ? { ...i, ...patch } : i));
-    const why = checkLayout(data.grid, next);
-    if (why) { hapticNotify("error"); setHint(why); return false; }
-    setDraft((d) => ({ ...d, [id]: patch }));
-    setHint(null);
-    if (patch.x != null) setPopped(id);
-    return true;
-  };
-  const canPlace = (id: number, x: number, y: number) =>
-    checkLayout(data.grid, items.map((i) => (i.id === id ? { ...i, x, y } : i))) === null;
-  const onDrop = (id: number, x: number, y: number) => {
-    const item = items.find((i) => i.id === id);
-    setSelected(id);
-    if (item && tryMove(id, { x, y, rot: item.rot })) hapticNotify("success");
-  };
-  const comboIds = useMemo(() => new Set((data.combos ?? []).flatMap((c) => c.ids)), [data.combos]);
-  const onCell = (x: number, y: number) => {
-    if (!current) { setHint("Выбери предмет на участке или на складе"); return; }
-    if (tryMove(current.id, { x, y, rot: current.rot })) hapticNotify("success");
-  };
-  const onItem = (item: VillaItem) => {
-    if (current && current.id !== item.id && current.x == null) {
-      setHint("Эта клетка занята — выбери свободную");
+  const put = (move: Placement) => {
+    if (!fits(move.id, move.x, move.y, move.rot)) {
+      hapticNotify("error");
+      setHint("Сюда не встанет — клетки заняты или за краем");
       return;
     }
+    setHint(null);
+    save.mutate(move);
+  };
+  /** A thing from storage lands on the nearest free spot, waiting for ✓. */
+  const startPlacing = (item: VillaItem, all: VillaItem[]) => {
+    const spot = freeSpot(data.grid, all.map((i) => (i.id === item.id ? { ...i, rot: 0 } : i)), item.id);
+    setSelected(null);
+    setPending({ id: item.id, x: spot?.[0] ?? 0, y: spot?.[1] ?? 0, rot: 0 });
+    setHint(spot ? "Тащи на нужное место и нажми ✓" : "Места нет — убери что-нибудь на склад");
+  };
+
+  const buy = useMutation({
+    mutationFn: (s: VillaShopItem) => (s.stars ? payWithStars(s.code) : buyVillaItem(s.code, crypto.randomUUID())),
+    onSuccess: (res, s) => {
+      if (!res) return;
+      onSaved(res);
+      const fresh = res.items.filter((i) => i.code === s.code && i.x == null).pop();
+      if (fresh) startPlacing(fresh, res.items);
+    },
+    onError,
+  });
+  const upgrade = useMutation({
+    mutationFn: (target: "villa" | "garage") => upgradeVilla(target, crypto.randomUUID()),
+    onSuccess: (res) => onSaved(res),
+    onError,
+  });
+  const pick = (s: VillaShopItem) => {
+    const stored = data.items.find((i) => i.code === s.code && i.x == null);
+    if (stored) { startPlacing(stored, data.items); return; }
+    if (!s.can_buy) { hapticNotify("error"); setHint(s.reason || "Пока нельзя"); return; }
+    buy.mutate(s);
+  };
+
+  const onCell = (x: number, y: number) => {
+    if (pending) { setPending({ ...pending, x, y }); return; }
+    setSelected(null);
+    setHint(null);
+  };
+  const onItem = (item: VillaItem) => {
+    if (pending) return;
     setSelected(item.id === selected ? null : item.id);
     setHint(null);
   };
+  const onDrop = (id: number, x: number, y: number) => {
+    if (pending?.id === id) { setPending({ ...pending, x, y }); return; }
+    const item = items.find((i) => i.id === id);
+    if (item) { setSelected(id); put({ id, x, y, rot: item.rot }); }
+  };
+  const turn = () => {
+    if (!current || current.x == null || current.y == null) return;
+    const rot = current.rot ? 0 : 1;
+    if (pending) { setPending({ ...pending, rot }); return; }
+    put({ id: current.id, x: current.x, y: current.y, rot });
+  };
+  const [cw, ch] = current ? footprint(current) : [1, 1];
+  const pendingOk = pending ? fits(pending.id, pending.x, pending.y, pending.rot) : false;
+  const busy = save.isPending || buy.isPending || upgrade.isPending;
+  const shop = data.shop.filter((s) => s.kind === tray);
 
   return (
     <section className="flex flex-col gap-2">
-      <div className="overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-sky-400/25 to-sky-900/10">
+      <div className="relative overflow-hidden rounded-3xl border border-white/10">
         <VillaPlot
           grid={data.grid}
           gridMax={data.grid_max ?? data.grid}
           items={items}
-          selectedId={selected}
+          selectedId={pending?.id ?? selected}
           onCell={onCell}
           onItem={onItem}
           onDrop={onDrop}
-          canPlace={canPlace}
+          canPlace={(id, x, y) => fits(id, x, y, items.find((i) => i.id === id)?.rot ?? 0)}
           poppedId={popped}
-          comboIds={dirty ? undefined : comboIds}
+          comboIds={comboIds}
+          mark={pending ? { x: pending.x, y: pending.y, w: cw, h: ch, ok: pendingOk } : null}
+          showGrid={Boolean(pending || selected)}
           label={`Участок ${data.grid}×${data.grid}`}
         />
-      </div>
-      <p className="px-1 text-center text-[11px] text-ink-mist">
-        {hint ?? (current
-          ? current.x == null ? `«${current.name}» — нажми на клетку, куда поставить` : `«${current.name}» — тащи пальцем или нажми на клетку`
-          : `Открыто ${data.grid}×${data.grid} из ${data.grid_max ?? data.grid}. Тащи предмет пальцем на новое место. Два пальца — зум`)}
-      </p>
-      {current && (
-        <div className="grid grid-cols-3 gap-2">
-          <button
-            type="button" onClick={() => tryMove(current.id, { x: current.x, y: current.y, rot: current.rot ? 0 : 1 })}
-            disabled={current.x == null}
-            className="min-h-[44px] rounded-2xl bg-white/10 text-xs font-bold text-ink-chalk disabled:opacity-40"
-          >
-            ↻ Повернуть
-          </button>
-          <button
-            type="button"
-            onClick={() => { if (tryMove(current.id, { x: null, y: null, rot: current.rot })) setSelected(null); }}
-            disabled={current.kind === "villa" || current.kind === "garage" || current.x == null}
-            className="min-h-[44px] rounded-2xl bg-white/10 text-xs font-bold text-ink-chalk disabled:opacity-40"
-          >
-            📦 На склад
-          </button>
-          <button type="button" onClick={() => setSelected(null)} className="min-h-[44px] rounded-2xl bg-white/5 text-xs font-bold text-ink-mist">
-            Готово
-          </button>
-        </div>
-      )}
-      {dirty && (
-        <div className="grid grid-cols-2 gap-2">
-          <button type="button" onClick={() => { setDraft({}); setSelected(null); setHint(null); }} className="min-h-[48px] rounded-2xl bg-white/5 text-sm font-bold text-ink-mist">
-            Отменить
-          </button>
-          <button
-            type="button" onClick={() => save.mutate()} disabled={save.isPending}
-            className="min-h-[48px] rounded-2xl bg-floodlight text-sm font-bold text-bg-base"
-          >
-            💾 Сохранить
-          </button>
-        </div>
-      )}
-      <Combos data={data} />
-      <div className="rounded-2xl border border-white/10 bg-bg-surface p-3" aria-label="Склад">
-        <p className="mb-2 text-xs font-bold text-ink-chalk">📦 Склад {stored.length ? `· ${stored.length}` : ""}</p>
-        {stored.length === 0 ? (
-          <p className="text-[11px] text-ink-mist">Всё расставлено. Новые вещи — в «Магазине».</p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {stored.map((i) => (
-              <button
-                key={i.id} type="button" onClick={() => { setSelected(i.id === selected ? null : i.id); setHint(null); }}
-                className={`flex min-h-[44px] items-center gap-1 rounded-xl px-2 text-xs font-semibold ${selected === i.id ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-chalk"}`}
-                aria-pressed={selected === i.id}
-              >
-                <span className="text-lg" aria-hidden>{i.emoji}</span>
-                {i.name}
-                <span className="text-[10px] opacity-70">{footprint(i).join("×")}</span>
-              </button>
-            ))}
+        {current && (
+          <div className="absolute inset-x-2 bottom-2 flex items-center gap-2 rounded-2xl bg-black/70 p-2 backdrop-blur" data-testid="villa-actions">
+            <span className="min-w-0 flex-1 truncate text-xs font-bold text-white">{current.emoji} {current.name}</span>
+            <button type="button" onClick={turn} disabled={busy} aria-label="Повернуть" className="h-11 w-11 rounded-xl bg-white/15 text-lg text-white">↻</button>
+            {pending ? (
+              <>
+                <button type="button" onClick={() => { setPending(null); setHint(null); }} aria-label="Отмена" className="h-11 w-11 rounded-xl bg-white/15 text-lg text-white">✕</button>
+                <button
+                  type="button" onClick={() => put(pending)} disabled={!pendingOk || busy} aria-label="Поставить"
+                  className="h-11 rounded-xl bg-accent-lime px-4 text-sm font-bold text-bg-base disabled:opacity-40"
+                >
+                  ✓ Поставить
+                </button>
+              </>
+            ) : (
+              <>
+                {current.kind !== "villa" && current.kind !== "garage" && (
+                  <button
+                    type="button" aria-label="На склад" disabled={busy}
+                    onClick={() => { save.mutate({ id: current.id, x: null, y: null, rot: current.rot }); setSelected(null); }}
+                    className="h-11 w-11 rounded-xl bg-white/15 text-lg text-white"
+                  >
+                    📦
+                  </button>
+                )}
+                <button type="button" onClick={() => setSelected(null)} aria-label="Готово" className="h-11 w-11 rounded-xl bg-white/15 text-lg text-white">✓</button>
+              </>
+            )}
           </div>
         )}
       </div>
+      <p className="px-1 text-center text-[11px] text-ink-mist" role="status">
+        {hint ?? (current ? "Тащи пальцем, ↻ — повернуть" : "Выбери внизу, что построить. Нажми на предмет на участке, чтобы двигать")}
+      </p>
+      <div className="rounded-2xl border border-white/10 bg-bg-surface p-2" aria-label="Строить">
+        <div className="mb-2 grid grid-cols-4 gap-1">
+          {([["home", "🏡 Дом"], ["yard", "🌴 Двор"], ["car", "🚗 Машины"], ["premium", "⭐ Премиум"]] as [TrayTab, string][]).map(([key, title]) => (
+            <button
+              key={key} type="button" onClick={() => setTray(key)} aria-pressed={tray === key}
+              className={`min-h-[36px] rounded-xl text-[11px] font-bold ${tray === key ? "bg-floodlight text-bg-base" : "bg-white/5 text-ink-mist"}`}
+            >
+              {title}
+            </button>
+          ))}
+        </div>
+        <div className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-1">
+          {tray === "home" ? (
+            <>
+              <BuildCard
+                art={spriteOf({ code: "villa", level: Math.min(5, data.villa_level + 1) })} emoji="🏡"
+                title={data.next_villa ? `Вилла ${data.next_villa.level} ур.` : "Вилла · макс."}
+                sub={data.next_villa ? `участок ${data.next_villa.grid}×${data.next_villa.grid}` : `${data.villa_level} ур.`}
+                price={data.next_villa ? <><IconCoin size={11} /> {fmt(data.next_villa.price)}</> : null}
+                disabled={!data.next_villa || busy} onTap={() => upgrade.mutate("villa")}
+              />
+              <BuildCard
+                art={spriteOf({ code: "garage", level: Math.min(3, data.garage_level + 1) })} emoji="🅿️"
+                title={data.next_garage ? (data.garage_level ? `Гараж ${data.next_garage.level} ур.` : "Построить гараж") : "Гараж · макс."}
+                sub={data.next_garage ? `мест ${data.next_garage.slots}` : `${data.garage_level} ур.`}
+                price={data.next_garage ? <><IconCoin size={11} /> {fmt(data.next_garage.price)}</> : null}
+                disabled={!data.next_garage || busy} onTap={() => upgrade.mutate("garage")}
+              />
+            </>
+          ) : shop.map((s) => {
+            const stored = data.items.filter((i) => i.code === s.code && i.x == null).length;
+            return (
+              <BuildCard
+                key={s.code} art={spriteOf({ code: s.code, level: null })} emoji={s.emoji} title={s.name}
+                sub={stored ? `📦 на складе: ${stored}` : `${s.w}×${s.h} · +${s.prestige} престижа`}
+                price={stored ? "Поставить" : s.stars ? `⭐ ${fmt(s.stars)}` : s.coins ? <><IconCoin size={11} /> {fmt(s.coins)}</> : null}
+                dim={!stored && !s.can_buy} disabled={busy} onTap={() => pick(s)}
+              />
+            );
+          })}
+        </div>
+      </div>
+      <Combos data={data} />
     </section>
+  );
+}
+
+function BuildCard({ art, emoji, title, sub, price, disabled, dim, onTap }: {
+  art?: string; emoji: string; title: string; sub: string; price: ReactNode; disabled?: boolean; dim?: boolean; onTap: () => void;
+}) {
+  return (
+    <button
+      type="button" onClick={onTap} disabled={disabled} aria-label={title}
+      className={`flex w-[104px] shrink-0 snap-start flex-col items-center gap-1 rounded-2xl bg-white/5 p-2 text-center ${dim ? "opacity-50" : ""} disabled:opacity-40`}
+    >
+      <span className="grid h-16 w-full place-items-center">
+        {art ? <img src={art} alt="" className="max-h-16 max-w-full object-contain" /> : <span className="text-3xl">{emoji}</span>}
+      </span>
+      <span className="line-clamp-2 min-h-[28px] text-[11px] font-bold leading-tight text-ink-chalk">{title}</span>
+      <span className="line-clamp-1 text-[9px] text-ink-mist">{sub}</span>
+      {price && <span className="flex items-center gap-0.5 rounded-lg bg-floodlight px-2 py-0.5 text-[10px] font-bold text-bg-base">{price}</span>}
+    </button>
   );
 }
 

@@ -64,7 +64,7 @@ describe("villa grid", () => {
 });
 
 describe("TownVillaPage", () => {
-  it("places a thing from storage on a free cell and saves", async () => {
+  it("places a thing from the build tray, turns it and saves at once", async () => {
     render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
         <MemoryRouter initialEntries={["/town/villa"]}>
@@ -73,12 +73,14 @@ describe("TownVillaPage", () => {
       </QueryClientProvider>,
     );
     expect(await screen.findByText(/Престиж 21/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Пальма/ }));
-    fireEvent.click(screen.getByTestId("villa-cell-2-2"));  // under the villa
-    expect(screen.getByText("Клетки уже заняты")).toBeInTheDocument();
+    // The build tray: a palm in storage lands on a free spot, waiting for ✓.
+    fireEvent.click(screen.getByRole("button", { name: "Пальма" }));
+    expect(screen.getByTestId("villa-mark")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("villa-cell-2-2"));  // under the villa: red, can't put
+    expect(screen.getByRole("button", { name: "Поставить" })).toBeDisabled();
     fireEvent.click(screen.getByTestId("villa-cell-6-6"));
-    expect(screen.getAllByTestId("villa-item-palm")).toHaveLength(1);
-    fireEvent.click(screen.getByRole("button", { name: /Сохранить/ }));
-    await waitFor(() => expect(saveVillaLayout).toHaveBeenCalledWith([{ id: 2, x: 6, y: 6, rot: 0 }]));
+    fireEvent.click(screen.getByRole("button", { name: "Повернуть" }));
+    fireEvent.click(screen.getByRole("button", { name: "Поставить" }));
+    await waitFor(() => expect(saveVillaLayout).toHaveBeenCalledWith([{ id: 2, x: 6, y: 6, rot: 1 }]));
   });
 });
