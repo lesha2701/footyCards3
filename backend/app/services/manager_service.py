@@ -185,7 +185,18 @@ def season_key(now: datetime) -> str:
 
 
 def preseason_end(now: datetime, config) -> datetime:
-    return week_start(now) + timedelta(hours=config.manager_preseason_hours)
+    """When this week's transfer window closes: Monday + manager_preseason_hours,
+    or later for a season with a one-off `window_until` (local time)."""
+    end = week_start(now) + timedelta(hours=config.manager_preseason_hours)
+    until = (finance.cfg(config).get("window_until") or {}).get(season_key(now))
+    if until:
+        try:
+            moved = datetime.fromisoformat(str(until))
+        except ValueError:
+            return end
+        moved = moved if moved.tzinfo else moved.replace(tzinfo=app_timezone())
+        return max(end, moved)
+    return end
 
 
 def season_schedule(start: datetime, config) -> list[str]:
