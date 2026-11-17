@@ -220,6 +220,8 @@ describe("ManagerPage", () => {
     renderPage();
     expect(await screen.findByLabelText("Трансферное окно закрыто")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("hero-transfers"));
+    // The avatar in the tabs' bar opens the window's sheet.
+    expect(await screen.findByTestId("window-sheet")).toBeInTheDocument();
     expect(await screen.findByText(/Твой клуб сыграет со следующего сезона/)).toBeInTheDocument();
     expect(screen.queryByText("Межсезонье")).toBeNull();
     expect(screen.queryByText("Трансферное окно открыто")).toBeNull();

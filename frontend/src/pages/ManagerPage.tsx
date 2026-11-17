@@ -1,4 +1,5 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -59,6 +60,7 @@ import TacticsPanel from "@/components/manager/TacticsPanel";
 import TransferLight, { windowOpen } from "@/components/manager/TransferLight";
 import { MIcon } from "@/lib/managerIcons";
 import GameHero from "@/components/common/GameHero";
+import { artOf } from "@/lib/gameArt";
 import { formatGameError } from "@/lib/errors";
 import { goTo, parseGo, useFocusTarget } from "@/lib/managerFocus";
 import { usePersistentState } from "@/lib/usePersistentState";
@@ -116,6 +118,7 @@ export default function ManagerPage() {
     if (!seen.includes(t)) setSeen([...seen, t]);
   };
   const [error, setError] = useState<string | null>(null);
+  const [windowSheet, setWindowSheet] = useState(false);
   const onView = (v: ManagerView) => {
     setError(null);
     queryClient.setQueryData(["manager"], v);
@@ -187,11 +190,24 @@ export default function ManagerPage() {
     { id: "office", icon: "💼", label: "Кабинет" },
     { id: "staff", icon: "👥", label: "Персонал", locked: !staff, dot: staff && !seen.includes("staff") && club.seasons_played === 0 },
   ];
+  const open = windowOpen(data.season, club);
+  const art = artOf("manager");
   return (
     <div className="flex flex-col gap-4" data-testid="manager-page">
-      {hero}
-      {errorLine}
-      <nav className="sticky z-20 -mx-1 grid grid-cols-4 gap-1 rounded-2xl bg-bg-base p-1 shadow-[0_8px_16px_-8px_rgba(0,0,0,0.9)] ring-1 ring-white/5" style={{ top: stickTop }} data-testid="manager-tabs">
+      {/* One sticky bar like Card Arena's: the mode's avatar (its ring is the transfer window's light) and the tabs. */}
+      <div className="sticky z-20 -mx-1 flex items-stretch gap-1 rounded-2xl bg-bg-base p-1 shadow-[0_8px_16px_-8px_rgba(0,0,0,0.9)] ring-1 ring-white/5" style={{ top: stickTop }}>
+        <h1 className="sr-only">Менеджер</h1>
+        <button onClick={() => setWindowSheet(true)} data-testid="hero-transfers"
+          aria-label={`Трансферное окно ${open ? "открыто" : "закрыто"}`}
+          className="relative flex w-[52px] shrink-0 items-center justify-center active:scale-95">
+          <span className={`relative block h-12 w-12 overflow-hidden rounded-full ring-[3px] ${open ? "ring-emerald-400 shadow-[0_0_14px_-2px_rgba(52,211,153,0.9)]" : "ring-red-400/90"}`}>
+            {art ? <img src={art} alt="" className="h-full w-full object-cover" /> : <span className="flex h-full w-full items-center justify-center bg-bg-raised text-2xl">💼</span>}
+          </span>
+          <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 rounded-full px-1 text-[8px] font-black uppercase leading-tight text-bg-base ${open ? "bg-emerald-400" : "bg-red-400"}`}>
+            {open ? "live" : "стоп"}
+          </span>
+        </button>
+      <nav className="grid min-w-0 flex-1 grid-cols-4 gap-1" data-testid="manager-tabs">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -202,13 +218,33 @@ export default function ManagerPage() {
             <MIcon code={`tab_${t.id}`} emoji={t.icon} className="h-9 w-9" emojiClass="text-xl" />
             <span className="w-full truncate text-center">{t.locked ? "🔒 " : ""}{t.label}</span>
             {t.dot && tab !== t.id && <span className="absolute right-1.5 top-1 h-2 w-2 rounded-full bg-accent-lime" />}
+            {t.id === "transfers" && <span className={`absolute left-1.5 top-1 h-2 w-2 rounded-full ${open ? "animate-pulse bg-emerald-400" : "bg-red-400"}`} />}
           </button>
         ))}
       </nav>
+      </div>
+      <AnimatePresence>
+        {windowSheet && (
+          <>
+            <motion.div key="shade" className="fixed inset-0 z-[60] bg-black/60" onClick={() => setWindowSheet(false)}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+            <motion.section key="sheet" role="dialog" aria-label="Трансферное окно" data-testid="window-sheet"
+              className="fixed inset-x-0 bottom-0 z-[61] mx-auto flex max-h-[86vh] max-w-[480px] flex-col gap-3 overflow-y-auto rounded-t-3xl bg-bg-surface p-4 pb-8 ring-1 ring-white/10"
+              initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 30, stiffness: 320 }}>
+              <div className="mx-auto h-1 w-10 rounded-full bg-white/20" />
+              <div className="flex items-center justify-between gap-2">
+                <TransferLight open={open} until={data.season.preseason_ends_at} />
+                <button onClick={() => setWindowSheet(false)} aria-label="Закрыть" className="rounded-full bg-bg-raised px-2.5 py-1 text-sm text-ink-mist">✕</button>
+              </div>
+              <SeasonBanner view={data} summary={summary} />
+              <button onClick={() => { setWindowSheet(false); setTab("transfers"); }} className="rounded-2xl bg-floodlight py-3 text-sm font-bold text-bg-base">🔁 К трансферам</button>
+            </motion.section>
+          </>
+        )}
+      </AnimatePresence>
       {/* «Сейчас главное» lives on the club's own tab, under the tabs. */}
       {tab === "club" && <TodayPanel onTab={setTab} onError={onError} />}
       {tab === "club" && <ClubTab {...props} club={club} onTab={setTab} />}
-      {tab === "transfers" && <SeasonBanner view={data} summary={summary} />}
       {tab === "transfers" && <TransfersTab {...props} club={club} />}
       {tab === "office" && <PresidentTab onError={onError} onTab={setTab} />}
       {tab === "staff" && (staff ? <StaffTab onError={onError} /> : (
