@@ -2,8 +2,8 @@
 the villa's daily income, the week's party (user_town_villas.income_day / party_until /
 party_week, town_visits.party_coins) and the prestige «Вилла месяца» ranks by.
 
-Revision ID: 0306
-Revises: 0305
+Revision ID: 0308
+Revises: 0307
 Create Date: 2026-11-17
 """
 from typing import Sequence, Union
@@ -11,8 +11,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0306"
-down_revision: Union[str, None] = "0305"
+revision: str = "0308"
+down_revision: Union[str, None] = "0307"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
