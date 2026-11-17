@@ -1,7 +1,11 @@
 """«Моя вилла»: the player's own plot in his town, laid out as he likes.
 
-The plot is an isometric grid (grid_<level> cells a side, it grows with the
-villa's level). On it stand the villa itself (5 levels), the garage (0–3
+The plot is the meadow of the plot picture cut into isometric cells
+(town_villa_plot.CELLS, centre first): a villa level opens the first
+cells_<level> of them, so the plot grows outwards in a round shape that
+follows the meadow. A layout that no longer fits (the admin shrank the
+plot) is repaired on the next look: what is outside goes to storage, the
+villa and the garage move to a free spot. On it stand the villa itself (5 levels), the garage (0–3
 levels, garage_slots_<level> cars) and whatever the player bought: cars and
 yard things for coins (`coins_<code>`) or for Telegram Stars (`stars_<code>`,
 the premium ones; `supply_<code>` > 0 makes an item limited, every copy
@@ -31,9 +35,27 @@ the villa (town_social_service visits) and like it once a day
 older than town_social.week_min_account_days only) and pays
 villa_week_reward_1..3 once a week — settled lazily by the first reader
 under a town_weeks row keyed "V" + the ISO week.
+
+In the game (PERKS): a building on the plot gives one perk — once, however
+many buildings of that perk stand (two pitches are still one extra
+training): ⚽ a pitch → +1 free «Мой игрок» training a day
+(my_players.villa_training_day), 🩺 the tennis court / the stable → the
+«Менеджер» club's injuries are treated perk_treat_pct cheaper, 🚁 the
+helipad / the guest garage → its tours cost perk_tour_pct less (both go
+into manager_service.base_snapshot, frozen with the season like the rest
+of it), 🏆 the trophy pavilion → guests see the owner's trophies.
+The villa pays its income once a local day: income_base + prestige ×
+income_per_100 / 100, at most income_cap (user_town_villas.income_day).
+Once a week the owner throws a party (party_cost coins, party_hours):
+a guest liking the villa then gets party_guest_coins, for at most
+party_guest_per_day parties a day (town_visits.party_coins).
+«Вилла месяца» ranks villas by prestige + the month's likes ×
+month_like_points and pays month_reward_1..3, settled like the week under
+"VM" + the month; the prestige is the one last shown to the owner
+(user_town_villas.prestige).
 """
 import secrets
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import func, select
@@ -49,13 +71,14 @@ from app.models.town import (
 )
 from app.models.user import User
 from app.services import town_service
+from app.services.town_villa_plot import CELL_COUNT, CELLS
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 
 STARS_PREFIX = "town:villa:"
 MAX_VILLA_LEVEL = 5
 MAX_GARAGE_LEVEL = 3
-VILLA_SIZE = (3, 3)
+VILLA_SIZE = (4, 4)
 GARAGE_SIZE = (2, 2)
 
 # code -> (name, emoji, kind, w, h). kind: car | yard | premium.
@@ -68,7 +91,7 @@ ITEMS: dict[str, tuple[str, str, str, int, int]] = {
     "car_bus": ("Автобус команды", "🚌", "car", 1, 2),
     "car_classic": ("Золотой родстер", "🏁", "car", 1, 2),
     "pool": ("Бассейн", "🏊", "yard", 3, 2),
-    "pitch_mini": ("Мини-поле", "⚽", "yard", 3, 3),
+    "pitch_mini": ("Мини-поле", "⚽", "yard", 4, 4),
     "goal_practice": ("Ворота для тренировки", "🥅", "yard", 1, 1),
     "gazebo_bbq": ("Беседка с грилем", "🍖", "yard", 2, 2),
     "palm": ("Пальма", "🌴", "yard", 1, 1),
@@ -79,13 +102,51 @@ ITEMS: dict[str, tuple[str, str, str, int, int]] = {
     "lamp": ("Фонарь", "🏮", "yard", 1, 1),
     "bench": ("Скамейка", "🪑", "yard", 1, 1),
     "path": ("Дорожка", "▫️", "yard", 1, 1),
+    "path_gravel": ("Гравийная дорожка", "🪨", "yard", 1, 1),
+    "path_terracotta": ("Терракотовая плитка", "🟧", "yard", 1, 1),
+    "path_deck": ("Деревянный настил", "🪵", "yard", 1, 1),
+    "path_stepping": ("Камни в траве", "🌿", "yard", 1, 1),
     "sun_umbrella": ("Зонт с шезлонгом", "⛱️", "yard", 1, 1),
+    "pitch_five": ("Поле для пятёрок", "🏟️", "yard", 3, 6),
+    "pergola_bbq": ("Летняя кухня", "🥩", "yard", 2, 2),
+    "pizza_oven": ("Печь для пиццы", "🍕", "yard", 1, 1),
+    "garage_guest": ("Гостевой гараж", "🏠", "yard", 2, 2),
+    "fence_stone": ("Каменная ограда", "🧱", "yard", 1, 1),
+    "fence_iron": ("Кованая ограда", "⚜️", "yard", 1, 1),
+    "fence_hedge": ("Изгородь-ограда", "🌳", "yard", 1, 1),
+    "fence_picket": ("Белый заборчик", "🤍", "yard", 1, 1),
+    "chicken_coop": ("Курятник", "🐔", "yard", 2, 2),
+    "staff_house": ("Домик персонала", "🏡", "yard", 3, 2),
+    "dog_kennel": ("Будка с собакой", "🐕", "yard", 1, 1),
+    "greenhouse": ("Оранжерея", "🪴", "yard", 2, 2),
+    "vegetable_garden": ("Огород", "🥕", "yard", 2, 2),
+    "stable": ("Конюшня", "🐴", "yard", 3, 2),
+    "tennis_court": ("Теннисный корт", "🎾", "yard", 3, 5),
+    "treehouse": ("Домик на дереве", "🌳", "yard", 2, 2),
+    "flamingo_pond": ("Пруд с фламинго", "🦩", "premium", 2, 2),
+    "beehive": ("Пасека", "🐝", "yard", 1, 1),
+    "hammock": ("Гамак между пальмами", "🏖️", "yard", 2, 1),
+    "basketball_hoop": ("Баскетбольное кольцо", "🏀", "yard", 1, 1),
     "fountain_ball": ("Фонтан с золотым мячом", "⛲", "premium", 2, 2),
     "statue_gold": ("Золотая статуя", "🏆", "premium", 1, 1),
     "trophy_pavilion": ("Павильон трофеев", "🏛️", "premium", 2, 2),
     "helipad": ("Вертолётная площадка", "🚁", "premium", 3, 3),
     "firepit": ("Лаунж с камином", "🔥", "premium", 2, 2),
+    "patio_pool": ("Патио с бассейном", "🏝️", "premium", 4, 4),
+    "lion_enclosure": ("Вольер со львом", "🦁", "premium", 3, 3),
 }
+# What the villa gives in the game: perk -> (name, emoji, buildings). A perk counts once, however
+# many of its buildings stand on the plot (in storage they give nothing).
+PERKS: dict[str, tuple[str, str, tuple[str, ...]]] = {
+    "training": ("Своё поле", "⚽", ("pitch_mini", "pitch_five")),
+    "recovery": ("Восстановление", "🩺", ("tennis_court", "stable")),
+    "travel": ("Свой транспорт", "🚁", ("helipad", "garage_guest")),
+    "trophies": ("Витрина трофеев", "🏆", ("trophy_pavilion",)),
+}
+# Fence sections join their neighbours of the same fence; rot = 1 makes a section a gate.
+FENCES = ("fence_stone", "fence_iron", "fence_hedge", "fence_picket")
+# Flat path tiles of every kind (the frontend joins tiles of the same kind).
+PATHS = ("path", "path_gravel", "path_terracotta", "path_deck", "path_stepping")
 # One copy at most: cars and premium things (yard things — as many as fit).
 _SINGLE_KINDS = ("car", "premium")
 
@@ -104,12 +165,12 @@ POSTS: dict[str, tuple[str, str, tuple[str, ...]]] = {
 # post -> things any one of which on the plot makes it work (empty = always works)
 POST_WORKPLACE: dict[str, tuple[str, ...]] = {
     "security": (), "concierge": (),
-    "garden": ("palm", "olive", "cypress", "flowers", "hedge"),
-    "garage": ("garage",),
-    "kitchen": ("gazebo_bbq",),
-    "party": ("firepit", "gazebo_bbq"),
-    "health": ("pool", "pitch_mini"),
-    "pool": ("pool",),
+    "garden": ("palm", "olive", "cypress", "flowers", "hedge", "greenhouse", "vegetable_garden", "beehive"),
+    "garage": ("garage", "garage_guest"),
+    "kitchen": ("gazebo_bbq", "pergola_bbq", "pizza_oven"),
+    "party": ("firepit", "gazebo_bbq", "pergola_bbq"),
+    "health": ("pool", "pitch_mini", "pitch_five", "patio_pool", "tennis_court", "stable", "lion_enclosure"),
+    "pool": ("pool", "patio_pool"),
 }
 
 # (a, b, name, emoji): a and b standing side by side
@@ -126,17 +187,40 @@ COMBOS: tuple[tuple[str, str, str, str], ...] = (
     ("helipad", "lamp", "Ночная посадка", "🚁"),
     ("trophy_pavilion", "flowers", "Зал трофеев", "🏆"),
     ("villa", "pool", "Бассейн у дома", "🏊"),
+    ("pizza_oven", "pergola_bbq", "Итальянский вечер", "🍕"),
+    ("pitch_five", "goal_practice", "Своя пятёрка", "⚽"),
+    ("patio_pool", "palm", "Курорт", "🏝️"),
+    ("villa", "fence_iron", "Кованые ворота", "⚜️"),
+    ("garage_guest", "path", "Гостевая парковка", "🅿️"),
+    ("chicken_coop", "vegetable_garden", "Своя ферма", "🐔"),
+    ("greenhouse", "beehive", "Сад и пасека", "🐝"),
+    ("hammock", "palm", "Сиеста", "🌴"),
+    ("villa", "dog_kennel", "Верный сторож", "🐕"),
+    ("tennis_court", "bench", "Свой Уимблдон", "🎾"),
+    ("flamingo_pond", "flowers", "Розовый сад", "🦩"),
+    ("lion_enclosure", "statue_gold", "Царь зверей", "🦁"),
+    ("stable", "fence_picket", "Конный двор", "🐴"),
+    ("staff_house", "path", "Служебный вход", "🏡"),
+    ("basketball_hoop", "pitch_mini", "Спортгородок", "🏀"),
 )
 
 VILLA_DEFAULTS: dict[str, int] = {
     "villa_price_2": 15000, "villa_price_3": 40000, "villa_price_4": 90000, "villa_price_5": 180000,
-    "grid_1": 8, "grid_2": 9, "grid_3": 10, "grid_4": 11, "grid_5": 12,
+    # meadow cells open at a villa level (the plot's centre first; at most all of them)
+    "cells_1": 140, "cells_2": 220, "cells_3": 320, "cells_4": 460, "cells_5": 700,
     "garage_price_1": 8000, "garage_price_2": 25000, "garage_price_3": 60000,
     "garage_slots_1": 1, "garage_slots_2": 3, "garage_slots_3": 6,
     "prestige_villa_level": 20, "prestige_garage_level": 10, "prestige_staff": 15, "prestige_combo": 5,
     "prestige_per_pct": 60, "prestige_max_pct": 5,
-    "max_items": 120,
+    "max_items": 250,  # paths and fence sections are things too: a full plot needs room
     "villa_week_reward_1": 2000, "villa_week_reward_2": 1000, "villa_week_reward_3": 500,
+    # the villa in the game: one perk per kind of building (PERKS)
+    "perk_training": 1,  # extra free «Мой игрок» trainings a day with a pitch on the plot (0 = off)
+    "perk_treat_pct": 30, "perk_tour_pct": 20,
+    "income_base": 20, "income_per_100": 20, "income_cap": 200,
+    "party_cost": 1000, "party_hours": 24, "party_guest_coins": 30, "party_guest_per_day": 3,
+    "month_like_points": 10,
+    "month_reward_1": 10000, "month_reward_2": 5000, "month_reward_3": 2500,
     # cars
     "coins_car_hatch": 3000, "prestige_car_hatch": 5,
     "coins_car_jeep": 6000, "prestige_car_jeep": 8,
@@ -158,16 +242,43 @@ VILLA_DEFAULTS: dict[str, int] = {
     "coins_lamp": 500, "prestige_lamp": 1,
     "coins_bench": 400, "prestige_bench": 1,
     "coins_path": 100, "prestige_path": 0,
+    "coins_path_gravel": 80, "prestige_path_gravel": 0,
+    "coins_path_terracotta": 150, "prestige_path_terracotta": 0,
+    "coins_path_deck": 150, "prestige_path_deck": 0,
+    "coins_path_stepping": 120, "prestige_path_stepping": 0,
     "coins_sun_umbrella": 700, "prestige_sun_umbrella": 1,
+    "coins_pitch_five": 30000, "prestige_pitch_five": 30,
+    "coins_pergola_bbq": 9000, "prestige_pergola_bbq": 11,
+    "coins_pizza_oven": 3500, "prestige_pizza_oven": 4,
+    "coins_garage_guest": 12000, "prestige_garage_guest": 8,
+    "coins_fence_stone": 150, "prestige_fence_stone": 0,
+    "coins_fence_iron": 250, "prestige_fence_iron": 0,
+    "coins_fence_hedge": 120, "prestige_fence_hedge": 0,
+    "coins_fence_picket": 100, "prestige_fence_picket": 0,
+    "coins_chicken_coop": 4000, "prestige_chicken_coop": 5,
+    "coins_staff_house": 10000, "prestige_staff_house": 10,
+    "coins_dog_kennel": 1500, "prestige_dog_kennel": 2,
+    "coins_greenhouse": 7000, "prestige_greenhouse": 8,
+    "coins_vegetable_garden": 3000, "prestige_vegetable_garden": 4,
+    "coins_stable": 18000, "prestige_stable": 18,
+    "coins_tennis_court": 25000, "prestige_tennis_court": 25,
+    "coins_treehouse": 6000, "prestige_treehouse": 7,
+    "coins_beehive": 1200, "prestige_beehive": 2,
+    "coins_hammock": 1500, "prestige_hammock": 2,
+    "coins_basketball_hoop": 2000, "prestige_basketball_hoop": 3,
     # premium
-    "stars_fountain_ball": 79, "prestige_fountain_ball": 25,
-    "stars_statue_gold": 59, "prestige_statue_gold": 20,
-    "stars_trophy_pavilion": 99, "prestige_trophy_pavilion": 30,
-    "stars_helipad": 199, "prestige_helipad": 45,
-    "stars_firepit": 69, "prestige_firepit": 15,
+    "stars_fountain_ball": 250, "prestige_fountain_ball": 25,
+    "stars_statue_gold": 150, "prestige_statue_gold": 20,
+    "stars_trophy_pavilion": 300, "prestige_trophy_pavilion": 30,
+    "stars_helipad": 600, "prestige_helipad": 45,
+    "stars_firepit": 200, "prestige_firepit": 15,
+    "stars_patio_pool": 400, "prestige_patio_pool": 35,
+    "stars_lion_enclosure": 500, "prestige_lion_enclosure": 40,
+    "stars_flamingo_pond": 300, "prestige_flamingo_pond": 30,
     # copies of a Stars item sold at most, each numbered (0 = no limit, no numbers)
     "supply_car_sport": 0, "supply_car_bus": 0, "supply_fountain_ball": 0, "supply_statue_gold": 0,
     "supply_trophy_pavilion": 0, "supply_helipad": 0, "supply_firepit": 0,
+    "supply_patio_pool": 0, "supply_lion_enclosure": 0, "supply_flamingo_pond": 0,
 }
 
 
@@ -177,9 +288,9 @@ def villa_config(config) -> dict[str, int]:
     for key, value in stored.items():
         if key in VILLA_DEFAULTS and isinstance(value, int) and not isinstance(value, bool):
             out[key] = max(0, value)
-    for level in range(1, MAX_VILLA_LEVEL + 1):  # the grid never shrinks and always holds the villa and the garage
-        floor = out[f"grid_{level - 1}"] if level > 1 else 6
-        out[f"grid_{level}"] = min(30, max(floor, out[f"grid_{level}"]))
+    for level in range(1, MAX_VILLA_LEVEL + 1):  # the plot never shrinks and always holds the villa and the garage
+        floor = out[f"cells_{level - 1}"] if level > 1 else 40
+        out[f"cells_{level}"] = min(CELL_COUNT, max(floor, out[f"cells_{level}"]))
     out["prestige_per_pct"] = max(1, out["prestige_per_pct"])
     return out
 
@@ -200,8 +311,10 @@ def item_price(v: dict, code: str) -> tuple[int, int]:
     return v.get(f"coins_{code}", 0), v.get(f"stars_{code}", 0)
 
 
-def grid_size(v: dict, villa_level: int) -> int:
-    return v[f"grid_{max(1, min(MAX_VILLA_LEVEL, villa_level))}"]
+def open_cells(v: dict, villa_level: int) -> tuple[tuple[int, int], ...]:
+    """The cells open at a villa level, the plot's centre first."""
+    level = max(1, min(MAX_VILLA_LEVEL, villa_level))
+    return CELLS[:v[f"cells_{level}"]]
 
 
 def garage_slots(v: dict, garage_level: int) -> int:
@@ -222,9 +335,10 @@ def footprint(code: str, rot: int) -> tuple[int, int]:
     return (h, w) if rot else (w, h)
 
 
-def check_layout(cells: int, items: list[tuple[int, str, Optional[int], Optional[int], int]]) -> Optional[str]:
-    """None when (id, code, x, y, rot) items fit: inside the grid, no
+def check_layout(cells, items: list[tuple[int, str, Optional[int], Optional[int], int]]) -> Optional[str]:
+    """None when (id, code, x, y, rot) items fit: on open cells only, no
     overlaps, the villa and the garage placed. Otherwise why not."""
+    cells = cells if isinstance(cells, (set, frozenset)) else set(cells)
     taken: dict[tuple[int, int], int] = {}
     for item_id, code, x, y, rot in items:
         if x is None or y is None:
@@ -232,7 +346,7 @@ def check_layout(cells: int, items: list[tuple[int, str, Optional[int], Optional
                 return "Виллу и гараж нельзя убрать на склад"
             continue
         w, h = footprint(code, rot)
-        if x < 0 or y < 0 or x + w > cells or y + h > cells:
+        if any((x + dx, y + dy) not in cells for dx in range(w) for dy in range(h)):
             return "Предмет выходит за участок"
         for dx in range(w):
             for dy in range(h):
@@ -259,13 +373,18 @@ def _touch(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> bool:
     return a[0] - 1 <= b[2] and b[0] - 1 <= a[2] and a[1] - 1 <= b[3] and b[1] - 1 <= a[3]
 
 
+def _kind_of(code: str) -> str:
+    """Every kind of path tile counts as «path» in the combos."""
+    return "path" if code in PATHS else code
+
+
 def combos_of(items) -> list[dict]:
     """The combos standing on the plot, each once, with the ids that make it."""
     placed = [(i, c) for i in items if (c := _cells(i)) is not None]
     out = []
     for a, b, name, emoji in COMBOS:
-        pair = next(((x.id, y.id) for x, cx in placed if x.code == a
-                     for y, cy in placed if y.code == b and _touch(cx, cy)), None)
+        pair = next(((x.id, y.id) for x, cx in placed if _kind_of(x.code) == a
+                     for y, cy in placed if _kind_of(y.code) == b and _touch(cx, cy)), None)
         if pair:
             out.append({"a": a, "b": b, "name": name, "emoji": emoji, "ids": list(pair)})
     return out
@@ -331,6 +450,59 @@ async def prestige_for(db: AsyncSession, config, user_id: int) -> tuple[int, int
     return prestige, prestige_pct(v, prestige)
 
 
+# --- the villa in the game ----------------------------------------------------------------------
+
+def perks_of(items) -> list[str]:
+    """The perks of the things standing on the plot — each once, whatever stands twice."""
+    placed = {i.code for i in items if i.x is not None}
+    return [p for p, (_, _, codes) in PERKS.items() if placed & set(codes)]
+
+
+def perk_text(v: dict, perk: str) -> str:
+    return {
+        "training": f"+{v['perk_training']} бесплатная тренировка «Моего игрока» в день",
+        "recovery": f"лечение травм в «Менеджере» дешевле на {v['perk_treat_pct']}%",
+        "travel": f"турне клуба в «Менеджере» дешевле на {v['perk_tour_pct']}%",
+        "trophies": "гости виллы видят твои трофеи",
+    }[perk]
+
+
+async def perks_for(db: AsyncSession, config, user_id: int) -> list[str]:
+    """The owner's villa perks now (none while the town is off or there is no villa)."""
+    if not config.town_enabled or await _villa(db, user_id) is None:
+        return []
+    return perks_of(await _items(db, user_id))
+
+
+async def training_perk(db: AsyncSession, config, user_id: int) -> int:
+    """Extra free «Мой игрок» trainings a day the villa's pitch gives (0 or 1)."""
+    v = villa_config(config)
+    return min(1, v["perk_training"]) if "training" in await perks_for(db, config, user_id) else 0
+
+
+async def manager_perks(db: AsyncSession, config, owner_id: int) -> dict[str, int]:
+    """What the owner's villa gives his «Менеджер» club (manager_service.base_snapshot)."""
+    v = villa_config(config)
+    perks = await perks_for(db, config, owner_id)
+    return {"villa_treat_pct": min(90, v["perk_treat_pct"]) if "recovery" in perks else 0,
+            "villa_tour_pct": min(90, v["perk_tour_pct"]) if "travel" in perks else 0}
+
+
+def income_of(v: dict, prestige: int) -> int:
+    return min(v["income_cap"], v["income_base"] + prestige * v["income_per_100"] // 100)
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def party_on(villa: Optional[UserTownVilla], now: Optional[datetime] = None) -> bool:
+    if villa is None or villa.party_until is None:
+        return False
+    until = villa.party_until if villa.party_until.tzinfo else villa.party_until.replace(tzinfo=timezone.utc)
+    return until > (now or _now())
+
+
 async def _sold(db: AsyncSession, code: str) -> int:
     return int((await db.execute(
         select(func.count(UserTownVillaItem.id)).where(UserTownVillaItem.code == code)
@@ -354,8 +526,7 @@ def _plot(v: dict, villa: UserTownVilla, items: list[UserTownVillaItem], staff: 
     car = next((i for i in known if i.id == villa.car_item_id and i.code in ITEMS), None)
     return {
         "villa_level": villa.villa_level, "garage_level": villa.garage_level,
-        "grid": grid_size(v, villa.villa_level),
-        "grid_max": grid_size(v, MAX_VILLA_LEVEL),
+        "cells_open": len(open_cells(v, villa.villa_level)), "cells_total": CELL_COUNT,
         "combos": combos_of(known),
         "items": [_item_out(i, villa) for i in known],
         "car": {"id": car.id, "code": car.code, "name": ITEMS[car.code][0], "emoji": ITEMS[car.code][1]} if car else None,
@@ -363,18 +534,43 @@ def _plot(v: dict, villa: UserTownVilla, items: list[UserTownVillaItem], staff: 
             "id": r.id, "name": r.name, "title": r.title, "icon": r.icon, "image_path": r.image_path, "rarity": r.rarity,
         }} for p, r in staff.items()],
         "prestige": prestige, "prestige_pct": prestige_pct(v, prestige),
+        "perks": [{"code": p, "name": PERKS[p][0], "emoji": PERKS[p][1], "text": perk_text(v, p)} for p in perks_of(known)],
+        "party_until": villa.party_until.isoformat() if party_on(villa) else None,
     }
 
 
-def _first_free(cells: int, items: list[UserTownVillaItem], code: str) -> Optional[tuple[int, int]]:
-    w, h = size_of(code)
+def _first_free(cells: tuple[tuple[int, int], ...], items: list[UserTownVillaItem], code: str) -> Optional[tuple[int, int]]:
+    """The free spot nearest the plot's centre (cells come centre first)."""
     layout = [(i.id, i.code, i.x, i.y, i.rot) for i in items]
-    for s in range(cells * 2):  # front of the plot last: try cells by x + y
-        for x in range(cells):
-            y = s - x
-            if 0 <= y < cells and check_layout(cells, layout + [(0, code, x, y, 0)]) is None:
-                return x, y
+    room = set(cells)
+    for x, y in cells:
+        if check_layout(room, layout + [(0, code, x, y, 0)]) is None:
+            return x, y
     return None
+
+
+def _repair(cells: tuple[tuple[int, int], ...], items: list[UserTownVillaItem]) -> bool:
+    """Makes a layout that no longer fits fit again (the grid changed): the
+    villa and the garage first, then the rest in order; what can't stand
+    goes to storage, a villa or garage that can't to the first free spot.
+    True when something moved."""
+    layout = lambda: [(i.id, i.code, i.x, i.y, i.rot) for i in items]  # noqa: E731
+    if check_layout(cells, layout()) is None:
+        return False
+    order = sorted(items, key=lambda i: (i.code not in ("villa", "garage"), i.id))
+    kept: list[UserTownVillaItem] = []
+    for item in order:
+        if item.x is not None and check_layout(cells, [(k.id, k.code, k.x, k.y, k.rot) for k in kept]
+                                               + [(item.id, item.code, item.x, item.y, item.rot)]) is None:
+            kept.append(item)
+            continue
+        if item.code in ("villa", "garage"):
+            spot = _first_free(cells, kept, item.code)
+            item.x, item.y, item.rot = (spot[0], spot[1], 0) if spot else (0, 0, 0)
+            kept.append(item)
+        else:
+            item.x = item.y = None
+    return True
 
 
 async def _ensure_villa(db: AsyncSession, config, user_id: int) -> UserTownVilla:
@@ -388,7 +584,8 @@ async def _ensure_villa(db: AsyncSession, config, user_id: int) -> UserTownVilla
             villa = UserTownVilla(user_id=user_id, villa_level=1, garage_level=0, staff={})
             db.add(villa)
             await db.flush()
-            db.add(UserTownVillaItem(user_id=user_id, code="villa", x=1, y=1, rot=0))
+            spot = _first_free(open_cells(villa_config(config), 1), [], "villa") or CELLS[0]
+            db.add(UserTownVillaItem(user_id=user_id, code="villa", x=spot[0], y=spot[1], rot=0))
             await db.flush()
     except IntegrityError:  # a parallel request made it first
         pass
@@ -399,7 +596,12 @@ async def _open(db: AsyncSession, config, user_id: int) -> UserTownVilla:
     town_service._require_enabled(config)
     if not town_service.is_unlocked(config, await db.get(UserTown, user_id)):
         raise ConflictError("Сначала открой город")
-    return await _ensure_villa(db, config, user_id)
+    villa = await _ensure_villa(db, config, user_id)
+    items = await _items(db, user_id)
+    if _repair(open_cells(villa_config(config), villa.villa_level), items):
+        db.add_all(items)
+        await db.flush()
+    return villa
 
 
 async def get_villa(db: AsyncSession, user: User) -> dict:
@@ -450,10 +652,22 @@ async def _state(db: AsyncSession, config, user: User, villa: UserTownVilla) -> 
                    "posts": staff_posts_for(r.resident.title)}
                   for r in held if r.resident.is_active and staff_posts_for(r.resident.title)]
     nl, ng = villa.villa_level + 1, villa.garage_level + 1
+    plot = _plot(v, villa, items, staff)
+    if villa.prestige != plot["prestige"]:  # «Вилла месяца» ranks by the prestige last shown
+        villa.prestige = plot["prestige"]
+        db.add(villa)
+        await db.commit()
+    today = local_today()
     return {
-        **_plot(v, villa, items, staff),
+        **plot,
+        "all_perks": [{"code": p, "name": n, "emoji": e, "text": perk_text(v, p),
+                       "buildings": [ITEMS[c][0] for c in codes]} for p, (n, e, codes) in PERKS.items()],
+        "income": {"coins": income_of(v, plot["prestige"]), "ready": villa.income_day != today,
+                   "base": v["income_base"], "per_100": v["income_per_100"], "cap": v["income_cap"]},
+        "party": {"cost": v["party_cost"], "hours": v["party_hours"], "guest_coins": v["party_guest_coins"],
+                  "can_throw": v["party_hours"] > 0 and villa.party_week != villa_week_key(today) and not party_on(villa)},
         "user_id": user.id,
-        "next_villa": {"level": nl, "price": v[f"villa_price_{nl}"], "grid": grid_size(v, nl)} if nl <= MAX_VILLA_LEVEL else None,
+        "next_villa": {"level": nl, "price": v[f"villa_price_{nl}"], "cells": len(open_cells(v, nl))} if nl <= MAX_VILLA_LEVEL else None,
         "next_garage": {"level": ng, "price": v[f"garage_price_{ng}"], "slots": garage_slots(v, ng)}
         if ng <= MAX_GARAGE_LEVEL else None,
         "garage_slots": slots, "cars": cars,
@@ -499,7 +713,7 @@ async def upgrade(db: AsyncSession, user: User, target: str, idempotency_key: Op
     items = await _items(db, user.id)
     spot = None
     if target == "garage" and level == 1:
-        spot = _first_free(grid_size(v, villa.villa_level), items, "garage")
+        spot = _first_free(open_cells(v, villa.villa_level), items, "garage")
         if spot is None:
             raise ConflictError("Освободи на участке место 2×2 под гараж")
     await town_service._settle_before_population_change(db, config, user.id)
@@ -611,7 +825,7 @@ async def save_layout(db: AsyncSession, user: User, moves: list[dict]) -> dict:
             raise ConflictError("Нужны обе координаты")
         item.x, item.y = x, y
         item.rot = 1 if move.get("rot") else 0
-    error = check_layout(grid_size(v, villa.villa_level), [(i.id, i.code, i.x, i.y, i.rot) for i in items.values()])
+    error = check_layout(open_cells(v, villa.villa_level), [(i.id, i.code, i.x, i.y, i.rot) for i in items.values()])
     if error:
         await db.rollback()
         raise ConflictError(error)
@@ -737,8 +951,15 @@ async def guest_view(db: AsyncSession, config, owner_id: int, visit: TownVisit) 
     from app.services.town_social_service import week_days
 
     monday, _ = week_days(local_today())
+    plot = _plot(v, villa, await _items(db, owner_id), staff)
+    trophies = []
+    if any(p["code"] == "trophies" for p in plot["perks"]):
+        from app.services.my_player_service import trophies_of
+
+        trophies = [{k: t[k] for k in ("id", "name", "icon", "image_path")} for t in (await trophies_of(db, owner_id))[:12]]
     return {
-        **_plot(v, villa, await _items(db, owner_id), staff),
+        **plot, "trophies": trophies,
+        "party_guest_coins": v["party_guest_coins"] if plot["party_until"] else 0,
         "user_id": owner_id, "liked": visit.villa_liked,
         "likes_total": await _villa_likes(db, owner_id), "likes_week": await _villa_likes(db, owner_id, monday),
     }
@@ -751,7 +972,7 @@ async def summary(db: AsyncSession, config, owner_id: int) -> Optional[dict]:
         return None
     prestige, _ = await prestige_for(db, config, owner_id)
     car = await db.get(UserTownVillaItem, villa.car_item_id) if villa.car_item_id else None
-    return {"villa_level": villa.villa_level, "prestige": prestige,
+    return {"villa_level": villa.villa_level, "prestige": prestige, "party": party_on(villa),
             "car": car.code if car is not None and car.user_id == owner_id and car.code in ITEMS else None}
 
 
@@ -847,4 +1068,175 @@ async def villa_week(db: AsyncSession, user: User) -> dict:
         "me": next((r for r in ranking if r["user_id"] == user.id), None),
         "last_week": [{"place": w.place, "user_id": w.user_id, "owner": _owner_name(names.get(w.user_id)),
                        "likes": w.score, "coins": w.coins} for w in winners],
+        "month": await _month_view(db, config, user, today),
+    }
+
+
+# --- income, the party and «Вилла месяца» ---------------------------------------------------------
+
+async def collect_income(db: AsyncSession, user: User) -> dict:
+    """The villa's income for today, once a local day."""
+    config = await get_config(db)
+    town_service._require_enabled(config)
+    locked_user = await lock_user_for_update(db, user.id)
+    villa = await _villa(db, user.id, lock=True)
+    if villa is None:
+        raise NotFoundError("Сначала открой виллу")
+    today = local_today()
+    if villa.income_day == today:
+        raise ConflictError("Доход виллы за сегодня уже забран — приходи завтра")
+    prestige, _ = await prestige_for(db, config, user.id)
+    coins = 0 if locked_user.game_rewards_blocked else income_of(villa_config(config), prestige)
+    villa.income_day = today
+    db.add(villa)
+    if coins:
+        await credit_coins(db, locked_user, coins, TransactionType.town_villa, "Доход виллы",
+                           related_object_type="town_villa_income", related_object_id=None)
+    await db.commit()
+    return {**await _state(db, config, user, villa), "new_balance": locked_user.balance, "income_paid": coins}
+
+
+async def throw_party(db: AsyncSession, user: User) -> dict:
+    """The week's party: party_cost coins, party_hours long, once a «Вилла недели» week."""
+    config = await get_config(db)
+    town_service._require_enabled(config)
+    v = villa_config(config)
+    if v["party_hours"] <= 0:
+        raise ConflictError("Вечеринки сейчас не проводятся")
+    locked_user = await lock_user_for_update(db, user.id)
+    villa = await _villa(db, user.id, lock=True)
+    if villa is None:
+        raise NotFoundError("Сначала открой виллу")
+    week = villa_week_key(local_today())
+    if villa.party_week == week or party_on(villa):
+        raise ConflictError("Вечеринка на этой неделе уже была — следующая с понедельника")
+    if v["party_cost"]:
+        await debit_coins(db, locked_user, v["party_cost"], TransactionType.town_villa, "Вечеринка на вилле",
+                          related_object_type="town_villa_party", related_object_id=None)
+    villa.party_until = _now() + timedelta(hours=v["party_hours"])
+    villa.party_week = week
+    db.add(villa)
+    await db.commit()
+    return {**await _state(db, config, user, villa), "new_balance": locked_user.balance}
+
+
+async def party_reward(db: AsyncSession, config, guest: User, owner_id: int, visit: TownVisit) -> int:
+    """A guest's villa like during the owner's party: party_guest_coins, for at most
+    party_guest_per_day parties a day, accounts older than week_min_account_days only.
+    The guest is locked by the caller, who commits."""
+    from app.services.town_social_service import social_config
+
+    v = villa_config(config)
+    if not party_on(await _villa(db, owner_id)) or v["party_guest_coins"] <= 0 or guest.game_rewards_blocked:
+        return 0
+    created = guest.created_at if guest.created_at.tzinfo else guest.created_at.replace(tzinfo=timezone.utc)
+    if _now() - created < timedelta(days=social_config(config)["week_min_account_days"]):
+        return 0
+    paid_today = int((await db.execute(select(func.count()).select_from(TownVisit).where(
+        TownVisit.visitor_id == guest.id, TownVisit.day == visit.day, TownVisit.party_coins > 0,
+    ))).scalar_one())
+    if paid_today >= v["party_guest_per_day"]:
+        return 0
+    coins = v["party_guest_coins"]
+    await credit_coins(db, guest, coins, TransactionType.town_villa, "Вечеринка на вилле",
+                       related_object_type="town_villa_party", related_object_id=owner_id)
+    visit.party_coins = coins
+    return coins
+
+
+# The first month «Вилла месяца» pays for (the ones before it had no rating).
+FIRST_MONTH = "VM2026-11"
+
+
+def villa_month_key(day: date) -> str:
+    return f"VM{day.year:04d}-{day.month:02d}"
+
+
+def _month_bounds(day: date) -> tuple[date, date]:
+    first = day.replace(day=1)
+    nxt = (first + timedelta(days=32)).replace(day=1)
+    return first, nxt - timedelta(days=1)
+
+
+async def _month_scores(db: AsyncSession, config, day: date) -> list[dict]:
+    """Villas by prestige + the month's likes × month_like_points."""
+    from app.services.town_social_service import _owner_name, social_config
+
+    v = villa_config(config)
+    first, last = _month_bounds(day)
+    old_enough = _now() - timedelta(days=social_config(config)["week_min_account_days"])
+    likes = {oid: int(n) for oid, n in (await db.execute(
+        select(TownVisit.owner_id, func.count()).join(User, User.id == TownVisit.visitor_id)
+        .where(TownVisit.day >= first, TownVisit.day <= last, TownVisit.villa_liked.is_(True),
+               User.created_at <= old_enough, User.is_banned.is_(False))
+        .group_by(TownVisit.owner_id)
+    )).all()}
+    rows = (await db.execute(
+        select(UserTownVilla, User).join(User, User.id == UserTownVilla.user_id)
+        .where(User.is_banned.is_(False), (UserTownVilla.prestige > 0) | UserTownVilla.user_id.in_(list(likes) or [0]))
+    )).all()
+    out = [{"user_id": villa.user_id, "owner": _owner_name(owner), "prestige": villa.prestige,
+            "likes": likes.get(villa.user_id, 0), "villa_level": villa.villa_level,
+            "score": villa.prestige + likes.get(villa.user_id, 0) * v["month_like_points"]}
+           for villa, owner in rows]
+    out.sort(key=lambda r: (-r["score"], -r["villa_level"], r["user_id"]))
+    for place, row in enumerate(out, start=1):
+        row["place"] = place
+    return out
+
+
+async def settle_villa_month(db: AsyncSession, config, day: date) -> bool:
+    """Pays month_reward_1..3 for the month of `day`, once (a town_weeks row "VM…")."""
+    key = villa_month_key(day)
+    if key < FIRST_MONTH or await db.get(TownWeek, key) is not None:
+        return False
+    v = villa_config(config)
+    ranking = await _month_scores(db, config, day)
+    try:
+        db.add(TownWeek(week=key))
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        return False
+    for row in ranking[:3]:
+        coins = v.get(f"month_reward_{row['place']}", 0)
+        user = await lock_user_for_update(db, row["user_id"])
+        paid = 0 if user.game_rewards_blocked else coins
+        if paid:
+            await credit_coins(db, user, paid, TransactionType.town_week, f"«Вилла месяца»: {row['place']} место",
+                               related_object_type="town_villa_month", related_object_id=row["place"])
+        db.add(TownWeekResult(week=key, place=row["place"], user_id=row["user_id"], score=row["score"], coins=paid))
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        return False
+    return True
+
+
+def _month_reward(v: dict, place: int) -> int:
+    return v.get(f"month_reward_{place}", 0) if place <= 3 else 0
+
+
+async def _month_view(db: AsyncSession, config, user: User, today: date) -> dict:
+    from app.services.town_social_service import _owner_name
+
+    v = villa_config(config)
+    last_day = today.replace(day=1) - timedelta(days=1)
+    await settle_villa_month(db, config, last_day)
+    ranking = await _month_scores(db, config, today)
+    winners = (await db.execute(
+        select(TownWeekResult).where(TownWeekResult.week == villa_month_key(last_day))
+        .order_by(TownWeekResult.place).limit(3)
+    )).scalars().all()
+    names = {u.id: u for u in (await db.execute(
+        select(User).where(User.id.in_([w.user_id for w in winners] or [0]))
+    )).scalars()}
+    return {
+        "ends_on": _month_bounds(today)[1].isoformat(), "like_points": v["month_like_points"],
+        "rewards": [{"place": p, "coins": _month_reward(v, p)} for p in (1, 2, 3)],
+        "top": [{**r, "reward": _month_reward(v, r["place"])} for r in ranking[:20]],
+        "me": next((r for r in ranking if r["user_id"] == user.id), None),
+        "last_month": [{"place": w.place, "user_id": w.user_id, "owner": _owner_name(names.get(w.user_id)),
+                        "score": w.score, "coins": w.coins} for w in winners],
     }

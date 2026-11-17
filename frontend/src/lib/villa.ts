@@ -1,8 +1,9 @@
 /**
- * «Моя вилла»: the plot. A square grid of grid_max cells a side lies on the
- * lawn of the plot picture (corner(): the lawn in perspective, cell (0, 0)
- * at the back); the villa's level opens grid × grid of it from the back
- * corner, the rest is locked. A thing of w×h cells (h×w when turned) at
+ * «Моя вилла»: the plot. The meadow of the plot picture is cut into
+ * isometric cells (PLOT_CELLS, centre first — lib/villaPlot.ts, the twin of
+ * the server's town_villa_plot.py); the villa's level opens the first
+ * cells_open of them, so the plot grows outwards in a round shape, the rest
+ * is locked. A thing of w×h cells (h×w when turned) at
  * (x, y) covers x…x+w−1, y…y+h−1 — the same rule as the server's
  * town_villa_service.check_layout.
  *
@@ -12,13 +13,45 @@
  * thing is drawn as a coloured block with its emoji.
  */
 import type { VillaItem, VillaKind } from "@/api/town";
+import { PLOT_CELLS, PLOT_ORIGIN, PLOT_TH, PLOT_TW } from "@/lib/villaPlot";
 
 const ART = import.meta.glob<string>("@/assets/town/villa/*.webp", { eager: true, import: "default" });
 const artUrl = (name: string): string | undefined => ART[`/src/assets/town/villa/${name}.webp`];
 
+/** Fence sections join their neighbours of the same fence; rot = 1 — a gate. */
+export const FENCES = ["fence_stone", "fence_iron", "fence_hedge", "fence_picket"];
+export const isFence = (code: string): boolean => FENCES.includes(code);
+/** Flat path tiles: they lie under everything and join up with tiles of the same kind. */
+export const PATHS = ["path", "path_gravel", "path_terracotta", "path_deck", "path_stepping"];
+export const isPath = (code: string): boolean => PATHS.includes(code);
+
+/** The picture's name (SPRITE_GROUND key): by level for the villa / garage, a fence by its straight section. */
+export function spriteKey(item: Pick<VillaItem, "code" | "level">): string {
+  if (item.code === "villa" || item.code === "garage") return `${item.code}_${item.level ?? 1}`;
+  if (isFence(item.code)) return `${item.code}_a`;
+  return item.code;
+}
+
 export function spriteOf(item: Pick<VillaItem, "code" | "level">): string | undefined {
-  if (item.code === "villa" || item.code === "garage") return artUrl(`${item.code}_${item.level ?? 1}`) ?? artUrl(item.code);
-  return artUrl(item.code);
+  return artUrl(spriteKey(item)) ?? artUrl(item.code);
+}
+
+export const artOf = artUrl;
+
+/** Which fence pieces a section at (x, y) is drawn with: the halves towards its
+ * neighbours of the same fence (n: y−1, s: y+1 — the "a" section, e: x+1,
+ * w: x−1 — the "b" one), a post where it ends or turns, or a gate. */
+export function fencePieces(cells: Set<string>, x: number, y: number, gate: boolean):
+  { full?: "a" | "b" | "gate" | "gate_b"; halves: ("n" | "s" | "e" | "w")[]; post: boolean } {
+  const n = cells.has(`${x}:${y - 1}`); const s = cells.has(`${x}:${y + 1}`);
+  const e = cells.has(`${x + 1}:${y}`); const w = cells.has(`${x - 1}:${y}`);
+  const alongX = e || w; const alongY = n || s;
+  if (gate) return { full: alongX && !alongY ? "gate_b" : "gate", halves: [], post: false };
+  if (!alongX && !alongY) return { full: "a", halves: [], post: false };
+  if (n && s && !alongX) return { full: "a", halves: [], post: false };
+  if (e && w && !alongY) return { full: "b", halves: [], post: false };
+  const halves = ([["n", n], ["s", s], ["e", e], ["w", w]] as const).filter(([, on]) => on).map(([k]) => k);
+  return { halves, post: true };
 }
 
 export const plotArt = (): string | undefined => artUrl("plot");
@@ -29,8 +62,12 @@ export function footprint(item: { w: number; h: number; rot: number }): [number,
   return item.rot ? [item.h, item.w] : [item.w, item.h];
 }
 
-/** null when everything fits, else why not (the server checks the same). */
-export function checkLayout(grid: number, items: Placed[]): string | null {
+/** The cells open at cells_open, centre first. */
+export const openCells = (count: number): [number, number][] => PLOT_CELLS.slice(0, count);
+export const cellSet = (cells: [number, number][]): Set<string> => new Set(cells.map(([x, y]) => `${x}:${y}`));
+
+/** null when everything fits on the open cells, else why not (the server checks the same). */
+export function checkLayout(open: Set<string>, items: Placed[]): string | null {
   const taken = new Set<string>();
   for (const it of items) {
     if (it.x == null || it.y == null) {
@@ -38,7 +75,9 @@ export function checkLayout(grid: number, items: Placed[]): string | null {
       continue;
     }
     const [w, h] = footprint(it);
-    if (it.x < 0 || it.y < 0 || it.x + w > grid || it.y + h > grid) return "Предмет выходит за участок";
+    for (let dx = 0; dx < w; dx++) {
+      for (let dy = 0; dy < h; dy++) if (!open.has(`${it.x + dx}:${it.y + dy}`)) return "Предмет выходит за участок";
+    }
     for (let dx = 0; dx < w; dx++) {
       for (let dy = 0; dy < h; dy++) {
         const key = `${it.x + dx}:${it.y + dy}`;
@@ -50,57 +89,35 @@ export function checkLayout(grid: number, items: Placed[]): string | null {
   return null;
 }
 
-/** The plot picture (assets/town/villa/plot.webp) and its lawn: a quad
- * T(op) → R(ight) → B(ottom) → L(eft) in picture pixels (the walls' lines,
- * L and R lie past the picture's edges). The grid fills the lawn's
- * [INSET, 1 − INSET] part, so it keeps clear of the walls and the gate. */
-export const PLOT_W = 900;
-export const PLOT_H = 1200;
-const LAWN = { T: [450, 305], R: [987, 589], B: [450, 983], L: [-87, 589] } as const;
-const INSET = 0.11;
+/** The plot picture (assets/town/villa/plot.webp) is drawn in strict 2:1
+ * isometry (no perspective): grid point (0, 0) sits at ORIGIN, a cell is
+ * TW × TH picture pixels. */
+export const PLOT_W = 1086;
+export const PLOT_H = 1448;
+const ORIGIN = PLOT_ORIGIN;
+export const TW = PLOT_TW;
+export const TH = PLOT_TH;
 
-function lawnPoint(u: number, v: number): [number, number] {
-  const { T, R, B, L } = LAWN;
-  const k = [(1 - u) * (1 - v), u * (1 - v), u * v, (1 - u) * v];
-  return [k[0] * T[0] + k[1] * R[0] + k[2] * B[0] + k[3] * L[0], k[0] * T[1] + k[1] * R[1] + k[2] * B[1] + k[3] * L[1]];
-}
-
-const toLawn = (grid: number, g: number) => INSET + (1 - 2 * INSET) * (g / grid);
-
-/** Picture point of the grid corner (gx, gy), (0, 0) the plot's back corner;
- * `grid` is the whole lawn's cells a side (grid_max). */
-export function corner(grid: number, gx: number, gy: number): [number, number] {
-  return lawnPoint(toLawn(grid, gx), toLawn(grid, gy));
+/** Picture point of the grid corner (gx, gy). */
+export function corner(gx: number, gy: number): [number, number] {
+  return [ORIGIN[0] + (gx - gy) * (TW / 2), ORIGIN[1] + (gx + gy) * (TH / 2)];
 }
 
 /** The grid point (fractional) under a picture point — the corner() inverse. */
-export function unproject(grid: number, px: number, py: number): [number, number] {
-  let u = 0.5;
-  let v = 0.5;
-  for (let i = 0; i < 12; i++) {
-    const [x, y] = lawnPoint(u, v);
-    const e = 1e-4;
-    const [xu, yu] = lawnPoint(u + e, v);
-    const [xv, yv] = lawnPoint(u, v + e);
-    const a = (xu - x) / e, b = (xv - x) / e, c = (yu - y) / e, d = (yv - y) / e;
-    const det = a * d - b * c || 1e-9;
-    const dx = px - x;
-    const dy = py - y;
-    u += (d * dx - b * dy) / det;
-    v += (a * dy - c * dx) / det;
-  }
-  const back = (t: number) => ((t - INSET) / (1 - 2 * INSET)) * grid;
-  return [back(u), back(v)];
+export function unproject(px: number, py: number): [number, number] {
+  const a = (px - ORIGIN[0]) / (TW / 2);
+  const b = (py - ORIGIN[1]) / (TH / 2);
+  return [(a + b) / 2, (b - a) / 2];
 }
 
-export function rhombus(grid: number, x: number, y: number, w: number, h: number, lift = 0): string {
-  const pts = [corner(grid, x, y), corner(grid, x + w, y), corner(grid, x + w, y + h), corner(grid, x, y + h)];
+export function rhombus(x: number, y: number, w: number, h: number, lift = 0): string {
+  const pts = [corner(x, y), corner(x + w, y), corner(x + w, y + h), corner(x, y + h)];
   return pts.map(([px, py]) => `${px.toFixed(1)},${(py - lift).toFixed(1)}`).join(" ");
 }
 
-/** The view the plot opens at: the lawn with a strip of sea and the gate. */
-export const HOME_VIEW = { x: 0, y: 170, w: PLOT_W, h: 860 };
-export const MIN_VIEW_W = 280;
+/** The view the plot opens at: the meadow with a strip of the bay above. */
+export const HOME_VIEW = { x: 0, y: 250, w: PLOT_W, h: 960 };
+export const MIN_VIEW_W = 320;
 
 export type View = { x: number; y: number; w: number; h: number };
 
@@ -128,13 +145,10 @@ export function pathKerbs(cells: Set<string>, x: number, y: number): { n: boolea
   };
 }
 
-/** The free spot nearest the open plot's middle for thing `id` (as turned), or null. */
-export function freeSpot(grid: number, items: Placed[], id: number): [number, number] | null {
-  const mid = (grid - 1) / 2;
-  const spots: [number, number][] = [];
-  for (let y = 0; y < grid; y++) for (let x = 0; x < grid; x++) spots.push([x, y]);
-  spots.sort((a, b) => Math.hypot(a[0] - mid, a[1] - mid) - Math.hypot(b[0] - mid, b[1] - mid));
-  return spots.find(([x, y]) => checkLayout(grid, items.map((i) => (i.id === id ? { ...i, x, y } : i))) === null) ?? null;
+/** The free spot nearest the plot's centre for thing `id` (as turned), or null. */
+export function freeSpot(open: [number, number][], items: Placed[], id: number): [number, number] | null {
+  const room = cellSet(open);
+  return open.find(([x, y]) => checkLayout(room, items.map((i) => (i.id === id ? { ...i, x, y } : i))) === null) ?? null;
 }
 
 /** Back things first: by the front corner, then left to right. */
@@ -153,7 +167,7 @@ export function blockHeight(item: Pick<VillaItem, "code" | "kind" | "level">): n
   if (item.code === "villa") return 54 + (item.level ?? 1) * 10;
   if (item.code === "garage") return 26 + (item.level ?? 1) * 4;
   if (["palm", "cypress", "olive"].includes(item.code)) return 44;
-  if (["pool", "pitch_mini", "path", "helipad"].includes(item.code)) return 3;
+  if (["pool", "pitch_mini", "helipad"].includes(item.code) || isPath(item.code)) return 3;
   if (item.kind === "car") return 12;
   if (item.code === "lamp") return 34;
   return 18;
