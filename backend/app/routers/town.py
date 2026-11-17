@@ -8,7 +8,7 @@ from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.schemas.stars import StarsInvoiceStatusOut
-from app.services import stars_payment_service, town_season_service, town_service, town_social_service
+from app.services import stars_payment_service, town_season_service, town_service, town_social_service, town_villa_service
 
 router = APIRouter(prefix="/town", tags=["town"])
 
@@ -94,6 +94,85 @@ async def season_invoice(code: str, db: AsyncSession = Depends(get_db), user: Us
 @router.get("/week")
 async def week(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await town_social_service.week_ranking(db, user)
+
+
+class VillaUpgradeRequest(BaseModel):
+    target: str = Field(max_length=16)
+    idempotency_key: Optional[str] = Field(default=None, max_length=128)
+
+
+class VillaMove(BaseModel):
+    id: int
+    x: Optional[int] = Field(default=None, ge=0, le=64)
+    y: Optional[int] = Field(default=None, ge=0, le=64)
+    rot: int = Field(default=0, ge=0, le=1)
+
+
+class VillaLayoutRequest(BaseModel):
+    items: list[VillaMove] = Field(max_length=300)
+
+
+class VillaCarRequest(BaseModel):
+    item_id: Optional[int] = None
+
+
+class VillaStaffRequest(BaseModel):
+    post: str = Field(max_length=16)
+    resident_id: Optional[int] = None
+
+
+@router.get("/villa")
+async def villa(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await town_villa_service.get_villa(db, user)
+
+
+@router.get("/villa/week")
+async def villa_week(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await town_villa_service.villa_week(db, user)
+
+
+@router.post("/villa/upgrade")
+async def villa_upgrade(payload: VillaUpgradeRequest, db: AsyncSession = Depends(get_db),
+                        user: User = Depends(get_current_user)):
+    return await town_villa_service.upgrade(db, user, payload.target, payload.idempotency_key)
+
+
+@router.post("/villa/items/{code}/buy")
+async def villa_buy(code: str, payload: KeyRequest, db: AsyncSession = Depends(get_db),
+                    user: User = Depends(get_current_user)):
+    return await town_villa_service.buy_item(db, user, code, payload.idempotency_key)
+
+
+@router.post("/villa/items/{code}/invoice")
+async def villa_invoice(code: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await town_villa_service.create_invoice(db, user, code)
+
+
+@router.put("/villa/layout")
+async def villa_layout(payload: VillaLayoutRequest, db: AsyncSession = Depends(get_db),
+                       user: User = Depends(get_current_user)):
+    return await town_villa_service.save_layout(db, user, [m.model_dump() for m in payload.items])
+
+
+@router.post("/villa/car")
+async def villa_car(payload: VillaCarRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await town_villa_service.choose_car(db, user, payload.item_id)
+
+
+@router.post("/villa/staff")
+async def villa_staff(payload: VillaStaffRequest, db: AsyncSession = Depends(get_db),
+                      user: User = Depends(get_current_user)):
+    return await town_villa_service.set_staff(db, user, payload.post, payload.resident_id)
+
+
+@router.get("/visit/{owner_id}/villa")
+async def visit_villa(owner_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await town_social_service.visit_villa(db, user, owner_id)
+
+
+@router.post("/visit/{owner_id}/villa/like")
+async def like_villa(owner_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await town_social_service.like_villa(db, user, owner_id)
 
 
 @router.get("/visit/{owner_id}")

@@ -221,6 +221,54 @@ async def test_friends_league_with_derbies(client, db_session, bot_token):
     assert bool(trophies) == winner_team["is_friend"]
 
 
+async def _friends(client, db_session, bot_token, a_tg, b_tg):
+    a_id, a_headers, _ = await _signed(client, db_session, bot_token, a_tg)
+    b_id, b_headers, _ = await _signed(client, db_session, bot_token, b_tg)
+    db_session.add(Friendship(requester_id=a_id, addressee_id=b_id, user_low=min(a_id, b_id), user_high=max(a_id, b_id), status="accepted"))
+    await db_session.commit()
+    league_id = (await client.post(f"{API}/player-career/friends", headers=a_headers, json={"invite_ids": [b_id]})).json()["league"]["id"]
+    assert (await client.post(f"{API}/player-career/friends/{league_id}/respond", headers=b_headers, json={"accept": True})).status_code == 200
+    return league_id, (a_id, a_headers), (b_id, b_headers)
+
+
+async def test_friends_league_member_leaves_the_lobby(client, db_session, bot_token):
+    league_id, (_, a_headers), (_, b_headers) = await _friends(client, db_session, bot_token, 891101, 891102)
+    assert not (await client.get(f"{API}/player-career/friends", headers=b_headers)).json()["can_create"]
+    left = await client.post(f"{API}/player-career/friends/{league_id}/leave", headers=b_headers)
+    assert left.status_code == 200, left.text
+    assert left.json()["league"] is None and left.json()["can_create"]
+    lobby = (await client.get(f"{API}/player-career/friends", headers=a_headers)).json()["league"]
+    assert {m["status"] for m in lobby["members"]} == {"accepted", "left"}
+    assert (await client.post(f"{API}/player-career/friends/{league_id}/start", headers=a_headers)).status_code == 409  # nobody left
+    assert (await client.post(f"{API}/player-career/friends/{league_id}/leave", headers=b_headers)).status_code == 409
+
+
+async def test_friends_league_owner_leaving_the_lobby_closes_it(client, db_session, bot_token):
+    league_id, (_, a_headers), (_, b_headers) = await _friends(client, db_session, bot_token, 891103, 891104)
+    assert (await client.post(f"{API}/player-career/friends/{league_id}/leave", headers=a_headers)).status_code == 200
+    db_session.expire_all()
+    assert (await db_session.get(PlayerCareerFriendLeague, league_id)).status == "cancelled"
+    assert (await client.get(f"{API}/player-career/friends", headers=b_headers)).json()["can_create"]
+
+
+async def test_friends_league_leaving_a_running_league_hands_the_club_to_a_bot(client, db_session, bot_token):
+    league_id, (a_id, a_headers), (b_id, b_headers) = await _friends(client, db_session, bot_token, 891105, 891106)
+    assert (await client.post(f"{API}/player-career/friends/{league_id}/start", headers=a_headers)).status_code == 200
+    left = await client.post(f"{API}/player-career/friends/{league_id}/leave", headers=b_headers)
+    assert left.status_code == 200, left.text
+    assert left.json()["league"] is None and left.json()["can_create"]
+
+    from app.services import player_career_friends
+
+    assert await player_career_friends.resolve_league(db_session, league_id, now=datetime.now(timezone.utc) + timedelta(days=5)) == 7
+    db_session.expire_all()
+    row = await db_session.get(PlayerCareerFriendLeague, league_id)
+    assert row.status == "finished" and not row.state["derbies"]
+    assert [t["user_id"] for t in row.state["teams"] if t["user_id"]] == [a_id]
+    trophies = (await db_session.execute(select(UserTrophy).where(UserTrophy.user_id == b_id))).scalars().all()
+    assert not trophies
+
+
 async def test_weekly_tasks_rankings_and_daily_chest(client, db_session, bot_token):
     user_id, headers, _ = await _signed(client, db_session, bot_token, 891007)
     config = await get_config(db_session)

@@ -353,6 +353,7 @@ async def _view(db: AsyncSession, config, user: User, owner_id: int, visit: Town
         ],
         "places": sorted(places),
         "season_items": await _season_items(db, owner_id),
+        "villa": await town_service._villa_summary(db, config, owner_id),
         "hotel": town.hotel_bought_at is not None,
         "population": sum(r.copies for r in residents if r.copies > 0 and r.resident.is_active),
         "likes_today": await _likes(db, owner_id, day), "likes_total": await _likes(db, owner_id),
@@ -397,6 +398,38 @@ async def like(db: AsyncSession, user: User, owner_id: int) -> dict:
     db.add(row)
     await db.commit()
     return await _view(db, config, user, owner_id, row)
+
+
+async def visit_villa(db: AsyncSession, user: User, owner_id: int) -> dict:
+    """A guest at someone's «Моя вилла» (the same visit row as the town's)."""
+    from app.services import town_villa_service
+
+    config = await get_config(db)
+    await _guest_target(db, config, user, owner_id)
+    try:
+        row = await _visit_row(db, user.id, owner_id, local_today())
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        row = await _visit_row(db, user.id, owner_id, local_today())
+    return await town_villa_service.guest_view(db, config, owner_id, row)
+
+
+async def like_villa(db: AsyncSession, user: User, owner_id: int) -> dict:
+    """A like for the villa, once a day a guest («Вилла недели»)."""
+    from app.services import town_villa_service
+
+    config = await get_config(db)
+    await _guest_target(db, config, user, owner_id)
+    await lock_user_for_update(db, user.id)
+    row = await _visit_row(db, user.id, owner_id, local_today(), lock=True)
+    if row.villa_liked:
+        raise ConflictError("Сегодня ты уже ставил лайк этой вилле")
+    view = await town_villa_service.guest_view(db, config, owner_id, row)  # no villa → 404 before the like
+    row.villa_liked = True
+    db.add(row)
+    await db.commit()
+    return {**view, "liked": True, "likes_total": view["likes_total"] + 1, "likes_week": view["likes_week"] + 1}
 
 
 async def gift(db: AsyncSession, user: User, owner_id: int) -> dict:

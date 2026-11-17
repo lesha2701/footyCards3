@@ -1493,6 +1493,8 @@ class GameConfig(TimestampMixin, Base):
     town_mood: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     # Residents' quests and guests (town_social_service.SOCIAL_DEFAULTS overridden key by key).
     town_social: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # «Моя вилла» (town_villa_service.VILLA_DEFAULTS overridden key by key).
+    town_villa: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     # Closed places on the town map (town_service.DECOR): {code: {price,
     # rent_pct}}; a bought place adds rent_pct % to the houses' rent.
     town_decor: Mapped[dict] = mapped_column(

@@ -915,6 +915,7 @@ export interface GameConfig {
   town_decor: Record<string, { price: number; rent_pct: number }>;
   town_mood: Record<string, number>;
   town_social: Record<string, number>;
+  town_villa: Record<string, number>;
   trade_send_min_account_age_days: number;
   trade_send_min_active_days: number;
   trade_daily_coins_receive_cap: number;

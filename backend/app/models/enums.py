@@ -152,6 +152,7 @@ class TransactionType(str, enum.Enum):
     town_quest = "town_quest"
     town_gift = "town_gift"
     town_week = "town_week"
+    town_villa = "town_villa"
     arena_division_reward = "arena_division_reward"
     arena_cup_reward = "arena_cup_reward"
     arena_goal_bonus = "arena_goal_bonus"

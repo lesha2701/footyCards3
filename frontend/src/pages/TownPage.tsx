@@ -12,6 +12,7 @@ import {
 import GameHero from "@/components/common/GameHero";
 import { IconClose, IconCoin } from "@/components/icons";
 import TownScene from "@/components/town/TownScene";
+import VillaCarDrive from "@/components/town/VillaCarDrive";
 import hotelArt from "@/assets/town/hotel.webp";
 import housesArt from "@/assets/town/houses.webp";
 import residentsArt from "@/assets/town/residents.webp";
@@ -407,6 +408,24 @@ function TownMap({
       )}
       {state?.enabled && state.unlocked && <QuestsPanel />}
       {state?.enabled && state.unlocked && <SeasonPanel />}
+      {state?.enabled && state.unlocked && (
+        <Link
+          to="/town/villa"
+          className="flex min-h-[52px] items-center gap-3 rounded-2xl border border-rose-300/25 bg-gradient-to-r from-rose-400/15 to-amber-300/10 px-3"
+          data-testid="town-villa-link"
+        >
+          <span className="text-3xl" aria-hidden>🏡</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-bold text-ink-chalk">Моя вилла</span>
+            <span className="block truncate text-[11px] text-ink-mist">
+              {state.villa?.villa_level
+                ? `${"★".repeat(state.villa.villa_level)} · престиж ${fmt(state.villa.prestige)} · +${state.villa.rent_pct}% к ренте`
+                : "Твой участок: вилла, гараж, двор — обустрой как хочешь"}
+            </span>
+          </span>
+          <span className="text-ink-mist" aria-hidden>›</span>
+        </Link>
+      )}
       <section className="rounded-3xl border border-white/10 bg-bg-surface p-2">
         <TownScene
           art={TOWN_MAP}
@@ -417,7 +436,12 @@ function TownMap({
             if (picked) setPlace(picked);
             else navigate(c === "base" ? "/base" : `/town/${c}`);
           }}
-          overlay={allLit ? <Fireworks /> : null}
+          overlay={allLit || state?.villa?.car ? (
+            <>
+              {allLit && <Fireworks />}
+              {state?.villa?.car && <VillaCarDrive code={state.villa.car} />}
+            </>
+          ) : null}
           zones={[...MAP_ZONES.map((z) => {
             const d = owned(z.code);
             return {

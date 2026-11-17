@@ -14,7 +14,7 @@ from app.models.game import GameSession
 from app.models.match import Match
 from app.models.user import User
 from app.schemas.admin import GameConfigOut, GameConfigUpdate, SuspiciousMatchOut, SuspiciousMemorySessionOut
-from app.services import club_base_service, magnate_engine, town_service, town_social_service
+from app.services import club_base_service, magnate_engine, town_service, town_social_service, town_villa_service
 from app.services.admin_log_service import log_action
 from app.services.game_config_service import get_config
 
@@ -58,6 +58,11 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
             updates["town_social"] = town_social_service.validate_social(updates["town_social"])
         except ValueError as exc:
             raise ConflictError(f"Город, задания и гости: {exc}")
+    if updates.get("town_villa") is not None:
+        try:
+            updates["town_villa"] = town_villa_service.validate_villa(updates["town_villa"])
+        except ValueError as exc:
+            raise ConflictError(f"Город, вилла: {exc}")
     if updates.get("town_mood") is not None:
         try:
             updates["town_mood"] = town_service.validate_mood(updates["town_mood"])

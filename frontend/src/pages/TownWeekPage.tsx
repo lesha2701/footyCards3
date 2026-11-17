@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
-import { fetchTownWeek } from "@/api/town";
+import { fetchTownWeek, fetchVillaWeek } from "@/api/town";
 import { IconCoin } from "@/components/icons";
 
 const fmt = (n: number) => n.toLocaleString("ru-RU");
@@ -69,6 +69,7 @@ export default function TownWeekPage() {
           </li>
         ))}
       </ol>
+      <VillaWeek />
       {last && last.winners.length > 0 && (
         <section className="rounded-2xl border border-white/10 bg-bg-surface p-3" aria-label="Победители прошлой недели">
           <p className="mb-1 text-xs font-bold text-ink-chalk">Прошлая неделя</p>
@@ -78,5 +79,35 @@ export default function TownWeekPage() {
         </section>
       )}
     </div>
+  );
+}
+
+/** «Вилла недели»: villas by the guests' likes this week, the top 3 paid. */
+function VillaWeek() {
+  const { data } = useQuery({ queryKey: ["town-villa-week"], queryFn: fetchVillaWeek, refetchInterval: 60_000 });
+  if (!data) return null;
+  return (
+    <section className="flex flex-col gap-2 rounded-2xl border border-rose-300/25 bg-rose-400/5 p-3" aria-label="Вилла недели" data-testid="villa-week">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-bold text-ink-chalk">🏡 Вилла недели</p>
+        <Link to="/town/villa" className="text-[11px] font-bold text-rose-200">Моя вилла ›</Link>
+      </div>
+      <p className="text-[11px] text-ink-mist">
+        Лайки гостей вилле. Награды: {data.rewards.filter((r) => r.coins).map((r) => `${medal(r.place)} ${fmt(r.coins)}`).join(" · ")} монет.
+        {data.me ? ` Твоя вилла — ${data.me.place} место.` : ""}
+      </p>
+      {data.top.length === 0 ? (
+        <p className="text-[11px] text-ink-mist">Лайков виллам пока нет — обустрой свою и позови соседей.</p>
+      ) : data.top.slice(0, 5).map((r) => (
+        <Link key={r.user_id} to={`/town/visit/${r.user_id}/villa`} className="flex items-center gap-2 rounded-xl bg-white/5 px-2 py-1.5">
+          <span className="w-7 text-center text-sm font-bold text-ink-chalk">{medal(r.place)}</span>
+          <span className="min-w-0 flex-1 truncate text-xs text-ink-chalk">{r.owner} · {"★".repeat(r.villa_level)}</span>
+          <span className="text-xs font-bold text-ink-chalk">❤️ {fmt(r.likes)}</span>
+        </Link>
+      ))}
+      {data.last_week.length > 0 && (
+        <p className="text-[11px] text-ink-mist">Прошлая неделя: {data.last_week.map((w) => `${medal(w.place)} ${w.owner}`).join(", ")}</p>
+      )}
+    </section>
   );
 }

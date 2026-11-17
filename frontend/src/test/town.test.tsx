@@ -146,6 +146,10 @@ vi.mock("@/api/town", () => ({
     me: null,
     last_week: { week: "2026-W45", winners: [{ place: 1, user_id: 1, owner: "Я", score: 30, coins: 3000 }], mine: { place: 1, coins: 3000 } },
   })),
+  fetchVillaWeek: vi.fn(async () => ({
+    ends_on: "2026-11-15", rewards: [{ place: 1, coins: 2000 }, { place: 2, coins: 1000 }, { place: 3, coins: 500 }],
+    top: [{ place: 1, user_id: 7, owner: "Петя", likes: 5, villa_level: 3, reward: 2000 }], me: null, last_week: [],
+  })),
 }));
 
 const quests = (claimed = false): TownQuests => ({
