@@ -15,7 +15,10 @@ export function useTodayState() {
     queryFn: fetchFreePackStatus,
     refetchInterval: 30000,
   });
-  const claimableTasks: Task[] = [...(taskList?.regular ?? []), ...(taskList?.weekly ?? []), ...(taskList?.premium ?? [])].filter(
+  // Subscription (premium) tasks stay out: their claim re-checks the channel
+  // live, and a player who left it (the bot resets the task to "claim again")
+  // would get "не подписан" from every tap instead of reaching «Задания».
+  const claimableTasks: Task[] = [...(taskList?.regular ?? []), ...(taskList?.weekly ?? [])].filter(
     (t) => t.is_completed && !t.is_claimed,
   );
   const dailyReady = !!calendar && !calendar.already_claimed_today;
