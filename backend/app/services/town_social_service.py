@@ -421,15 +421,17 @@ async def like_villa(db: AsyncSession, user: User, owner_id: int) -> dict:
 
     config = await get_config(db)
     await _guest_target(db, config, user, owner_id)
-    await lock_user_for_update(db, user.id)
+    guest = await lock_user_for_update(db, user.id)
     row = await _visit_row(db, user.id, owner_id, local_today(), lock=True)
     if row.villa_liked:
         raise ConflictError("Сегодня ты уже ставил лайк этой вилле")
     view = await town_villa_service.guest_view(db, config, owner_id, row)  # no villa → 404 before the like
     row.villa_liked = True
+    party = await town_villa_service.party_reward(db, config, guest, owner_id, row)
     db.add(row)
     await db.commit()
-    return {**view, "liked": True, "likes_total": view["likes_total"] + 1, "likes_week": view["likes_week"] + 1}
+    return {**view, "liked": True, "likes_total": view["likes_total"] + 1, "likes_week": view["likes_week"] + 1,
+            "party_paid": party, "new_balance": guest.balance}
 
 
 async def gift(db: AsyncSession, user: User, owner_id: int) -> dict:

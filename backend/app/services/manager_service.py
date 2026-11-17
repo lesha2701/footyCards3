@@ -288,6 +288,11 @@ async def base_snapshot(db: AsyncSession, owner_id: int, config) -> dict:
         "capacity": club_base_service.value_at(config, "stadium", "capacity", int(levels.get("stadium", 0)))
         if levels.get("stadium") else 0,
     }
+    # «Моя вилла»: the tennis court / the stable treat injuries cheaper, the helipad / the guest garage
+    # make tours cheaper (town_villa_service.PERKS).
+    from app.services import town_villa_service
+
+    snap.update(await town_villa_service.manager_perks(db, config, owner_id))
     # «Штаб президента»: the club staff's effects on top, within the caps.
     return staff.fold(snap, await staff.effects(db, owner_id, config), config)
 
@@ -1876,6 +1881,7 @@ async def _injury(db, club: ManagerClub, team: dict, xi: list[dict], league: Man
     low = int(finance._num(f["injury_rounds_min"], 1))
     rounds = rng.randint(low, max(low, int(finance._num(f["injury_rounds_max"], 1))))
     cost = value_of(int(p.get("rating", 50)), config) * int(finance._num(f["injury_treatment_pct"])) // 100
+    cost = cost * (100 - int((team.get("base") or {}).get("villa_treat_pct", 0))) // 100  # «Моя вилла»
     hurt[p["key"]] = {"name": p.get("name") or "игрок", "back": round_index + 1 + rounds, "rounds": rounds, "cost": cost}
     key = league.season_key
     if cost:

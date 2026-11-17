@@ -274,7 +274,7 @@ export interface TownVisitView {
   places: string[];
   season_items?: TownSeasonOwned[];
   /** null — the owner has no villa yet. */
-  villa?: { villa_level: number; prestige: number; car: string | null } | null;
+  villa?: { villa_level: number; prestige: number; car: string | null; party?: boolean } | null;
   hotel: boolean;
   population: number;
   likes_today: number;
@@ -428,10 +428,10 @@ export interface VillaCombo {
 export interface VillaPlotView {
   villa_level: number;
   garage_level: number;
-  /** Cells a side open at this villa level (from the back corner). */
-  grid: number;
-  /** Cells a side of the whole lawn (the last level). */
-  grid_max: number;
+  /** Meadow cells open at this villa level (lib/villaPlot.ts PLOT_CELLS, centre first). */
+  cells_open: number;
+  /** Cells of the whole meadow (the last level). */
+  cells_total: number;
   combos: VillaCombo[];
   items: VillaItem[];
   car: { id: number; code: string; name: string; emoji: string } | null;
@@ -440,6 +440,17 @@ export interface VillaPlotView {
   prestige_pct: number;
   user_id: number;
   likes_total: number;
+  /** What the buildings on the plot give in the game — one each, however many of a kind stand. */
+  perks: VillaPerk[];
+  /** ISO — the owner's party runs until then; null — no party now. */
+  party_until: string | null;
+}
+
+export interface VillaPerk {
+  code: string;
+  name: string;
+  emoji: string;
+  text: string;
 }
 
 export interface VillaShopItem {
@@ -461,7 +472,7 @@ export interface VillaShopItem {
 }
 
 export interface VillaState extends VillaPlotView {
-  next_villa: { level: number; price: number; grid: number } | null;
+  next_villa: { level: number; price: number; cells: number } | null;
   next_garage: { level: number; price: number; slots: number } | null;
   garage_slots: number;
   cars: number;
@@ -475,11 +486,33 @@ export interface VillaState extends VillaPlotView {
   prestige_max_pct: number;
   max_items: number;
   new_balance?: number;
+  all_perks: (VillaPerk & { buildings: string[] })[];
+  /** The villa's daily income (backend town_villa_service.income_of). */
+  income: { coins: number; ready: boolean; base: number; per_100: number; cap: number };
+  party: { cost: number; hours: number; guest_coins: number; can_throw: boolean };
+  /** Paid by POST /town/villa/income. */
+  income_paid?: number;
 }
 
 export interface VillaGuestView extends VillaPlotView {
   liked: boolean;
   likes_week: number;
+  /** The owner's trophies (only with the trophy pavilion on the plot). */
+  trophies: { id: number; name: string; icon: string | null; image_path: string | null }[];
+  /** > 0 — a party is on: a like pays the guest this much. */
+  party_guest_coins: number;
+  /** After a like during the party. */
+  party_paid?: number;
+  new_balance?: number;
+}
+
+export interface VillaMonth {
+  ends_on: string;
+  like_points: number;
+  rewards: { place: number; coins: number }[];
+  top: { user_id: number; owner: string; prestige: number; likes: number; score: number; villa_level: number; place: number; reward: number }[];
+  me: { place: number; score: number } | null;
+  last_month: { place: number; user_id: number; owner: string; score: number; coins: number }[];
 }
 
 export interface VillaWeek {
@@ -488,10 +521,22 @@ export interface VillaWeek {
   top: { user_id: number; owner: string; likes: number; villa_level: number; place: number; reward: number }[];
   me: { place: number; likes: number } | null;
   last_week: { place: number; user_id: number; owner: string; likes: number; coins: number }[];
+  /** «Вилла месяца»: prestige + the month's likes. */
+  month?: VillaMonth;
 }
 
 export async function fetchVilla(): Promise<VillaState> {
   const { data } = await api.get<VillaState>("/town/villa");
+  return data;
+}
+
+export async function collectVillaIncome(): Promise<VillaState> {
+  const { data } = await api.post<VillaState>("/town/villa/income");
+  return data;
+}
+
+export async function throwVillaParty(): Promise<VillaState> {
+  const { data } = await api.post<VillaState>("/town/villa/party");
   return data;
 }
 

@@ -853,7 +853,7 @@ export interface ManagerOffice {
   offers: {
     /** Shirt sponsor: `worn` = the brand on the shirt now (this or the coming season). */
     kit: { taken: boolean; shop: number; brands: string[]; worn: string | null; prices: number[] };
-    tour: { taken: boolean; options: ManagerTourOption[]; hotel_cut_pct: number; media_fans_pct: number };
+    tour: { taken: boolean; options: ManagerTourOption[]; hotel_cut_pct: number; media_fans_pct: number; villa_cut_pct?: number };
     tv: { taken: boolean; estimate: number; discount_pct: number; advance: number };
     deposit: { taken: boolean; rate_pct: number; min: number; max: number; blocked: boolean };
     venture: { taken: boolean; win_pct: number; multiplier: number; min: number; max: number; max_pct: number };

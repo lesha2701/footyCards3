@@ -616,6 +616,7 @@ def tour_terms(division: int, snap: dict, config) -> list[dict]:
     out = []
     for t in f["tours"]:
         cost = _share(grant, _num(t.get("cost_pct")) * (100 - hotel_cut) / 100)
+        cost = cost * (100 - int(snap.get("villa_tour_pct", 0))) // 100  # «Моя вилла»: own transport
         out.append({
             "code": str(t["code"]), "name": str(t.get("name") or t["code"]), "emoji": str(t.get("emoji") or "✈️"),
             "revenue": _share(grant, t.get("revenue_pct")), "cost": cost, "fans": int(_num(t.get("fans")) * fans_boost / 100),
@@ -1253,7 +1254,8 @@ async def view(db: AsyncSession, user: User, now: Optional[datetime] = None) -> 
                     "prices": [kit_price(division, snap, n, config) for n in range(1, int(_num(f["kit_seasons_max"], 3)) + 1)]},
             "tour": {"taken": "tour" in taken, "options": tour_terms(division, snap, config),
                      "hotel_cut_pct": min(90.0, _num(f["tour_hotel_cut_per_level"]) * _lvl(snap, "hotel")),
-                     "media_fans_pct": _num(f["tour_media_fans_pct_per_level"]) * _lvl(snap, "media")},
+                     "media_fans_pct": _num(f["tour_media_fans_pct_per_level"]) * _lvl(snap, "media"),
+                     "villa_cut_pct": int(snap.get("villa_tour_pct", 0))},
             "tv": {"taken": "tv" in taken, "estimate": estimate, "discount_pct": discount,
                    "advance": ms._nice(estimate * (100 - discount) / 100)},
             "deposit": {"taken": "deposit" in taken, "rate_pct": deposit_rate_bp(snap, config) / 100,

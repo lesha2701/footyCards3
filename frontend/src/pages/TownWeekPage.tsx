@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
-import { fetchTownWeek, fetchVillaWeek } from "@/api/town";
+import { fetchTownWeek, fetchVillaWeek, type VillaMonth } from "@/api/town";
 import { IconCoin } from "@/components/icons";
 
 const fmt = (n: number) => n.toLocaleString("ru-RU");
@@ -108,6 +108,31 @@ function VillaWeek() {
       {data.last_week.length > 0 && (
         <p className="text-[11px] text-ink-mist">Прошлая неделя: {data.last_week.map((w) => `${medal(w.place)} ${w.owner}`).join(", ")}</p>
       )}
+      {data.month && <VillaMonthBlock month={data.month} />}
     </section>
+  );
+}
+
+/** «Вилла месяца»: prestige + the month's likes; the top 3 paid once the month is over. */
+function VillaMonthBlock({ month }: { month: VillaMonth }) {
+  return (
+    <div className="mt-1 flex flex-col gap-2 border-t border-white/10 pt-2" data-testid="villa-month">
+      <p className="text-sm font-bold text-ink-chalk">🏛️ Вилла месяца</p>
+      <p className="text-[11px] text-ink-mist">
+        Престиж + {month.like_points} очк. за каждый лайк гостя за месяц. Итоги {endsOn(month.ends_on)}.
+        Награды: {month.rewards.filter((r) => r.coins).map((r) => `${medal(r.place)} ${fmt(r.coins)}`).join(" · ")} монет.
+        {month.me ? ` Твоя вилла — ${month.me.place} место.` : ""}
+      </p>
+      {month.top.slice(0, 5).map((r) => (
+        <Link key={r.user_id} to={`/town/visit/${r.user_id}/villa`} className="flex items-center gap-2 rounded-xl bg-white/5 px-2 py-1.5">
+          <span className="w-7 text-center text-sm font-bold text-ink-chalk">{medal(r.place)}</span>
+          <span className="min-w-0 flex-1 truncate text-xs text-ink-chalk">{r.owner} · ✨ {fmt(r.prestige)} · ❤️ {fmt(r.likes)}</span>
+          <span className="text-xs font-bold text-ink-chalk">{fmt(r.score)}</span>
+        </Link>
+      ))}
+      {month.last_month.length > 0 && (
+        <p className="text-[11px] text-ink-mist">Прошлый месяц: {month.last_month.map((w) => `${medal(w.place)} ${w.owner}`).join(", ")}</p>
+      )}
+    </div>
   );
 }

@@ -157,6 +157,8 @@ class TownVisit(Base):
     # A like for the guest's look at «Моя вилла» («Вилла недели»).
     villa_liked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     gift_coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Coins the guest got for a villa like during the owner's party.
+    party_coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     __table_args__ = (UniqueConstraint("visitor_id", "owner_id", "day", name="uq_town_visit_day"),)
@@ -220,6 +222,13 @@ class UserTownVilla(Base):
     garage_level: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     car_item_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     staff: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # The villa's daily income was collected on this local day.
+    income_day: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # The week's party: until when it runs and the «Вилла недели» key of its week (one a week).
+    party_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    party_week: Mapped[Optional[str]] = mapped_column(String(12), nullable=True)
+    # The prestige last shown to the owner («Вилла месяца» ranks by it).
+    prestige: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 

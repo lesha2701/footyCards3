@@ -1,20 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import type { VillaItem } from "@/api/town";
 import { skyAt, type Sky } from "@/lib/town";
 import {
-  CODE_COLOR, HOME_VIEW, KIND_COLOR, PLOT_H, PLOT_W, blockHeight, clampView, corner, drawOrder, footprint, pathKerbs,
-  plotArt, rhombus, spriteOf, unproject, zoomView, type View,
+  CODE_COLOR, HOME_VIEW, KIND_COLOR, PLOT_H, PLOT_W, artOf, blockHeight, clampView, corner, drawOrder, fencePieces,
+  footprint, isFence, isPath, pathKerbs, plotArt, rhombus, spriteKey, spriteOf, unproject, zoomView, type View,
 } from "@/lib/villa";
-
-/** How wide a picture stands on its footprint (1 = the footprint's width). */
-const SPRITE_SCALE: Record<string, number> = {
-  cypress: 0.5, lamp: 0.42, palm: 0.95, statue_gold: 0.7, hedge: 0.8, olive: 1.05, flowers: 0.85, bench: 0.85,
-  sun_umbrella: 0.9, goal_practice: 0.95, villa: 1.08, garage: 1.05,
-};
+import { PLOT_CELLS } from "@/lib/villaPlot";
+import { SPRITE_GROUND } from "@/lib/villaSprites";
 const NIGHT: Record<Sky, string | null> = {
   day: null, dawn: "rgba(255,170,120,0.14)", dusk: "rgba(255,120,60,0.18)", night: "rgba(10,20,60,0.5)",
 };
+
+/** Night halo [radius, lift above the footprint centre] for each light source. */
+const GLOW: Record<string, [number, number]> = { lamp: [12, 38], firepit: [14, 4], pizza_oven: [9, 8] };
 
 type Drag = { id: number; dx: number; dy: number; x: number; y: number; moved: boolean };
 
@@ -24,16 +23,14 @@ type Drag = { id: number; dx: number; dy: number; x: number; y: number; moved: b
  * given (the owner's editor): a thing is dragged to a new spot with a green
  * / red ghost under it (onDrop), or tapped (selected) and a cell tapped. */
 export default function VillaPlot({
-  grid, gridMax, items, selectedId, onCell, onItem, onDrop, canPlace, poppedId, comboIds, mark, showGrid = true, label,
+  open, items, selectedId, onCell, onItem, onDrop, canPlace, poppedId, comboIds, mark, showGrid = true, label,
 }: {
   /** A spot to show green / red (a thing waiting to be placed). */
   mark?: { x: number; y: number; w: number; h: number; ok: boolean } | null;
   /** The cell lines (cells stay tappable without them). */
   showGrid?: boolean;
-  /** Cells a side open now (from the back corner). */
-  grid: number;
-  /** Cells a side of the whole lawn. */
-  gridMax: number;
+  /** Meadow cells open now (the first of PLOT_CELLS, centre first). */
+  open: number;
   items: VillaItem[];
   selectedId?: number | null;
   onCell?: (x: number, y: number) => void;
@@ -76,7 +73,7 @@ export default function VillaPlot({
   const cellAt = (clientX: number, clientY: number): [number, number] | null => {
     const p = toPlot(clientX, clientY);
     if (!p) return null;
-    const [gx, gy] = unproject(gridMax, p[0], p[1]);
+    const [gx, gy] = unproject(p[0], p[1]);
     return [Math.floor(gx), Math.floor(gy)];
   };
 
@@ -150,8 +147,25 @@ export default function VillaPlot({
   );
   const dragged = drag?.moved ? shown.find((i) => i.id === drag.id) : undefined;
   const ghostOk = dragged && canPlace ? canPlace(dragged.id, drag!.x, drag!.y) : true;
-  const paths = useMemo(() => new Set(shown.filter((i) => i.code === "path" && i.x != null).map((i) => `${i.x}:${i.y}`)), [shown]);
-  const lit = (code: string) => (sky === "night" ? ["lamp", "villa", "firepit", "helipad"] : sky === "dusk" ? ["lamp", "firepit"] : []).includes(code);
+  const paths = useMemo(() => {  // per kind of path: tiles join only their own kind
+    const out = new Map<string, Set<string>>();
+    for (const i of shown) {
+      if (!isPath(i.code) || i.x == null) continue;
+      if (!out.has(i.code)) out.set(i.code, new Set());
+      out.get(i.code)!.add(`${i.x}:${i.y}`);
+    }
+    return out;
+  }, [shown]);
+  const fences = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    for (const i of shown) {
+      if (!isFence(i.code) || i.x == null) continue;
+      if (!m.has(i.code)) m.set(i.code, new Set());
+      m.get(i.code)!.add(`${i.x}:${i.y}`);
+    }
+    return m;
+  }, [shown]);
+  const lit = (code: string) => (sky === "night" ? ["lamp", "firepit", "pizza_oven"] : sky === "dusk" ? ["lamp", "firepit"] : []).includes(code);
 
   return (
     <div className="relative">
@@ -178,7 +192,7 @@ export default function VillaPlot({
             .villa-twinkle { animation: villa-twinkle 1.8s ease-in-out infinite; }
           `}</style>
           <radialGradient id="villa-glow">
-            <stop offset="0" stopColor="#ffe9a8" stopOpacity="0.85" />
+            <stop offset="0" stopColor="#ffe9a8" stopOpacity="0.7" />
             <stop offset="1" stopColor="#ffd36b" stopOpacity="0" />
           </radialGradient>
           <pattern id="villa-stone" width="14" height="10" patternUnits="userSpaceOnUse">
@@ -189,22 +203,17 @@ export default function VillaPlot({
         {ground ? (
           <image href={ground} x={0} y={0} width={PLOT_W} height={PLOT_H} />
         ) : (
-          <polygon points={rhombus(gridMax, 0, 0, gridMax, gridMax)} fill="#6fc35f" />
+          <rect x={0} y={0} width={PLOT_W} height={PLOT_H} fill="#6fc35f" />
         )}
-        {/* the cells the villa's level has not opened yet */}
-        {Array.from({ length: gridMax * gridMax }, (_, i) => {
-          const x = i % gridMax;
-          const y = Math.floor(i / gridMax);
-          if (x < grid && y < grid) return null;
-          return <polygon key={`l${i}`} points={rhombus(gridMax, x, y, 1, 1)} fill="rgba(20,30,20,0.32)" pointerEvents="none" />;
-        })}
-        {editing && Array.from({ length: grid * grid }, (_, i) => {
-          const x = i % grid;
-          const y = Math.floor(i / grid);
+        {/* the meadow cells the villa's level has not opened yet */}
+        {editing && showGrid && PLOT_CELLS.slice(open).map(([x, y]) => (
+          <polygon key={`l${x}:${y}`} points={rhombus(x, y, 1, 1)} fill="rgba(20,30,20,0.28)" pointerEvents="none" />
+        ))}
+        {editing && PLOT_CELLS.slice(0, open).map(([x, y], i) => {
           return (
             <polygon
               key={i}
-              points={rhombus(gridMax, x, y, 1, 1)}
+              points={rhombus(x, y, 1, 1)}
               fill="transparent"
               stroke={showGrid || drag ? "rgba(255,255,255,0.3)" : "transparent"}
               strokeWidth={1.2}
@@ -213,31 +222,27 @@ export default function VillaPlot({
             />
           );
         })}
-        {editing && grid < gridMax && (() => {
-          const [lx, ly] = corner(gridMax, grid + (gridMax - grid) / 2, grid + (gridMax - grid) / 2);
-          return <text x={lx} y={ly} textAnchor="middle" fontSize={26} fill="rgba(255,255,255,0.85)" pointerEvents="none">🔒</text>;
-        })()}
         {/* paths lie flat under everything and join up */}
-        {shown.filter((i) => i.code === "path" && i.x != null).map((i) => (
-          <PathTile key={i.id} gridMax={gridMax} item={i} kerbs={pathKerbs(paths, i.x!, i.y!)} selected={i.id === selectedId}
+        {shown.filter((i) => isPath(i.code) && i.x != null).map((i) => (
+          <PathTile key={i.id} item={i} kerbs={pathKerbs(paths.get(i.code)!, i.x!, i.y!)} selected={i.id === selectedId}
                     popped={i.id === poppedId} onTap={onItem ? () => onItem(i) : undefined} onDragStart={(e) => startDrag(i, e)} />
         ))}
-        {drawOrder(shown.filter((i) => i.code !== "path")).map((item) => (
+        {drawOrder(shown.filter((i) => !isPath(i.code))).map((item) => (
           <Thing
             key={item.id}
-            gridMax={gridMax}
             item={item}
             selected={item.id === selectedId}
             faded={item.id === dragged?.id}
             popped={item.id === poppedId}
             combo={comboIds?.has(item.id) ?? false}
+            fence={isFence(item.code) ? fences.get(item.code) : undefined}
             onTap={onItem ? () => onItem(item) : undefined}
             onDragStart={(e) => startDrag(item, e)}
           />
         ))}
         {dragged && (
           <polygon
-            points={rhombus(gridMax, drag!.x, drag!.y, ...footprint(dragged))}
+            points={rhombus(drag!.x, drag!.y, ...footprint(dragged))}
             fill={ghostOk ? "rgba(132,255,120,0.3)" : "rgba(255,80,80,0.38)"}
             stroke={ghostOk ? "#84ff78" : "#ff5050"}
             strokeWidth={3}
@@ -247,7 +252,7 @@ export default function VillaPlot({
         )}
         {mark && !dragged && (
           <polygon
-            points={rhombus(gridMax, mark.x, mark.y, mark.w, mark.h)}
+            points={rhombus(mark.x, mark.y, mark.w, mark.h)}
             fill={mark.ok ? "rgba(132,255,120,0.3)" : "rgba(255,80,80,0.38)"}
             stroke={mark.ok ? "#84ff78" : "#ff5050"}
             strokeWidth={3}
@@ -258,9 +263,10 @@ export default function VillaPlot({
         {NIGHT[sky] && <rect x={0} y={0} width={PLOT_W} height={PLOT_H} fill={NIGHT[sky]!} pointerEvents="none" />}
         {shown.filter((i) => i.x != null && lit(i.code)).map((i) => {
           const [w, h] = footprint(i);
-          const [cx, cy] = corner(gridMax, i.x! + w / 2, i.y! + h / 2);
-          const r = i.code === "villa" ? 120 : i.code === "lamp" ? 60 : 80;
-          return <circle key={`g${i.id}`} cx={cx} cy={cy - (i.code === "lamp" ? 40 : 20)} r={r} fill="url(#villa-glow)" pointerEvents="none" style={{ mixBlendMode: "screen" }} />;
+          const [cx, cy] = corner(i.x! + w / 2, i.y! + h / 2);
+          // a small halo right at the light itself: the lamp's head, the fire, the oven's mouth
+          const [r, lift] = GLOW[i.code] ?? [10, 0];
+          return <circle key={`g${i.id}`} cx={cx} cy={cy - lift} r={r} fill="url(#villa-glow)" pointerEvents="none" style={{ mixBlendMode: "screen" }} />;
         })}
       </svg>
       <div className="absolute right-2 top-2 flex flex-col gap-1">
@@ -280,7 +286,6 @@ export default function VillaPlot({
 }
 
 type ThingProps = {
-  gridMax: number;
   item: VillaItem;
   selected: boolean;
   popped: boolean;
@@ -288,10 +293,12 @@ type ThingProps = {
   onDragStart: (e: React.PointerEvent) => void;
 };
 
-function PathTile({ gridMax, item, kerbs, selected, popped, onTap, onDragStart }: ThingProps & { kerbs: ReturnType<typeof pathKerbs> }) {
+function PathTile({ item, kerbs, selected, popped, onTap, onDragStart }: ThingProps & { kerbs: ReturnType<typeof pathKerbs> }) {
   const x = item.x!;
   const y = item.y!;
-  const c = (gx: number, gy: number) => corner(gridMax, gx, gy).map((n) => n.toFixed(1)).join(",");
+  const c = (gx: number, gy: number) => corner(gx, gy).map((n) => n.toFixed(1)).join(",");
+  const stone = artOf(item.code);
+  const [l, top, r] = [corner(x, y + 1), corner(x, y), corner(x + 1, y)];
   const edges: [boolean, string][] = [
     [kerbs.n, `M${c(x, y)}L${c(x + 1, y)}`], [kerbs.e, `M${c(x + 1, y)}L${c(x + 1, y + 1)}`],
     [kerbs.s, `M${c(x + 1, y + 1)}L${c(x, y + 1)}`], [kerbs.w, `M${c(x, y + 1)}L${c(x, y)}`],
@@ -299,26 +306,34 @@ function PathTile({ gridMax, item, kerbs, selected, popped, onTap, onDragStart }
   return (
     <g onClick={onTap} onPointerDown={onDragStart} className={popped ? "villa-pop" : undefined} data-testid={`villa-item-${item.code}`}
        style={{ cursor: onTap ? "pointer" : undefined }}>
-      <polygon points={rhombus(gridMax, x, y, 1, 1)} fill="url(#villa-stone)" />
-      <path d={edges.filter(([on]) => on).map(([, d]) => d).join("")} stroke="#9c8b69" strokeWidth={3} fill="none" />
-      {selected && <polygon points={rhombus(gridMax, x, y, 1, 1)} fill="rgba(255,226,92,0.3)" stroke="#ffe25c" strokeWidth={3} />}
+      {stone ? (
+        <image href={stone} x={l[0]} y={top[1]} width={r[0] - l[0]} height={(r[0] - l[0]) * (SPRITE_GROUND[item.code]?.[2] ?? 0.5)} preserveAspectRatio="none" />
+      ) : (
+        <polygon points={rhombus(x, y, 1, 1)} fill="url(#villa-stone)" />
+      )}
+      <path d={edges.filter(([on]) => on).map(([, d]) => d).join("")} stroke="#b59a70" strokeOpacity={0.7} strokeWidth={2} fill="none" />
+      {selected && <polygon points={rhombus(x, y, 1, 1)} fill="rgba(255,226,92,0.3)" stroke="#ffe25c" strokeWidth={3} />}
     </g>
   );
 }
 
-function Thing({ gridMax, item, selected, faded, popped, combo, onTap, onDragStart }: ThingProps & { faded: boolean; combo: boolean }) {
+function Thing({ item, selected, faded, popped, combo, fence, onTap, onDragStart }: ThingProps & {
+  faded: boolean; combo: boolean;
+  /** Cells of the same fence (for a fence section). */
+  fence?: Set<string>;
+}) {
   const [w, h] = footprint(item);
   const x = item.x ?? 0;
   const y = item.y ?? 0;
   const sprite = spriteOf(item);
-  const front = corner(gridMax, x + w, y + h);
-  const leftC = corner(gridMax, x, y + h);
-  const rightC = corner(gridMax, x + w, y);
-  const backC = corner(gridMax, x, y);
+  const front = corner(x + w, y + h);
+  const leftC = corner(x, y + h);
+  const rightC = corner(x + w, y);
+  const backC = corner(x, y);
   const centerX = (leftC[0] + rightC[0]) / 2;
   const footW = rightC[0] - leftC[0];
   const outline = selected ? (
-    <polygon points={rhombus(gridMax, x, y, w, h)} fill="rgba(255,226,92,0.25)" stroke="#ffe25c" strokeWidth={3} />
+    <polygon points={rhombus(x, y, w, h)} fill="rgba(255,226,92,0.25)" stroke="#ffe25c" strokeWidth={3} />
   ) : null;
   const common = {
     onClick: onTap,
@@ -330,22 +345,63 @@ function Thing({ gridMax, item, selected, faded, popped, combo, onTap, onDragSta
   const sparkle = combo ? (
     <text x={centerX} y={Math.min(backC[1], front[1] - footW * 0.9)} textAnchor="middle" fontSize={22} className="villa-twinkle" pointerEvents="none">✨</text>
   ) : null;
+  /** A picture on this footprint (SPRITE_GROUND says where its own footprint lies). */
+  const place = (key: string, href: string, flip: boolean, clip?: string) => {
+    const [l, r, aspect, raise] = SPRITE_GROUND[key] ?? [0, 1, 1, 0];
+    const spriteW = footW / (r - l);
+    const spriteH = spriteW * aspect;
+    const bottom = front[1] - raise * spriteW;
+    return (
+      <image
+        key={key + (clip ?? "")}
+        href={href}
+        x={leftC[0] - l * spriteW}
+        y={bottom - spriteH}
+        width={spriteW}
+        height={spriteH}
+        preserveAspectRatio="none"
+        clipPath={clip ? `url(#${clip})` : undefined}
+        transform={flip ? `translate(${centerX * 2},0) scale(-1,1)` : undefined}
+      />
+    );
+  };
+  if (sprite && fence && isFence(item.code)) {
+    const piece = (name: string) => artOf(`${item.code}_${name}`);
+    const parts = fencePieces(fence, x, y, Boolean(item.rot));
+    const out: ReactNode[] = [];
+    const clipId = (side: "L" | "R") => `fence-${item.id}-${side}`;
+    if (parts.full === "gate" || parts.full === "gate_b") {
+      const g = piece("gate");
+      if (g) out.push(place(`${item.code}_gate`, g, parts.full === "gate_b"));
+    } else if (parts.full) {
+      const g = piece(parts.full);
+      if (g) out.push(place(`${item.code}_${parts.full}`, g, false));
+    }
+    // s (+y) and w (−x) lie left of the tile's middle, n and e right of it
+    for (const half of parts.halves) {
+      const name = half === "n" || half === "s" ? "a" : "b";
+      const g = piece(name);
+      if (g) out.push(place(`${item.code}_${name}`, g, false, clipId(half === "s" || half === "w" ? "L" : "R")));
+    }
+    const post = parts.post ? piece("post") : undefined;
+    if (post) out.push(place(`${item.code}_post`, post, false));
+    return (
+      <g {...common}>
+        <defs>
+          <clipPath id={clipId("L")}><rect x={centerX - footW} y={backC[1] - footW * 3} width={footW} height={footW * 4} /></clipPath>
+          <clipPath id={clipId("R")}><rect x={centerX} y={backC[1] - footW * 3} width={footW} height={footW * 4} /></clipPath>
+        </defs>
+        {outline}
+        {out}
+        {sparkle}
+      </g>
+    );
+  }
   if (sprite) {
-    const spriteW = footW * (SPRITE_SCALE[item.code] ?? 1);
-    const spriteH = spriteW * 3;
-    const bottom = front[1] + (front[1] - backC[1]) * 0.04;
     return (
       <g {...common}>
         {outline}
-        <image
-          href={sprite}
-          x={centerX - spriteW / 2}
-          y={bottom - spriteH}
-          width={spriteW}
-          height={spriteH}
-          preserveAspectRatio="xMidYMax meet"
-          transform={item.rot ? `translate(${centerX * 2},0) scale(-1,1)` : undefined}
-        />
+        {place(spriteKey(item), sprite, Boolean(item.rot))}
         {sparkle}
       </g>
     );
@@ -360,7 +416,7 @@ function Thing({ gridMax, item, selected, faded, popped, combo, onTap, onDragSta
       {outline}
       <polygon points={`${leftC[0]},${leftC[1]} ${front[0]},${front[1]} ${front[0]},${front[1] - lift} ${leftC[0]},${leftC[1] - lift}`} fill={sideL} />
       <polygon points={`${front[0]},${front[1]} ${rightC[0]},${rightC[1]} ${rightC[0]},${rightC[1] - lift} ${front[0]},${front[1] - lift}`} fill={sideR} />
-      <polygon points={rhombus(gridMax, x, y, w, h, lift)} fill={fill} stroke="rgba(0,0,0,0.12)" />
+      <polygon points={rhombus(x, y, w, h, lift)} fill={fill} stroke="rgba(0,0,0,0.12)" />
       <text x={centerX} y={(backC[1] + front[1]) / 2 - lift + emojiSize * 0.35} textAnchor="middle" fontSize={emojiSize}>
         {item.emoji}
       </text>

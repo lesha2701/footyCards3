@@ -628,7 +628,9 @@ async def get_view(db: AsyncSession, user: User) -> dict:
     rating = rating_of(mp, config) if mp else None
     effects = await effects_of(db, user.id) if mp else {}
     points = points_available(mp, xp, config)
-    training = _training_view(mp, config)
+    from app.services import town_villa_service
+
+    training = _training_view(mp, config, await town_villa_service.training_perk(db, config, user.id) if mp else 0)
     level_seen = mp.level_seen if mp else level
     view = {
         "enabled": config.my_player_enabled,
@@ -748,17 +750,25 @@ def current_streak(mp: MyPlayer, today: date) -> int:
     return mp.training_streak or 0
 
 
-def _training_view(mp: Optional[MyPlayer], config) -> dict:
+def _villa_run_left(mp: Optional[MyPlayer], villa_runs: int, today: date) -> bool:
+    """The villa's pitch gives one more free training today (after the daily one)."""
+    return bool(mp) and villa_runs > 0 and mp.villa_training_day != today
+
+
+def _training_view(mp: Optional[MyPlayer], config, villa_runs: int = 0) -> dict:
     today = local_today()
     free_done = bool(mp and mp.training_day == today)
     credits = mp.extra_training_credits if mp else 0
+    villa_left = _villa_run_left(mp, villa_runs, today)
     bought = _extra_bought_today(mp, today) if mp else 0
     drill = drill_for(mp.position, today) if mp else "shot"
     streak = current_streak(mp, today) if mp else 0
     every = max(1, config.my_player_streak_days)
     return {
         "done_today": free_done,
-        "can_train": bool(mp) and (not free_done or credits > 0),
+        "can_train": bool(mp) and (not free_done or villa_left or credits > 0),
+        # «Моя вилла»: a pitch on the plot gives one more free training a day.
+        "villa_perk": villa_runs > 0, "villa_left": villa_left,
         "extra_credits": credits,
         "extra_bought_today": bought,
         "extra_max": config.my_player_extra_trainings_max,
@@ -1030,12 +1040,20 @@ async def upgrade_skill(db: AsyncSession, user: User) -> dict:
     return await get_view(db, locked)
 
 
+async def _villa_runs(db: AsyncSession, config, user_id: int) -> int:
+    from app.services import town_villa_service
+
+    return await town_villa_service.training_perk(db, config, user_id)
+
+
 async def training_start(db: AsyncSession, user: User, now: Optional[datetime] = None) -> dict:
     config = await get_config(db)
     _require_enabled(config)
     now = now or datetime.now(timezone.utc)
     mp = await _locked_player(db, user.id)
-    if mp.training_day == local_today(now) and mp.extra_training_credits <= 0:
+    if mp.training_day == local_today(now) and mp.extra_training_credits <= 0 and not _villa_run_left(
+        mp, await _villa_runs(db, config, user.id), local_today(now),
+    ):
         raise ConflictError("Тренировка на сегодня уже пройдена — купи дополнительную или приходи завтра")
     mp.training_started_at = now
     await db.commit()
@@ -1070,7 +1088,8 @@ async def training_finish(db: AsyncSession, user: User, hits: int, now: Optional
     locked = await wallet_service.lock_user_for_update(db, user.id)
     mp = await _locked_player(db, user.id)
     free_available = mp.training_day != today
-    if not free_available and mp.extra_training_credits <= 0:
+    villa_run = not free_available and _villa_run_left(mp, await _villa_runs(db, config, user.id), today)
+    if not free_available and not villa_run and mp.extra_training_credits <= 0:
         raise ConflictError("Тренировка на сегодня уже пройдена — купи дополнительную или приходи завтра")
     started = ensure_aware(mp.training_started_at) if mp.training_started_at else None
     if started is None or now - started > TRAINING_TTL:
@@ -1106,6 +1125,8 @@ async def training_finish(db: AsyncSession, user: User, hits: int, now: Optional
                     "tokens": config.my_player_streak_tokens, "skill_code": code,
                     "skill_name": definition.name, "skill_icon": definition.icon, "streak": mp.training_streak,
                 }
+    elif villa_run:
+        mp.villa_training_day = today
     else:
         mp.extra_training_credits -= 1
     mp.training_started_at = None
