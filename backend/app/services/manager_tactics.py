@@ -18,7 +18,7 @@ All of it becomes a % on each player's rating for that one match
 from typing import Optional
 
 from app.services.arena_tactics import BEATS, BEATS_REASON, FORMATION_SHIFT, STYLE_LABELS, STYLES, formation_label
-from app.services.club_formation_service import CLUB_FORMATIONS
+from app.services.club_formation_service import CLUB_FORMATIONS, EXTRA_FORMATIONS
 
 __all__ = [
     "BEATS", "BEATS_REASON", "DEFAULT_FORMATION", "DEFAULT_STYLE", "FORMATIONS", "STYLES", "STYLE_LABELS",
@@ -27,7 +27,8 @@ __all__ = [
 
 DEFAULT_FORMATION = "4-3-3"
 DEFAULT_STYLE = "possession"
-FORMATIONS = tuple(f for f in ("4-3-3", "4-3-3H", "4-2-3-1", "4-4-2", "3-5-2", "5-3-2", "3-4-3") if f in CLUB_FORMATIONS)
+FORMATIONS = tuple(f for f in ("4-3-3", "4-3-3H", "4-2-3-1", "4-4-2", "3-5-2", "5-3-2", "3-4-3", "4-1-4-1", "4-3-1-2")
+                   if f in CLUB_FORMATIONS or f in EXTRA_FORMATIONS)
 ENGINE_MENTALITY = "BALANCED"
 ENGINE_PLAYSTYLE = "CENTRAL_PLAY"
 

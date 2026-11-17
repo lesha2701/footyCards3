@@ -32,7 +32,7 @@ from app.models.manager_club import (
 from app.models.notification import Notification
 from app.models.player import Player
 from app.models.user import User
-from app.services import manager_service, manager_shop, manager_tactics, share_service
+from app.services import manager_finance, manager_service, manager_shop, manager_tactics, share_service
 from app.services.card_creation import create_user_card
 from app.services.game_config_service import get_config
 from tests.factories import create_player, get_user_by_telegram_id
@@ -123,6 +123,8 @@ async def test_found_club_at_the_bottom_with_a_base_budget(client, db_session, b
     club = view["club"]
     assert club["division"] == bottom and club["base"]["marketing"] == 2
     bonus = min(per_level * 5 + sponsor * 2, grant * cap_pct // 100)
+    # The season grant is a little above the division budget (manager_finance «grant_pct»); the bonus cap is of the budget.
+    grant = manager_service._nice(grant * manager_finance.cfg(config)["grant_pct"] / 100)
     assert club["budget"] == grant + bonus == club["next_grant"]["total"]
     assert (await db_session.get(User, a_id)).balance == START - cost
     xi = club["squad"]["xi"]
@@ -290,7 +292,7 @@ async def test_season_wages_auto_signings_digests_and_promotion(client, db_sessi
     target = config.manager_division_rating[bottom - 1]
     rounds, size = manager_service.rounds_of(config), manager_service.league_size(config)
     eur_per_coin, per_day = config.manager_wage_eur_per_coin, len(manager_service.slots_of(config))
-    grant = config.manager_division_budget[bottom - 1]
+    grant = manager_service._nice(config.manager_division_budget[bottom - 1] * manager_finance.cfg(config)["grant_pct"] / 100)
     for position in (Position.GK, Position.CB, Position.CB, Position.LB, Position.RB, Position.CM, Position.CDM, Position.CAM,
                      Position.LW, Position.RW, Position.ST) * 2:
         await create_player(db_session, rating=target, position=position)

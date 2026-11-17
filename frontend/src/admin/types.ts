@@ -531,6 +531,7 @@ export interface GameConfig {
   player_career_chest_coins_max: number;
   player_career_chest_token_pct: number;
   player_career_weekly_goals: number;
+  player_career_weekly_clean_sheets: number;
   player_career_weekly_matches: number;
   player_career_weekly_rating_x10: number;
   player_career_weekly_coins: number[];

@@ -92,7 +92,8 @@ Main features:
   run lazily on reads and from bot sweeps (`/internal/clubs/...`), idempotent via
   unique rows;
 - «Менеджер» (`manager_service.py`, `manager_shop.py`): every user's own club.
-  Squad: his «Мой игрок» and one «Академия» card (both always start), up to
+  Squad: his «Мой игрок» and up to two «Академия» cards (`academy_slots`; the
+  second in `office["academy2"]`; all of them always start), up to
   `manager_max_live` other users' «Мои игроки» on contracts for seasons (sign
   a free agent, or buy / loan from another club — the player and the selling
   club both consent) and catalog footballers bought or loaned (`manager_npc`,
@@ -113,9 +114,18 @@ Main features:
   `GET /manager/moves`, «Трансферы» → «Сделки»). Runs lazily
   and from the bot's manager sweep (`/internal/manager/sweep`). A club whose
   league runs can't trade. Users' wages are coins, capped per season.
-  Tactics (`manager_tactics.py`): a club formation plus one of four styles
+  Tactics (`manager_tactics.py`): a club formation (Card Arena's seven plus
+  the manager-only `EXTRA_FORMATIONS` 4-1-4-1 and 4-3-1-2) plus one of four styles
   in a circle (Card Arena's); the engine runs with neutral settings and the
-  tactics are a transparent % on each line's ratings for the match.
+  tactics are a transparent % on each line's ratings for the match. A league
+  match is the XI plus a bench of `bench_size` (`matchday_bench`): played
+  phase by phase (`_Subs`, `simulate_match_controlled`), starters tire by
+  `tired_pct` from `sub_minutes` and fresher subs of the same line come on
+  (`subs_max`). «Главный тренер» (`manager_coach.py`): a character of twelve
+  rolled at the hiring (`office["coach"]`) runs the match day — formation,
+  style, «Установка на матч», substitutions — unless the president takes the
+  tactics back (`office["coach_auto"]`), and asks for the player the XI lacks
+  («Сегодня в клубе»). The season grant is `grant_pct` % of the division budget.
   «Личный турнир» plays the same layer (`personal_squads.style`, GameConfig
   `ptour_style_edge_pct` / `ptour_formation_effect_pct`, `GET
   /player-tournaments/tactics` shows the next opponent's style); its old
@@ -154,7 +164,15 @@ Main features:
   «Пока тебя не было»; a free week once). Skins of both, cars and office
   rooms (`staff_items`, coins or Stars), gifts of style items to another
   club and the stadium skins (`manager_perks.py`, cosmetics kinds
-  "stands" / "poster") — convenience and style only. Numbers: GameConfig.manager_finance
+  "stands" / "poster") — convenience and style only. «Решения президента»
+  (`manager_budget.py`: the season budget by articles, the hands-on bonus,
+  achievements, the analyst's finance review), the assistant's fine rules and
+  «только советовать» mode, the sporting director (`manager_staff.director`)
+  and staff conflicts (`manager_conflicts.py`, slot CONFLICT_SLOT + round) —
+  see docs/president-office.md; «Сегодня в клубе» tips carry a `target`
+  (`lib/managerFocus.ts`). «Штат» is a round table of ten departments
+  (`manager_staff.ROLES`) with a sheet per seat, «поручения» `staff_orders` and
+  the transport department's fleet (`fleet`). Numbers: GameConfig.manager_finance
   over `manager_finance.DEFAULTS`;
 - «Мой игрок» extras (`my_player_extras.py`): a weekly «Спонсор» (one of
   three brands of `my_player_sponsors`, goals counted by hooks in the

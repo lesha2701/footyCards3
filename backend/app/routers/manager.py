@@ -8,6 +8,8 @@ from app.core.rate_limit import check_rate_limit
 from app.database import get_db
 from app.models.user import User
 from app.schemas.manager import (
+    ManagerBudgetIn,
+    ManagerDirectorBudgetIn,
     ManagerStaffNameIn,
     ManagerStaffHireIn,
     ManagerDealCheckIn,
@@ -33,7 +35,7 @@ from app.schemas.manager import (
     ManagerTicketsIn,
     ManagerStadiumNameIn,
 )
-from app.services import manager_assistant, manager_staff
+from app.services import manager_assistant, manager_budget, manager_staff
 from app.services import manager_cup, manager_events, manager_exchange, manager_finance, manager_news, manager_perks, manager_service, manager_shop, manager_today
 
 router = APIRouter(prefix="/manager", tags=["manager"])
@@ -163,7 +165,7 @@ async def update_club(payload: ManagerClubUpdateIn, db: AsyncSession = Depends(g
     await check_rate_limit(f"manager_club:{user.id}", max_calls=20, window_seconds=60)
     return await manager_service.update_club(
         db, user, payload.name, payload.formation, payload.style, payload.academy_card_id, payload.clear_academy,
-        prospect_starts=payload.prospect_starts,
+        payload.academy_slot, payload.coach_auto, prospect_starts=payload.prospect_starts,
     )
 
 
@@ -441,3 +443,56 @@ async def buy_bond(bond_id: int, payload: ManagerBondBuyIn, db: AsyncSession = D
 async def repay_bond(bond_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     await check_rate_limit(f"manager_exchange:{user.id}", max_calls=30, window_seconds=60)
     return await manager_exchange.repay_bond(db, user, bond_id)
+
+
+@router.post("/assistant/advice/{entry_id}")
+async def assistant_advice(entry_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Do what the assistant advised (mode «только советовать»)."""
+    await check_rate_limit(f"manager_staff:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_assistant.do_advice(db, user, entry_id[:16])
+
+
+@router.get("/staff/director")
+async def staff_director(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """The sporting director's replacements within his budget."""
+    await check_rate_limit(f"manager_director:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_staff.director(db, user)
+
+
+@router.post("/staff/director/budget")
+async def staff_director_budget(payload: ManagerDirectorBudgetIn, db: AsyncSession = Depends(get_db),
+                                user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_director:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_staff.director(db, user, payload.budget)
+
+
+@router.post("/staff/fleet/{kind}/buy")
+async def staff_fleet_buy(kind: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """«Транспортный департамент»: the next bus or plane for club euros."""
+    await check_rate_limit(f"manager_staff:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_staff.buy_fleet(db, user, kind[:16])
+
+
+@router.post("/staff/orders/{role}")
+async def staff_order(role: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """A department's «поручение» of the season."""
+    await check_rate_limit(f"manager_staff:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_staff.order(db, user, role[:16])
+
+
+@router.get("/decisions")
+async def president_decisions(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """«Решения президента»: the season budget, the hands-on meter, achievements, the analyst's finance review."""
+    return await manager_budget.office_view(db, user)
+
+
+@router.put("/budget")
+async def president_budget(payload: ManagerBudgetIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_budget:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_budget.set_plan(db, user, payload.alloc)
+
+
+@router.post("/achievements/{code}/claim")
+async def president_achievement(code: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_budget:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_budget.claim(db, user, code[:32])

@@ -9,8 +9,8 @@ active graduate ("graduate"); older graduates retire to the hall
 ("retired") — partial unique indexes. prospect_duels: async «Ответка» duels
 between friends' prospects. Notification type prospect_event.
 
-Revision ID: 0309
-Revises: 0308
+Revision ID: 0311
+Revises: 0310
 Create Date: 2026-11-10
 """
 from typing import Sequence, Union
@@ -19,8 +19,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0309"
-down_revision: Union[str, None] = "0308"
+revision: str = "0311"
+down_revision: Union[str, None] = "0310"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

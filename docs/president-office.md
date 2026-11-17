@@ -139,3 +139,59 @@ frontend `components/manager/ExchangePanel.tsx` («📈 Биржа» section).
   running or last season) and the capital (budget + deposits and venture +
   shares at the price + bonds held − the loan debt − own bonds sold), top
   `rating_size` and my place.
+
+## Decisions of the president (no migration: `manager_clubs.office` JSON + ledger refs)
+
+- **Season budget** (`manager_budget.py`, `PUT /manager/budget`, `GET /manager/decisions`):
+  in the window the president splits the pot (budget + the coming grant) into
+  articles `budget_articles` (wages / transfers / the club — ledger kinds per
+  article), the rest is the reserve. At season end (`season_end`, after
+  `finance.season_end` in `_settle`) an article overspent by more than
+  `budget_tolerance_pct` costs `budget_fans_penalty` fans each; all within plan
+  → `budget_bonus` of `budget_bonus_pct` of the unspent (cap
+  `budget_bonus_max_pct` of the grant), ref `budget:<key>`.
+- **Hands-on** (`ACTOR` ContextVar, `act()`): each decision is counted as the
+  president's or the assistant's (`office["acts"]`). From `hands_on_min`
+  decisions the season pays `hands_on_fans` and `hands_on_bonus_pct` of the
+  grant × the president's share (ref `hands_on:<key>`).
+- **Achievements** `president_achievements` (goal, `reward_pct` of the
+  grant): claimed once, ledger kind `achievement`, ref `ach:<code>`.
+- **Analyst finance review** (`review`, with «Аналитик» only): income /
+  expense / profit, the top costs, deals' net (`DEAL_LINES`), the budget rows
+  and advice.
+- **Assistant fine rules**: separate `transfer_limit` / `renew_limit` within
+  `limit`, `min_sale`, untouchables `keep` (`npc:<id>` / `live:<contract>`),
+  `mode` "act" | "advise". In "advise" every would-be action is a log line
+  with an `action`; `POST /manager/assistant/advice/{id}` runs it as the
+  president's own decision.
+- **Sporting director** (staff role `director`, `GET /manager/staff/director`,
+  budget `POST /manager/staff/director/budget`): for empty XI places and
+  expiring footballers proposes `staff_effects.director` options from the
+  catalog within his budget.
+- **Staff conflicts** (`manager_conflicts.py`): after `conflict_rounds`, when
+  both roles of a `staff_conflicts` template are hired, an event with slot
+  CONFLICT_SLOT + round.
+- **Tips lead to the action**: every «Сегодня в клубе» item carries a
+  `target`; the frontend (`lib/managerFocus.ts`) opens its tab and sub-section
+  and lights `[data-focus=<target>]`; the home tile links `?go=<tab>:<target>`.
+
+## «Штат»: the round table (migration `0309_manager_staff_departments`)
+
+Ten departments sit around the table with the president at its head (his
+Telegram photo): coach, sporting director, scout, academy director (rating
+points to the academy kids — `academy_pts` on the filler), physio, transport
+(`away_pct` to every line away), stadium director (`stadium_pct` at home),
+press, marketing, finance director (`finance_pts` off the loan rate, half on
+deposits). `staff_slots` by division limits the taken seats. The old
+`driver` became `transport`, the old `agent` became `academy`.
+
+- **Fleet** (`fleet`, office `fleet`): a bus and a plane bought level by level
+  for club euros (`price_pct` of the grant, window only, needs the head of
+  transport), `upkeep_pct` booked at the season start (`fleet_upkeep`, can't
+  pay → sold), `away_pct` / `injury_pct` folded into the snapshot.
+- **Orders** (`staff_orders`, `POST /manager/staff/orders/{role}`): once a
+  season per department (ledger ref `order:<role>:<key>`): fans now, form for
+  the next rounds of the running league, or an injured footballer back.
+- Art drops into `frontend/src/assets/manager/staff/<code>.webp`:
+  `council_table`, `seat_empty` and the fleet codes (`minibus`, `coach_bus`,
+  `liner`, `charter`, `jet`); without a file the UI draws its own.

@@ -538,6 +538,7 @@ class GameConfigOut(BaseModel):
     player_career_chest_coins_max: int = 200
     player_career_chest_token_pct: int = 10
     player_career_weekly_goals: int = 5
+    player_career_weekly_clean_sheets: int = 3
     player_career_weekly_matches: int = 10
     player_career_weekly_rating_x10: int = 70
     player_career_weekly_coins: list[int] = []
@@ -1477,6 +1478,7 @@ class GameConfigUpdate(BaseModel):
     player_career_chest_coins_max: Optional[int] = Field(default=None, ge=0, le=100000)
     player_career_chest_token_pct: Optional[int] = Field(default=None, ge=0, le=100)
     player_career_weekly_goals: Optional[int] = Field(default=None, ge=1, le=200)
+    player_career_weekly_clean_sheets: Optional[int] = Field(default=None, ge=1, le=200)
     player_career_weekly_matches: Optional[int] = Field(default=None, ge=1, le=200)
     player_career_weekly_rating_x10: Optional[int] = Field(default=None, ge=10, le=100)
     player_career_weekly_coins: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)

@@ -37,7 +37,7 @@ export default function TacticsPanel({ style, formation, rules, next, busy, onCh
   const [helpOpen, setHelpOpen] = useState(false);
   const styleLabel = (s: ManagerStyle) => rules.styles.find((x) => x.value === s)?.label ?? s;
   return (
-    <section className="flex flex-col gap-3 rounded-2xl bg-bg-surface p-4" data-testid="tactics">
+    <section className="flex flex-col gap-3 rounded-2xl bg-bg-surface p-4" data-testid="tactics" data-focus="tactics">
       <div className="flex items-center justify-between">
         <h2><SectionTitle art={tacticsArt}>Тактика</SectionTitle></h2>
         <button onClick={() => setHelpOpen(!helpOpen)} className="text-micro text-ink-mist underline">Как считается матч?</button>

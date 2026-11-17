@@ -79,7 +79,9 @@ from app.models.player import Player
 from app.models.user import User
 from app.services import club_base_service, my_player_service, player_career_clubs as pcc, prospect_service, tournament_match_engine
 from app.services import manager_staff as staff
-from app.services import manager_assistant as assistant, manager_press as press
+from app.services import manager_assistant as assistant, manager_conflicts as conflicts, manager_press as press
+from app.services import manager_budget
+from app.services import manager_coach as coach
 from app.services import manager_cup as cup, manager_events as events, manager_perks as perks, manager_exchange as exchange, manager_finance as finance, manager_tactics as tactics, trade_guard_service, wallet_service
 from app.services.manager_tactics import DEFAULT_FORMATION
 from app.services.career_service import standings
@@ -368,10 +370,12 @@ async def base_snapshot(db: AsyncSession, owner_id: int, config) -> dict:
 
 
 def season_grant(division: int, snap: dict, config) -> dict:
-    grant = _pick(config.manager_division_budget, division - 1, 2_000_000)
-    raw = config.manager_budget_per_base_level * snap["level"] + config.manager_sponsor_eur_per_level * snap["marketing"] \
+    base = _pick(config.manager_division_budget, division - 1, 2_000_000)
+    # Above the division budget: the XI and most of a matchday bench (bench_size) in the first season.
+    grant = _nice(base * int(finance.cfg(config)["grant_pct"]) / 100)
+    raw =config.manager_budget_per_base_level * snap["level"] + config.manager_sponsor_eur_per_level * snap["marketing"] \
         + config.manager_merch_eur_per_level * snap["shop"]
-    bonus = min(raw, grant * config.manager_base_bonus_cap_pct // 100)
+    bonus = min(raw, base * config.manager_base_bonus_cap_pct // 100)
     return {"grant": grant, "bonus": bonus, "bonus_raw": raw, "total": grant + bonus}
 
 
@@ -485,15 +489,23 @@ async def _npc_persons(db: AsyncSession, club_id: int) -> set[str]:
     return {person_key(p) for p in players}
 
 
-async def _academy_card(db: AsyncSession, club: ManagerClub) -> Optional[UserCard]:
-    if not club.academy_card_id:
-        return None
-    card = (await db.execute(
-        select(UserCard).options(selectinload(UserCard.player)).where(UserCard.id == club.academy_card_id)
-    )).scalar_one_or_none()
-    if card is None or card.owner_id != club.owner_id or card.player is None or card.player.path_talent_code is None:
-        return None
-    return card
+def academy_ids(club: ManagerClub, config) -> list[Optional[int]]:
+    """The «Академия» cards chosen for the slots: the first in the club row,
+    the second in the office JSON (`office["academy2"]`)."""
+    slots = max(1, int(finance.cfg(config)["academy_slots"]))
+    ids = [club.academy_card_id, staff.office(club).get("academy2")]
+    return [int(i) if i else None for i in ids[:slots]]
+
+
+async def _academy_cards(db: AsyncSession, club: ManagerClub, config) -> list[UserCard]:
+    ids = [i for i in dict.fromkeys(academy_ids(club, config)) if i]
+    if not ids:
+        return []
+    cards = {c.id: c for c in (await db.execute(
+        select(UserCard).options(selectinload(UserCard.player)).where(UserCard.id.in_(ids))
+    )).scalars().all()}
+    return [c for c in (cards.get(i) for i in ids)
+            if c is not None and c.owner_id == club.owner_id and c.player is not None and c.player.path_talent_code is not None]
 
 
 async def academy_options(db: AsyncSession, owner_id: int) -> list[UserCard]:
@@ -538,8 +550,7 @@ async def build_pool(db: AsyncSession, club: ManagerClub, config) -> tuple[list[
                             "name": card.player.display_name, "position": card.player.position.value, "rating": card.player.rating,
                             **looks(club.owner_id)})
             cards[f"own:{club.owner_id}"] = card
-    academy = await _academy_card(db, club)
-    if academy is not None:
+    for academy in await _academy_cards(db, club, config):
         engine = _engine_card(academy, config)
         entries.append({"key": f"academy:{academy.id}", "kind": "academy", "ref": academy.id, "name": engine.player.display_name,
                         "position": engine.player.position.value, "rating": engine.player.rating,
@@ -618,6 +629,20 @@ def pick_xi(entries: list[dict], club_name: str, filler_rating: int, formation: 
     return [taken[s.code] for s in slots], bench
 
 
+def matchday_bench(bench: list[dict], size: int) -> list[dict]:
+    """The substitutes of a match: the best of each line first (a keeper, a
+    defender, …), then the strongest of the rest; the others are not in the
+    matchday squad."""
+    ranked = sorted(bench, key=lambda e: (-e["rating"], e.get("key", "")))
+    picked: list[dict] = []
+    for line in ("GK", "DEF", "MID", "FWD"):
+        best = next((e for e in ranked if _category(Position(e["position"])) == line), None)
+        if best is not None:
+            picked.append(best)
+    picked += [e for e in ranked if e not in picked]
+    return picked[:max(0, size)]
+
+
 def _avg(xi: list[dict]) -> int:
     return round(sum(p["rating"] for p in xi) / len(xi)) if xi else 50
 
@@ -635,8 +660,14 @@ async def squad_view(db: AsyncSession, club: ManagerClub, config) -> dict:
             p["value"] = live_value(p["rating"], contracts.get(p["ref"]), config)  # form at the club counts
         elif p["kind"] != "kid":
             p["value"] = value_of(p["rating"], config)
+    fc = finance.cfg(config)
+    size = int(fc["bench_size"])
+    subs = matchday_bench(bench, size)
+    # The matchday substitutes first, then the ones left out of the squad.
+    bench = [*({**p, "sub": True} for p in subs), *(p for p in bench if p not in subs)]
     return {"xi": xi, "bench": bench, "rating": _avg(xi), "kids": sum(1 for p in xi if p["kind"] == "kid"),
-            "formation": tactics.clean_formation(club.formation)}
+            "formation": tactics.clean_formation(club.formation), "bench_size": size,
+            "subs_max": int(fc["subs_max"]), "sub_from": int((fc["sub_minutes"] or [60])[0])}
 
 
 # What a frozen season roster keeps of an entry (no pictures, no engine cards).
@@ -657,14 +688,19 @@ def _engine_for(entry: dict, cards: dict, index: int, i: int, club_name: str, li
     return _EngineCard(id=-(500_000 + index * 100 + i + 1), player_id=entry.get("player_id") or 0, player=player)
 
 
-def _side_from(xi: list[dict], cards: dict, index: int, club_name: str, formation: str, mods: dict, config):
+def _side_from(xi: list[dict], cards: dict, index: int, club_name: str, formation: str, mods: dict, config,
+               tired: int = 0, fresh: frozenset = frozenset()):
     """Engine side with the neutral engine tactics; the club's own tactics
-    are already in the ratings (`mods`, manager_tactics.modifiers)."""
+    are already in the ratings (`mods`, manager_tactics.modifiers). `tired`
+    % comes off everyone but the `fresh` (substitutes' keys); a substitute
+    keeps his own engine id (`_n`)."""
     slots = {s.code: s for s in get_formation_slots(tactics.clean_formation(formation))}
-    with_slots = [
-        (_engine_for(p, cards, index, i, club_name, slots[p["slot"]].category, mods, config), slots[p["slot"]])
-        for i, p in enumerate(xi)
-    ]
+    with_slots = []
+    for i, p in enumerate(xi):
+        card = _engine_for(p, cards, index, p.get("_n", i), club_name, slots[p["slot"]].category, mods, config)
+        if tired and p.get("key") not in fresh:
+            card.player.rating = max(1, card.player.rating * (100 - tired) // 100)
+        with_slots.append((card, slots[p["slot"]]))
     side = build_side(with_slots, tactics.ENGINE_MENTALITY, tactics.ENGINE_PLAYSTYLE)
     lineup = [
         {"club_card_id": c.id, "player_id": c.player_id, "name": c.player.display_name, "rating": c.player.rating,
@@ -673,6 +709,88 @@ def _side_from(xi: list[dict], cards: dict, index: int, club_name: str, formatio
         for c, slot in with_slots
     ]
     return side, lineup
+
+
+class _Subs(tournament_match_engine.MatchController):
+    """A league match phase by phase: from each of `sub_minutes` the starters
+    are `tired_pct` % down, and each side's coach brings on the bench player
+    who beats a tired starter of his line by the most (one a window, at most
+    `subs_max`)."""
+
+    def __init__(self, specs: dict, config):
+        fc = finance.cfg(config)
+        self.specs, self.config = specs, config
+        self.minutes = [int(m) for m in fc["sub_minutes"]]
+        self.tired = [int(t) for t in fc["tired_pct"]] or [0]
+        # A coach's character moves his windows and adds substitutions (manager_coach.sub_rules).
+        self.windows = {k: sorted(int(m) for m in (sp.get("minutes") or self.minutes)) for k, sp in specs.items()}
+        self.max = {k: int(sp["subs_max"]) if sp.get("subs_max") is not None else int(fc["subs_max"]) for k, sp in specs.items()}
+        self.next = {k: 0 for k in specs}
+        self.step = -1
+        self.on = {k: [dict(p) for p in sp["xi"]] for k, sp in specs.items()}
+        self.bench = {k: [{**dict(p), "_n": 11 + j} for j, p in enumerate(sp.get("bench") or [])] for k, sp in specs.items()}
+        self.fresh: dict[str, set] = {k: set() for k in specs}
+        self.subs: list[dict] = []
+        self.built = {k: self._build(k) for k in specs}
+        self.first = {k: list(self.built[k][1]) for k in specs}
+
+    def _tired(self) -> int:
+        return 0 if self.step < 0 else self.tired[min(self.step, len(self.tired) - 1)]
+
+    def _build(self, k: str):
+        sp = self.specs[k]
+        return _side_from(self.on[k], sp["cards"], sp["index"], sp["name"], sp["formation"], sp["mods"], self.config,
+                          tired=self._tired(), fresh=frozenset(self.fresh[k]))
+
+    def _sub(self, k: str, minute: int) -> list[dict]:
+        if sum(1 for x in self.subs if x["side"] == k) >= self.max[k] or not self.bench[k]:
+            return []
+        keep = (100 - self._tired()) / 100
+        best = None
+        for i, p in enumerate(self.on[k]):
+            if p.get("key") in self.fresh[k]:
+                continue
+            line = _category(Position(p["position"]))
+            for b in self.bench[k]:
+                gain = b["rating"] - p["rating"] * keep
+                if _category(Position(b["position"])) == line and gain > 0 and (best is None or gain > best[0]):
+                    best = (gain, i, b)
+        if best is None:
+            return []
+        _gain, i, b = best
+        out = self.on[k][i]
+        self.bench[k].remove(b)
+        self.on[k][i] = {**b, "slot": out["slot"]}
+        self.fresh[k].add(b.get("key"))
+        self.subs.append({"side": k, "minute": minute, "in": b["name"], "out": out["name"]})
+        return [{"minute": minute, "event_type": "substitution", "team": k,
+                 "payload": {"in": b["name"], "out": out["name"]}, "description": f"🔄 {b['name']} вместо {out['name']}"}]
+
+    def before_phase(self, minute: int, score_a: int, score_b: int) -> tuple:
+        events: list[dict] = []
+        moved = False
+        while self.step + 1 < len(self.minutes) and minute >= self.minutes[self.step + 1]:
+            self.step += 1
+            moved = True
+        for k in self.specs:
+            windows = self.windows[k]
+            while self.next[k] < len(windows) and minute >= windows[self.next[k]]:
+                self.next[k] += 1
+                made = self._sub(k, minute)
+                events += made
+                moved = moved or bool(made)
+        if moved:
+            self.built = {k: self._build(k) for k in self.specs}
+        (sa, la), (sb, lb) = self.built["a"], self.built["b"]
+        return sa, sb, la, lb, events
+
+    def played(self, k: str) -> list[tuple[dict, dict]]:
+        """(entry, engine lineup card) of everyone who played: the starters,
+        then the substitutes who came on."""
+        pairs = list(zip(self.specs[k]["xi"], self.first[k]))
+        final = self._build(k)[1]
+        pairs += [(p, card) for p, card in zip(self.on[k], final) if p.get("key") in self.fresh[k]]
+        return pairs
 
 
 # --- club ------------------------------------------------------------------------------
@@ -716,10 +834,11 @@ async def found_club(db: AsyncSession, user: User, name: str, now: Optional[date
 
 async def update_club(
     db: AsyncSession, user: User, name: Optional[str], formation: Optional[str], style: Optional[str],
-    academy_card_id: Optional[int] = None, clear_academy: bool = False, prospect_starts: Optional[bool] = None,
+    academy_card_id: Optional[int] = None, clear_academy: bool = False, academy_slot: int = 1,
+    coach_auto: Optional[bool] = None, prospect_starts: Optional[bool] = None,
 ) -> dict:
-    """Name, tactics (any time — also during a season), the academy card and
-    «the prospect always starts» (only between seasons)."""
+    """Name, tactics (any time — also during a season), the academy cards
+    of the slots and «the prospect always starts» (only between seasons)."""
     club = await _owned_club(db, user.id, lock=True)
     if club is None:
         raise NotFoundError("У тебя нет клуба")
@@ -733,17 +852,36 @@ async def update_club(
         if style not in tactics.STYLES:
             raise ConflictError("Неизвестный стиль")
         club.style = style
+    if coach_auto is not None and not (academy_card_id is not None or clear_academy):
+        data = staff.office(club)
+        data["coach_auto"] = bool(coach_auto)
+        staff.save(club, data)
     if academy_card_id is not None or clear_academy:
+        config = await get_config(db)
+        ids = academy_ids(club, config)
+        if not 1 <= academy_slot <= len(ids):
+            raise ConflictError(f"Игроков академии в составе — не больше {len(ids)}")
         await _ensure_window(db, club)
         if clear_academy:
-            club.academy_card_id = None
+            ids[academy_slot - 1] = None
         else:
             card = (await db.execute(
                 select(UserCard).options(selectinload(UserCard.player)).where(UserCard.id == academy_card_id)
             )).scalar_one_or_none()
             if card is None or card.owner_id != user.id or card.player is None or card.player.path_talent_code is None:
                 raise ConflictError("Это не карточка твоей «Академии»")
-            club.academy_card_id = card.id
+            # The same card in the other slot moves here.
+            ids = [None if i == card.id else i for i in ids]
+            ids[academy_slot - 1] = card.id
+        club.academy_card_id = ids[0]
+        data = staff.office(club)
+        if coach_auto is not None:
+            data["coach_auto"] = bool(coach_auto)
+        if len(ids) > 1 and ids[1]:
+            data["academy2"] = ids[1]
+        else:
+            data.pop("academy2", None)
+        staff.save(club, data)
     if prospect_starts is not None:
         await _ensure_window(db, club)
         club.prospect_starts = bool(prospect_starts)
@@ -924,6 +1062,7 @@ async def renew_offer(db: AsyncSession, user: User, contract_id: int, wage: int,
         f"{wage} монет за сезон, {seasons} сез. (сейчас {contract.wage} монет, осталось {contract.seasons_left} сез.)",
         related_object_type=RELATED, related_object_id=club.id,
     )
+    manager_budget.act(club, await finance.upcoming_key(db, datetime.now(timezone.utc)))
     await db.commit()
     return await get_view(db, user)
 
@@ -1393,6 +1532,7 @@ async def sign_npc(db: AsyncSession, user: User, player_id: int, kind: str, seas
     except IntegrityError:
         raise ConflictError("Его только что забрал другой клуб")
     await _move(db, club, "in", kind, _npc_who(player), datetime.now(timezone.utc), fee=fee)
+    manager_budget.act(club, await finance.upcoming_key(db, datetime.now(timezone.utc)))
     await db.commit()
     return await get_view(db, user)
 
@@ -1435,6 +1575,7 @@ async def extend_npc(db: AsyncSession, user: User, npc_id: int, seasons: int = 1
     npc.seasons_left = seasons
     npc.auto = False
     await _move(db, club, "in", "extend", _npc_who(player), now, fee=fee)
+    manager_budget.act(club, await finance.upcoming_key(db, now))
     await db.commit()
     return await get_view(db, user)
 
@@ -1859,10 +2000,21 @@ async def _play_round(db: AsyncSession, league: ManagerLeague, round_index: int,
             for e in roster:
                 if e.get("key") in live:
                     e["rating"] = live[e["key"]].player.rating
-            xi, _bench = pick_xi(roster, club.name, t.get("filler", 50), club.formation)
+            filler = t.get("filler", 50) + int((t.get("base") or {}).get("academy_pts", 0))
+            # «Главный тренер» with a character runs the match day (unless the president took the tactics back).
+            boss = await coach.coach_of(db, club)
+            trait = boss["trait"] if boss else None
+            formation = tactics.clean_formation(club.formation)
+            if boss and boss["auto"]:
+                formation = coach.formation_for(trait, roster, formation, tactics.FORMATIONS,
+                                                lambda f, r=roster, n=club.name, fl=filler: _avg(pick_xi(r, n, fl, f)[0]))
+            xi, bench = pick_xi(roster, club.name, filler, formation)
             t["xi"] = xi
-            plan[t["index"]] = {"xi": xi, "cards": live, "formation": tactics.clean_formation(club.formation),
-                                "style": tactics.clean_style(club.style), "name": club.name}
+            fc = finance.cfg(config)
+            minutes, subs_max = coach.sub_rules(trait, [int(m) for m in fc["sub_minutes"]], int(fc["subs_max"]))
+            plan[t["index"]] = {"xi": xi, "bench": matchday_bench(bench, int(fc["bench_size"])), "cards": live,
+                                "formation": formation, "style": tactics.clean_style(club.style), "name": club.name,
+                                "trait": trait if boss and boss["auto"] else None, "minutes": minutes, "subs_max": subs_max}
         else:
             plan[t["index"]] = {"xi": [{**p, "kind": "bot"} for p in t["players"]], "cards": {},
                                 "formation": t.get("formation") or DEFAULT_FORMATION,
@@ -1870,31 +2022,35 @@ async def _play_round(db: AsyncSession, league: ManagerLeague, round_index: int,
     rng = random.Random(league.id * 7919 + round_index)
     results = []
     for home, away in state["fixtures"][round_index]:
-        sides = {}
+        specs = {}
         for idx, opp in ((home, away), (away, home)):
-            p = plan[idx]
+            p = dict(plan[idx])
+            if p.get("trait"):  # the coach's style for this opponent
+                p["style"] = coach.style_for(p["trait"], p["style"], plan[opp]["style"])
             mods = tactics.modifiers(p["style"], p["formation"], plan[opp]["style"], config)
             mods = finance.fatigue_mods(mods, teams[idx].get("finance") or {}, round_index)  # a preseason tour's tired legs
             if teams[idx]["club_id"]:  # «Установка на матч» and the events' form
                 mods = events.match_mods(mods, clubs[teams[idx]["club_id"]], league.id, round_index, config)
-                mods = staff.coach_mods(mods, teams[idx].get("base") or {})  # the staff's head coach
+                mods = staff.coach_mods(mods, teams[idx].get("base") or {}, idx == home)  # head coach, stadium / transport
             if idx == home and teams[idx]["club_id"]:
                 mods = finance.support_mods(mods, teams[idx].get("finance") or {}, config)  # the home crowd (ticket price)
-            sides[idx] = _side_from(p["xi"], p["cards"], idx, p["name"], p["formation"], mods, config)
-        match = tournament_match_engine.simulate_match(
-            sides[home][0], sides[away][0], sides[home][1], sides[away][1], config, teams[home]["name"], teams[away]["name"],
-        )
+            specs["a" if idx == home else "b"] = {**p, "index": idx, "mods": mods}
+        subs = _Subs(specs, config)
+        match = tournament_match_engine.simulate_match_controlled(subs, config, teams[home]["name"], teams[away]["name"])
+        played = {k: subs.played(k) for k in ("a", "b")}
         results.append({
             "home": home, "away": away, "hs": match.score_a, "as": match.score_b,
-            "goals": _goal_events(match, {"a": sides[home][1], "b": sides[away][1]}),
-            "styles": [plan[home]["style"], plan[away]["style"]],
-            "formations": [plan[home]["formation"], plan[away]["formation"]],
+            "goals": _goal_events(match, {k: [card for _p, card in played[k]] for k in played}),
+            "subs": [{"team": home if x["side"] == "a" else away, "minute": x["minute"], "in": x["in"], "out": x["out"]}
+                     for x in subs.subs],
+            "styles": [specs["a"]["style"], specs["b"]["style"]],
+            "formations": [specs["a"]["formation"], specs["b"]["formation"]],
         })
         for idx, side in ((home, "a"), (away, "b")):
             t = teams[idx]
             if not t["club_id"]:
                 continue
-            await _settle_match(db, clubs[t["club_id"]], t, sides[idx][1], match, side, idx == home, league.division,
+            await _settle_match(db, clubs[t["club_id"]], t, played[side], match, side, idx == home, league.division,
                                 at, rng, config, state, _match_rating, cups, league.season_key)
             await _injury(db, clubs[t["club_id"]], t, plan[idx]["xi"], league, round_index, state, config,
                           events.injury_factor(clubs[t["club_id"]], league.id, round_index, config))
@@ -1910,6 +2066,8 @@ async def _play_round(db: AsyncSession, league: ManagerLeague, round_index: int,
     for club in clubs.values():
         await events.after_round(db, club, league, config)  # «События клуба» after the set rounds
         await press.after_round(db, club, league, config)  # «Пресс-конференция»
+        await conflicts.after_round(db, club, league, config)  # «Конфликты в штабе»
+        await _coach_after_round(db, club, league, config)  # «Главный тренер»: the next «Установка на матч»
         await assistant.after_round(db, club, league, config)  # «Помощник»: the next plan, answers left open
     if league.rounds_played >= len(state["fixtures"]):
         await _finish(db, league, config)
@@ -1978,7 +2136,7 @@ async def _settle_match(db, club, team, lineup, match, side, home, division, at,
     # The match income (unless the TV rights were sold), tour fans' tickets, the sponsor's win bonus.
     await finance.match_money(db, club, team.get("finance") or {}, key, own > opp, home, division,
                               income * _pct(config.manager_division_income_pct, division) // 100, config)
-    for p, line_card in zip(team["xi"], lineup):
+    for p, line_card in lineup:  # (entry, engine card) of everyone who played (_Subs.played)
         card_id = line_card["club_card_id"]
         goals = sum(1 for e in match.event_log if e.get("event_type") == "goal" and e.get("team") == side
                     and (e.get("payload") or {}).get("shooter_id") == card_id)
@@ -2169,6 +2327,7 @@ async def _settle(db: AsyncSession, key: str, config) -> None:
     for club in clubs.values():
         # Sponsors' season results, deposits, the venture fund («Кабинет президента»).
         await finance.season_end(db, club, key, rank[club.id][0] if club.id in rank else None, club.id in relegated, config)
+        await manager_budget.season_end(db, club, key, config)  # the budget plan and the hands-on bonus
     season.depth = depth
     season.settled_at = now
 
@@ -2246,13 +2405,56 @@ async def next_match(db: AsyncSession, league: ManagerLeague, club: ManagerClub,
     else:
         style, formation = tactics.clean_style(other.get("style")), other.get("formation") or DEFAULT_FORMATION
     my_style = tactics.clean_style(club.style)
+    boss = await coach.coach_of(db, club)
+    if boss and boss["auto"]:
+        my_style = coach.style_for(boss["trait"], my_style, style)
     schedule = state.get("schedule") or []
     return {
         "opponent": other["name"], "owner_name": other.get("owner_name"), "rating": other.get("rating"),
         "home": pair[0] == mine["index"], "at": schedule[league.rounds_played] if league.rounds_played < len(schedule) else None,
         "style": style, "formation": formation, "edge": tactics.edge(my_style, style),
         "mods": tactics.modifiers(my_style, club.formation, style, config),
+        "my_style": my_style, "by_coach": bool(boss and boss["auto"]),
     }
+
+
+async def _coach_view(db: AsyncSession, club: ManagerClub, squad: dict) -> Optional[dict]:
+    """The head coach for the club page: his character and what he asks for."""
+    boss = await coach.coach_of(db, club)
+    if boss is None:
+        return None
+    ask = coach.request(boss["trait"], squad["xi"], lambda p: _category(Position(p["position"])))
+    return {**coach.out(boss), "ask": ask}
+
+
+async def _coach_after_round(db: AsyncSession, club: ManagerClub, league: ManagerLeague, config) -> None:
+    """The head coach sets the «Установка на матч» of the next round by his
+    character (inside the round, no commit). His choice — a plan or none —
+    is marked `by: coach`, and «Помощник» leaves it."""
+    from app.services import manager_assistant as assistant
+
+    boss = await coach.coach_of(db, club)
+    state = league.state or {}
+    nxt = league.rounds_played
+    if not boss or not boss["auto"] or nxt >= len(state.get("fixtures") or []):
+        return
+    current = club.match_plan or {}
+    if current.get("league_id") == league.id and current.get("round") == nxt:
+        return  # the president (or the coach) already chose
+    teams = state.get("teams") or []
+    mine = next((t for t in teams if t.get("club_id") == club.id), None)
+    pair = next(((h, a) for h, a in state["fixtures"][nxt] if mine and mine["index"] in (h, a)), None)
+    if mine is None or pair is None:
+        return
+    other = teams[pair[1] if pair[0] == mine["index"] else pair[0]]
+    code, why = coach.plan_for(boss["trait"], int(mine.get("rating") or 0), int(other.get("rating") or 0),
+                               {p["code"] for p in events.plans(config)})
+    club.match_plan = {"league_id": league.id, "round": nxt, "code": code, "by": "coach"}
+    flag_modified(club, "match_plan")
+    plan = events._plan(code, config) if code else None
+    text = (f"Установка на «{other['name']}»: {plan['name']} — {why}" if plan
+            else f"На «{other['name']}» без особой установки — {why}" if why else f"На «{other['name']}» играем от схемы")
+    assistant.log(club, "🧢", f"{boss['person']} ({boss['title']}): {text}", config)
 
 
 def zone_of(place: int, division: int, depth: int, config) -> Optional[str]:
@@ -2285,6 +2487,8 @@ def _league_out(league: ManagerLeague, my_club_ids: set[int], depth: int, config
                 "live": bool(teams[h]["club_id"] and teams[a]["club_id"]),
                 **({"hs": m["hs"], "away_score": m["as"],
                     "goals": [{**g, "home": g["team"] == "a"} for g in m.get("goals") or []],
+                    "subs": [{"minute": x["minute"], "in": x["in"], "out": x["out"], "home": x["team"] == h}
+                             for x in m.get("subs") or []],
                     "styles": m.get("styles"), "formations": m.get("formations")} if m else {}),
             })
         rounds.append({"index": r, "at": schedule[r] if r < len(schedule) else None, "matches": matches})
@@ -2445,6 +2649,9 @@ async def get_view(db: AsyncSession, user: User, now: Optional[datetime] = None)
             "live_count": sum(1 for c in club_contracts if c.status in ("active", "offered") and c.user_id != club.owner_id and c.kind != RENEW),
             "academy_card_id": club.academy_card_id,
             "prospect_starts": bool(club.prospect_starts),
+            # Every slot, chosen card or None (the first one is academy_card_id).
+            "academy_card_ids": academy_ids(club, config),
+            "coach": await _coach_view(db, club, squad),
             "kit_sponsor": await _kit_sponsor(db, club, now),
             "academy_options": [
                 {"card_id": c.id, "name": c.player.display_name, "position": c.player.position.value, "rating": _card_rating(c, config)}

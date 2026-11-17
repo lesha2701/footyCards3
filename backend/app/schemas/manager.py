@@ -14,6 +14,10 @@ class ManagerClubUpdateIn(BaseModel):
     academy_card_id: Optional[int] = None
     clear_academy: bool = False
     prospect_starts: Optional[bool] = None
+    # Which «Академия» slot academy_card_id / clear_academy is for (1 or 2).
+    academy_slot: int = Field(default=1, ge=1, le=4)
+    # The head coach sets the tactics (True) or the president himself (False).
+    coach_auto: Optional[bool] = None
 
 
 class ManagerOfferIn(BaseModel):
@@ -137,6 +141,19 @@ class ManagerAssistantRulesIn(BaseModel):
     decline_below_pct: Optional[int] = Field(default=None, ge=0, le=300)
     events: Optional[Literal["safe", "balanced", "bold", "off"]] = None
     plan: Optional[Literal["auto", "normal", "off"]] = None
+    transfer_limit: Optional[int] = Field(default=None, ge=0)
+    renew_limit: Optional[int] = Field(default=None, ge=0)
+    min_sale: Optional[int] = Field(default=None, ge=0)
+    keep: Optional[list[str]] = Field(default=None, max_length=20)
+    mode: Optional[Literal["act", "advise"]] = None
+
+
+class ManagerBudgetIn(BaseModel):
+    alloc: dict[str, int] = Field(default_factory=dict, max_length=10)
+
+
+class ManagerDirectorBudgetIn(BaseModel):
+    budget: int = Field(ge=0)
 
 
 class ManagerDealCheckIn(BaseModel):

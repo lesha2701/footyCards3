@@ -9,6 +9,7 @@ import {
 import { CarArt } from "@/components/manager/OfficeScene";
 import StaffPortrait from "@/components/manager/StaffPortrait";
 import { useOfficeStaff } from "@/components/manager/useOfficeStaff";
+import { goTo } from "@/lib/managerFocus";
 import { eur } from "@/lib/managerMoney";
 
 function at(iso: string | null | undefined): string {
@@ -99,17 +100,16 @@ export function Diary({ onTab }: { onTab: (t: ManagerTodayTab) => void }) {
   const { data } = useQuery({ queryKey: ["manager", "summary"], queryFn: fetchManagerSummary, staleTime: 60_000 });
   const { assistant } = useOfficeStaff();
   if (!data?.club) return null;
-  const rows: { icon: string; title: string; when?: string; tab?: ManagerTodayTab; hot?: boolean }[] = [];
+  const rows: { icon: string; title: string; when?: string; tab?: ManagerTodayTab; target?: string; hot?: boolean }[] = [];
   const s = data.season;
-  if (s.transfers_open) rows.push({ icon: "🔁", title: "Закрытие трансферного окна", when: at(s.preseason_ends_at), tab: "transfers", hot: true });
+  // The window's countdown is the hero's light and the tips are «Сегодня в клубе»: the diary is only the schedule.
   const nm = data.club.next_match;
-  if (nm) rows.push({ icon: "⚽", title: `${nm.home ? "Дома" : "В гостях"}: «${nm.opponent}»`, when: at(nm.at), tab: "club" });
+  if (nm) rows.push({ icon: "⚽", title: `${nm.home ? "Дома" : "В гостях"}: «${nm.opponent}»`, when: at(nm.at), tab: "club", target: "tactics" });
   else rows.push({ icon: "🏁", title: data.league?.status === "active" ? "Первый тур нового сезона" : "Твой первый тур в лиге", when: at(s.first_round_at), tab: "league" });
   if (!s.transfers_open) rows.push({ icon: "🔓", title: "Трансферное окно откроется после последнего тура сезона" });
   const played = data.league?.status === "active" ? data.league.rounds_played : 0;
   const press = (assistant?.press_rounds ?? []).find((r) => r > played);
   if (press && data.league?.status === "active") rows.push({ icon: "🎙", title: `Пресс-конференция после ${press}-го тура`, when: `через ${press - played} тур.` });
-  for (const t of data.today.slice(0, 3)) rows.push({ icon: t.icon, title: t.text, tab: t.tab, hot: t.urgent });
   if (rows.length === 0) return null;
   return (
     <section className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4" data-testid="diary">
@@ -117,7 +117,7 @@ export function Diary({ onTab }: { onTab: (t: ManagerTodayTab) => void }) {
       <ol className="relative flex flex-col gap-1.5 before:absolute before:bottom-2 before:left-[13px] before:top-2 before:w-px before:bg-white/10">
         {rows.map((r, i) => (
           <li key={`${r.title}-${i}`}>
-            <button disabled={!r.tab} onClick={() => r.tab && onTab(r.tab)} className="relative flex w-full items-center gap-2.5 rounded-xl py-1 pr-1 text-left">
+            <button disabled={!r.tab} onClick={() => { if (r.tab) { onTab(r.tab); goTo(r.target); } }} className="relative flex w-full items-center gap-2.5 rounded-xl py-1 pr-1 text-left">
               <span className={`z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm ${r.hot ? "bg-amber-400/25 ring-1 ring-amber-300/60" : "bg-bg-raised"}`}>{r.icon}</span>
               <span className="min-w-0 flex-1 text-xs text-ink-chalk">{r.title}</span>
               {r.when && <span className="shrink-0 text-[10px] font-semibold text-ink-mist">{r.when}</span>}

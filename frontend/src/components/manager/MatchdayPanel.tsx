@@ -63,7 +63,7 @@ export default function MatchdayPanel({ office, onDone, onError, busy, onInsure 
           «Медцентр» ур. {ins.medical} его снижает): пропустит {ins.rounds[0]}–{ins.rounds[1]} тура, лечение — {ins.treatment_pct}% его стоимости.
         </p>
         {office.injuries.length > 0 && (
-          <ul className="mt-2 flex flex-col gap-1">
+          <ul data-focus="injuries" className="mt-2 flex flex-col gap-1">
             {office.injuries.map((i, n) => (
               <li key={n} className="flex justify-between rounded-lg bg-red-400/10 px-2.5 py-1.5 text-caption">
                 <span className="text-ink-chalk">🤕 {i.name}</span>

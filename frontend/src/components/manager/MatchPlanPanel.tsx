@@ -39,13 +39,14 @@ export default function MatchPlanPanel({ onError }: { onError: (e: unknown) => v
   const last = data.recent.find((e) => e.status === "chosen");
   return (
     <>
-      {data.events.map((e) => (
-        <section key={e.id} data-testid={e.press ? "press-conference" : "club-event"}
+      {data.events.map((e, i) => (
+        <section key={e.id} data-testid={e.press ? "press-conference" : e.conflict ? "staff-conflict" : "club-event"} data-focus={i === 0 ? "events" : undefined}
           className={`flex flex-col gap-2.5 rounded-2xl p-4 ring-1 ${e.press
             ? "bg-gradient-to-br from-sky-500/25 via-bg-surface to-bg-surface ring-sky-300/40"
+            : e.conflict ? "bg-gradient-to-br from-amber-500/25 via-bg-surface to-bg-surface ring-amber-300/40"
             : "bg-gradient-to-br from-fuchsia-500/25 via-bg-surface to-bg-surface ring-fuchsia-400/40"}`}>
-          <p className={`text-micro font-bold uppercase tracking-[0.18em] ${e.press ? "text-sky-200" : "text-fuchsia-200"}`}>
-            {e.press ? "🎙 Пресс-конференция · микрофоны включены" : "Событие клуба"}
+          <p className={`text-micro font-bold uppercase tracking-[0.18em] ${e.press ? "text-sky-200" : e.conflict ? "text-amber-200" : "text-fuchsia-200"}`}>
+            {e.press ? "🎙 Пресс-конференция · микрофоны включены" : e.conflict ? "⚡ Спор в штабе · реши, кто прав" : "Событие клуба"}
           </p>
           <p className="font-display text-base font-bold text-ink-chalk">{e.emoji} {e.title}</p>
           <p className="-mt-1 text-xs text-ink-mist">{e.text}</p>
