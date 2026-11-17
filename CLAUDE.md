@@ -28,11 +28,17 @@ Main features:
 - «Моя вилла» in the town (`town_villa_service.py`): an isometric plot laid
   out by the player (villa / garage levels, cars, yard and Stars things on a
   grid checked by `check_layout` and its TS twin `lib/villa.ts`; the grid lies
-  on the lawn of `assets/town/villa/plot.webp` — `corner`/`unproject`, the
-  level opens grid × grid of grid_max), residents on staff posts by profession
-  (a post works only with its workplace placed, `POST_WORKPLACE`), side-by-side
+  on the meadow of `assets/town/villa/plot.webp` in strict isometry — `corner`/`unproject`; the
+  buildable cells are the meadow itself, centre first (`town_villa_plot.CELLS` and its twin
+  `lib/villaPlot.ts`, generated from the picture, both check `PLOT_CHECK`), a level opens the first
+  `cells_<level>` of them so the plot grows outwards, a layout that no longer fits is
+  repaired on read by `_repair`), residents on staff posts by profession
+  (a post works only with its workplace placed, `POST_WORKPLACE`), fence sections join their neighbours of the same fence (`FENCES`, `lib/villa.ts` `fencePieces`, rot = a gate), each sprite stands on its footprint by `lib/villaSprites.ts` (generated from the cut-outs), side-by-side
   `COMBOS`, prestige → capped +% to the town's house rent,
-  the chosen car on the town map, guests' villa likes and «Вилла недели»;
+  the chosen car on the town map, guests' villa likes and «Вилла недели»; in the game (`PERKS`):
+  a building gives one perk however many stand (pitch → +1 «Мой игрок» training, court / stable and
+  helipad / guest garage → «Менеджер» treatment / tours cheaper via `base_snapshot`, pavilion → trophies
+  for guests), a daily income by prestige, a weekly party (guests' likes pay them) and «Вилла месяца»;
 - game currency, daily rewards and a free periodic pack;
 - Card Arena (`match_service.py`, `arena_moments.py`, `arena_cup_service.py`): divisions, a live
   match with a server clock on each decision (`state["live"]`; a skip or a timeout is

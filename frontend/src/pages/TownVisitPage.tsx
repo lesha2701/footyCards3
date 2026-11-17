@@ -75,7 +75,7 @@ export default function TownVisitPage() {
           </div>
           {data.villa && (
             <Link to={`/town/visit/${ownerId}/villa`} className="flex min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-white/5 text-sm font-bold text-ink-chalk">
-              🏡 Вилла хозяина · {"★".repeat(data.villa.villa_level)} · престиж {fmt(data.villa.prestige)}
+              🏡 Вилла хозяина · {"★".repeat(data.villa.villa_level)} · престиж {fmt(data.villa.prestige)}{data.villa.party ? " · 🎉 вечеринка" : ""}
             </Link>
           )}
           <section className="rounded-3xl border border-white/10 bg-bg-surface p-2">

@@ -46,6 +46,8 @@ class MyPlayer(Base):
     extra_training_credits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     extra_trainings_bought: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     extra_training_day: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # «Моя вилла»: the extra free training its pitch gives was done on this day.
+    villa_training_day: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     # Consecutive days with the free training done (ends on training_day);
     # every config.my_player_streak_days in a row pays skill tokens.
     training_streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

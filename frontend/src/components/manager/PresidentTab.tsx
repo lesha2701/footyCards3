@@ -495,6 +495,7 @@ function DealPanel({ kind, office, busy, ask, sign }: {
           ))}
         </div>
         {boost("🏨", t.hotel_cut_pct > 0 ? `Клубный отель ур. ${lv.hotel}: расходы −${pct(t.hotel_cut_pct)}` : "Клубный отель удешевит турне")}
+        {!!t.villa_cut_pct && boost("🚁", `Свой транспорт на вилле: турне −${pct(t.villa_cut_pct)}`)}
         {boost("🎥", t.media_fans_pct > 0 ? `Медиацентр ур. ${lv.media}: фанатов +${pct(t.media_fans_pct)}` : "Медиацентр приведёт больше фанатов")}
         {button("Отправиться в турне", !picked || office.free_budget < (picked?.cost ?? 0), `${picked?.name}?`,
           `Доход ${eur(picked?.revenue ?? 0)}, расходы ${eur(picked?.cost ?? 0)}. Первые ${picked?.fatigue_rounds} туров команда будет слабее на ${pct(picked?.fatigue_pct ?? 0)}.`,
