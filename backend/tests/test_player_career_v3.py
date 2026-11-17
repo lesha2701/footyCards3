@@ -295,6 +295,30 @@ async def test_weekly_tasks_rankings_and_daily_chest(client, db_session, bot_tok
     assert (await client.post(f"{API}/player-career/chest", headers=headers)).status_code == 409
 
 
+@pytest.mark.parametrize("tg_id,position,line", [(891031, "GK", "GK"), (891032, "CB", "DEF"), (891033, "CM", "MID")])
+async def test_weekly_first_task_follows_the_line(client, db_session, bot_token, tg_id, position, line):
+    """A goalkeeper or a defender keeps clean sheets, a midfielder counts goals + assists."""
+    user_id, headers, _ = await _signed(client, db_session, bot_token, tg_id, position)
+    config = await get_config(db_session)
+    now = datetime.now(timezone.utc)
+    if line == "MID":
+        # 0 goals + N assists — a pure scorer's task would stay at 0.
+        for _ in range(config.player_career_weekly_goals):
+            await life.record_week(db_session, user_id, now, 0, 1, 7.0, False)
+        target, label = config.player_career_weekly_goals, "голов + передач"
+    else:
+        # Clean sheets without a goal.
+        for _ in range(config.player_career_weekly_clean_sheets):
+            await life.record_week(db_session, user_id, now, 0, 0, 7.0, True)
+        target, label = config.player_career_weekly_clean_sheets, "на ноль"
+    await db_session.commit()
+    view = (await client.get(f"{API}/player-career", headers=headers)).json()
+    task = next(t for t in view["weekly"]["tasks"] if t["code"] == "goals")
+    assert label in task["label"] and "Забей" not in task["label"]
+    assert task["target"] == target and task["value"] == target and task["done"]
+    assert (await client.post(f"{API}/player-career/weekly/goals/claim", headers=headers)).status_code == 200
+
+
 async def test_hall_of_fame_after_a_season(client, db_session, bot_token):
     user_id, headers, club = await _signed(client, db_session, bot_token, 891008)
     season = (await client.post(f"{API}/player-career/seasons", headers=headers)).json()["season"]
