@@ -158,6 +158,7 @@ async def update_club(payload: ManagerClubUpdateIn, db: AsyncSession = Depends(g
     await check_rate_limit(f"manager_club:{user.id}", max_calls=20, window_seconds=60)
     return await manager_service.update_club(
         db, user, payload.name, payload.formation, payload.style, payload.academy_card_id, payload.clear_academy,
+        prospect_starts=payload.prospect_starts,
     )
 
 
@@ -165,7 +166,8 @@ async def update_club(payload: ManagerClubUpdateIn, db: AsyncSession = Depends(g
 async def make_offer(payload: ManagerOfferIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     """Sign a free agent, or ask another club for a transfer / a loan."""
     await check_rate_limit(f"manager_offer:{user.id}", max_calls=20, window_seconds=60)
-    return await manager_service.make_offer(db, user, payload.user_id, payload.wage, payload.seasons, payload.fee, payload.kind)
+    return await manager_service.make_offer(db, user, payload.user_id, payload.wage, payload.seasons, payload.fee, payload.kind,
+                                          subject=payload.subject)
 
 
 @router.post("/offers/{contract_id}/cancel")
@@ -200,7 +202,7 @@ async def renew_contract(
 @router.post("/market")
 async def set_market(payload: ManagerMarketIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     """List / unlist my «Мой игрок» as a free agent."""
-    return await manager_service.set_market(db, user, payload.open)
+    return await manager_service.set_market(db, user, payload.open, subject=payload.subject)
 
 
 @router.post("/npc")

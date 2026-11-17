@@ -79,6 +79,7 @@ const PlayPage = lazy(() => import("@/pages/PlayPage"));
 const MemoryGamePage = lazy(() => import("@/pages/MemoryGamePage"));
 const ArenaPage = lazy(() => import("@/pages/ArenaPage"));
 const AcademyPage = lazy(() => import("@/pages/AcademyPage"));
+const ProspectPage = lazy(() => import("@/pages/ProspectPage"));
 const TownPage = lazy(() => import("@/pages/TownPage"));
 const TownResidentsPage = lazy(() => import("@/pages/TownResidentsPage"));
 const TownGuestsPage = lazy(() => import("@/pages/TownGuestsPage"));
@@ -329,6 +330,7 @@ export default function App() {
         <Route path="/play/memory" element={<MemoryGamePage />} />
         <Route path="/play/arena" element={<ArenaPage />} />
         <Route path="/academy" element={<AcademyPage />} />
+        <Route path="/academy/prospect" element={<ProspectPage />} />
         <Route path="/base" element={<ClubBasePage />} />
         <Route path="/town" element={<TownPage />} />
         <Route path="/town/residents" element={<TownResidentsPage />} />

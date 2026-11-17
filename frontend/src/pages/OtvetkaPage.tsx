@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { fetchCollection } from "@/api/collection";
 import { claimOtvetkaReward, playOtvetkaEpisode, startOtvetka } from "@/api/games";
+import { fetchProspect } from "@/api/prospect";
 import CardPickerModal from "@/components/cards/CardPickerModal";
 import GameHero from "@/components/common/GameHero";
 import { IconCoin } from "@/components/icons";
@@ -51,7 +52,7 @@ const OUTCOME: Record<OneOnOneOutcome, string> = {
 
 const signOf = (e: OtvetkaEpisode) => (e.minute === null ? "Серия пенальти" : `${e.minute}′ · ${TITLE[e.kind]}`);
 
-type Match = OtvetkaStartResult & { card: UserCard };
+type Match = OtvetkaStartResult & { card: UserCard | null };
 type Played = { episode: OtvetkaEpisode; result: OtvetkaResult };
 
 /** «Ответка»: pick a card, then a match of ten episodes at match minutes.
@@ -71,6 +72,12 @@ export default function OtvetkaPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [cardSearch, setCardSearch] = useState("");
   const answer = useRef<OtvetkaResult | null>(null);
+  const [params] = useSearchParams();
+  // ?duel=<id>: the prospect plays his side of a friends' duel (once).
+  const duelRef = useRef<number | null>(Number(params.get("duel")) || null);
+  const wantsProspect = params.get("prospect") === "1" || duelRef.current !== null;
+  const { data: prospectView } = useQuery({ queryKey: ["prospect"], queryFn: fetchProspect, enabled: match === null });
+  const prospect = prospectView?.enabled ? prospectView.prospect : null;
 
   const { data: collection } = useQuery({
     queryKey: ["collection", "otvetka", cardSearch],
@@ -79,7 +86,12 @@ export default function OtvetkaPage() {
   });
 
   const start = useMutation({
-    mutationFn: (card: UserCard) => startOtvetka(card.id).then((data) => ({ ...data, card })),
+    // null = the «Воспитанник Академии» plays.
+    mutationFn: (card: UserCard | null) => {
+      const duel = card ? null : duelRef.current;
+      duelRef.current = null;
+      return startOtvetka(card ? card.id : null, duel).then((data) => ({ ...data, card }));
+    },
     onSuccess: (data) => {
       setMatch(data);
       setEpisode(data.episode);
@@ -92,11 +104,21 @@ export default function OtvetkaPage() {
     onError: (err) => setErrorMsg(formatGameError(err, "Не удалось начать матч")),
   });
 
+  // From the prospect's page: straight onto the pitch.
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (wantsProspect && prospect && !match && !autoStarted.current) {
+      autoStarted.current = true;
+      start.mutate(null);
+    }
+  }, [wantsProspect, prospect, match, start]);
+
   const claim = useMutation({
     mutationFn: () => claimOtvetkaReward(match!.session_id),
     onSuccess: (data) => {
       updateBalance(data.new_balance);
       hapticNotify("success");
+      if (data.prospect_xp !== null && data.prospect_xp !== undefined) void queryClient.invalidateQueries({ queryKey: ["prospect"] });
     },
   });
 
@@ -110,13 +132,26 @@ export default function OtvetkaPage() {
         </p>
         {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
         <CardPickerModal
-          open={!start.isPending}
+          open={!start.isPending && !(wantsProspect && !start.isError && (prospect || prospectView === undefined))}
           title="Кто выходит на матч?"
           cards={collection?.items ?? []}
           onSelect={(card) => start.mutate(card)}
           onClose={() => navigate("/play")}
           searchValue={cardSearch}
           onSearchChange={setCardSearch}
+          header={prospect && (
+            <button
+              type="button"
+              onClick={() => start.mutate(null)}
+              className="mb-3 flex w-full items-center gap-3 rounded-2xl border border-path/40 bg-path/10 p-3 text-left active:scale-[0.99]"
+            >
+              <span className="text-2xl" aria-hidden>🧒</span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-display text-sm font-bold text-ink-chalk">Воспитанник: {prospect.name}</span>
+                <span className="block text-xs text-ink-mist">{prospect.age} лет · рейтинг {prospect.rating} · играет против сверстников и растёт</span>
+              </span>
+            </button>
+          )}
         />
       </div>
     );
@@ -163,6 +198,16 @@ export default function OtvetkaPage() {
               Ты получил +{claim.data.reward_coins}
               <IconCoin size={16} />
             </p>
+            {claim.data.prospect_xp !== null && claim.data.prospect_xp !== undefined && (
+              <p className="mt-1 text-sm font-semibold text-path">
+                {match.prospect_name}: +{claim.data.prospect_xp} опыта{claim.data.prospect_xp === 0 ? " (лимит опыта за матчи на сегодня)" : ""}
+              </p>
+            )}
+            {match.duel_id && (
+              <button onClick={() => navigate("/academy/prospect?tab=friends")} className="mt-1 text-sm font-semibold text-legend underline">
+                ⚔️ Твой ход в дуэли сделан — итог на странице воспитанника
+              </button>
+            )}
             {claim.data.reward_coins === 0 && (last.reward_coins ?? 0) > 0 && (
               <p className="mt-1 text-xs text-ink-mist">Лимит наградных матчей на сегодня исчерпан</p>
             )}
@@ -234,7 +279,10 @@ export default function OtvetkaPage() {
         rating={match.rating}
         bug={bug}
         title={label}
-        gear={{ ball: match.ball, kickerBoots: match.boots, kickerPrint: shirtPrint(match.card.player) }}
+        gear={{
+          ball: match.ball, kickerBoots: match.boots,
+          kickerPrint: match.card ? shirtPrint(match.card.player) : { name: match.prospect_name ?? "", number: prospectView?.prospect?.number ?? 10 },
+        }}
         celebration={match.celebration}
         nextLabel={nextLabel}
         note={verdict}

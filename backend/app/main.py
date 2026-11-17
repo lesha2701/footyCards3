@@ -70,6 +70,7 @@ from app.routers import (
     academy,
     club_base,
     town,
+    prospect,
     career,
     club_features,
     clubs,
@@ -186,6 +187,7 @@ app.include_router(path.router, prefix=API_PREFIX)
 app.include_router(academy.router, prefix=API_PREFIX)
 app.include_router(club_base.router, prefix=API_PREFIX)
 app.include_router(town.router, prefix=API_PREFIX)
+app.include_router(prospect.router, prefix=API_PREFIX)
 app.include_router(bingo.router, prefix=API_PREFIX)
 app.include_router(packs.router, prefix=API_PREFIX)
 app.include_router(free_pack.router, prefix=API_PREFIX)

@@ -5,11 +5,13 @@ import { useNavigate } from "react-router-dom";
 import { fetchCollection } from "@/api/collection";
 import { claimOneOnOneReward, playOneOnOneAttack, startOneOnOne } from "@/api/games";
 import CardPickerModal from "@/components/cards/CardPickerModal";
+import { ProspectPickOption, ProspectXpNote } from "@/components/cards/ProspectPickOption";
 import GameHero from "@/components/common/GameHero";
 import { IconCoin } from "@/components/icons";
 import AttackRun from "@/components/oneOnOne/AttackRun";
 import { formatGameError } from "@/lib/errors";
 import { hapticNotify, showConfirm } from "@/lib/telegram";
+import { useProspectPick } from "@/lib/useProspectPick";
 import { useAuthStore } from "@/store/authStore";
 import type { OneOnOneAttack, OneOnOneOutcome, OneOnOneResult, OneOnOneStartResult, UserCard } from "@/types";
 
@@ -27,7 +29,8 @@ const OUTCOME: Record<OneOnOneOutcome, { label: string; className: string }> = {
   wall: { label: "В стенку", className: "text-ink-mist" },
 };
 
-type Series = OneOnOneStartResult & { card: UserCard };
+// card null = the «Воспитанник Академии» plays.
+type Series = OneOnOneStartResult & { card: UserCard | null };
 
 /** «Атака 1 на 1»: pick a card, then a series of breakaways at the keeper
  * from server-chosen spots. The episode runs here from the finger, frame
@@ -51,7 +54,7 @@ export default function OneOnOnePage() {
   });
 
   const start = useMutation({
-    mutationFn: (card: UserCard) => startOneOnOne(card.id).then((data) => ({ ...data, card })),
+    mutationFn: (card: UserCard | null) => startOneOnOne(card ? card.id : null).then((data) => ({ ...data, card })),
     onSuccess: (data) => {
       setSeries(data);
       setAttack(data.attack);
@@ -68,8 +71,11 @@ export default function OneOnOnePage() {
     onSuccess: (data) => {
       updateBalance(data.new_balance);
       hapticNotify("success");
+      if (data.prospect_xp !== null && data.prospect_xp !== undefined) void queryClient.invalidateQueries({ queryKey: ["prospect"] });
     },
   });
+  // From the prospect's page (?prospect=1): straight onto the pitch with him.
+  const { prospect, holdPicker } = useProspectPick(series === null, () => start.mutate(null));
 
   if (!series || !attack) {
     return (
@@ -84,13 +90,14 @@ export default function OneOnOnePage() {
         </p>
         {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
         <CardPickerModal
-          open={!start.isPending}
+          open={!start.isPending && !(holdPicker && !start.isError)}
           title="Кто выходит один на один?"
           cards={collection?.items ?? []}
           onSelect={(card) => start.mutate(card)}
           onClose={() => navigate("/play")}
           searchValue={cardSearch}
           onSearchChange={setCardSearch}
+          header={prospect && <ProspectPickOption prospect={prospect} onPick={() => start.mutate(null)} />}
         />
       </div>
     );
@@ -124,6 +131,7 @@ export default function OneOnOnePage() {
               Ты получил +{claim.data.reward_coins}
               <IconCoin size={16} />
             </p>
+            <ProspectXpNote xp={claim.data.prospect_xp} />
             {claim.data.reward_coins === 0 && total > 0 && (
               <p className="mt-1 text-xs text-ink-mist">Лимит наградных серий на сегодня исчерпан</p>
             )}
@@ -158,7 +166,7 @@ export default function OneOnOnePage() {
       index={attack.attack_index}
       total={series.total_attacks}
       rating={series.rating}
-      name={series.card.player.display_name}
+      name={series.card ? series.card.player.display_name : (series.prospect_name ?? "")}
       ball={series.ball}
       feint={series.feint}
       coins={total}

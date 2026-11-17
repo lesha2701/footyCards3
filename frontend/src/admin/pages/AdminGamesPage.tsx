@@ -6,6 +6,7 @@ import AdminCareerRivalries from "@/admin/pages/AdminCareerRivalries";
 import { fetchGameConfig, fetchNewbieFunnel, fetchSuspiciousMatches, fetchSuspiciousMemorySessions, updateGameConfig } from "@/admin/api";
 import AdminMagnateBoardEditor from "@/admin/pages/AdminMagnateBoardEditor";
 import ManagerFinanceFields from "@/admin/components/ManagerFinanceFields";
+import ProspectFields, { ProspectStatsPanel } from "@/admin/components/ProspectFields";
 import RewardBundleEditor from "@/admin/components/RewardBundleEditor";
 import { EMPTY_BUNDLE, type GameConfig } from "@/admin/types";
 
@@ -1713,6 +1714,16 @@ export default function AdminGamesPage() {
           {field("otvetka_bot_goal_pct", "Бот забивает, %")}
           {field("otvetka_bot_penalty_pct", "Бот забивает пенальти, %")}
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">🧒 Воспитанник Академии</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Свой игрок с детства: возраст идёт по календарю, рейтинг — от опыта («Ответка» за него, тренировка, истории),
+          каждая ступень ограничивает рейтинг, пик — от скрытого потенциала.
+        </p>
+        <ProspectStatsPanel />
+        <ProspectFields value={form.prospect} onChange={(next) => setForm({ ...form, prospect: next })} />
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">

@@ -146,6 +146,14 @@ async def _my_player(db: AsyncSession, user: User) -> tuple[str, str]:
     return path, f"Мой игрок {out['name']}: рейтинг {out['rating']}, {out['tier_label'].lower()}! ⚽ Создай своего в Victor FC"
 
 
+async def _prospect(db: AsyncSession, user: User) -> tuple[str, str]:
+    """«Воспитанник Академии» (or his graduate) — prospect_life.share_image."""
+    from app.services import prospect_life
+
+    image, fingerprint, caption = await prospect_life.share_image(db, user)
+    return _store(image, "prospect", user.id, fingerprint), caption
+
+
 async def _manager_frame(db: AsyncSession, owner_id: Optional[int]) -> str:
     from app.models.manager_club import ManagerClub
     from app.services import manager_shop
@@ -198,10 +206,18 @@ async def _manager_transfer(db: AsyncSession, user: User, contract_id: int) -> t
     seller = await db.get(ManagerClub, parent.club_id) if parent else None
     if user.id not in {contract.user_id, buyer.owner_id, seller.owner_id if seller else None}:
         raise NotFoundError("Сделка не найдена")
-    mp = await my_player_service.get_my_player(db, contract.user_id)
-    if mp is None:
-        raise NotFoundError("Игрок не найден")
-    out = my_player_service.player_out(mp, config)
+    subject = manager_service._subject(contract)
+    if subject in manager_service.YOUTH:
+        person = await manager_service._person(db, contract.user_id, subject, config)
+        if person is None:
+            raise NotFoundError("Игрок не найден")
+        out = {"name": person.name, "number": person.number, "position": person.position.value,
+               "rating": person.rating, "appearance": person.appearance}
+    else:
+        mp = await my_player_service.get_my_player(db, contract.user_id)
+        if mp is None:
+            raise NotFoundError("Игрок не найден")
+        out = my_player_service.player_out(mp, config)
     fee_text = manager_service.money(contract.fee) if contract.fee else "Свободный трансфер"
     kind_label = {"sign": f"Контракт на {contract.seasons_total} сез.", "transfer": f"Трансфер · контракт на {contract.seasons_total} сез.",
                   "loan": "Аренда на сезон"}[contract.kind]
@@ -452,6 +468,8 @@ async def prepare_share(db: AsyncSession, user: User, kind: str, object_id: int)
         path, caption = await _my_player(db, user)
     elif kind == "manager_player":
         path, caption = await _manager_player(db, user)
+    elif kind == "prospect":
+        path, caption = await _prospect(db, user)
     elif kind == "manager_transfer":
         path, caption = await _manager_transfer(db, user, object_id)
     elif kind == "manager_news":

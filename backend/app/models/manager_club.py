@@ -29,6 +29,9 @@ class ManagerClub(Base):
     budget: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     division: Mapped[int] = mapped_column(Integer, nullable=False, default=1, index=True)
     academy_card_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user_cards.id", ondelete="SET NULL"), nullable=True)
+    # The owner's «Воспитанник Академии» always starts (otherwise he competes
+    # for a place by rating like everybody else).
+    prospect_starts: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     budget_season: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     # The league of the current (or last) season.
     league_id: Mapped[Optional[int]] = mapped_column(ForeignKey("manager_leagues.id", ondelete="SET NULL"), nullable=True)
@@ -74,6 +77,10 @@ class ManagerContract(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     club_id: Mapped[int] = mapped_column(ForeignKey("manager_clubs.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    # Whose footballer: "player" = the user's «Мой игрок», "prospect" = his
+    # «Воспитанник Академии» (prospect_service). One active contract per
+    # (user, subject).
+    subject: Mapped[str] = mapped_column(String(8), nullable=False, default="player")
     kind: Mapped[str] = mapped_column(String(16), nullable=False, default="sign")
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="offered")
     from_contract_id: Mapped[Optional[int]] = mapped_column(ForeignKey("manager_contracts.id", ondelete="SET NULL"), nullable=True)

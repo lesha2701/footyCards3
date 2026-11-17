@@ -274,9 +274,9 @@ def _draw_avatar(img: Image.Image, box: tuple[int, int, int, int], appearance: d
 
 def render_my_player(
     *, name: str, number: int, position: str, rating: int, attack: int, defense: int, level: int,
-    tier: str, tier_label: str, appearance: dict, bot_username: str,
+    tier: str, tier_label: str, appearance: dict, bot_username: str, title: str = "Мой игрок в Victor FC!", level_text: str = "",
 ) -> bytes:
-    img, draw = _base("Мой игрок в Victor FC!", bot_username)
+    img, draw = _base(title, bot_username)
     color = TIER_COLORS.get(tier, TIER_COLORS["bronze"])
     box = (SIZE // 2 - 170, 165, SIZE // 2 + 170, 575)
     glow = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
@@ -304,7 +304,7 @@ def render_my_player(
 
     title = f"{name} #{number}"
     _center(draw, 592, title, _fit(draw, title, FONT_HEAVY, 40, SIZE - 80), WHITE)
-    _center(draw, 646, f"АТК {attack} · ЗЩТ {defense} · уровень {level}", _font(FONT_BOLD, 26), color)
+    _center(draw, 646, f"АТК {attack} · ЗЩТ {defense} · {level_text or f'уровень {level}'}", _font(FONT_BOLD, 26), color)
     return _jpeg(img)
 
 

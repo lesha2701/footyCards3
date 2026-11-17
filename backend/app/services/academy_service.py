@@ -327,6 +327,10 @@ async def deliver_speedup(db: AsyncSession, user: User, invoice) -> dict:
     or renames the «Город»."""
     if (invoice.academy_speedup or "").startswith("town:"):
             return await town_service.deliver_stars_invoice(db, user, invoice)
+    if (invoice.academy_speedup or "").startswith("prospect:"):
+        from app.services import prospect_service
+
+        return await prospect_service.deliver_stars_invoice(db, user, invoice)
     if (invoice.academy_speedup or "").startswith(club_base_service.SPEEDUP_PREFIX):
         return await club_base_service.deliver_speedup(db, user, invoice)
     if (invoice.academy_speedup or "").startswith(club_base_service.COSMETIC_PREFIX):

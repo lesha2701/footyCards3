@@ -163,7 +163,7 @@ export default function ClubCardSheet({ clubId, onClose, onError }: { clubId: nu
                 <p className="text-xs text-ink-mist">Рейтинг состава <b className="text-ink-chalk">{data.rating}</b> · болельщиков <b className="text-ink-chalk">{data.fans}</b></p>
                 <div className="flex flex-wrap gap-1">
                   {data.xi.map((p) => (
-                    <span key={p.slot} className={`rounded px-1.5 py-0.5 text-micro ${p.kind === "own" || p.kind === "live" ? "bg-accent-cyan/20 text-ink-chalk" : "bg-bg-raised text-ink-mist"}`}>
+                    <span key={p.slot} className={`rounded px-1.5 py-0.5 text-micro ${p.kind === "own" || p.kind === "live" || p.kind === "prospect" || p.kind === "graduate" ? "bg-accent-cyan/20 text-ink-chalk" : "bg-bg-raised text-ink-mist"}`}>
                       {p.position} {p.name} {p.rating}
                     </span>
                   ))}

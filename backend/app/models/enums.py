@@ -150,6 +150,7 @@ class TransactionType(str, enum.Enum):
     town_quest = "town_quest"
     town_gift = "town_gift"
     town_week = "town_week"
+    prospect_purchase = "prospect_purchase"
     arena_division_reward = "arena_division_reward"
     arena_cup_reward = "arena_cup_reward"
     arena_goal_bonus = "arena_goal_bonus"
@@ -502,6 +503,7 @@ class NotificationType(str, enum.Enum):
     auction_sold = "auction_sold"
     auction_expired = "auction_expired"
     auction_removed = "auction_removed"
+    prospect_event = "prospect_event"
 
 
 class TradeCardSide(str, enum.Enum):

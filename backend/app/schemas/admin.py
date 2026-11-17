@@ -588,6 +588,18 @@ class GameConfigOut(BaseModel):
     # Effective «Кабинет президента» numbers: the stored overrides over manager_finance.DEFAULTS.
     manager_finance: dict = {}
 
+    # Effective «Воспитанник Академии» numbers: the stored overrides over prospect_service.DEFAULTS.
+    prospect: dict = {}
+
+    @field_validator("prospect", mode="after")
+    @classmethod
+    def _prospect_with_defaults(cls, value: dict) -> dict:
+        from types import SimpleNamespace
+
+        from app.services.prospect_service import cfg
+
+        return cfg(SimpleNamespace(prospect=value or {}))
+
     @field_validator("manager_finance", mode="after")
     @classmethod
     def _finance_with_defaults(cls, value: dict) -> dict:
@@ -1456,6 +1468,7 @@ class GameConfigUpdate(BaseModel):
     manager_place_budget: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
     manager_slots: Optional[list[str]] = Field(default=None, min_length=1, max_length=8)
     manager_finance: Optional[dict] = None
+    prospect: Optional[dict] = None
     manager_cosmetics: Optional[list[dict]] = Field(default=None, max_length=200)
     manager_merch: Optional[list[dict]] = Field(default=None, max_length=20)
     player_career_objective_coins: Optional[int] = Field(default=None, ge=0)

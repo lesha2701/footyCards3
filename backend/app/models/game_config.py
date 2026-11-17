@@ -825,6 +825,9 @@ class GameConfig(TimestampMixin, Base):
     # club value. Only the overridden numbers are stored; manager_finance.DEFAULTS
     # fills the rest.
     manager_finance: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # «Воспитанник Академии» (prospect_service): only the overridden numbers
+    # are stored; prospect_service.DEFAULTS fills the rest.
+    prospect: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     manager_value_ratings: Mapped[list] = mapped_column(JSON, default=lambda: [45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95], nullable=False)
     manager_value_eur: Mapped[list] = mapped_column(JSON, default=lambda: [50000, 80000, 150000, 400000, 1000000, 3500000, 12000000, 35000000, 80000000, 160000000, 220000000], nullable=False)
     manager_division_budget: Mapped[list] = mapped_column(JSON, default=lambda: [120000000, 70000000, 40000000, 22000000, 12000000, 7000000, 4500000, 3000000, 2500000, 2000000], nullable=False)

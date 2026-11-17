@@ -80,6 +80,13 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
             updates["manager_finance"] = manager_finance.validate(updates["manager_finance"])
         except (ValueError, TypeError) as exc:
             raise ConflictError(f"Кабинет президента: {exc}")
+    if updates.get("prospect") is not None:
+        from app.services import prospect_service
+
+        try:
+            updates["prospect"] = prospect_service.validate(updates["prospect"])
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise ConflictError(f"Воспитанник Академии: {exc}")
     if updates.get("club_base_caps") is not None:
         if any(v < 0 for v in updates["club_base_caps"].values()):
             raise ConflictError("Клубная база: потолки не могут быть отрицательными")
@@ -265,3 +272,11 @@ async def suspicious_matches(db: AsyncSession = Depends(get_db)):
         if abs(m.user_score - m.opponent_score) >= config.suspicious_score_margin
     ]
     return suspicious[:100]
+
+
+@router.get("/prospect-stats")
+async def prospect_stats(db: AsyncSession = Depends(get_db)):
+    """«Воспитанник Академии»: how many, by stage, graduates, Stars and coins."""
+    from app.services import prospect_life
+
+    return await prospect_life.admin_stats(db)

@@ -12,11 +12,15 @@ export interface ManagerSquadPlayer {
   key?: string;
   /** own = my «Мой игрок», academy = my academy card (both always start),
    * live = another user's «Мой игрок», npc = a catalog footballer, kid = an academy kid in an empty slot. */
-  kind: "own" | "academy" | "live" | "npc" | "kid";
+  kind: "own" | "academy" | "live" | "npc" | "kid" | "prospect" | "graduate";
   name: string;
   position: string;
   rating: number;
   value?: number;
+  /** Whose footballer a user entry is: «Мой игрок» or a «Воспитанник Академии». */
+  subject?: ManagerSubject;
+  /** My own prospect (kind "prospect"): always in the XI. */
+  starts?: boolean;
   user_id?: number;
   owner_name?: string;
   player_id?: number;
@@ -29,9 +33,36 @@ export interface ManagerSquadPlayer {
   photo?: string | null;
 }
 
+/** player = a user's «Мой игрок», prospect = his «Воспитанник Академии»,
+ * graduate = that prospect after «Выпускной» (frozen rating). */
+export type ManagerSubject = "player" | "prospect" | "graduate";
+
+/** My «Воспитанник Академии» in «Менеджер». */
+export interface ManagerProspect {
+  name: string;
+  position: string;
+  rating: number;
+  age: number;
+  /** Old enough for clubs (from the min_stage stage). */
+  eligible: boolean;
+  min_stage: string;
+  stage: string;
+  market_open: boolean;
+  value: number;
+  /** His contract at another club. */
+  contract: ManagerContract | null;
+  appearance: MyPlayerAppearance;
+  number: number;
+  subject?: ManagerSubject;
+  /** Value change over the last seasons, %. */
+  trend_pct?: number | null;
+  generation?: number;
+}
+
 export interface ManagerContract {
   id: number;
   user_id: number;
+  subject?: ManagerSubject;
   /** renew = the club's new contract for its own player (an offer only). */
   kind: "sign" | "transfer" | "loan" | "renew";
   status: "offered" | "active" | "on_loan" | "ended" | "declined" | "cancelled" | "accepted";
@@ -141,6 +172,8 @@ export interface ManagerClub {
   next_match: ManagerNextMatch | null;
   live_count: number;
   academy_card_id: number | null;
+  /** My «Воспитанник Академии» is always in the XI. */
+  prospect_starts?: boolean;
   /** The brand on the shirt («Кабинет президента», this or the coming season). */
   kit_sponsor: string | null;
   academy_options: { card_id: number; name: string; position: string; rating: number }[];
@@ -283,17 +316,26 @@ export interface ManagerView {
   /** My own «Мой игрок» at another club. */
   contract: ManagerContract | null;
   offers: ManagerContract[];
+  prospect?: ManagerProspect | null;
+  /** My graduate (after «Выпускной»). */
+  graduate?: ManagerProspect | null;
+  /** Wage cap of a contract with a prospect / graduate, coins a season. */
+  youth_wage_max?: number;
   league: ManagerLeague | null;
   shop: ManagerShop;
 }
 
 export interface ManagerMarketPlayer {
   user_id: number;
+  subject?: ManagerSubject;
+  /** A prospect's age (years). */
+  age?: number;
   player_name: string;
   owner_name: string;
   position: string;
   rating: number;
-  level: number;
+  /** null for a prospect. */
+  level: number | null;
   value: number;
   trend_pct: number | null;
   is_friend: boolean;
@@ -638,13 +680,14 @@ export async function foundManagerClub(name: string): Promise<ManagerView> {
 
 export async function updateManagerClub(patch: {
   name?: string; formation?: string; style?: ManagerStyle; academy_card_id?: number; clear_academy?: boolean;
+  prospect_starts?: boolean;
 }): Promise<ManagerView> {
   const { data } = await api.patch<ManagerView>("/manager/club", patch);
   return data;
 }
 
 export async function offerManagerContract(offer: {
-  user_id: number; wage: number; seasons: number; fee?: number; kind?: "sign" | "transfer" | "loan";
+  user_id: number; wage: number; seasons: number; fee?: number; kind?: "sign" | "transfer" | "loan"; subject?: ManagerSubject;
 }): Promise<ManagerView> {
   const { data } = await api.post<ManagerView>("/manager/offers", offer);
   return data;
@@ -671,8 +714,8 @@ export async function renewManagerContract(contractId: number, wage: number, sea
   return data;
 }
 
-export async function setManagerMarket(open: boolean): Promise<ManagerView> {
-  const { data } = await api.post<ManagerView>("/manager/market", { open });
+export async function setManagerMarket(open: boolean, subject: ManagerSubject = "player"): Promise<ManagerView> {
+  const { data } = await api.post<ManagerView>("/manager/market", { open, subject });
   return data;
 }
 

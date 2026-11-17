@@ -33,6 +33,7 @@ from app.models.manager_club import (
     ManagerValueHistory,
 )
 from app.models.my_player import MyPlayer, MyPlayerDuel
+from app.models.academy_prospect import AcademyProspect, ProspectDuel, ProspectLedger
 from app.models.my_player_extras import MyPlayerEdition, MyPlayerGift, MyPlayerSponsorContract
 from app.models.newbie import NewbieProgress
 from app.models.comeback_gift import ComebackGift
@@ -138,6 +139,9 @@ from app.models.user_stadium_card import UserStadiumCard
 from app.models.club_stadium_card import ClubStadiumCard
 
 __all__ = [
+    "AcademyProspect",
+    "ProspectDuel",
+    "ProspectLedger",
     "ArenaCupRun",
     "FanBattleLedger",
     "FanBattleMember",

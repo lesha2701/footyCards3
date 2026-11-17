@@ -13,6 +13,7 @@ class ManagerClubUpdateIn(BaseModel):
     style: Optional[str] = Field(default=None, max_length=16)
     academy_card_id: Optional[int] = None
     clear_academy: bool = False
+    prospect_starts: Optional[bool] = None
 
 
 class ManagerOfferIn(BaseModel):
@@ -21,6 +22,8 @@ class ManagerOfferIn(BaseModel):
     seasons: int = 1
     fee: int = Field(default=0, ge=0)
     kind: Optional[Literal["sign", "transfer", "loan"]] = None
+    # «Мой игрок» or the user's «Воспитанник Академии».
+    subject: Literal["player", "prospect", "graduate"] = "player"
 
 
 class ManagerRespondIn(BaseModel):
@@ -29,6 +32,7 @@ class ManagerRespondIn(BaseModel):
 
 class ManagerMarketIn(BaseModel):
     open: bool
+    subject: Literal["player", "prospect", "graduate"] = "player"
 
 
 class ManagerNpcIn(BaseModel):

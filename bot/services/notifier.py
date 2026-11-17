@@ -56,6 +56,7 @@ _TYPE_PATHS = {
     "player_career_season_finished": "/play/player-career",
     "player_career_event": "/play/player-career",
     "manager_event": "/play/manager",
+    "prospect_event": "/academy/prospect",
     "weekly_cup_result": "/weekly-cup",
     "match_day_result": "/match-day",
     "my_player_duel": "/my-player",

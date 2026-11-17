@@ -580,6 +580,8 @@ export interface GameConfig {
   manager_slots: string[];
   /** «Кабинет президента»: effective numbers (manager_finance.DEFAULTS + overrides). */
   manager_finance: Record<string, unknown>;
+  /** «Воспитанник Академии»: effective numbers (prospect_service.DEFAULTS + overrides). */
+  prospect: Record<string, unknown>;
   manager_cosmetics: Record<string, unknown>[];
   manager_merch: Record<string, unknown>[];
   player_career_objective_coins: number;
