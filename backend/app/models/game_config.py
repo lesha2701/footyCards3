@@ -793,6 +793,8 @@ class GameConfig(TimestampMixin, Base):
     player_career_chest_token_pct: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     # Weekly task: goals.
     player_career_weekly_goals: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    # Weekly task for defenders and goalkeepers: clean sheets (instead of goals).
+    player_career_weekly_clean_sheets: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     # Weekly task: matches.
     player_career_weekly_matches: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     # Weekly task: average rating x10 (70 = 7.0) over 5+ matches.

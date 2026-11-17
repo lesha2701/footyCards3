@@ -838,7 +838,8 @@ export default function AdminGamesPage() {
           {field("player_career_chest_coins_min", "Сундук дня: монет от")}
           {field("player_career_chest_coins_max", "Сундук дня: монет до")}
           {field("player_career_chest_token_pct", "Сундук дня: шанс жетона, %")}
-          {field("player_career_weekly_goals", "Задание недели: голов")}
+          {field("player_career_weekly_goals", "Задание недели: голов (полузащитник — голов + передач)")}
+          {field("player_career_weekly_clean_sheets", "Задание недели защитника и вратаря: матчей на ноль")}
           {field("player_career_weekly_matches", "Задание недели: матчей")}
           {field("player_career_weekly_rating_x10", "Задание недели: оценка ×10 (70 = 7.0)")}
           {listField("player_career_weekly_coins", "Задания недели: монеты (голы, матчи, оценка)")}

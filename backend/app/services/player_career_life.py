@@ -275,21 +275,42 @@ async def rankings(db: AsyncSession, user: User, now: Optional[datetime] = None)
     }
 
 
-def weekly_tasks_spec(config) -> list[dict]:
+def _first_task(config, line: str) -> dict:
+    """The first weekly task follows the player's line: a forward scores, a
+    midfielder makes goals + assists, a defender or goalkeeper keeps clean sheets."""
+    goals = config.player_career_weekly_goals
+    if line in ("GK", "DEF"):
+        sheets = config.player_career_weekly_clean_sheets
+        return {"label": f"Сыграй {sheets} {_plural(sheets, 'матч', 'матча', 'матчей')} на ноль", "target": sheets}
+    if line == "MID":
+        return {"label": f"Набери {goals} голов + передач", "target": goals}
+    return {"label": f"Забей {goals} {_plural(goals, 'гол', 'гола', 'голов')}", "target": goals}
+
+
+def _plural(n: int, one: str, few: str, many: str) -> str:
+    if n % 10 == 1 and n % 100 != 11:
+        return one
+    return few if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14 else many
+
+
+def weekly_tasks_spec(config, line: str = "FWD") -> list[dict]:
     coins = list(config.player_career_weekly_coins or [0, 0, 0]) + [0, 0, 0]
     return [
-        {"code": "goals", "label": f"Забей {config.player_career_weekly_goals} голов", "target": config.player_career_weekly_goals, "coins": coins[0]},
+        # The code stays "goals" for every line: claims of the week are keyed by it.
+        {"code": "goals", **_first_task(config, line), "coins": coins[0]},
         {"code": "matches", "label": f"Сыграй {config.player_career_weekly_matches} матчей", "target": config.player_career_weekly_matches, "coins": coins[1]},
         {"code": "rating", "label": f"Средняя оценка {config.player_career_weekly_rating_x10 / 10:.1f}+ (от 5 матчей)",
          "target": config.player_career_weekly_rating_x10 / 10, "coins": coins[2]},
     ]
 
 
-def _task_value(code: str, stat: Optional[PlayerCareerWeekStat]):
+def _task_value(code: str, stat: Optional[PlayerCareerWeekStat], line: str = "FWD"):
     if stat is None:
         return 0
     if code == "goals":
-        return stat.goals
+        if line in ("GK", "DEF"):
+            return stat.clean_sheets or 0
+        return stat.goals + (stat.assists if line == "MID" else 0)
     if code == "matches":
         return stat.matches
     return round(stat.rating_sum / stat.matches, 2) if stat.matches >= 5 else 0
@@ -303,9 +324,13 @@ async def weekly_tasks(db: AsyncSession, user_id: int, config, now: Optional[dat
     claimed = set((await db.execute(
         select(PlayerCareerWeeklyClaim.code).where(PlayerCareerWeeklyClaim.user_id == user_id, PlayerCareerWeeklyClaim.week == key)
     )).scalars().all())
+    from app.services.my_player_service import category_of
+
+    position = (await db.execute(select(MyPlayer.position).where(MyPlayer.user_id == user_id))).scalar_one_or_none()
+    line = category_of(position) if position is not None else "FWD"
     tasks = []
-    for t in weekly_tasks_spec(config):
-        value = _task_value(t["code"], stat)
+    for t in weekly_tasks_spec(config, line):
+        value = _task_value(t["code"], stat, line)
         tasks.append({**t, "value": value, "done": value >= t["target"], "claimed": t["code"] in claimed})
     return {"week": key, "tasks": tasks}
 
