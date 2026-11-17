@@ -17,9 +17,13 @@ import TownWeekPage from "@/pages/TownWeekPage";
 const inside = ([x, y]: [number, number]) => x >= 0 && x <= SCENE_W && y >= 0 && y <= SCENE_H;
 
 describe("town data", () => {
-  it("has five districts of twelve buildings and the base on the map", () => {
-    expect(DISTRICTS.map((d) => d.code)).toEqual(["center", "favela", "beach", "mountains", "business"]);
-    expect(MAP_ZONES.map((z) => z.code).sort()).toEqual(["base", "beach", "business", "center", "favela", "mountains"]);
+  it("has nine districts of twelve buildings and the base on the map", () => {
+    expect(DISTRICTS.map((d) => d.code)).toEqual([
+      "center", "favela", "beach", "mountains", "business", "residential", "industrial", "airport", "island",
+    ]);
+    expect(MAP_ZONES.map((z) => z.code).sort()).toEqual([
+      "airport", "base", "beach", "business", "center", "favela", "industrial", "island", "mountains", "residential",
+    ]);
     for (const d of DISTRICTS) {
       expect(d.buildings).toHaveLength(12);
       expect(new Set(d.buildings.map((b) => b.code)).size).toBe(12);
@@ -70,7 +74,7 @@ const town = (over: Partial<TownState> = {}): TownState => ({
   residents: { enabled: true, population: 7, rent_per_resident: 1, rent: 7, rent_pct: 20, hotel_pct: 0, daily_coins: 0 },
   houses: [{ district: "beach", code: "surf" }],
   owned_total: 1,
-  total_houses: 60,
+  total_houses: 108,
   price_growth_pct: 4,
   districts: DISTRICTS.map((d) => ({
     code: d.code, name: d.name, rent: 45, next_price: 4160, owned: d.code === "beach" ? 1 : 0, total: 12,
@@ -141,6 +145,10 @@ vi.mock("@/api/town", () => ({
     top: [{ place: 1, user_id: 7, name: "Город Пети", owner: "Петя", score: 44, likes: 3, guests: 4, houses: 2, reward: 3000 }],
     me: null,
     last_week: { week: "2026-W45", winners: [{ place: 1, user_id: 1, owner: "Я", score: 30, coins: 3000 }], mine: { place: 1, coins: 3000 } },
+  })),
+  fetchVillaWeek: vi.fn(async () => ({
+    ends_on: "2026-11-15", rewards: [{ place: 1, coins: 2000 }, { place: 2, coins: 1000 }, { place: 3, coins: 500 }],
+    top: [{ place: 1, user_id: 7, owner: "Петя", likes: 5, villa_level: 3, reward: 2000 }], me: null, last_week: [],
   })),
 }));
 
@@ -307,7 +315,7 @@ describe("TownPage", () => {
   it("shows the town of the week ranking and the past week's prize", async () => {
     at("/town/week");
     expect(await screen.findByRole("link", { name: /Город Пети/ })).toHaveAttribute("href", "/town/visit/7");
-    expect(screen.getByTestId("town-week-mine")).toHaveTextContent("🥇 место — +3 000 монет");
+    expect(screen.getByTestId("town-week-mine")).toHaveTextContent("на 1 месте 🥇 — +3 000 монет");
     expect(screen.getByText(/❤️ лайк гостя — 10/)).toBeInTheDocument();
   });
 

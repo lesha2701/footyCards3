@@ -26,7 +26,7 @@ async def test_passes_are_sold_for_stars_and_stack(client, db_session, bot_token
     uid, headers, club_id = await _setup(client, db_session, bot_token, 899401)
     shop = (await client.get(f"{API}/manager", headers=headers)).json()["shop"]
     passes = {p["code"]: p for p in shop["passes"]}
-    assert set(passes) == {"analytics"} and not passes["analytics"]["active"]
+    assert set(passes) == {"analytics", "assistant"} and not passes["analytics"]["active"]
     stars = passes["analytics"]["stars"]
     key, _title, _about, price = await manager_shop.stars_order(db_session, uid, "analytics", config)
     assert key == "manager:analytics" and price == stars > 0

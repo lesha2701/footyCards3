@@ -68,6 +68,7 @@ const SECTIONS: Section[] = [
   { group: "Игры и события", to: "/admin/match-day", label: "Матч дня", Icon: IconPlay },
   { group: "Игры и события", to: "/admin/halloween", label: "🎃 Ночь тыкв", Icon: IconFire },
   { group: "Игры и события", to: "/admin/fan-battle", label: "⚔️ Битва фанатов", Icon: IconFire },
+  { group: "Игры и события", to: "/admin/anniversary", label: "💯 100 дней", Icon: IconFire },
   { group: "Карточки", to: "/admin/upgrades", label: "Апгрейд", Icon: IconUpgrade },
   { group: "Карточки", to: "/admin/diamond-upgrades", label: "Диамант", Icon: IconCard },
   { group: "Карточки", to: "/admin/card-skills", label: "Навыки карточек", Icon: IconBrain },

@@ -24,6 +24,7 @@ API = "/api/v1"
 FRONTEND_CODES = {
     # Kept in step with frontend/src/lib/town.ts (the drawn tap zones).
     "center": 12, "favela": 12, "beach": 12, "mountains": 12, "business": 12,
+    "residential": 12, "industrial": 12, "airport": 12, "island": 12,
 }
 
 
@@ -74,7 +75,7 @@ async def test_buying_houses_gets_dearer_and_never_charges_twice(client, db_sess
 
     state = (await client.get(f"{API}/town", headers=headers)).json()
     favela = next(d for d in state["districts"] if d["code"] == "favela")
-    assert state["enabled"] and state["owned_total"] == 0 and state["total_houses"] == 60
+    assert state["enabled"] and state["owned_total"] == 0 and state["total_houses"] == 108
     assert favela["next_price"] == 1000 and favela["rent"] == 20
 
     first = await client.post(f"{API}/town/houses/favela/church/buy", headers=headers, json={"idempotency_key": "h1"})

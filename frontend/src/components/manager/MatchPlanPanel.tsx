@@ -40,8 +40,13 @@ export default function MatchPlanPanel({ onError }: { onError: (e: unknown) => v
   return (
     <>
       {data.events.map((e) => (
-        <section key={e.id} className="flex flex-col gap-2.5 rounded-2xl bg-gradient-to-br from-fuchsia-500/25 via-bg-surface to-bg-surface p-4 ring-1 ring-fuchsia-400/40" data-testid="club-event">
-          <p className="text-micro font-bold uppercase tracking-[0.18em] text-fuchsia-200">Событие клуба</p>
+        <section key={e.id} data-testid={e.press ? "press-conference" : "club-event"}
+          className={`flex flex-col gap-2.5 rounded-2xl p-4 ring-1 ${e.press
+            ? "bg-gradient-to-br from-sky-500/25 via-bg-surface to-bg-surface ring-sky-300/40"
+            : "bg-gradient-to-br from-fuchsia-500/25 via-bg-surface to-bg-surface ring-fuchsia-400/40"}`}>
+          <p className={`text-micro font-bold uppercase tracking-[0.18em] ${e.press ? "text-sky-200" : "text-fuchsia-200"}`}>
+            {e.press ? "🎙 Пресс-конференция · микрофоны включены" : "Событие клуба"}
+          </p>
           <p className="font-display text-base font-bold text-ink-chalk">{e.emoji} {e.title}</p>
           <p className="-mt-1 text-xs text-ink-mist">{e.text}</p>
           <div className="grid grid-cols-2 gap-2">
@@ -93,6 +98,7 @@ export default function MatchPlanPanel({ onError }: { onError: (e: unknown) => v
       {last?.result && (
         <p className="-mt-2 px-1 text-micro text-ink-mist">
           Последнее решение: {last.emoji} {last.title} — {last.options.find((o) => o.code === last.choice)?.label}
+          {last.by === "assistant" && " · решил помощник"}
         </p>
       )}
     </>

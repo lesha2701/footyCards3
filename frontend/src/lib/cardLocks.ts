@@ -18,3 +18,9 @@ export function squadLabel(card: LockFields): string | null {
 export function cardLockProps(card: LockFields): { inSquad: boolean; userLocked: boolean } {
   return { inSquad: inSquad(card), userLocked: !!card.is_user_locked };
 }
+
+/** An exclusive keepsake bound to its owner for good (backend BOUND_FOREVER,
+ * e.g. «Беккенбауэр Центурион»): never traded, sold or burned. */
+export function isBoundForever(card: Pick<UserCard, "bound_until">): boolean {
+  return !!card.bound_until && new Date(card.bound_until).getUTCFullYear() >= 2099;
+}

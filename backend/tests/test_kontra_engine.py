@@ -1,4 +1,5 @@
 import copy
+import random
 
 import pytest
 
@@ -148,3 +149,95 @@ def test_gear_percentages_apply():
     plain = _unit("a", "me")
     geared = _unit("a", "me", gear={"pct": {"spd": 10, "atk": 5, "crit": 7}})
     assert geared["spd"] > plain["spd"] and geared["atk"] > plain["atk"] and geared["crit"] == plain["crit"] + 7
+
+
+# ---------------------------------------------------------------------------
+# Tactics and the leader's ultimate
+# ---------------------------------------------------------------------------
+
+def test_tactics_cycle_and_stat_bonus():
+    assert engine.beats("pressing", "tiki") and engine.beats("tiki", "bus") and engine.beats("bus", "pressing")
+    assert not engine.beats("tiki", "pressing") and not engine.beats(None, "bus") and not engine.beats("bus", None)
+    squad = _squad("me", "m")
+    atk = [u["atk"] for u in squad]
+    engine.apply_tactic(squad, "pressing")
+    assert all(u["atk"] == round(a * 108 / 100) for u, a in zip(squad, atk))
+    engine.apply_tactic(squad, None)  # no scheme: nothing changes
+    assert all(u["atk"] == round(a * 108 / 100) for u, a in zip(squad, atk))
+
+
+def _hit_damage(tactics, edge):
+    state = engine.new_battle("edge", _squad("me", "m"), _squad("foe", "f"), mode="arena", max_rounds=50,
+                              manual=True, tactics=tactics, edge=edge)
+    attacker, target = engine.unit(state, "m1"), engine.unit(state, "f1")
+    engine._hit(state, attacker, target, 100, random.Random(1), "strike")
+    return state["events"][-1]
+
+
+def test_a_countering_tactic_hits_harder():
+    plain = _hit_damage({"me": "pressing", "foe": "bus"}, 10)  # bus beats pressing, not the other way
+    edged = _hit_damage({"me": "pressing", "foe": "tiki"}, 10)
+    assert "edge" not in plain and edged["edge"] is True
+    assert edged["damage"] > plain["damage"]
+
+
+def _with_leader(role_position="CB"):
+    me = _squad("me", "m")
+    leader = next(u for u in me if u["position"] == role_position)
+    engine.apply_team_bonuses(me, leader["id"], 0)
+    return me, leader
+
+
+def test_only_the_leader_gets_the_ultimate_and_it_needs_full_charge():
+    me, leader = _with_leader("ST")
+    assert [a["code"] for a in leader["abilities"]][-1] == "ult_attacker"
+    assert all(not any(engine.is_ult(a["code"]) for a in u["abilities"]) for u in me if u is not leader)
+    state = engine.new_battle("u", me, _squad("foe", "f"), mode="arena", max_rounds=50, manual=True)
+    state["turn_of"] = leader["id"]
+    assert "ult_attacker" not in engine.available(leader, state)
+    with pytest.raises(engine.EngineError):
+        engine.act(state, leader["id"], "ult_attacker", "f1")
+    state["charge"]["me"] = engine.ULT_FULL
+    assert "ult_attacker" in engine.available(leader, state)
+    target = engine.unit(state, "f2")
+    engine.add_effect(target, "shield", 2, 10_000)
+    events = engine.act(state, leader["id"], "ult_attacker", "f2")
+    assert events[0]["ult"] is True and state["charge"]["me"] == 0
+    hit = next(e for e in events if e["kind"] == "hit")
+    assert hit["target"] == "f2" and hit["absorbed"] == 0 and hit["damage"] > 0  # straight through the shield
+
+
+def test_charge_fills_from_actions_and_hits_taken():
+    state = _battle(manual=True)
+    actor = engine.advance(state)
+    engine.act(state, actor["id"], "strike", None)
+    side, other_side = actor["side"], engine.other(actor["side"])
+    assert state["charge"][side] == engine.ULT_CHARGE_ACTION
+    assert state["charge"][other_side] == engine.ULT_CHARGE_HIT_TAKEN
+
+
+@pytest.mark.parametrize("position,code", [("CB", "ult_defender"), ("GK", "ult_goalkeeper"), ("CM", "ult_midfielder")])
+def test_team_ultimates(position, code):
+    me, leader = _with_leader(position)
+    state = engine.new_battle("t", me, _squad("foe", "f"), mode="arena", max_rounds=50, manual=True)
+    state["turn_of"], state["charge"]["me"] = leader["id"], engine.ULT_FULL
+    for u in me:
+        u["hp"] = u["max_hp"] // 2
+        engine.add_effect(u, "yellow", 2)
+    engine.act(state, leader["id"], code)
+    if code == "ult_defender":
+        assert all(engine.has(u, "shield") for u in me)
+    elif code == "ult_goalkeeper":
+        assert all(not engine.has(u, "yellow") and u["hp"] > u["max_hp"] // 2 for u in me)
+    else:
+        assert all(engine.has(u, "haste") for u in me)
+
+
+def test_the_ai_spends_a_full_charge():
+    me, _ = _with_leader("ST")
+    foe = _squad("foe", "f")
+    engine.apply_team_bonuses(foe, "f1", 0)
+    state = engine.new_battle("ai", me, foe, mode="arena", max_rounds=80, manual=False)
+    engine.run_until_input(state)
+    assert state["finished"]
+    assert any(e["kind"] == "ability" and e.get("ult") for e in state["events"])

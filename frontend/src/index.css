@@ -418,6 +418,42 @@ body {
   .fans-spark, .fans-pulse { animation: none; }
 }
 
+/* «💯 Нам 100 дней!»: the anniversary sky, the gold «Первые 100» frame. */
+.anni-sky {
+  background:
+    radial-gradient(90% 110% at 15% 0%, rgb(251 191 36 / 0.45) 0%, transparent 60%),
+    radial-gradient(80% 100% at 100% 100%, rgb(168 85 247 / 0.35) 0%, transparent 60%),
+    linear-gradient(135deg, #1a1206 0%, #0b0b14 100%);
+}
+.gold100-frame {
+  background-image: linear-gradient(160deg, #fff3b0 0%, #fbbf24 22%, #a16207 50%, #fde68a 72%, #78350f 100%) !important;
+  box-shadow: 0 0 16px rgb(251 191 36 / 0.55);
+}
+@keyframes anniGlow {
+  0%, 100% { text-shadow: 0 0 12px rgb(251 191 36 / 0.6); }
+  50% { text-shadow: 0 0 26px rgb(251 191 36 / 0.95); }
+}
+.anni-glow { animation: anniGlow 2.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .anni-glow { animation: none; }
+}
+
+/* «Путь к Центуриону» (components/loyalty): purple night, a gold edge. */
+.centurion-sky {
+  background:
+    radial-gradient(90% 120% at 0% 0%, rgb(217 70 239 / 0.42) 0%, transparent 60%),
+    radial-gradient(70% 90% at 100% 100%, rgb(251 191 36 / 0.22) 0%, transparent 60%),
+    linear-gradient(135deg, #1b0b26 0%, #0b0b14 100%);
+}
+@keyframes centurionGlow {
+  0%, 100% { filter: drop-shadow(0 0 10px rgb(217 70 239 / 0.45)); }
+  50% { filter: drop-shadow(0 0 22px rgb(217 70 239 / 0.8)); }
+}
+.centurion-glow { animation: centurionGlow 2.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .centurion-glow { animation: none; }
+}
+
 /* «Город»: water strips shimmer — a soft light band drifting across, on the
    GPU (background position of one element), never with reduced motion. */
 .town-water {
@@ -468,4 +504,54 @@ body {
   12% { opacity: 1; }
   60% { transform: scale(1); opacity: 1; }
   100% { transform: scale(1.12); opacity: 0; }
+}
+
+/* «Контратака»: the stands behind the far goal — a crowd of dots with
+   flash-bulbs (pure CSS, no per-frame JS). */
+.kontra-crowd {
+  background-image:
+    radial-gradient(circle, rgba(255, 255, 255, 0.35) 0 1px, transparent 1.6px),
+    radial-gradient(circle, rgba(148, 197, 255, 0.25) 0 1px, transparent 1.6px);
+  background-size: 7px 6px, 11px 9px;
+  background-position: 0 0, 3px 2px;
+  -webkit-mask-image: linear-gradient(180deg, #000 30%, transparent);
+  mask-image: linear-gradient(180deg, #000 30%, transparent);
+}
+.kontra-bulb {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow: 0 0 8px 3px rgba(255, 255, 255, 0.8);
+  opacity: 0;
+  animation: kontra-bulb 2.8s infinite;
+}
+@keyframes kontra-bulb {
+  0%, 86%, 100% { opacity: 0; }
+  88% { opacity: 1; }
+  92% { opacity: 0.2; }
+}
+.kontra-bob {
+  animation: kontra-bob 2.4s ease-in-out infinite;
+}
+@keyframes kontra-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+.kontra-spin {
+  animation: kontra-spin 3s linear infinite;
+}
+@keyframes kontra-spin {
+  to { transform: rotate(360deg); }
+}
+.kontra-pulse-ring {
+  animation: kontra-pulse-ring 1.4s ease-out infinite;
+}
+@keyframes kontra-pulse-ring {
+  0% { transform: scale(0.85); opacity: 0.9; }
+  100% { transform: scale(1.25); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kontra-bulb, .kontra-bob, .kontra-spin, .kontra-pulse-ring { animation: none; }
 }

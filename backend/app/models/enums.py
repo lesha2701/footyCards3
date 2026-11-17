@@ -128,6 +128,8 @@ class TransactionType(str, enum.Enum):
     mordoboi_legend_reward = "mordoboi_legend_reward"
     kontra_reward = "kontra_reward"
     kontra_chest_purchase = "kontra_chest_purchase"
+    magic_reward = "magic_reward"
+    magic_purchase = "magic_purchase"
     free_kick_refill = "free_kick_refill"
     weekly_top_reward = "weekly_top_reward"
     newbie_reward = "newbie_reward"
@@ -151,6 +153,7 @@ class TransactionType(str, enum.Enum):
     town_gift = "town_gift"
     town_week = "town_week"
     prospect_purchase = "prospect_purchase"
+    town_villa = "town_villa"
     arena_division_reward = "arena_division_reward"
     arena_cup_reward = "arena_cup_reward"
     arena_goal_bonus = "arena_goal_bonus"
@@ -190,6 +193,9 @@ class TransactionType(str, enum.Enum):
     # «⚔️ Битва фанатов» (services/fan_battle_service.py): daily battles,
     # milestones and the final.
     fan_battle_reward = "fan_battle_reward"
+    # «💯 Нам 100 дней!» (services/anniversary_service.py): calendar gifts,
+    # the community goal «Сотня» and the recap gift.
+    anniversary_reward = "anniversary_reward"
 
 
 class GiftKind(str, enum.Enum):

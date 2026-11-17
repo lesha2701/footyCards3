@@ -7,7 +7,7 @@ from app.models.enums import Position, Rarity
 _PLAYER_COLUMN_FIELDS = (
     "id", "first_name", "last_name", "display_name", "rating", "rarity",
     "country", "club", "position", "image_path", "quick_sell_price", "is_active",
-    "is_pack_droppable", "collection_id", "path_talent_code", "person_key", "duel_style", "character_trait",
+    "is_pack_droppable", "collection_id", "edition_size", "path_talent_code", "person_key", "duel_style", "character_trait",
 )
 # Flank duels of the career (services/duel_service.py STYLES).
 DuelStyle = Literal["speed", "technique", "power", "reading"]
@@ -37,6 +37,8 @@ class PlayerOut(BaseModel):
     collection_name: Optional[str] = None
     # The collection's special frame ("zombie" / "vampire"), see CardCollection.card_skin.
     collection_skin: Optional[str] = None
+    # Numbered edition: copies that will ever exist; null = a regular card.
+    edition_size: Optional[int] = None
     # «Академия»: set = a path card with this talent (services/path_talent_catalog.py).
     path_talent_code: Optional[str] = None
     # «Один футболист» (services/player_identity.py); null = by display name.

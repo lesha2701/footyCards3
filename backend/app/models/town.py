@@ -154,6 +154,8 @@ class TownVisit(Base):
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     day: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     liked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # A like for the guest's look at «Моя вилла» («Вилла недели»).
+    villa_liked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     gift_coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
@@ -204,3 +206,39 @@ class TownWeekResult(Base):
         UniqueConstraint("week", "place", name="uq_town_week_place"),
         UniqueConstraint("week", "user_id", name="uq_town_week_user"),
     )
+
+
+class UserTownVilla(Base):
+    """«Моя вилла» (town_villa_service): the player's own plot — the villa's
+    and the garage's levels, the car that drives on his town map and the
+    residents working at the villa ({post: resident id})."""
+
+    __tablename__ = "user_town_villas"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    villa_level: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    garage_level: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    car_item_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    staff: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class UserTownVillaItem(Base):
+    """A thing on the villa's plot: the villa and the garage themselves, cars
+    and yard items (town_villa_service.ITEMS). x/y — the cell of its top
+    corner on the grid, both None = in storage; rot 1 = turned (w and h
+    swapped). A limited item carries its serial («№ 7»)."""
+
+    __tablename__ = "user_town_villa_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(24), nullable=False)
+    x: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    y: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    rot: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    serial: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    __table_args__ = (UniqueConstraint("code", "serial", name="uq_town_villa_item_serial"),)

@@ -34,7 +34,7 @@ from app.schemas.diamond_upgrade import (
     FeedCardsRequest,
     FeedCardsResult,
 )
-from app.services import card_star_service
+from app.services import anniversary_service, card_star_service
 from app.services.card_upgrade_service import UPGRADE_CARDS_MAX_PAGE, list_rules, list_upgradeable_cards, upgrade_card
 from app.services.collection_service import (
     collection_stats,
@@ -73,7 +73,12 @@ async def claim_card_star(
 async def get_album_overview_route(
     search: Optional[str] = None, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
-    return await get_album_overview(db, user.id, search)
+    upcoming = await anniversary_service.sync_collection(db)
+    out = await get_album_overview(db, user.id, search)
+    for item in out.collections:
+        if upcoming and item.id == upcoming[0]:
+            item.available_from = upcoming[1]
+    return out
 
 
 @router.get("/album/{collection_id}", response_model=AlbumCollectionDetailOut)
@@ -81,7 +86,11 @@ async def get_album_collection_detail_route(
     collection_id: int, search: Optional[str] = None, db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    return await get_album_collection_detail(db, user.id, collection_id, search)
+    upcoming = await anniversary_service.sync_collection(db)
+    out = await get_album_collection_detail(db, user.id, collection_id, search)
+    if upcoming and collection_id == upcoming[0]:
+        out.available_from = upcoming[1]
+    return out
 
 
 @router.get("/cards", response_model=Page[UserCardListItem])

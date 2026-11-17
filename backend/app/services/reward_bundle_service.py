@@ -14,6 +14,7 @@ from app.models.badge import Badge, UserBadge
 from app.models.enums import CardSource, Rarity, TransactionType
 from app.models.monetization import Cosmetic
 from app.models.pack import Pack
+from app.models.player import Player
 from app.models.user import User
 from app.schemas.badge import BadgeOut
 from app.schemas.card import UserCardOut
@@ -29,6 +30,10 @@ class Bundle:
     card_rarity: Optional[str] = None
     badge_id: Optional[int] = None
     cosmetic_id: Optional[int] = None
+    # One exact footballer (an exclusive keepsake, e.g. «Беккенбауэр
+    # Центурион»): the copy is bound to the player forever — no trade, sale
+    # or burn (UserCard.BOUND_FOREVER).
+    player_id: Optional[int] = None
 
     @classmethod
     def of(cls, row, prefix: str = "") -> "Bundle":
@@ -52,7 +57,8 @@ class Bundle:
         )
 
     def is_empty(self) -> bool:
-        return not (self.coins or self.pack_id or self.card_rarity or self.badge_id or self.cosmetic_id)
+        return not (self.coins or self.pack_id or self.card_rarity or self.badge_id or self.cosmetic_id
+                    or self.player_id)
 
 
 async def validate(db: AsyncSession, bundle: Bundle) -> None:
@@ -63,6 +69,8 @@ async def validate(db: AsyncSession, bundle: Bundle) -> None:
         raise ConflictError(f"Значок #{bundle.badge_id} не найден")
     if bundle.cosmetic_id is not None and await db.get(Cosmetic, bundle.cosmetic_id) is None:
         raise ConflictError(f"Косметика #{bundle.cosmetic_id} не найдена")
+    if bundle.player_id is not None and await db.get(Player, bundle.player_id) is None:
+        raise ConflictError(f"Футболист #{bundle.player_id} не найден")
     if bundle.card_rarity is not None and bundle.card_rarity not in Rarity.__members__:
         raise ConflictError("Неизвестная редкость карточки")
 
@@ -153,6 +161,20 @@ async def grant(
             touched.append(player.id)
         except ConflictError:
             logger.warning("reward bundle: no %s card to give, skipped", bundle.card_rarity)
+
+    if bundle.player_id is not None:
+        from app.models.card import BOUND_FOREVER
+
+        player = await db.get(Player, bundle.player_id)
+        if player is None:
+            logger.warning("reward bundle: player %s not found, skipped", bundle.player_id)
+        else:
+            card = await create_user_card(db, user.id, player.id, card_source)
+            card.is_user_locked = True
+            card.bound_until = BOUND_FOREVER
+            card.player = player
+            out.cards.append(UserCardOut.model_validate(card))
+            touched.append(player.id)
 
     if touched:
         await collection_service.grant_collection_rewards_for_new_cards(db, user, touched)

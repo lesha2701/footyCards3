@@ -33,7 +33,7 @@ FRIENDS_ACTIVE_TODAY = "friends_active_today"
 # tasks are read (_refresh_played), so any mode can have a task.
 PLAYED_PREFIX = "played:"
 # A mode an admin can switch off: its tasks aren't handed out meanwhile.
-MODE_SWITCHES = {"blackjack": "blackjack_enabled", "mordoboi": "mordoboi_enabled", "kontra": "kontra_enabled"}
+MODE_SWITCHES = {"blackjack": "blackjack_enabled", "mordoboi": "mordoboi_enabled", "kontra": "kontra_enabled", "magic": "magic_enabled"}
 
 
 async def friends_active_today(db: AsyncSession, user_id: int, now: Optional[datetime] = None) -> int:

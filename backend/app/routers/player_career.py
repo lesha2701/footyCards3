@@ -133,6 +133,12 @@ async def start_friends_league(league_id: int, db: AsyncSession = Depends(get_db
     return await player_career_friends.start(db, user, league_id)
 
 
+@router.post("/friends/{league_id}/leave")
+async def leave_friends_league(league_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"player_career_friends:{user.id}", max_calls=10, window_seconds=60)
+    return await player_career_friends.leave(db, user, league_id)
+
+
 @router.post("/friends/{league_id}/cancel")
 async def cancel_friends_league(league_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await player_career_friends.cancel(db, user, league_id)

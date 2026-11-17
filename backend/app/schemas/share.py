@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 class SharePrepareIn(BaseModel):
     kind: Literal[
-        "card", "match", "trophy", "my_player", "trade_wishes", "manager_player", "manager_transfer", "manager_news", "manager_champion", "mordoboi_win", "prospect",
+        "card", "match", "trophy", "my_player", "trade_wishes", "manager_player", "manager_transfer", "manager_news", "manager_champion", "mordoboi_win", "prospect", "anniversary_recap",
     ]
     # Ignored for "my_player", "manager_player" and "trade_wishes" (always the
     # caller's own); "manager_transfer" = the manager contract id;

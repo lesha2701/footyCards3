@@ -77,6 +77,10 @@ DISTRICT_NAMES: dict[str, str] = {
     "beach": "Пляж",
     "mountains": "Горы",
     "business": "Бизнес-район",
+    "residential": "Жилой квартал",
+    "industrial": "Промзона",
+    "airport": "Аэропорт",
+    "island": "Круизный остров",
 }
 
 HOUSES: dict[str, dict[str, str]] = {
@@ -106,6 +110,62 @@ HOUSES: dict[str, dict[str, str]] = {
         "tower": "Офисная башня", "bank_tower": "Банк", "law": "Юристы", "sponsors": "Офис спонсоров",
         "agents": "Футбольные агенты", "exchange": "Биржа", "cars": "Автосалон", "congress": "Конгресс-центр",
     },
+    "residential": {
+        "townhouses": "Таунхаусы",
+        "apartments": "Дом с балконами",
+        "stone_house": "Каменный дом",
+        "cottage": "Белый коттедж",
+        "kindergarten": "Детский сад",
+        "school": "Школа",
+        "school_field": "Школьное поле",
+        "grocery": "Овощная лавка",
+        "academy": "Футбольная академия",
+        "field_house": "Домик у поля",
+        "cafe": "Кафе с террасой",
+        "square": "Сквер с фонтаном",
+    },
+    "industrial": {
+        "water_tower": "Водонапорная башня",
+        "plant": "Химзавод",
+        "port": "Грузовой порт",
+        "cargo_ship": "Сухогруз",
+        "kit_factory": "Фабрика формы",
+        "ball_factory": "Фабрика мячей",
+        "print": "Цех печати",
+        "warehouse": "Склад",
+        "trucks": "Автопарк",
+        "workers_field": "Заводское поле",
+        "canteen": "Столовая",
+        "station": "Грузовая станция",
+    },
+    "airport": {
+        "training": "Тренировочный центр",
+        "lounge": "Лаунж-павильон",
+        "trophy": "Зал трофеев",
+        "residence": "Резиденция",
+        "gym": "Фитнес-клуб",
+        "hotel": "Отель аэропорта",
+        "parking": "Парковка",
+        "fuel": "Заправка",
+        "terminal": "Терминал",
+        "tower": "Диспетчерская башня",
+        "cargo": "Грузовой ангар",
+        "jets": "Ангар бизнес-джетов",
+    },
+    "island": {
+        "resort": "Курорт на холме",
+        "palazzo": "Палаццо",
+        "lighthouse": "Маяк",
+        "trophy": "Музей трофеев",
+        "lagoon": "Лагуна",
+        "hotel": "Отель у моря",
+        "beach_bar": "Пляжный бар",
+        "pier_restaurant": "Ресторан на пирсе",
+        "marina": "Марина",
+        "terminal": "Круизный терминал",
+        "liner": "Круизный лайнер",
+        "bungalows": "Бунгало на воде",
+    },
 }
 
 # Closed places on the town map (frontend lib/town.ts DECOR_ZONES — the codes must match).
@@ -113,7 +173,9 @@ DECOR_DISTRICT = "decor"
 DECOR: dict[str, str] = {"pier": "Пирс с колесом обозрения", "park": "Парк с фонтаном", "island": "Остров легенды"}
 
 # Which districts a place cheers up (all = the legend's island, at half).
-DECOR_DISTRICTS: dict[str, tuple[str, ...]] = {"pier": ("beach",), "park": ("center", "favela"), "island": ()}
+DECOR_DISTRICTS: dict[str, tuple[str, ...]] = {
+    "pier": ("beach", "island"), "park": ("center", "favela", "residential"), "island": (),
+}
 
 MOOD_DEFAULTS: dict[str, int] = {
     "min_pct": 70, "max_pct": 120,                    # houses' rent at mood 0 / 100
@@ -434,16 +496,20 @@ async def _income_parts(db: AsyncSession, config, user_id: int, town: Optional[U
     sets = await _resident_sets(db, config, owned_residents)
     places_pct = decor_pct(config, places)
     set_pct = sets_pct(config, sets)
+    from app.services import town_villa_service
+
+    prestige, villa_pct = await town_villa_service.prestige_for(db, config, user_id)
     moods = district_moods(config, town, houses, places, owned_residents, _now())
     rents = districts_config(config)
     mooded = sum(rents[h.district]["rent"] * moods[h.district]["pct"] // 100 for h in houses if h.district in rents)
-    houses_rent = mooded * (100 + effects["rent_pct"] + places_pct + set_pct) // 100
+    houses_rent = mooded * (100 + effects["rent_pct"] + places_pct + set_pct + villa_pct) // 100
     hotel = hotel_rent(config, cards) * (100 + effects["hotel_pct"]) // 100
     residents = effects["rent"] + effects["daily_coins"]
     return {
         "houses": houses_rent, "hotel": hotel if hotel_owned else 0, "hotel_if_owned": hotel,
         "residents": residents, "cards": cards, "hotel_owned": hotel_owned, "effects": effects,
         "places": places, "places_pct": places_pct, "moods": moods, "sets": sets, "sets_pct": set_pct,
+        "prestige": prestige, "villa_pct": villa_pct,
         "total": houses_rent + (hotel if hotel_owned else 0) + residents,
     }
 
@@ -558,6 +624,8 @@ async def get_state(db: AsyncSession, user: User) -> dict:
         ],
         "decor_pct": parts["places_pct"],
         "sets_pct": parts["sets_pct"],
+        "villa": {"prestige": parts["prestige"], "rent_pct": parts["villa_pct"],
+                  **(await _villa_summary(db, config, user.id) or {})},
         "sets_complete": [s["name"] for s in parts["sets"] if s["complete"]],
         "houses": [{"district": h.district, "code": h.building_code} for h in houses],
         "owned_total": owned_total,
@@ -568,7 +636,7 @@ async def get_state(db: AsyncSession, user: User) -> dict:
                 "code": code,
                 "name": DISTRICT_NAMES[code],
                 "rent": rents[code]["rent"] * parts["moods"][code]["pct"] // 100
-                * (100 + effects["rent_pct"] + parts["places_pct"] + parts["sets_pct"]) // 100,
+                * (100 + effects["rent_pct"] + parts["places_pct"] + parts["sets_pct"] + parts["villa_pct"]) // 100,
                 **parts["moods"][code],
                 "next_price": house_price(config, code, owned_total),
                 "owned": sum(1 for h in houses if h.district == code),
@@ -1012,6 +1080,12 @@ async def validate_stars_invoice(db: AsyncSession, invoice) -> tuple[bool, str]:
         from app.services import town_season_service
 
         return await town_season_service.validate_invoice(db, invoice)
+    if invoice.academy_speedup.startswith("town:villa:"):
+        from app.services import town_villa_service
+
+        if not is_unlocked(config, await db.get(UserTown, invoice.user_id)):
+            return False, "Сначала открой город"
+        return await town_villa_service.validate_invoice(db, invoice)
     if invoice.academy_speedup != _RENAME:
         return False, "Unknown order"
     if not is_unlocked(config, await db.get(UserTown, invoice.user_id)):
@@ -1029,6 +1103,10 @@ async def deliver_stars_invoice(db: AsyncSession, user: User, invoice) -> dict:
         from app.services import town_season_service
 
         return await town_season_service.deliver_invoice(db, user, invoice)
+    if invoice.academy_speedup.startswith("town:villa:"):
+        from app.services import town_villa_service
+
+        return await town_villa_service.deliver_invoice(db, user, invoice)
     town = await _get_town(db, user.id)
     order = (await db.execute(select(TownLedger).where(
         TownLedger.user_id == user.id, TownLedger.idempotency_key == f"order-{invoice.payload_token}",
@@ -1046,3 +1124,9 @@ async def _season_items(db: AsyncSession, user_id: int) -> list[dict]:
     from app.services import town_season_service
 
     return await town_season_service.owned_items(db, user_id)
+
+
+async def _villa_summary(db: AsyncSession, config, user_id: int) -> Optional[dict]:
+    from app.services import town_villa_service
+
+    return await town_villa_service.summary(db, config, user_id)

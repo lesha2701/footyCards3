@@ -129,7 +129,12 @@ async def _get_or_create_user(
     previous_seen_at = user.last_seen_at
     previous_day = local_today(previous_seen_at) if previous_seen_at else None
     if previous_day != today:
+        old_streak = user.daily_login_streak
         user.daily_login_streak = user.daily_login_streak + 1 if previous_day == today - timedelta(days=1) else 1
+        # «Страховка серии»: one missed day of a long streak can be bought back.
+        from app.services.loyalty_service import note_streak_change
+
+        await note_streak_change(db, user, old_streak, previous_day, today)
         # Same once-a-day trigger feeds the analytics activity history.
         await record_daily_activity(db, user.id, today)
         changed = True
@@ -144,10 +149,21 @@ async def _get_or_create_user(
 
         await check_streak(db, user)
         await db.refresh(user)
+        # «Старожил», «Основатель», the «Центурион» card owed from before it existed.
+        from app.services.loyalty_service import check as check_loyalty
+
+        await check_loyalty(db, user)
+        await db.refresh(user)
         # Back after a long absence: a welcome gift may be due.
         from app.services.comeback_gift_service import check as check_comeback
 
         await check_comeback(db, user, previous_seen_at)
+        await db.refresh(user)
+        # Thanks to Stars buyers: settles last week's «Покровитель недели»
+        # once, and a «Преторианец» who reached the bar before it existed.
+        from app.services import stars_patron_service
+
+        await stars_patron_service.run_daily(db, user)
         await db.refresh(user)
     if previous_day != today and user.referred_by_id is not None and not user.referral_reward_granted:
         # A new active day may make him a counted friend (referral_service).

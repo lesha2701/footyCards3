@@ -52,6 +52,7 @@ METRIC_LABELS: dict[RankingMetric, str] = {
     RankingMetric.stratego_puzzles: "Задачи Стратего",
     RankingMetric.mordoboi_rating: "Рейтинг Мордобоя",
     RankingMetric.kontra_rating: "Арена Контратаки",
+    RankingMetric.magic_rating: "Рейтинг «Мяч и Магия»",
     RankingMetric.league_rating: "Рейтинг лиги",
     RankingMetric.matches_won: "Победы",
     RankingMetric.cards_count: "Карт в коллекции",
@@ -126,6 +127,7 @@ async def settle(db: AsyncSession, week_start: date) -> int:
 WEEKLY_RATINGS = {
     "arena_rating": 0, "tactics_rating": 0, "penalty_rating": 0,
     "stratego_rating": 0, "mordoboi_rating": 0, "kontra_rating": 1000,
+    "magic_rating": 0,
 }
 
 

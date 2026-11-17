@@ -6,6 +6,7 @@ import {
   cancelFriendsLeague,
   createFriendsLeague,
   fetchFriendsLeague,
+  leaveFriendsLeague,
   respondFriendsLeague,
   startFriendsLeague,
   type FriendsLeague,
@@ -37,6 +38,7 @@ export default function FriendsLeagueTab({ hasClub }: { hasClub: boolean }) {
   });
   const start = useMutation({ mutationFn: (id: number) => startFriendsLeague(id), onSuccess: (v) => { hapticNotify("success"); onData(v); }, onError });
   const cancel = useMutation({ mutationFn: (id: number) => cancelFriendsLeague(id), onSuccess: onData, onError });
+  const leave = useMutation({ mutationFn: (id: number) => leaveFriendsLeague(id), onSuccess: onData, onError });
 
   if (isLoading || !data) return <ListSkeleton />;
   const league = data.league;
@@ -59,7 +61,12 @@ export default function FriendsLeagueTab({ hasClub }: { hasClub: boolean }) {
         </section>
       ))}
 
-      {league && <LeagueBlock league={league} busy={start.isPending || cancel.isPending} onStart={() => start.mutate(league.id)} onCancel={() => cancel.mutate(league.id)} />}
+      {league && (
+        <LeagueBlock
+          league={league} busy={start.isPending || cancel.isPending || leave.isPending}
+          onStart={() => start.mutate(league.id)} onCancel={() => cancel.mutate(league.id)} onLeave={() => leave.mutate(league.id)}
+        />
+      )}
 
       {data.can_create && (
         <section className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4">
@@ -101,7 +108,10 @@ export default function FriendsLeagueTab({ hasClub }: { hasClub: boolean }) {
   );
 }
 
-function LeagueBlock({ league, busy, onStart, onCancel }: { league: FriendsLeague; busy: boolean; onStart: () => void; onCancel: () => void }) {
+function LeagueBlock({ league, busy, onStart, onCancel, onLeave }: {
+  league: FriendsLeague; busy: boolean; onStart: () => void; onCancel: () => void; onLeave: () => void;
+}) {
+  const [confirmLeave, setConfirmLeave] = useState(false);
   if (league.status === "lobby") {
     const joined = league.members.filter((m) => m.status === "accepted").length;
     return (
@@ -110,8 +120,8 @@ function LeagueBlock({ league, busy, onStart, onCancel }: { league: FriendsLeagu
         {league.members.map((m) => (
           <p key={m.user_id} className="flex justify-between text-sm text-ink-chalk">
             {m.name}
-            <span className={m.status === "accepted" ? "text-accent-lime" : m.status === "declined" ? "text-red-400" : "text-ink-mist"}>
-              {m.status === "accepted" ? "в лиге" : m.status === "declined" ? "отказался" : "ждём ответа"}
+            <span className={m.status === "accepted" ? "text-accent-lime" : m.status === "declined" || m.status === "left" ? "text-red-400" : "text-ink-mist"}>
+              {m.status === "accepted" ? "в лиге" : m.status === "declined" ? "отказался" : m.status === "left" ? "вышел" : "ждём ответа"}
             </span>
           </p>
         ))}
@@ -123,7 +133,12 @@ function LeagueBlock({ league, busy, onStart, onCancel }: { league: FriendsLeagu
             <button disabled={busy} onClick={onCancel} className="rounded-xl bg-bg-raised py-2.5 text-sm text-ink-mist">Отменить</button>
           </div>
         ) : (
-          <p className="text-caption text-ink-mist">Ждём, когда {league.owner_name} начнёт лигу</p>
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <p className="text-caption text-ink-mist">Ждём, когда {league.owner_name} начнёт лигу</p>
+            <button disabled={busy} onClick={onLeave} className="shrink-0 rounded-xl bg-bg-raised px-3 py-2 text-xs text-ink-mist disabled:opacity-40">
+              Выйти
+            </button>
+          </div>
         )}
       </section>
     );
@@ -184,6 +199,19 @@ function LeagueBlock({ league, busy, onStart, onCancel }: { league: FriendsLeagu
           );
         })}
       </div>
+      {league.status === "active" && (
+        confirmLeave ? (
+          <div className="rounded-xl bg-red-500/10 p-3" data-testid="friends-leave-confirm">
+            <p className="text-xs text-ink-chalk">Выйти из лиги? Твой клуб доиграет оставшиеся туры без тебя, награды за них и за место не придут.</p>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button disabled={busy} onClick={onLeave} className="rounded-lg bg-red-500/80 py-2 text-xs font-bold text-white disabled:opacity-40">Выйти</button>
+              <button onClick={() => setConfirmLeave(false)} className="rounded-lg bg-bg-raised py-2 text-xs text-ink-mist">Остаться</button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => setConfirmLeave(true)} className="self-center text-xs text-ink-mist-dim underline">Выйти из лиги</button>
+        )
+      )}
     </section>
   );
 }

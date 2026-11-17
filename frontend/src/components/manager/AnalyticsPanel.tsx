@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { fetchManagerAnalytics, type ManagerPass } from "@/api/manager";
+import { fetchManagerAnalytics, type ManagerAnalytics, type ManagerPass } from "@/api/manager";
 import analyticsArt from "@/assets/manager/analytics.webp";
 import SectionTitle from "@/components/manager/SectionTitle";
 import { payMyPlayerWithStars } from "@/lib/myPlayerStars";
@@ -20,7 +20,8 @@ function Form({ form }: { form: ("W" | "D" | "L")[] }) {
   );
 }
 
-/** «Аналитика Pro»: the next opponent line by line; a teaser without the pass. */
+/** «Аналитик»: the next opponent line by line, the advice, the last match and
+ * the forecast; a teaser without the pass. */
 export default function AnalyticsPanel({ pass, onError }: { pass: ManagerPass | undefined; onError: (e: unknown) => void }) {
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
@@ -44,8 +45,8 @@ export default function AnalyticsPanel({ pass, onError }: { pass: ManagerPass | 
       <section className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-sky-500/15 to-bg-surface p-3.5 ring-1 ring-sky-300/25" data-testid="analytics-teaser">
         <img src={analyticsArt} alt="" width={44} height={44} className="shrink-0 rounded-xl ring-1 ring-white/10" />
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-bold text-ink-chalk">Аналитика Pro</span>
-          <span className="block text-micro text-ink-mist">Разбор соперника, алерты по акциям, спонсор и напоминания до окна</span>
+          <span className="block text-sm font-bold text-ink-chalk">📊 Аналитик в штаб</span>
+          <span className="block text-micro text-ink-mist">Разбор соперника, совет на тур, оценка сделок, прогноз сезона</span>
         </span>
         <button disabled={busy} onClick={() => void buy()} className="shrink-0 rounded-xl bg-amber-400 px-3 py-2 text-xs font-bold text-bg-base">
           {pass.stars} ⭐
@@ -54,8 +55,9 @@ export default function AnalyticsPanel({ pass, onError }: { pass: ManagerPass | 
     );
   }
   const o = data?.opponent;
-  if (!o) return null;
+  if (!o) return data ? <AnalystNotes data={data} /> : null;
   return (
+    <>
     <section className="flex flex-col gap-2.5 rounded-2xl bg-gradient-to-br from-sky-500/20 via-bg-surface to-bg-surface p-4 ring-1 ring-sky-300/30" data-testid="analytics">
       <div className="flex items-center justify-between gap-2">
         <h2 className="min-w-0"><SectionTitle art={analyticsArt}>Разбор: «{o.name}»</SectionTitle></h2>
@@ -88,6 +90,45 @@ export default function AnalyticsPanel({ pass, onError }: { pass: ManagerPass | 
           <span>Соперник: {o.record.gf}:{o.record.ga}{o.injuries > 0 && ` · 🩹 ${o.injuries}`}</span>
           <Form form={o.record.form} />
         </div>
+      </div>
+    </section>
+    <AnalystNotes data={data} />
+    </>
+  );
+}
+
+const PLAN_TEXT = { press: "⚡ Прессинг", bus: "🧱 Автобус", rotate: "🔄 Ротация" } as const;
+const RESULT = { win: ["Победа", "text-accent-lime"], draw: ["Ничья", "text-ink-chalk"], loss: ["Поражение", "text-red-300"] } as const;
+
+/** «Аналитик»'s notes: the advice for the next match, the last match, the season forecast. */
+function AnalystNotes({ data }: { data: ManagerAnalytics }) {
+  const { advice, review, forecast } = data;
+  if (!advice && !review && !forecast) return null;
+  return (
+    <section className="grid grid-cols-1 gap-2" data-testid="analyst-notes">
+      {advice && (
+        <div className="flex flex-col gap-1 rounded-2xl bg-bg-surface p-3 ring-1 ring-sky-300/20">
+          <p className="text-micro font-bold uppercase tracking-wide text-sky-200">Совет на тур</p>
+          <p className="text-sm font-bold text-ink-chalk">{advice.plan ? PLAN_TEXT[advice.plan] : "⚖️ Обычная игра"}{advice.style_label && ` · стиль «${advice.style_label}»`}</p>
+          <p className="text-micro text-ink-mist">{advice.why}{advice.style_why && ` · ${advice.style_why}`}</p>
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        {review && (
+          <div className="flex flex-col gap-1 rounded-2xl bg-bg-surface p-3">
+            <p className="text-micro font-bold uppercase tracking-wide text-ink-mist">Прошлый матч</p>
+            <p className={`text-sm font-black ${RESULT[review.result][1]}`}>{RESULT[review.result][0]} {review.for}:{review.against}</p>
+            <p className="truncate text-[10px] text-ink-mist">«{review.opponent}»</p>
+            {review.notes.slice(0, 2).map((n) => <p key={n} className="text-[10px] leading-tight text-ink-chalk">• {n}</p>)}
+          </div>
+        )}
+        {forecast && (
+          <div className="flex flex-col gap-1 rounded-2xl bg-bg-surface p-3">
+            <p className="text-micro font-bold uppercase tracking-wide text-ink-mist">Прогноз сезона</p>
+            <p className="font-display text-2xl font-black text-sky-200">{forecast.place}<span className="text-sm text-ink-mist"> / {forecast.of}</span></p>
+            <p className="text-[10px] leading-tight text-ink-mist">место по силе состава в лиге</p>
+          </div>
+        )}
       </div>
     </section>
   );

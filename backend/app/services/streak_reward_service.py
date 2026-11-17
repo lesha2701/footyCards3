@@ -1,6 +1,7 @@
 """Keepsakes for days in a row in the game (users.daily_login_streak):
 GameConfig.streak_rewards `[{"days": 100, "coins": …, "pack_id": …,
-"card_rarity": …, "badge_id": …, "cosmetic_id": …}]`. Checked once a day
+"card_rarity": …, "badge_id": …, "cosmetic_id": …, "player_id": …}]` (player_id =
+an exclusive card bound forever, «Беккенбауэр Центурион» at 100). Checked once a day
 per player (core/dependencies, after the streak moved); every milestone is
 granted once (streak_rewards unique on user + days) and shown as a popup
 on the next app open until it's marked seen."""
@@ -47,7 +48,7 @@ async def check(db: AsyncSession, user: User) -> None:
         granted = await reward_bundle_service.grant(
             db, locked, Bundle(
                 coins=m.get("coins") or 0, pack_id=m.get("pack_id"), card_rarity=m.get("card_rarity"),
-                badge_id=m.get("badge_id"), cosmetic_id=m.get("cosmetic_id"),
+                badge_id=m.get("badge_id"), cosmetic_id=m.get("cosmetic_id"), player_id=m.get("player_id"),
             ),
             tx_type=TransactionType.achievement_reward,
             description=f"{m['days']} дней подряд в VICTOR FC", card_source=CardSource.task,

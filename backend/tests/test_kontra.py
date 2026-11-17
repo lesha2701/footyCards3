@@ -110,7 +110,10 @@ async def test_arena_auto_battle_moves_rating_and_pays(client, db_session, bot_t
     battle = (await client.post(f"{API}/arena/start", headers=headers, json={"offer": 0, "manual": False})).json()
     assert battle["status"] == "finished" and battle["result"] in ("win", "loss") and battle["events"]
     config = await db_session.get(GameConfig, 1)
-    expected = config.kontra_rating_win if battle["result"] == "win" else -config.kontra_rating_loss
+    from app.services import anti_bot_service
+
+    # a win against a bot gives a cut of the rating (anti_bot_service.bot_win_delta)
+    expected = anti_bot_service.bot_win_delta(config.kontra_rating_win, config) if battle["result"] == "win" else -config.kontra_rating_loss
     assert battle["rating_delta"] == expected
     user = await get_user_by_telegram_id(db_session, 960010)
     assert user.kontra_rating == 1000 + expected and user.kontra_rewarded_attempts_today == 1
@@ -252,3 +255,110 @@ async def test_stars_chest_delivery_is_idempotent(client, db_session, bot_token)
     assert len(gear) == 1 and gear[0].source == "stars"
     ok, _ = await kontra_service.validate_stars(db_session, uid, 25)
     assert ok
+
+
+# ---------------------------------------------------------------------------
+# Tactics, defence log + revenge, weekly leagues
+# ---------------------------------------------------------------------------
+
+async def test_tactic_is_saved_kept_and_played(client, db_session, bot_token):
+    headers, _, ids = await _player(client, db_session, bot_token, 960100)
+    squad = (await client.put(f"{API}/squad/tactic", headers=headers, json={"tactic": "bus"})).json()
+    assert squad["tactic"] == "bus" and {t["code"] for t in squad["tactics"]} == {"pressing", "tiki", "bus"}
+    assert squad["leader_ult"]["code"].startswith("ult_") and squad["tactic_edge_pct"] == 10
+    assert (await client.put(f"{API}/squad/tactic", headers=headers, json={"tactic": "nope"})).status_code == 409
+    # changing the squad or auto-picking keeps the tactic
+    assert (await client.put(f"{API}/squad", headers=headers, json={"cards": ids[:3], "leader": ids[0]})).json()["tactic"] == "bus"
+    assert (await client.post(f"{API}/squad/auto", headers=headers)).json()["tactic"] == "bus"
+    arena = (await client.get(f"{API}/arena", headers=headers)).json()
+    assert arena["tactic"]["code"] == "bus" and all(o["tactic"] for o in arena["offers"])  # bots pick one too
+    battle = (await client.post(f"{API}/arena/start", headers=headers, json={"offer": 0, "manual": False})).json()
+    assert battle["tactic_me"]["code"] == "bus" and battle["tactic_foe"]["code"] == arena["offers"][0]["tactic"]["code"]
+
+
+async def _beat_defence(client, db_session, bot_token):
+    """A strong attacker beats a weak defender; returns (attacker headers, defender headers, battle)."""
+    headers_a, uid_a, _ = await _player(client, db_session, bot_token, 960110, rating=99)
+    headers_b, _, ids_b = await _player(client, db_session, bot_token, 960111, rating=45, rarity=Rarity.common)
+    await client.put(f"{API}/squad", headers=headers_b, json={"cards": ids_b, "leader": ids_b[0]})
+    for _ in range(10):
+        arena = (await client.post(f"{API}/arena/refresh", headers=headers_a)).json()
+        real = [o for o in arena["offers"] if not o["is_bot"]]
+        if real:
+            break
+    battle = (await client.post(f"{API}/arena/start", headers=headers_a, json={"offer": real[0]["index"], "manual": False})).json()
+    assert battle["result"] == "win"
+    return headers_a, headers_b, battle
+
+
+async def test_defence_log_and_revenge_once(client, db_session, bot_token):
+    _, headers_b, battle = await _beat_defence(client, db_session, bot_token)
+    hub = (await client.get(f"{API}/hub", headers=headers_b)).json()
+    assert hub["defense_unread"] == 1
+    log = (await client.get(f"{API}/defense", headers=headers_b)).json()
+    item = log["items"][0]
+    assert item["battle_id"] == battle["id"] and item["result"] == "loss" and item["can_revenge"] and item["is_new"]
+    assert log["losses"] == 1 and log["wins"] == 0
+
+    assert (await client.post(f"{API}/defense/seen", headers=headers_b)).status_code == 204
+    assert (await client.get(f"{API}/hub", headers=headers_b)).json()["defense_unread"] == 0
+
+    arena = (await client.post(f"{API}/defense/{battle['id']}/revenge", headers=headers_b)).json()
+    first = arena["offers"][0]
+    assert first["revenge"] and not first["is_bot"] and len(arena["offers"]) == 3
+    assert (await client.post(f"{API}/defense/{battle['id']}/revenge", headers=headers_b)).status_code == 409
+    log = (await client.get(f"{API}/defense", headers=headers_b)).json()
+    assert not log["items"][0]["can_revenge"]
+
+    rematch = (await client.post(f"{API}/arena/start", headers=headers_b, json={"offer": 0, "manual": False})).json()
+    assert rematch["revenge"] is True
+    stored = await db_session.get(KontraBattle, rematch["id"])
+    assert (stored.server_state or {}).get("revenge") is True
+
+
+async def test_someone_elses_battle_cannot_be_revenged(client, db_session, bot_token):
+    headers_a, _, battle = await _beat_defence(client, db_session, bot_token)
+    assert (await client.post(f"{API}/defense/{battle['id']}/revenge", headers=headers_a)).status_code == 404
+
+
+async def test_week_bank_starts_a_fresh_week():
+    user = SimpleNamespace(kontra_week=None, kontra_week_best=0, kontra_league_reward=None)
+    assert kontra_service._bank_week(user, SimpleNamespace(kontra_leagues=[[0, 0], [1060, 150]])) is True
+    assert user.kontra_week is not None and user.kontra_week_best == 0 and user.kontra_league_reward is None
+    assert kontra_service._bank_week(user, SimpleNamespace(kontra_leagues=[[0, 0]])) is False
+
+
+async def test_finished_week_banks_the_league_and_pays_once(client, db_session, bot_token):
+    from datetime import timedelta
+
+    from app.core.timeutil import local_today
+    from app.services import kontra_catalog
+
+    headers, uid, _ = await _player(client, db_session, bot_token, 960120)
+    user = await get_user_by_telegram_id(db_session, 960120)
+    user.kontra_week = kontra_catalog.week_start(local_today()) - timedelta(days=7)
+    user.kontra_week_best = 1250  # Платина (>= 1240)
+    await db_session.commit()
+    hub = (await client.get(f"{API}/hub", headers=headers)).json()
+    assert hub["league_reward"] == {"name": "Платина", "icon": "💠", "coins": 600, "best": 1250}
+    assert hub["league"]["week_best"] == 0 and hub["league"]["name"] == "Бронза"
+
+    await db_session.refresh(user)
+    before = user.balance
+    claimed = (await client.post(f"{API}/league/claim", headers=headers)).json()
+    assert claimed["league_reward"] is None
+    await db_session.refresh(user)
+    assert user.balance == before + 600
+    assert (await client.post(f"{API}/league/claim", headers=headers)).status_code == 409
+
+
+async def test_arena_wins_raise_the_week_best(client, db_session, bot_token):
+    headers, _, _ = await _player(client, db_session, bot_token, 960130, rating=95)
+    await client.get(f"{API}/arena", headers=headers)
+    battle = (await client.post(f"{API}/arena/start", headers=headers, json={"offer": 0, "manual": False})).json()
+    user = await get_user_by_telegram_id(db_session, 960130)
+    await db_session.refresh(user)
+    if battle["rating_delta"]:
+        assert user.kontra_week_best == user.kontra_rating
+    arena = (await client.get(f"{API}/arena", headers=headers)).json()
+    assert arena["league"]["week_best"] == user.kontra_week_best

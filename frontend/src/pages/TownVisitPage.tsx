@@ -5,9 +5,10 @@ import { Link, useParams } from "react-router-dom";
 import { giftTown, likeTown, visitTown, type TownVisitView } from "@/api/town";
 import { IconCoin } from "@/components/icons";
 import TownScene from "@/components/town/TownScene";
+import VillaCarDrive from "@/components/town/VillaCarDrive";
 import { formatGameError } from "@/lib/errors";
 import { hapticNotify } from "@/lib/telegram";
-import { DECOR_ZONES, MAP_ZONES, TOWN_MAP } from "@/lib/town";
+import { DECOR_ZONES, MAP_ZONES, TOWN_MAP, badgeAnchor } from "@/lib/town";
 import { useAuthStore } from "@/store/authStore";
 
 const fmt = (n: number) => n.toLocaleString("ru-RU");
@@ -72,11 +73,17 @@ export default function TownVisitPage() {
               )}
             </button>
           </div>
+          {data.villa && (
+            <Link to={`/town/visit/${ownerId}/villa`} className="flex min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-white/5 text-sm font-bold text-ink-chalk">
+              🏡 Вилла хозяина · {"★".repeat(data.villa.villa_level)} · престиж {fmt(data.villa.prestige)}
+            </Link>
+          )}
           <section className="rounded-3xl border border-white/10 bg-bg-surface p-2">
             <TownScene
               art={TOWN_MAP}
               label={`Карта: ${data.name}`}
               decorations={data.season_items}
+              overlay={data.villa?.car ? <VillaCarDrive code={data.villa.car} /> : null}
               onPick={() => undefined}
               zones={[...MAP_ZONES.filter((z) => z.code !== "base").map((z) => {
                 const d = district(z.code);
@@ -85,9 +92,9 @@ export default function TownVisitPage() {
                   label: z.name,
                   zone: z.zone,
                   badge: (
-                    <span className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center whitespace-nowrap rounded-2xl bg-black/65 px-2.5 py-1 font-display text-xs font-bold text-white shadow-lg ring-1 ring-white/25">
+                    <span className={`absolute top-1/2 flex -translate-y-1/2 flex-col items-center whitespace-nowrap rounded-xl bg-black/65 px-1.5 py-0.5 font-display text-[10px] font-bold leading-tight text-white shadow-lg ring-1 ring-white/25 ${badgeAnchor(z.zone)}`}>
                       <span><span aria-hidden>{z.emoji}</span> {z.name}</span>
-                      {d && <span className="text-[10px] font-semibold text-white/70">🏠 {d.owned}/{d.total} · {moodEmoji(d.mood)} {d.mood}</span>}
+                      {d && <span className="text-[9px] font-semibold text-white/70">🏠 {d.owned}/{d.total} · {moodEmoji(d.mood)} {d.mood}</span>}
                     </span>
                   ),
                 };

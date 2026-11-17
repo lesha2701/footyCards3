@@ -14,7 +14,7 @@ from app.models.game import GameSession
 from app.models.match import Match
 from app.models.user import User
 from app.schemas.admin import GameConfigOut, GameConfigUpdate, SuspiciousMatchOut, SuspiciousMemorySessionOut
-from app.services import club_base_service, magnate_engine, town_service, town_social_service
+from app.services import club_base_service, magnate_engine, town_service, town_social_service, town_villa_service
 from app.services.admin_log_service import log_action
 from app.services.game_config_service import get_config
 
@@ -58,6 +58,11 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
             updates["town_social"] = town_social_service.validate_social(updates["town_social"])
         except ValueError as exc:
             raise ConflictError(f"Город, задания и гости: {exc}")
+    if updates.get("town_villa") is not None:
+        try:
+            updates["town_villa"] = town_villa_service.validate_villa(updates["town_villa"])
+        except ValueError as exc:
+            raise ConflictError(f"Город, вилла: {exc}")
     if updates.get("town_mood") is not None:
         try:
             updates["town_mood"] = town_service.validate_mood(updates["town_mood"])
@@ -130,7 +135,7 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
         config.club_pass_bonus_card_rarity = None
     for key in ("club_card_exchange_pack_id", "club_pass_daily_pack_id", "club_pass_bonus_pack_id", "club_pass_frame_cosmetic_id", "club_pass_badge_id",
                 "starter_offer_pack_id", "starter_offer_cosmetic_id", "club_raid_reward_pack_id",
-                "newbie_finale_pack_id", "newbie_finale_badge_id"):
+                "newbie_finale_pack_id", "newbie_finale_badge_id", "magic_pack_id"):
         if getattr(config, key) == 0:
             setattr(config, key, None)  # 0 from the admin form = none
     if "weekly_top_rewards" in updates:
@@ -152,12 +157,14 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
 
         rows = []
         for row in sorted(updates["streak_rewards"], key=lambda r: r["days"]):
-            bundle = Bundle(**{k: (row.get(k) or None) for k in ("pack_id", "card_rarity", "badge_id", "cosmetic_id")},
+            bundle = Bundle(**{k: (row.get(k) or None)
+                               for k in ("pack_id", "card_rarity", "badge_id", "cosmetic_id", "player_id")},
                             coins=row.get("coins") or 0)
             await reward_bundle_service.validate(db, bundle)
             rows.append({"days": row["days"], "coins": bundle.coins, "pack_id": bundle.pack_id,
                          "card_rarity": getattr(bundle.card_rarity, "value", bundle.card_rarity),
-                         "badge_id": bundle.badge_id, "cosmetic_id": bundle.cosmetic_id})
+                         "badge_id": bundle.badge_id, "cosmetic_id": bundle.cosmetic_id,
+                         "player_id": bundle.player_id})
         if len({r["days"] for r in rows}) != len(rows):
             raise ConflictError("Награды за дни подряд: два порога с одинаковым числом дней")
         config.streak_rewards = rows

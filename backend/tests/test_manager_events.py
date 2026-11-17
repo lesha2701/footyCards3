@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 
 from app.core.exceptions import ConflictError
 from app.models.manager_club import ManagerClub, ManagerEvent, ManagerLeague, ManagerLedger
-from app.services import manager_events as events, manager_finance as finance, manager_service
+from app.services import manager_events as events, manager_finance as finance, manager_press as press, manager_service
 from app.services.game_config_service import get_config
 from tests.test_manager import API, M, _next_season_start, _no_season_at_the_real_clock, _reset_rate_limits  # noqa: F401
 from tests.test_manager_finance import _club_row, _keep_loaded, _setup, _squad, _user  # noqa: F401
@@ -48,6 +48,7 @@ async def test_plan_for_the_next_match_and_an_event_after_its_round(client, db_s
     hurt = (league.state.get("injuries") or {}).get(str(club_id)) or {}
     assert all(v["back"] - v["rounds"] - 1 != 0 for v in hurt.values())
     opened = (await db_session.execute(select(ManagerEvent).where(ManagerEvent.club_id == club_id))).scalars().all()
+    opened = [e for e in opened if e.slot < press.PRESS_SLOT]  # press conferences have their own slots
     assert [e.slot for e in opened] == [0] if league.rounds_played < rounds[1] else len(opened) >= 1
 
     event = opened[0]
@@ -65,7 +66,7 @@ async def test_plan_for_the_next_match_and_an_event_after_its_round(client, db_s
     assert club.fans_bonus == max(0, fans + option["fans"])
     if option["form_pct"]:
         assert view["form_pct"] == option["form_pct"]
-    assert view["recent"][0]["status"] == "chosen" and not view["events"]
+    assert view["recent"][0]["status"] == "chosen" and not [e for e in view["events"] if not e["press"]]
     with pytest.raises(ConflictError):
         await events.choose(db_session, await _user(db_session, uid), event.id, option["code"])
     if option["money"]:

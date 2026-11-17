@@ -28,7 +28,7 @@ from app.models.user import User
 TRACK_EVERY = timedelta(minutes=5)
 # API prefixes (after /api/v1) whose POSTs are game actions.
 GAME_PREFIXES = (
-    "/games", "/matches", "/tactico", "/stratego", "/magnate", "/blackjack", "/mordoboi", "/kontra",
+    "/games", "/matches", "/tactico", "/stratego", "/magnate", "/blackjack", "/mordoboi", "/kontra", "/magic",
     "/path", "/career", "/player-career", "/manager", "/my-player",
 )
 
@@ -79,7 +79,7 @@ async def track_play(db: AsyncSession, user: User) -> None:
         set_committed_value(user, key, value)
 
 
-RANKED_MODES = ("arena", "tactico", "mordoboi", "stratego", "kontra", "penalty")
+RANKED_MODES = ("arena", "tactico", "mordoboi", "stratego", "kontra", "magic", "penalty")
 
 
 def bot_win_delta(delta: int, config: GameConfig) -> int:

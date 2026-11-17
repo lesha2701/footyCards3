@@ -41,7 +41,7 @@ type Form = Pick<GameConfig, "club_base_enabled" | "club_base_buildings" | "club
   | "club_base_income_max_days" | "club_base_cosmetics"
   | "town_enabled" | "town_districts" | "town_price_growth_pct" | "town_income_max_hours"
   | "town_unlock_coins" | "town_rename_stars" | "town_hotel_price" | "town_hotel_rent_per_100_cards"
-  | "town_hotel_max_cards" | "town_decor" | "town_mood" | "town_social">;
+  | "town_hotel_max_cards" | "town_decor" | "town_mood" | "town_social" | "town_villa">;
 
 // [GameConfig.town_mood key, label, default (town_service.MOOD_DEFAULTS)]
 const TOWN_MOOD: [string, string, number][] = [
@@ -69,12 +69,100 @@ const TOWN_SOCIAL: [string, string, number][] = [
   ["season_item_stars", "Сезонное украшение, ⭐", 49], ["season_item_supply", "Копий украшения (0 = без лимита)", 0],
 ];
 
+// [GameConfig.town_villa key, label, default (town_villa_service.VILLA_DEFAULTS)]
+const TOWN_VILLA: [string, string, number][] = [
+  ["villa_price_2", "Вилла 2 ур., монет", 15000],
+  ["villa_price_3", "Вилла 3 ур., монет", 40000],
+  ["villa_price_4", "Вилла 4 ур., монет", 90000],
+  ["villa_price_5", "Вилла 5 ур., монет", 180000],
+  ["grid_1", "Участок на 1 ур., клеток", 8],
+  ["grid_2", "Участок на 2 ур., клеток", 9],
+  ["grid_3", "Участок на 3 ур., клеток", 10],
+  ["grid_4", "Участок на 4 ур., клеток", 11],
+  ["grid_5", "Участок на 5 ур., клеток", 12],
+  ["garage_price_1", "Гараж 1 ур., монет", 8000],
+  ["garage_price_2", "Гараж 2 ур., монет", 25000],
+  ["garage_price_3", "Гараж 3 ур., монет", 60000],
+  ["garage_slots_1", "Гараж 1 ур.: мест", 1],
+  ["garage_slots_2", "Гараж 2 ур.: мест", 3],
+  ["garage_slots_3", "Гараж 3 ур.: мест", 6],
+  ["prestige_villa_level", "Престиж за уровень виллы", 20],
+  ["prestige_garage_level", "Престиж за уровень гаража", 10],
+  ["prestige_staff", "Престиж за работающего жителя на посту", 15],
+  ["prestige_combo", "Престиж за комбо (два предмета рядом)", 5],
+  ["prestige_per_pct", "Престижа на +1% ренты", 60],
+  ["prestige_max_pct", "Максимум +% ренты", 5],
+  ["max_items", "Предметов на вилле, максимум", 120],
+  ["villa_week_reward_1", "Вилла недели: 1 место", 2000],
+  ["villa_week_reward_2", "Вилла недели: 2 место", 1000],
+  ["villa_week_reward_3", "Вилла недели: 3 место", 500],
+  ["coins_car_hatch", "🚗 Городской хэтчбек, монет", 3000],
+  ["prestige_car_hatch", "🚗 Городской хэтчбек: престиж", 5],
+  ["coins_car_jeep", "🚙 Открытый джип, монет", 6000],
+  ["prestige_car_jeep", "🚙 Открытый джип: престиж", 8],
+  ["coins_car_van", "🚐 Фургон сёрфера, монет", 9000],
+  ["prestige_car_van", "🚐 Фургон сёрфера: престиж", 10],
+  ["coins_car_cabrio", "🚘 Кабриолет 60-х, монет", 12000],
+  ["prestige_car_cabrio", "🚘 Кабриолет 60-х: престиж", 12],
+  ["stars_car_sport", "🏎️ Суперкар, ⭐", 99],
+  ["prestige_car_sport", "🏎️ Суперкар: престиж", 25],
+  ["stars_car_bus", "🚌 Автобус команды, ⭐", 149],
+  ["prestige_car_bus", "🚌 Автобус команды: престиж", 30],
+  ["stars_car_classic", "🏁 Золотой родстер, ⭐", 249],
+  ["prestige_car_classic", "🏁 Золотой родстер: престиж", 40],
+  ["supply_car_classic", "🏁 Золотой родстер: копий (0 = без лимита)", 300],
+  ["coins_pool", "🏊 Бассейн, монет", 15000],
+  ["prestige_pool", "🏊 Бассейн: престиж", 20],
+  ["coins_pitch_mini", "⚽ Мини-поле, монет", 20000],
+  ["prestige_pitch_mini", "⚽ Мини-поле: престиж", 25],
+  ["coins_goal_practice", "🥅 Ворота для тренировки, монет", 2500],
+  ["prestige_goal_practice", "🥅 Ворота для тренировки: престиж", 4],
+  ["coins_gazebo_bbq", "🍖 Беседка с грилем, монет", 8000],
+  ["prestige_gazebo_bbq", "🍖 Беседка с грилем: престиж", 10],
+  ["coins_palm", "🌴 Пальма, монет", 600],
+  ["prestige_palm", "🌴 Пальма: престиж", 1],
+  ["coins_olive", "🫒 Оливковое дерево, монет", 800],
+  ["prestige_olive", "🫒 Оливковое дерево: престиж", 1],
+  ["coins_cypress", "🌲 Кипарис, монет", 600],
+  ["prestige_cypress", "🌲 Кипарис: престиж", 1],
+  ["coins_flowers", "💐 Клумба, монет", 400],
+  ["prestige_flowers", "💐 Клумба: престиж", 1],
+  ["coins_hedge", "🌿 Живая изгородь, монет", 300],
+  ["prestige_hedge", "🌿 Живая изгородь: престиж", 1],
+  ["coins_lamp", "🏮 Фонарь, монет", 500],
+  ["prestige_lamp", "🏮 Фонарь: престиж", 1],
+  ["coins_bench", "🪑 Скамейка, монет", 400],
+  ["prestige_bench", "🪑 Скамейка: престиж", 1],
+  ["coins_path", "▫️ Дорожка, монет", 100],
+  ["prestige_path", "▫️ Дорожка: престиж", 0],
+  ["coins_sun_umbrella", "⛱️ Зонт с шезлонгом, монет", 700],
+  ["prestige_sun_umbrella", "⛱️ Зонт с шезлонгом: престиж", 1],
+  ["stars_fountain_ball", "⛲ Фонтан с золотым мячом, ⭐", 79],
+  ["prestige_fountain_ball", "⛲ Фонтан с золотым мячом: престиж", 25],
+  ["stars_statue_gold", "🏆 Золотая статуя, ⭐", 59],
+  ["prestige_statue_gold", "🏆 Золотая статуя: престиж", 20],
+  ["stars_trophy_pavilion", "🏛️ Павильон трофеев, ⭐", 99],
+  ["prestige_trophy_pavilion", "🏛️ Павильон трофеев: престиж", 30],
+  ["stars_helipad", "🚁 Вертолётная площадка, ⭐", 199],
+  ["prestige_helipad", "🚁 Вертолётная площадка: престиж", 45],
+  ["stars_firepit", "🔥 Лаунж с камином, ⭐", 69],
+  ["prestige_firepit", "🔥 Лаунж с камином: престиж", 15],
+  ["supply_car_sport", "🏎️ Суперкар: копий (0 = без лимита)", 0],
+  ["supply_car_bus", "🚌 Автобус команды: копий (0 = без лимита)", 0],
+  ["supply_fountain_ball", "⛲ Фонтан с золотым мячом: копий (0 = без лимита)", 0],
+  ["supply_statue_gold", "🏆 Золотая статуя: копий (0 = без лимита)", 0],
+  ["supply_trophy_pavilion", "🏛️ Павильон трофеев: копий (0 = без лимита)", 0],
+  ["supply_helipad", "🚁 Вертолётная площадка: копий (0 = без лимита)", 0],
+  ["supply_firepit", "🔥 Лаунж с камином: копий (0 = без лимита)", 0],
+];
+
 const TOWN_DECOR: Record<string, string> = {
   park: "⛲ Парк с фонтаном", pier: "🎡 Пирс с колесом обозрения", island: "🏆 Остров легенды",
 };
 
 const TOWN_DISTRICTS: Record<string, string> = {
   favela: "🎨 Фавелы", center: "🏛️ Центр", mountains: "🏔️ Горы", beach: "🏖️ Пляж", business: "🏙️ Бизнес-район",
+  residential: "🏘️ Жилой квартал", industrial: "🏭 Промзона", airport: "✈️ Аэропорт", island: "🛳️ Круизный остров",
 };
 
 // Kind -> values that can be sold (the first value of each kind is the free default).
@@ -121,6 +209,7 @@ export default function AdminClubBasePage() {
       town_decor: config.town_decor ?? {},
       town_mood: config.town_mood ?? {},
       town_social: config.town_social ?? {},
+      town_villa: config.town_villa ?? {},
     });
   }, [config]);
 
@@ -352,6 +441,27 @@ export default function AdminClubBasePage() {
                   if (e.target.value === "") delete next[key];
                   else next[key] = Math.max(0, Math.round(Number(e.target.value)));
                   setForm({ ...form, town_social: next });
+                }}
+                className="rounded bg-bg-base px-2 py-1 outline-none"
+              />
+            </label>
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-slate-400">
+          🏡 «Моя вилла»: уровни, гараж, цены предметов (монеты или ⭐ — одно из двух), престиж и «Вилла недели».
+          Пустое поле — значение по умолчанию.
+        </p>
+        <div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3 lg:grid-cols-5">
+          {TOWN_VILLA.map(([key, label, def]) => (
+            <label key={key} className="flex flex-col gap-1 rounded-lg bg-white/5 p-2">
+              <span className="text-slate-400">{label}</span>
+              <input
+                type="number" min={0} placeholder={String(def)} value={form.town_villa[key] ?? ""}
+                onChange={(e) => {
+                  const next = { ...form.town_villa };
+                  if (e.target.value === "") delete next[key];
+                  else next[key] = Math.max(0, Math.round(Number(e.target.value)));
+                  setForm({ ...form, town_villa: next });
                 }}
                 className="rounded bg-bg-base px-2 py-1 outline-none"
               />

@@ -11,7 +11,6 @@ import {
   type ManagerLook,
   type ManagerView,
 } from "@/api/manager";
-import analyticsArt from "@/assets/manager/analytics.webp";
 import standsArt from "@/assets/manager/stands.webp";
 import LimitedBadge from "@/components/common/LimitedBadge";
 import ShareButton from "@/components/common/ShareButton";
@@ -207,24 +206,6 @@ export default function StyleTab({ view, club, onView, onError }: {
         )}
       </section>
 
-      {(shop.passes ?? []).filter((p) => p.stars > 0).map((p) => (
-        <section key={p.code} className="flex flex-col gap-2 rounded-2xl bg-gradient-to-br from-sky-400/15 to-bg-surface p-4 ring-1 ring-sky-300/30" data-testid={`pass-${p.code}`}>
-          <h2><SectionTitle art={analyticsArt}>{p.name}</SectionTitle></h2>
-          <ul className="flex flex-col gap-1 text-caption text-ink-mist">
-            {[
-              "Разбор следующего соперника: линии, форма, голы, травмы", "Уведомления о скачках курса твоих акций",
-              "Подпишет лучшего спонсора, если забыл до старта сезона", "Напомнит за сутки до закрытия окна, что осталось сделать",
-            ].map((t) => <li key={t}>• {t}</li>)}
-            <li className="text-micro">Без бонусов к силе — только удобство.</li>
-          </ul>
-          {p.active && p.until && (
-            <p className="text-xs text-accent-lime">Активен до {new Date(p.until).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}</p>
-          )}
-          <button disabled={busy === p.code} onClick={() => void stars(p.code)} className="rounded-xl bg-amber-400 py-2.5 text-sm font-bold text-bg-base">
-            {p.active ? "Продлить" : "Подключить"} на {p.days} дн. · {p.stars} ⭐
-          </button>
-        </section>
-      ))}
 
       {shop.my_merch.length > 0 && (
         <section className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4">

@@ -76,6 +76,10 @@ async def credit_coins(
     from app.services import fan_battle_service
 
     await fan_battle_service.grant_game_points(db, user, tx_type, amount)
+    # «💯 Нам 100 дней!»: and one game towards the community goal «Сотня».
+    from app.services import anniversary_service
+
+    await anniversary_service.count_game(db, user, tx_type, amount)
     return tx
 
 

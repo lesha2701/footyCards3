@@ -139,7 +139,7 @@ export function RewardPack({ name }: { name: string }) {
 export function RewardCard({ card }: { card: UserCard }) {
   return (
     <div className="w-28">
-      <PlayerCard player={card.player} size="sm" stars={card.stars} pathStage={card.path_stage} prestige={card.prestige} animated />
+      <PlayerCard player={card.player} size="sm" stars={card.stars} pathStage={card.path_stage} prestige={card.prestige} serial={card.serial_number} animated />
     </div>
   );
 }

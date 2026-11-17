@@ -57,11 +57,8 @@ def _assert_pack_available(pack: Pack) -> None:
         raise ConflictError("This pack is not currently available")
     if pack.stars_price is not None:
         raise ConflictError("This pack can only be purchased with Telegram Stars")
-    now = datetime.now(timezone.utc)
-    if pack.available_from and now < pack.available_from:
-        raise ConflictError("This pack is not on sale yet")
-    if pack.available_until and now > pack.available_until:
-        raise ConflictError("This pack sale has ended")
+    if not is_on_sale(pack):
+        raise ConflictError("This pack is not on sale now")
 
 
 PATH_POOL_EMPTY = "В паке пока нет карточек «Академии» — администратор ещё не добавил игроков"
@@ -86,11 +83,44 @@ def _needs_path_pool(pack: Pack) -> bool:
     )
 
 
+COLLECTION_POOL_EMPTY = "В этом паке пока нет карточек — коллекция ещё не готова"
+
+
+async def collection_pool_ready(db: AsyncSession, pack: Pack) -> bool:
+    """A themed pack (player_pool "collection:<id>") has at least one card to
+    drop (same filter as _pick_collection_player); other packs: True."""
+    pool = getattr(pack, "player_pool", "default") or "default"
+    if not pool.startswith("collection:"):
+        return True
+    row = (await db.execute(
+        select(Player.id).where(
+            Player.collection_id == int(pool.split(":", 1)[1] or 0), Player.is_active.is_(True),
+            Player.path_talent_code.is_(None),
+        ).limit(1)
+    )).first()
+    return row is not None
+
+
+def is_on_sale(pack: Pack, now: Optional[datetime] = None) -> bool:
+    """Inside its sale window (available_from / available_until), if any."""
+    now = now or datetime.now(timezone.utc)
+    start = pack.available_from
+    end = pack.available_until
+    if start is not None and start.tzinfo is None:
+        start = start.replace(tzinfo=timezone.utc)
+    if end is not None and end.tzinfo is None:
+        end = end.replace(tzinfo=timezone.utc)
+    return not ((start and now < start) or (end and now > end))
+
+
 async def assert_pool_ready(db: AsyncSession, pack: Pack) -> None:
     """Refuse BEFORE any payment: a path pack whose diamond slot has nothing
-    to drop would only fail mid-opening."""
+    to drop, or a themed pack whose collection is still empty, would only
+    fail mid-opening."""
     if _needs_path_pool(pack) and not await path_pool_ready(db):
         raise ConflictError(PATH_POOL_EMPTY, details={"reason": "path_pool_empty"})
+    if not await collection_pool_ready(db, pack):
+        raise ConflictError(COLLECTION_POOL_EMPTY, details={"reason": "collection_pool_empty"})
 
 
 async def today_count(db: AsyncSession, pack_id: int, user_id: int) -> int:
@@ -993,6 +1023,10 @@ async def list_available_packs(db: AsyncSession, user_id: Optional[int] = None) 
         pity_counter = (await db.execute(select(User.pity_counter).where(User.id == user_id))).scalar_one_or_none() or 0
     out = []
     for pack in packs:
+        # A seasonal pack (e.g. «Юбилейный пак») shows only inside its sale
+        # window, and a themed one only once its collection has cards.
+        if not is_on_sale(pack, now) or not await collection_pool_ready(db, pack):
+            continue
         purchase_count = 0
         if user_id is not None and pack.purchase_limit_per_user is not None:
             purchase_count = (
@@ -1002,11 +1036,7 @@ async def list_available_packs(db: AsyncSession, user_id: Optional[int] = None) 
                     )
                 )
             ).scalar_one()
-        is_available_now = True
-        if pack.available_from and now < pack.available_from:
-            is_available_now = False
-        if pack.available_until and now > pack.available_until:
-            is_available_now = False
+        is_available_now = True  # outside the window it isn't listed at all
         unavailable_reason = None
         if _needs_path_pool(pack) and not pool_ready:
             is_available_now = False

@@ -12,6 +12,7 @@ import {
 import GameHero from "@/components/common/GameHero";
 import { IconClose, IconCoin } from "@/components/icons";
 import TownScene from "@/components/town/TownScene";
+import VillaCarDrive from "@/components/town/VillaCarDrive";
 import hotelArt from "@/assets/town/hotel.webp";
 import housesArt from "@/assets/town/houses.webp";
 import residentsArt from "@/assets/town/residents.webp";
@@ -20,7 +21,7 @@ import { formatGameError } from "@/lib/errors";
 import { useMarkSeen } from "@/lib/seenSections";
 import { hapticNotify, openTelegramInvoice } from "@/lib/telegram";
 import {
-  DECOR_ZONES, DISTRICTS, FIREWORKS_BOX, MAP_ZONES, SCENE_H, SCENE_W, SEASON_LABEL, TOWN_MAP, districtOf, type DecorZone, type District,
+  DECOR_ZONES, DISTRICTS, FIREWORKS_BOX, badgeAnchor, MAP_ZONES, SCENE_H, SCENE_W, SEASON_LABEL, TOWN_MAP, districtOf, type DecorZone, type District,
   type TownBuilding,
 } from "@/lib/town";
 import { useAuthStore } from "@/store/authStore";
@@ -338,7 +339,7 @@ function QuestsPanel() {
   return (
     <section className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-bg-surface p-3" aria-label="Задания жителей" data-testid="town-quests">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-bold text-ink-chalk">📜 Задания жителей</p>
+        <p className="text-sm font-bold text-ink-chalk">📜 Задания</p>
         <span className="flex gap-1.5">
           <Link to="/town/week" className="rounded-full bg-amber-400/10 px-3 py-1 text-xs font-bold text-amber-200">🏆 Неделя</Link>
           <Link to="/town/guests" className="rounded-full bg-cyan-400/10 px-3 py-1 text-xs font-bold text-cyan-200">👋 В гости ›</Link>
@@ -391,7 +392,7 @@ function TownMap({
   const canRename = !!state?.unlocked && state.enabled && state.rename_stars > 0;
   return (
     <div className="flex flex-col gap-4">
-      <GameHero game="home-town" title={state?.name ?? "Город"} subtitle="Шесть районов, дома и жители — всё твоё" />
+      <GameHero game="home-town" title={state?.name ?? "Город"} subtitle="Девять районов, база, дома и жители — всё твоё" />
       {canRename && (
         <button
           type="button"
@@ -407,6 +408,24 @@ function TownMap({
       )}
       {state?.enabled && state.unlocked && <QuestsPanel />}
       {state?.enabled && state.unlocked && <SeasonPanel />}
+      {state?.enabled && state.unlocked && (
+        <Link
+          to="/town/villa"
+          className="flex min-h-[52px] items-center gap-3 rounded-2xl border border-rose-300/25 bg-gradient-to-r from-rose-400/15 to-amber-300/10 px-3"
+          data-testid="town-villa-link"
+        >
+          <span className="text-3xl" aria-hidden>🏡</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-bold text-ink-chalk">Моя вилла</span>
+            <span className="block truncate text-[11px] text-ink-mist">
+              {state.villa?.villa_level
+                ? `${"★".repeat(state.villa.villa_level)} · престиж ${fmt(state.villa.prestige)} · +${state.villa.rent_pct}% к ренте`
+                : "Твой участок: вилла, гараж, двор — обустрой как хочешь"}
+            </span>
+          </span>
+          <span className="text-ink-mist" aria-hidden>›</span>
+        </Link>
+      )}
       <section className="rounded-3xl border border-white/10 bg-bg-surface p-2">
         <TownScene
           art={TOWN_MAP}
@@ -417,7 +436,12 @@ function TownMap({
             if (picked) setPlace(picked);
             else navigate(c === "base" ? "/base" : `/town/${c}`);
           }}
-          overlay={allLit ? <Fireworks /> : null}
+          overlay={allLit || state?.villa?.car ? (
+            <>
+              {allLit && <Fireworks />}
+              {state?.villa?.car && <VillaCarDrive code={state.villa.car} />}
+            </>
+          ) : null}
           zones={[...MAP_ZONES.map((z) => {
             const d = owned(z.code);
             return {
@@ -425,10 +449,10 @@ function TownMap({
               label: z.name,
               zone: z.zone,
               badge: (
-                <span className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center whitespace-nowrap rounded-2xl bg-black/65 px-2.5 py-1 font-display text-xs font-bold text-white shadow-lg ring-1 ring-white/25 backdrop-blur-sm group-hover:scale-105">
+                <span className={`absolute top-1/2 flex -translate-y-1/2 flex-col items-center whitespace-nowrap rounded-xl bg-black/65 px-1.5 py-0.5 font-display text-[10px] font-bold leading-tight text-white shadow-lg ring-1 ring-white/25 backdrop-blur-sm group-hover:scale-105 ${badgeAnchor(z.zone)}`}>
                   <span><span aria-hidden>{z.emoji}</span> {z.name}</span>
                   {d && (
-                    <span className="text-[10px] font-semibold text-white/70">
+                    <span className="text-[9px] font-semibold text-white/70">
                       🏠 {d.owned}/{d.total} · {moodEmoji(d.mood)} {d.mood}
                     </span>
                   )}

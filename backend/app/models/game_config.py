@@ -87,11 +87,16 @@ DEFAULT_CLUB_BASE_COSMETICS: list = [
 # (before town_price_growth_pct for every house already owned) and its rent
 # in coins a day. The 0267 migration writes the same values.
 DEFAULT_TOWN_DISTRICTS: dict = {
-    "favela": {"price": 1500, "rent": 10},
-    "center": {"price": 3000, "rent": 18},
-    "mountains": {"price": 4500, "rent": 25},
-    "beach": {"price": 6000, "rent": 32},
-    "business": {"price": 9000, "rent": 42},
+    # 0278: ~10% dearer houses, ~10% less rent.
+    "favela": {"price": 1700, "rent": 9},
+    "center": {"price": 3300, "rent": 16},
+    "mountains": {"price": 5000, "rent": 23},
+    "beach": {"price": 6600, "rent": 29},
+    "business": {"price": 9900, "rent": 38},
+    "residential": {"price": 2400, "rent": 13},
+    "industrial": {"price": 8300, "rent": 33},
+    "airport": {"price": 12100, "rent": 45},
+    "island": {"price": 15400, "rent": 54},
 }
 
 # «Город», closed places on the map (pier, park, island): the price of
@@ -401,6 +406,17 @@ class GameConfig(TimestampMixin, Base):
     comeback_gift_cooldown_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     comeback_gift_coins: Mapped[int] = mapped_column(Integer, default=3000, nullable=False)
     comeback_gift_pack_slug: Mapped[str] = mapped_column(String, default="elite", nullable=False)
+    # Thanks to Stars buyers (stars_patron_service): «Покровитель недели» —
+    # the previous week's top buyers (at least week_min Stars): #1 gets the
+    # trophy and a card of week_card_rarity, places 2..week_places get coins;
+    # «Преторианец» — the badge + trophy at praetorian_threshold Stars in all.
+    stars_patron_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    stars_patron_week_min: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    stars_patron_week_places: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    stars_patron_week_card_rarity: Mapped[str] = mapped_column(String(16), default="legendary", nullable=False)
+    stars_patron_week_coins: Mapped[int] = mapped_column(Integer, default=5000, nullable=False)
+    stars_praetorian_threshold: Mapped[int] = mapped_column(Integer, default=10000, nullable=False)
+    stars_praetorian_badge_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Shop "предложение дня" (services/shop_offer_service.py): one coin pack a
     # day at a discount, once per player per day. pack_id = None rotates
     # through the active coin packs by date. Off by default.
@@ -1021,10 +1037,76 @@ class GameConfig(TimestampMixin, Base):
     kontra_boss_reward_tiers: Mapped[list] = mapped_column(
         JSON, default=lambda: [[0, 20], [20000, 50], [60000, 100], [150000, 200], [400000, 400]], nullable=False,
     )
+    # Weekly arena leagues: [[peak rating of the week, coins], ...] — the
+    # names (Бронза … Легенда) go by index (kontra_service.LEAGUE_NAMES).
+    kontra_leagues: Mapped[list] = mapped_column(
+        JSON, default=lambda: [[0, 0], [1060, 150], [1140, 300], [1240, 600], [1360, 1000]], nullable=False,
+    )
+    # Squad tactics: % more damage against the tactic yours counters.
+    kontra_tactic_edge_pct: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     kontra_gear_drop_boss_pct: Mapped[int] = mapped_column(Integer, default=35, nullable=False)
     kontra_gear_drop_arena_pct: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     kontra_chest_coins: Mapped[int] = mapped_column(Integer, default=1500, nullable=False)
     kontra_chest_stars: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
+    # «Мяч и Магия» (magic_service.py): adventure map + stack battles vs a bot hero. Off by default.
+    magic_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    magic_reward_win: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    magic_reward_loss: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    # Free runs a day (each is rewarded); more are bought: the day's first extra for coins, the rest for Stars.
+    # Runs: every mode has its own day — free runs, then one for coins, then some for Stars.
+    # A bought run counts for that mode and that day only. Prices ≈ 80% of a mode's average
+    # pay (coins) and 1 ⭐ = 100 coins, rounded up (Stars), so a run is bought for
+    # the progress, never as a coin farm. «Быстрая схватка»:
+    magic_daily_limit: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    magic_extra_run_coins: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    magic_extra_run_stars: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    magic_extra_runs_daily_limit: Mapped[int] = mapped_column(Integer, default=2, nullable=False)  # for Stars
+    # «Хардкор» and «Приключение»: the same four numbers.
+    magic_hardcore_daily_limit: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    magic_hardcore_run_coins: Mapped[int] = mapped_column(Integer, default=350, nullable=False)
+    magic_hardcore_run_stars: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    magic_hardcore_star_runs: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    magic_adventure_daily_limit: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    magic_adventure_run_coins: Mapped[int] = mapped_column(Integer, default=450, nullable=False)
+    magic_adventure_run_stars: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    magic_adventure_star_runs: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # «Магический пак»: 5 creature cards of the chosen faction (0 = not sold that way).
+    magic_creature_pack_coins: Mapped[int] = mapped_column(Integer, default=2000, nullable=False)
+    magic_creature_pack_stars: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    magic_wounded_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
+    magic_heal_essence_pct: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    magic_heal_stars: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    magic_essence_pack: Mapped[int] = mapped_column(Integer, default=300, nullable=False)
+    magic_essence_leadership: Mapped[int] = mapped_column(Integer, default=450, nullable=False)
+    magic_essence_leadership_max: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    magic_essence_mana: Mapped[int] = mapped_column(Integer, default=360, nullable=False)
+    magic_essence_mana_max: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    magic_essence_per_star: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    magic_essence_per_100_coins: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    # Progress pace (docs/magic-army.md): run XP %, captain duplicates, how much rivals follow it.
+    magic_progress_xp_pct: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    magic_captain_dup_xp: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    magic_captain_dup_daily: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    magic_progress_scaling_pct: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    magic_challenge_level_cap: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    # «Второй шанс»: replay a lost final once, for coins or Stars, so many times a day.
+    magic_retry_coins: Mapped[int] = mapped_column(Integer, default=250, nullable=False)
+    magic_retry_stars: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    magic_retries_daily_limit: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # The run's gold becomes coins at the end (% of the gold, rewarded runs only).
+    magic_gold_coins_pct: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    # Reward % by difficulty (normal = 100).
+    magic_easy_reward_pct: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    magic_hard_reward_pct: Mapped[int] = mapped_column(Integer, default=160, nullable=False)
+    # A pack for a rewarded win: chance by difficulty; no pack id = no packs.
+    magic_pack_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    magic_pack_chance_normal_pct: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    magic_pack_chance_hard_pct: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    magic_rating_win: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    magic_rating_loss: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    magic_days: Mapped[int] = mapped_column(Integer, default=7, nullable=False)
+    magic_moves_per_day: Mapped[int] = mapped_column(Integer, default=9, nullable=False)
+    magic_stack_cap: Mapped[int] = mapped_column(Integer, default=300, nullable=False)
     # «🎃 Ночь тыкв» (services/halloween_service.py): one switch, the dates and
     # every number of the event (pumpkin drops, shop, doors, boss) in
     # halloween_settings — halloween_service.DEFAULT_SETTINGS fills missing keys.
@@ -1039,6 +1121,15 @@ class GameConfig(TimestampMixin, Base):
     fan_battle_starts_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     fan_battle_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     fan_battle_settings: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # «💯 Нам 100 дней!» (services/anniversary_service.py): the same shape —
+    # calendar gifts, the community goal «Сотня», the recap gift, the ids.
+    anniversary_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    anniversary_starts_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    anniversary_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    anniversary_settings: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # Loyalty keepsakes (services/loyalty_service.py): «Старожил», «Основатель»,
+    # the «Центурион» card and «Страховка серии» — over loyalty_service.DEFAULTS.
+    loyalty_settings: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
 
     # «Топ недели» (weekly_top_service.py): every Monday the top places of
     # each ranking get the reward of their place. weekly_top_rewards is one
@@ -1405,6 +1496,8 @@ class GameConfig(TimestampMixin, Base):
     town_mood: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     # Residents' quests and guests (town_social_service.SOCIAL_DEFAULTS overridden key by key).
     town_social: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # «Моя вилла» (town_villa_service.VILLA_DEFAULTS overridden key by key).
+    town_villa: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     # Closed places on the town map (town_service.DECOR): {code: {price,
     # rent_pct}}; a bought place adds rent_pct % to the houses' rent.
     town_decor: Mapped[dict] = mapped_column(

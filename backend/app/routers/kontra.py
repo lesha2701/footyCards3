@@ -12,12 +12,14 @@ from app.schemas.kontra import (
     KontraAutoRequest,
     KontraBattleOut,
     KontraBossOut,
+    KontraDefenseOut,
     KontraGearEquipRequest,
     KontraGearListOut,
     KontraHubOut,
     KontraSquadOut,
     KontraSquadSetRequest,
     KontraStartRequest,
+    KontraTacticRequest,
 )
 from app.schemas.stars import StarsInvoiceCreateOut
 from app.services import kontra_service, shop_product_service
@@ -43,6 +45,32 @@ async def set_squad(payload: KontraSquadSetRequest, db: AsyncSession = Depends(g
 @router.post("/squad/auto", response_model=KontraSquadOut)
 async def auto_squad(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await kontra_service.auto_squad(db, user)
+
+
+@router.put("/squad/tactic", response_model=KontraSquadOut)
+async def set_tactic(payload: KontraTacticRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await kontra_service.set_tactic(db, user, payload.tactic)
+
+
+@router.post("/league/claim", response_model=KontraHubOut)
+async def claim_league(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await kontra_service.claim_league_reward(db, user)
+
+
+@router.get("/defense", response_model=KontraDefenseOut)
+async def defense_log(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await kontra_service.defense_log(db, user)
+
+
+@router.post("/defense/seen", status_code=204)
+async def defense_seen(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await kontra_service.mark_defense_seen(db, user)
+
+
+@router.post("/defense/{battle_id}/revenge", response_model=KontraArenaOut)
+async def revenge(battle_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"kontra_refresh:{user.id}", max_calls=20, window_seconds=60)
+    return await kontra_service.take_revenge(db, user, battle_id)
 
 
 @router.get("/arena", response_model=KontraArenaOut)

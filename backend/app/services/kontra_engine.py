@@ -58,6 +58,12 @@ ABILITIES: dict[str, tuple[str, int, str, str]] = {
     "boss_slam": ("Разнос", 2, "enemy_all", "70% атаки по всему отряду"),
     "boss_card": ("Красная карточка", 3, "enemy", "200% атаки и оглушение"),
     "boss_chant": ("Кричалка", 3, "enemy_all", "«Травма» на 2 хода всему отряду"),
+    # the leader's ultimate (by the leader's role), ready when the squad's
+    # charge (state["charge"]) is full — see ULT_*
+    "ult_attacker": ("Удар в девятку", 0, "enemy", "250% атаки по цели сквозь щит и провокацию"),
+    "ult_midfielder": ("Мастер-класс", 0, "ally_all", "+60% шкалы хода и «Ускорение» на 2 хода всему отряду"),
+    "ult_defender": ("Железный занавес", 0, "ally_all", "Щит 25% HP всему отряду на 2 хода"),
+    "ult_goalkeeper": ("Сухой матч", 0, "ally_all", "Лечит отряд на 25% HP и снимает все негативные эффекты"),
 }
 ROLE_ABILITIES = {
     "attacker": ("penalty", "hat_trick", "bicycle"),
@@ -76,6 +82,21 @@ PASSIVES: dict[str, tuple[str, str]] = {
     "vision": ("Видение поля", "После своей способности +10% шкалы хода союзникам"),
     "inspire": ("Вдохновение", "Его «Сейв» и «Медбригада» ещё и лечат всех на 5%"),
 }
+# Ultimate charge of a side (0..ULT_FULL): every own action and every hit
+# its fighters take fill it; the leader spends it.
+ULT_FULL = 100
+ULT_CHARGE_ACTION = 18
+ULT_CHARGE_HIT_TAKEN = 6
+NEGATIVE_EFFECTS = frozenset({"stun", "yellow", "slow", "blind", "injury"})
+
+# Squad tactics: code -> (name, short bonus, stat, pct, the tactic it beats).
+# A side whose tactic beats the other's deals state["edge"]% more damage.
+TACTICS: dict[str, tuple[str, str, str, int, str]] = {
+    "pressing": ("Прессинг", "+8% атаки", "atk", 8, "tiki"),
+    "tiki": ("Тики-така", "+10% скорости", "spd", 10, "bus"),
+    "bus": ("Автобус", "+12% защиты", "def", 12, "pressing"),
+}
+
 ROLE_PASSIVE = {"attacker": "cold_blood", "defender": "armor", "midfielder": "vision", "goalkeeper": "inspire"}
 
 EFFECT_LABELS = {
@@ -172,13 +193,29 @@ def apply_team_bonuses(units: list[dict], leader_id: Optional[int], chemistry_pc
         u["hp"] = u["max_hp"]
     if leader is not None:
         leader["leader"] = True
+        if leader["role"] in ROLES:
+            leader["abilities"].append({"code": f"ult_{leader['role']}", "cd": 0})
 
 
-def new_battle(seed: str, me: list[dict], foe: list[dict], *, mode: str, max_rounds: int, manual: bool) -> dict:
+def apply_tactic(units: list[dict], tactic: Optional[str]) -> None:
+    if tactic not in TACTICS:
+        return
+    _, _, stat, pct, _ = TACTICS[tactic]
+    for u in units:
+        u[stat] = round(u[stat] * (100 + pct) / 100)
+
+
+def beats(tactic: Optional[str], other_tactic: Optional[str]) -> bool:
+    return tactic in TACTICS and TACTICS[tactic][4] == other_tactic
+
+
+def new_battle(seed: str, me: list[dict], foe: list[dict], *, mode: str, max_rounds: int, manual: bool,
+               tactics: Optional[dict] = None, edge: int = 0) -> dict:
     return {
         "seed": seed, "actions": 0, "mode": mode, "manual": manual, "auto": not manual,
         "units": [*me, *foe], "turn_of": None, "round": 0, "max_rounds": max_rounds,
         "events": [], "finished": False, "winner": None, "damage_to_foe": 0,
+        "tactics": tactics or {}, "edge": edge, "charge": {"me": 0, "foe": 0},
     }
 
 
@@ -239,6 +276,19 @@ def _attack_power(u: dict) -> int:
     return a
 
 
+def is_ult(code: str) -> bool:
+    return code.startswith("ult_")
+
+
+def charge(state: dict, side: str) -> int:
+    return (state.get("charge") or {}).get(side, 0)
+
+
+def _add_charge(state: dict, side: str, amount: int) -> None:
+    ch = state.setdefault("charge", {"me": 0, "foe": 0})
+    ch[side] = min(ULT_FULL, ch.get(side, 0) + amount)
+
+
 def _event(state: dict, kind: str, **data) -> dict:
     e = {"kind": kind, "n": len(state["events"]) + 1, **data}
     state["events"].append(e)
@@ -249,8 +299,10 @@ def _event(state: dict, kind: str, **data) -> dict:
 # Combat
 # ---------------------------------------------------------------------------
 
-def _hit(state: dict, attacker: dict, target: dict, mult: int, r: random.Random, ability: str) -> int:
-    """mult in %; returns damage dealt (after shield). Misses on «офсайд»."""
+def _hit(state: dict, attacker: dict, target: dict, mult: int, r: random.Random, ability: str,
+         pierce: bool = False) -> int:
+    """mult in %; returns damage dealt (after shield, unless `pierce`).
+    Misses on «офсайд»."""
     blind = effect(attacker, "blind")
     if blind:
         attacker["effects"].remove(blind)
@@ -263,8 +315,12 @@ def _hit(state: dict, attacker: dict, target: dict, mult: int, r: random.Random,
         dmg *= attacker["crit_dmg"] / 100
     if target["passive"] == "armor":
         dmg *= 0.85
+    tactics = state.get("tactics") or {}
+    edge = bool(state.get("edge")) and beats(tactics.get(attacker["side"]), tactics.get(target["side"]))
+    if edge:
+        dmg *= (100 + state["edge"]) / 100
     dmg = max(1, round(dmg * r.uniform(0.95, 1.05)))
-    shield = effect(target, "shield")
+    shield = None if pierce else effect(target, "shield")
     absorbed = 0
     if shield:
         absorbed = min(shield["value"], dmg)
@@ -275,8 +331,9 @@ def _hit(state: dict, attacker: dict, target: dict, mult: int, r: random.Random,
     target["hp"] = max(0, target["hp"] - taken)
     if attacker["side"] == "me" and target["side"] == "foe":
         state["damage_to_foe"] += taken
+    _add_charge(state, target["side"], ULT_CHARGE_HIT_TAKEN)
     _event(state, "hit", actor=attacker["id"], target=target["id"], ability=ability, damage=taken,
-           absorbed=absorbed, crit=crit, hp=target["hp"])
+           absorbed=absorbed, crit=crit, hp=target["hp"], **({"edge": True} if edge else {}))
     if target["hp"] <= 0:
         target["alive"] = False
         target["effects"] = []
@@ -312,8 +369,9 @@ def _weakest(units: list[dict]) -> dict:
     return min(units, key=lambda u: (u["hp"] / u["max_hp"], u["id"]))
 
 
-def available(u: dict) -> list[str]:
-    return [a["code"] for a in u["abilities"] if a["cd"] == 0]
+def available(u: dict, state: Optional[dict] = None) -> list[str]:
+    full = state is not None and charge(state, u["side"]) >= ULT_FULL
+    return [a["code"] for a in u["abilities"] if a["cd"] == 0 and (full or not is_ult(a["code"]))]
 
 
 def act(state: dict, actor_id: str, ability: str, target_id: Optional[str] = None) -> list[dict]:
@@ -329,10 +387,12 @@ def act(state: dict, actor_id: str, ability: str, target_id: Optional[str] = Non
         raise EngineError("У бойца нет такой способности")
     if slot["cd"] > 0:
         raise EngineError("Способность ещё перезаряжается")
+    if is_ult(ability) and charge(state, actor["side"]) < ULT_FULL:
+        raise EngineError("Суперудар ещё не заряжен")
     start = len(state["events"])
     r = rng(state, f"act:{actor_id}")
     name, cooldown, _kind, _ = ABILITIES[ability]
-    _event(state, "ability", actor=actor_id, ability=ability, name=name)
+    _event(state, "ability", actor=actor_id, ability=ability, name=name, **({"ult": True} if is_ult(ability) else {}))
     allies = living(state, actor["side"])
     foes = living(state, other(actor["side"]))
 
@@ -411,6 +471,25 @@ def act(state: dict, actor_id: str, ability: str, target_id: Optional[str] = Non
         for f in foes:
             add_effect(f, "injury", 2, max(1, f["max_hp"] * 4 // 100))
         _event(state, "effect", target="foes", effect="injury")
+    elif ability == "ult_attacker":
+        target = next((u for u in foes if u["id"] == target_id), None) or min(foes, key=lambda u: (u["hp"], u["id"]))
+        _hit(state, actor, target, 250, r, ability, pierce=True)
+    elif ability == "ult_midfielder":
+        for mate in allies:
+            if mate["id"] != actor_id:
+                mate["meter"] += TURN_METER * 60 // 100
+            add_effect(mate, "haste", 2)
+        _event(state, "meter", target="team", pct=60)
+        _event(state, "effect", target="team", effect="haste")
+    elif ability == "ult_defender":
+        for mate in allies:
+            add_effect(mate, "shield", 2, mate["max_hp"] * 25 // 100)
+        _event(state, "effect", target="team", effect="shield")
+    elif ability == "ult_goalkeeper":
+        for mate in allies:
+            mate["effects"] = [e for e in mate["effects"] if e["code"] not in NEGATIVE_EFFECTS]
+            _heal(state, actor, mate, 25)
+        _event(state, "effect", target="team", effect="cleanse")
 
     if actor["passive"] == "inspire" and ability in ("save", "medics"):
         for mate in living(state, actor["side"]):
@@ -420,6 +499,10 @@ def act(state: dict, actor_id: str, ability: str, target_id: Optional[str] = Non
             if mate["id"] != actor_id:
                 mate["meter"] += TURN_METER // 10
     slot["cd"] = cooldown
+    if is_ult(ability):
+        state.setdefault("charge", {"me": 0, "foe": 0})[actor["side"]] = 0
+    else:
+        _add_charge(state, actor["side"], ULT_CHARGE_ACTION)
     state["actions"] += 1
     state["turn_of"] = None
     _check_end(state)
@@ -495,13 +578,14 @@ def advance(state: dict) -> Optional[dict]:
 def ai_choose(state: dict, actor: dict) -> tuple[str, Optional[str]]:
     """A sensible, deterministic pick: heal/shield when hurt, otherwise the
     strongest ready ability; strike the weakest enemy."""
-    ready = available(actor)
+    ready = available(actor, state)
     allies = living(state, actor["side"])
     hurt = [u for u in allies if u["hp"] * 100 < u["max_hp"] * 50]
     order = {
         "medics": 0 if len(hurt) >= 2 else 9, "save": 0 if hurt else 9, "wall": 1 if len(allies) > 1 else 9,
         "boss_card": 1, "boss_slam": 1, "boss_chant": 2, "penalty": 2, "hat_trick": 2, "bicycle": 2,
         "pressing": 3, "tackle": 3, "offside": 3, "conductor": 3, "through_ball": 3, "long_kick": 4, "strike": 8,
+        "ult_attacker": 0, "ult_midfielder": 0, "ult_defender": 0, "ult_goalkeeper": 0 if hurt else 9,
     }
     ability = min(ready, key=lambda c: (order.get(c, 5), c))
     foes = living(state, other(actor["side"]))

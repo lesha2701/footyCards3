@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
 import {
+  fetchAdminBadges,
   createCardCollection,
   fetchAdminCardCollections,
   fetchAdminPacks,
@@ -25,6 +26,7 @@ interface CollectionForm {
   image_path: string | null;
   reward_coins: number;
   reward_pack_id: number | "";
+  reward_badge_id: number | "";
 }
 
 function collectionToForm(c?: CardCollection): CollectionForm {
@@ -36,6 +38,7 @@ function collectionToForm(c?: CardCollection): CollectionForm {
     image_path: c?.image_path ?? null,
     reward_coins: c?.reward_coins ?? 0,
     reward_pack_id: c?.reward_pack_id ?? "",
+    reward_badge_id: c?.reward_badge_id ?? "",
   };
 }
 
@@ -43,6 +46,7 @@ export default function AdminCardCollectionsPage() {
   const queryClient = useQueryClient();
   const { data: collections, isLoading } = useQuery({ queryKey: ["admin-card-collections"], queryFn: fetchAdminCardCollections });
   const { data: packs } = useQuery({ queryKey: ["admin-packs"], queryFn: fetchAdminPacks });
+  const { data: badges } = useQuery({ queryKey: ["admin-badges"], queryFn: fetchAdminBadges });
   const [editing, setEditing] = useState<CardCollection | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<CollectionForm>(collectionToForm());
@@ -59,6 +63,7 @@ export default function AdminCardCollectionsPage() {
     is_active: form.is_active,
     reward_coins: form.reward_coins,
     reward_pack_id: form.reward_pack_id === "" ? null : form.reward_pack_id,
+    reward_badge_id: form.reward_badge_id === "" ? null : form.reward_badge_id,
   });
 
   const createMutation = useMutation({
@@ -169,6 +174,19 @@ export default function AdminCardCollectionsPage() {
                   <option value="">Нет</option>
                   {packs?.map((p) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-slate-400">Значок за сбор (необязательно)</span>
+                <select
+                  value={form.reward_badge_id}
+                  onChange={(e) => setForm({ ...form, reward_badge_id: e.target.value ? Number(e.target.value) : "" })}
+                  className="rounded-lg bg-bg-surface px-3 py-2 text-sm outline-none"
+                >
+                  <option value="">Нет</option>
+                  {badges?.map((b) => (
+                    <option key={b.id} value={b.id}>{b.icon} {b.name}</option>
                   ))}
                 </select>
               </label>

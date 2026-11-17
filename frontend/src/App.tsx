@@ -11,6 +11,7 @@ import ComebackGiftPopup from "@/components/common/ComebackGiftPopup";
 import StreakRewardPopup from "@/components/common/StreakRewardPopup";
 import NewbieWelcome from "@/components/newbie/NewbieWelcome";
 import NewbieGiftPopup from "@/components/newbie/NewbieGiftPopup";
+import StarsPatronLetter from "@/components/common/StarsPatronLetter";
 import NewbieNextPage from "@/pages/NewbieNextPage";
 import { createSession } from "@/api/auth";
 import { joinByInvite } from "@/api/clubs";
@@ -85,6 +86,8 @@ const TownResidentsPage = lazy(() => import("@/pages/TownResidentsPage"));
 const TownGuestsPage = lazy(() => import("@/pages/TownGuestsPage"));
 const TownVisitPage = lazy(() => import("@/pages/TownVisitPage"));
 const TownWeekPage = lazy(() => import("@/pages/TownWeekPage"));
+const TownVillaPage = lazy(() => import("@/pages/TownVillaPage"));
+const TownVillaVisitPage = lazy(() => import("@/pages/TownVillaVisitPage"));
 const ClubBasePage = lazy(() => import("@/pages/ClubBasePage"));
 const TacticoMatchesPage = lazy(() => import("@/pages/TacticoMatchesPage"));
 const TacticoMatchPage = lazy(() => import("@/pages/TacticoMatchPage"));
@@ -98,6 +101,9 @@ const KontraArenaPage = lazy(() => import("@/pages/KontraArenaPage"));
 const KontraBossPage = lazy(() => import("@/pages/KontraBossPage"));
 const KontraBattlePage = lazy(() => import("@/pages/KontraBattlePage"));
 const KontraGearPage = lazy(() => import("@/pages/KontraGearPage"));
+const MagicPage = lazy(() => import("@/pages/MagicPage"));
+const MagicArmyPage = lazy(() => import("@/pages/MagicArmyPage"));
+const MagicRunPage = lazy(() => import("@/pages/MagicRunPage"));
 const MordoboiSearchPage = lazy(() => import("@/pages/MordoboiSearchPage"));
 const MordoboiMatchPage = lazy(() => import("@/pages/MordoboiMatchPage"));
 const MordoboiOpenChallengePage = lazy(() => import("@/pages/MordoboiOpenChallengePage"));
@@ -165,6 +171,8 @@ const HalloweenPage = lazy(() => import("@/pages/HalloweenPage"));
 const AdminHalloweenPage = lazy(() => import("@/admin/pages/AdminHalloweenPage"));
 const FanBattlePage = lazy(() => import("@/pages/FanBattlePage"));
 const AdminFanBattlePage = lazy(() => import("@/admin/pages/AdminFanBattlePage"));
+const AnniversaryPage = lazy(() => import("@/pages/AnniversaryPage"));
+const AdminAnniversaryPage = lazy(() => import("@/admin/pages/AdminAnniversaryPage"));
 const UpgradePage = lazy(() => import("@/pages/UpgradePage"));
 const BingoPage = lazy(() => import("@/pages/BingoPage"));
 const RankingPage = lazy(() => import("@/pages/RankingPage"));
@@ -277,6 +285,7 @@ export default function App() {
     {!window.location.pathname.startsWith("/admin") && <StreakRewardPopup />}
     {!window.location.pathname.startsWith("/admin") && <ComebackGiftPopup />}
     {!window.location.pathname.startsWith("/admin") && <NewbieGiftPopup />}
+    {!window.location.pathname.startsWith("/admin") && <StarsPatronLetter />}
     <Routes>
       <Route path="/admin" element={<AdminGuard><AdminLayout /></AdminGuard>}>
         <Route index element={<AdminDashboardPage />} />
@@ -301,6 +310,7 @@ export default function App() {
         <Route path="wheel" element={<AdminWheelPage />} />
         <Route path="halloween" element={<AdminHalloweenPage />} />
         <Route path="fan-battle" element={<AdminFanBattlePage />} />
+        <Route path="anniversary" element={<AdminAnniversaryPage />} />
         <Route path="daily-rewards" element={<AdminDailyRewardsPage />} />
         <Route path="games" element={<AdminGamesPage />} />
         <Route path="economy" element={<AdminEconomyPage />} />
@@ -337,6 +347,8 @@ export default function App() {
         <Route path="/town/guests" element={<TownGuestsPage />} />
         <Route path="/town/visit/:ownerId" element={<TownVisitPage />} />
         <Route path="/town/week" element={<TownWeekPage />} />
+        <Route path="/town/villa" element={<TownVillaPage />} />
+        <Route path="/town/visit/:ownerId/villa" element={<TownVillaVisitPage />} />
         <Route path="/town/:district" element={<TownPage />} />
         <Route path="/play/tactico" element={<TacticoMatchesPage />} />
         <Route path="/play/career" element={<CareerPage />} />
@@ -358,6 +370,9 @@ export default function App() {
         <Route path="/play/kontra/boss" element={<KontraBossPage />} />
         <Route path="/play/kontra/battles/:battleId" element={<KontraBattlePage />} />
         <Route path="/play/kontra/gear" element={<KontraGearPage />} />
+        <Route path="/play/magic" element={<MagicPage />} />
+        <Route path="/play/magic/army" element={<MagicArmyPage />} />
+        <Route path="/play/magic/runs/:runId" element={<MagicRunPage />} />
         <Route path="/play/mordoboi/search" element={<MordoboiSearchPage />} />
         <Route path="/play/mordoboi/matches/:matchId" element={<MordoboiMatchPage />} />
         <Route path="/play/mordoboi/open/:matchId" element={<MordoboiOpenChallengePage />} />
@@ -425,6 +440,7 @@ export default function App() {
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/halloween" element={<HalloweenPage />} />
         <Route path="/fans" element={<FanBattlePage />} />
+        <Route path="/anniversary" element={<AnniversaryPage />} />
         <Route path="/wheel" element={<WheelPage />} />
         <Route path="/club-pass" element={<ClubPassPage />} />
         <Route path="/season" element={<SeasonPassPage />} />

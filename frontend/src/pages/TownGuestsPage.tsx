@@ -21,7 +21,6 @@ export default function TownGuestsPage() {
             {data ? `Твоему городу лайков: сегодня ${fmt(data.likes_today)} · всего ${fmt(data.likes_total)}` : "Загрузка…"}
           </p>
         </div>
-        <Link to="/town/week" className="shrink-0 rounded-full bg-amber-400/10 px-3 py-1.5 text-xs font-bold text-amber-200">🏆 Неделя</Link>
         <Link to="/town" className="shrink-0 rounded-full bg-white/5 px-3 py-1.5 text-xs font-bold text-ink-mist">🗺️ Город</Link>
       </div>
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">Гости сейчас недоступны</p>}
@@ -32,6 +31,13 @@ export default function TownGuestsPage() {
           хозяин получит +{fmt(data.gift_rent)} к ренте. Подарков сегодня: {data.gifts_left}.
         </p>
       )}
+      <Link
+        to="/town/week"
+        className="flex items-center justify-between rounded-2xl border border-amber-300/25 bg-amber-400/5 px-3 py-2.5 text-sm font-bold text-amber-200"
+      >
+        <span>🏆 Город недели — лайки гостей дают места и монеты</span>
+        <span aria-hidden>›</span>
+      </Link>
       {data && data.towns.length === 0 && (
         <p className="rounded-2xl bg-bg-surface px-3 py-6 text-center text-sm text-ink-mist">Пока некому ходить в гости — города соседей ещё строятся.</p>
       )}

@@ -7,6 +7,7 @@ import { fetchGameConfig, fetchNewbieFunnel, fetchSuspiciousMatches, fetchSuspic
 import AdminMagnateBoardEditor from "@/admin/pages/AdminMagnateBoardEditor";
 import ManagerFinanceFields from "@/admin/components/ManagerFinanceFields";
 import ProspectFields, { ProspectStatsPanel } from "@/admin/components/ProspectFields";
+import LoyaltySettingsPanel from "@/admin/components/LoyaltySettingsPanel";
 import RewardBundleEditor from "@/admin/components/RewardBundleEditor";
 import { EMPTY_BUNDLE, type GameConfig } from "@/admin/types";
 
@@ -68,7 +69,7 @@ const MY_PLAYER_COSMETICS: [string, string][] = [
 const WEEKLY_TOP_METRICS: [string, string][] = [
   ["arena_rating", "Рейтинг Arena"], ["tactics_rating", "Рейтинг Тактико"], ["penalty_rating", "Рейтинг Пенальти"],
   ["stratego_rating", "Рейтинг Стратего"], ["stratego_puzzles", "Задачи Стратего"], ["mordoboi_rating", "Рейтинг Мордобоя"],
-  ["kontra_rating", "Арена Контратаки"], ["league_rating", "Рейтинг лиги"], ["matches_won", "Победы"],
+  ["kontra_rating", "Арена Контратаки"], ["magic_rating", "Рейтинг «Мяч и Магия»"], ["league_rating", "Рейтинг лиги"], ["matches_won", "Победы"],
   ["cards_count", "Карт в коллекции"], ["unique_players", "Уникальных игроков"], ["referral_count", "Рефералов"],
   ["base_level", "Уровень базы"], ["academy_level", "Уровень Академии"], ["academy_prestige", "Престиж Академии"],
   ["games_week", "Игр за неделю"], ["stars_week", "Звёзд за неделю"], ["referrals_week", "Рефералов за неделю"],
@@ -215,6 +216,7 @@ export default function AdminGamesPage() {
       | "blackjack_enabled"
       | "mordoboi_enabled"
       | "kontra_enabled"
+      | "magic_enabled"
       | "weekly_top_enabled"
       | "newbie_enabled"
       | "leagues_enabled"
@@ -222,6 +224,7 @@ export default function AdminGamesPage() {
       | "bot_daily_digest_enabled"
       | "bot_comeback_enabled"
       | "comeback_gift_enabled"
+      | "stars_patron_enabled"
       | "shop_daily_offer_enabled"
       | "club_league_enabled"
       | "career_enabled"
@@ -976,6 +979,34 @@ export default function AdminGamesPage() {
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Покровители (Stars)</p>
+        <p className="mb-3 text-sm text-ink-mist">
+          Каждый понедельник лучший покупатель звёзд прошлой недели получает трофей «Покровитель недели», карту и письмо;
+          следующие места — письмо и монеты. За покупки на сумму от порога — значок и трофей «Преторианец».
+        </p>
+        <div className="grid grid-cols-2 items-end gap-3">
+          {toggle("stars_patron_enabled", "Включено")}
+          {field("stars_patron_week_min", "Мин. ⭐ за неделю")}
+          {field("stars_patron_week_places", "Мест с благодарностью")}
+          {field("stars_patron_week_coins", "Монеты за 2-е и далее")}
+          <label className="block text-sm">
+            <span className="mb-1 block text-ink-mist">Карта за 1-е место</span>
+            <select
+              value={form.stars_patron_week_card_rarity ?? ""}
+              onChange={(e) => setForm({ ...form, stars_patron_week_card_rarity: e.target.value })}
+              className="w-full rounded-xl bg-bg-base px-3 py-2 text-ink-chalk"
+            >
+              <option value="">без карты</option>
+              <option value="epic">эпическая</option>
+              <option value="legendary">легендарная</option>
+              <option value="diamond">алмазная</option>
+            </select>
+          </label>
+          {field("stars_praetorian_threshold", "«Преторианец» от ⭐")}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-1 font-display text-base font-bold">Подарок за возвращение</p>
         <p className="mb-3 text-sm text-ink-mist">
           Игрок, которого не было дольше порога, получает подарок при входе. Бот заранее пишет о нём вечером.
@@ -1227,10 +1258,23 @@ export default function AdminGamesPage() {
                 value={m}
                 onChange={(next) => {
                   const rows = [...form.streak_rewards];
-                  rows[i] = { ...next, days: m.days };
+                  rows[i] = { ...m, ...next, days: m.days };
                   setForm({ ...form, streak_rewards: rows });
                 }}
               />
+              <label className="mt-1 flex items-center gap-2 text-xs text-slate-300">
+                ID эксклюзивного футболиста (навсегда у игрока, не продаётся)
+                <input
+                  type="number"
+                  value={m.player_id ?? ""}
+                  onChange={(e) => {
+                    const rows = [...form.streak_rewards];
+                    rows[i] = { ...m, player_id: e.target.value ? Number(e.target.value) : null };
+                    setForm({ ...form, streak_rewards: rows });
+                  }}
+                  className="w-24 rounded-lg bg-bg-surface px-2 py-1 outline-none"
+                />
+              </label>
             </div>
           ))}
           <button
@@ -1241,6 +1285,8 @@ export default function AdminGamesPage() {
           </button>
         </div>
       </section>
+
+      <LoyaltySettingsPanel />
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Memory Sequence</p>
@@ -1605,7 +1651,23 @@ export default function AdminGamesPage() {
           {field("kontra_gear_drop_arena_pct", "Комплект за победу на арене, %")}
           {field("kontra_chest_coins", "Сундук комплекта, монет (0 — нет)")}
           {field("kontra_chest_stars", "Сундук комплекта, ⭐ (0 — нет)")}
+          {field("kontra_tactic_edge_pct", "Тактика: % урона, если твоя бьёт тактику соперника")}
         </div>
+        <label className="mt-3 flex flex-col gap-1">
+          <span className="text-xs text-slate-400">
+            Лиги недели (Бронза, Серебро, Золото, Платина, Легенда) — строки «лучший рейтинг недели монеты», до 5 строк
+          </span>
+          <textarea
+            rows={5}
+            value={(form.kontra_leagues ?? []).map(([r, c]) => `${r} ${c}`).join("\n")}
+            onChange={(e) => setForm({
+              ...form,
+              kontra_leagues: e.target.value.split("\n").map((l) => l.trim().split(/\s+/).map(Number))
+                .filter((p) => p.length === 2 && p.every(Number.isFinite)).slice(0, 5) as [number, number][],
+            })}
+            className="rounded-lg bg-bg-surface px-3 py-2 font-mono text-xs outline-none"
+          />
+        </label>
         <label className="mt-3 flex flex-col gap-1">
           <span className="text-xs text-slate-400">Босс: награда за урон попытки — строки «урон монеты»</span>
           <textarea
@@ -1619,6 +1681,63 @@ export default function AdminGamesPage() {
             className="rounded-lg bg-bg-surface px-3 py-2 font-mono text-xs outline-none"
           />
         </label>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 font-display text-base font-bold">Мяч и Магия</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Поход героя по карте за несколько дней и бои отрядов против героя-бота. Отряд — один футболист: редкость
+          карточки даёт уровень существа, число копий — численность (√копий). Монеты — в пределах дневного лимита,
+          с множителем сложности; пак — шанс за победу (без ID пака паков нет). Рейтинг — недельный.
+        </p>
+        <div className="mb-3">{toggle("magic_enabled", "Режим включён (выкл — нельзя начинать походы, плитка скрыта)")}</div>
+        <div className="grid grid-cols-2 gap-3">
+          {field("magic_reward_win", "Монет за победу (средний)")}
+          {field("magic_reward_loss", "Монет за поражение (средний)")}
+          {field("magic_daily_limit", "Быстрая схватка: бесплатных в день")}
+          {field("magic_extra_run_coins", "Быстрая: +1 поход за монеты (1 в день), цена")}
+          {field("magic_extra_run_stars", "Быстрая: +поход за звёзды, цена")}
+          {field("magic_extra_runs_daily_limit", "Быстрая: походов за звёзды в день")}
+          {field("magic_hardcore_daily_limit", "Хардкор: бесплатных в день")}
+          {field("magic_hardcore_run_coins", "Хардкор: +1 за монеты (1 в день), цена")}
+          {field("magic_hardcore_run_stars", "Хардкор: +поход за звёзды, цена")}
+          {field("magic_hardcore_star_runs", "Хардкор: походов за звёзды в день")}
+          {field("magic_adventure_daily_limit", "Приключение: бесплатных в день")}
+          {field("magic_adventure_run_coins", "Приключение: +1 за монеты (1 в день), цена")}
+          {field("magic_adventure_run_stars", "Приключение: +поход за звёзды, цена")}
+          {field("magic_adventure_star_runs", "Приключение: походов за звёзды в день")}
+          {field("magic_creature_pack_coins", "Магический пак, монет (0 — нет)")}
+          {field("magic_creature_pack_stars", "Магический пак, звёзд (0 — нет)")}
+          {field("magic_wounded_hours", "Раненые существа возвращаются, часов")}
+          {field("magic_heal_essence_pct", "Лечение раненых за эссенцию, % их цены")}
+          {field("magic_heal_stars", "Лечение всех раненых сразу, звёзд (0 — нет)")}
+          {field("magic_essence_pack", "Лавка эссенции: магический пак, эссенции (0 — нет)")}
+          {field("magic_essence_leadership", "Лавка: +1 лидерство, эссенции за 1-й (дальше ×2, ×3…)")}
+          {field("magic_essence_leadership_max", "Лавка: +лидерства всего максимум")}
+          {field("magic_essence_mana", "Лавка: +1 мана, эссенции за 1-ю (дальше ×2, ×3…)")}
+          {field("magic_essence_mana_max", "Лавка: +маны всего максимум")}
+          {field("magic_essence_per_star", "Лавка: облик за эссенцию — эссенции за 1 звезду цены (0 — нет)")}
+          {field("magic_essence_per_100_coins", "Лавка: облик за эссенцию — эссенции за 100 монет цены (0 — нет)")}
+          {field("magic_progress_xp_pct", "Опыт капитанов и гвардии за поход, % (100 — как задумано)")}
+          {field("magic_captain_dup_xp", "Дубль капитану: опыта за копию")}
+          {field("magic_captain_dup_daily", "Дубль капитану: копий в день на капитана")}
+          {field("magic_progress_scaling_pct", "Враги растут с прокачкой армии на столько % (100 — прокачка не облегчает)")}
+          {field("magic_challenge_level_cap", "Недельный вызов: уровень капитанов и гвардии не выше")}
+          {field("magic_retry_coins", "Второй шанс в финале, монет")}
+          {field("magic_retry_stars", "Второй шанс в финале, звёзд")}
+          {field("magic_retries_daily_limit", "Вторых шансов в день")}
+          {field("magic_gold_coins_pct", "Золото похода → монеты, %")}
+          {field("magic_easy_reward_pct", "Лёгкий: % награды")}
+          {field("magic_hard_reward_pct", "Сложный: % награды")}
+          {field("magic_pack_id", "Пак за победу: ID (0 — нет)")}
+          {field("magic_pack_chance_normal_pct", "Шанс пака: средний, %")}
+          {field("magic_pack_chance_hard_pct", "Шанс пака: сложный, %")}
+          {field("magic_rating_win", "Рейтинг за победу (средний)")}
+          {field("magic_rating_loss", "Рейтинг за поражение")}
+          {field("magic_days", "Дней в походе")}
+          {field("magic_moves_per_day", "Ходов героя в день")}
+          {field("magic_stack_cap", "Максимум бойцов в отряде")}
+        </div>
       </section>
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
