@@ -136,3 +136,24 @@ async def test_pro_matchday_squad_and_five_substitutions(db_session):
     made = [x for x in subs.subs if x["side"] == "a"]
     assert len(made) == 5 and len({x["minute"] for x in made}) == 5
     assert len(subs.played("a")) == 16
+
+
+async def test_one_off_window_extension_moves_only_its_season(db_session):
+    from datetime import datetime, timezone
+
+    config = await get_config(db_session)
+    config.manager_finance = {**(config.manager_finance or {}), "window_until": {"2026-W47": "2026-11-18T12:00"}}
+    tue = datetime(2026, 11, 17, 20, 0, tzinfo=timezone.utc)
+    end = manager_service.preseason_end(tue, config)
+    assert end.astimezone(timezone.utc) == datetime(2026, 11, 18, 9, 0, tzinfo=timezone.utc)  # 12:00 Moscow
+    # The first round stays at the first slot an hour later; next week is as planned.
+    first = datetime.fromisoformat(manager_service.season_schedule(end, config)[0])
+    assert first.astimezone(timezone.utc) == datetime(2026, 11, 18, 10, 0, tzinfo=timezone.utc)
+    next_week = datetime(2026, 11, 24, 12, 0, tzinfo=timezone.utc)
+    assert manager_service.preseason_end(next_week, config) == \
+        manager_service.week_start(next_week) + manager_service.timedelta(hours=config.manager_preseason_hours)
+    # Never earlier than the plan.
+    config.manager_finance = {**config.manager_finance, "window_until": {"2026-W47": "2026-11-16T05:00"}}
+    assert manager_service.preseason_end(tue, config) == \
+        manager_service.week_start(tue) + manager_service.timedelta(hours=config.manager_preseason_hours)
+    assert manager_finance.validate({"window_until": {"2026-W47": "2026-11-18T12:00"}})

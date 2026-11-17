@@ -60,6 +60,10 @@ DEFAULTS: dict = {
     # football).
     "grant_pct": 170, "academy_slots": 2, "bench_size": 12, "subs_max": 5,
     "sub_minutes": [60, 65, 70, 75, 80], "tired_pct": [3, 4, 5, 6, 7],
+    # A one-off longer transfer window: season key → local "YYYY-MM-DDTHH:MM"
+    # it closes at instead of Monday + manager_preseason_hours (never earlier).
+    # 2026-W47: the update came on Tuesday — open till an hour before round 1.
+    "window_until": {"2026-W47": "2026-11-18T12:00"},
     # Sponsors: % of G. place_pct = by place (index 0 = champion); rest_pct =
     # any other place that is not relegated; relegated_pct = relegated.
     "sponsors": [
@@ -470,6 +474,15 @@ def validate(raw: dict) -> dict:
             if not isinstance(value, list) or not all(isinstance(x, int) and x > 0 for x in value):
                 raise ValueError("event_rounds: нужен список номеров туров")
             out[key] = sorted(set(value))
+        elif key == "window_until":
+            if not isinstance(value, dict):
+                raise ValueError("window_until: нужен объект {\"2026-W47\": \"2026-11-18T12:00\"}")
+            for k, v in value.items():
+                try:
+                    datetime.fromisoformat(str(v))
+                except ValueError:
+                    raise ValueError(f"window_until: «{v}» — не дата YYYY-MM-DDTHH:MM") from None
+            out[key] = {str(k): str(v) for k, v in value.items()}
         elif key == "kit_brands":
             if not isinstance(value, list) or not value:
                 raise ValueError("kit_brands: нужен список названий")
