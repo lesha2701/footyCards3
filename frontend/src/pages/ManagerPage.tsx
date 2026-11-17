@@ -59,7 +59,6 @@ import StyleTab from "@/components/manager/StyleTab";
 import TacticsPanel from "@/components/manager/TacticsPanel";
 import TransferLight, { windowOpen } from "@/components/manager/TransferLight";
 import { MIcon } from "@/lib/managerIcons";
-import GameHero from "@/components/common/GameHero";
 import { artOf } from "@/lib/gameArt";
 import { formatGameError } from "@/lib/errors";
 import { goTo, parseGo, useFocusTarget } from "@/lib/managerFocus";
@@ -164,19 +163,33 @@ export default function ManagerPage() {
 
   const club = data.club;
   const props = { view: data, onView, onError };
-  const hero = (
-    <GameHero game="manager" title="Менеджер" subtitle={
-      <button onClick={() => (club ? setTab("transfers") : undefined)} className="mt-1 active:scale-95" data-testid="hero-transfers">
-        <TransferLight open={windowOpen(data.season, club)} until={data.season.preseason_ends_at} />
-      </button>
-    } />
+  const open = windowOpen(data.season, club);
+  const art = artOf("manager");
+  // The mode's avatar: its ring is the transfer window's light.
+  const avatar = (
+    <span className="relative flex w-[52px] shrink-0 items-center justify-center">
+      <span className={`relative block h-12 w-12 overflow-hidden rounded-full ring-[3px] ${open ? "ring-emerald-400 shadow-[0_0_14px_-2px_rgba(52,211,153,0.9)]" : "ring-red-400/90"}`}>
+        {art ? <img src={art} alt="" className="h-full w-full object-cover" /> : <span className="flex h-full w-full items-center justify-center bg-bg-raised text-2xl">💼</span>}
+      </span>
+      <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 rounded-full px-1 text-[8px] font-black uppercase leading-tight text-bg-base ${open ? "bg-emerald-400" : "bg-red-400"}`}>
+        {open ? "live" : "стоп"}
+      </span>
+    </span>
   );
+  const barClass = "sticky z-20 -mx-1 flex items-stretch gap-1 rounded-2xl bg-bg-base p-1 shadow-[0_8px_16px_-8px_rgba(0,0,0,0.9)] ring-1 ring-white/5";
   const errorLine = error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>;
   if (!club) {
     // A newcomer: one screen, one button. The rest opens after the club is founded.
     return (
       <div className="flex flex-col gap-4" data-testid="manager-page">
-        {hero}
+        {/* The same bar as a club's: the avatar, then the mode's name and the window instead of the tabs. */}
+        <div className={`${barClass} items-center`} style={{ top: stickTop }} data-testid="hero-transfers">
+          {avatar}
+          <span className="min-w-0 flex-1 py-1 pr-2">
+            <h1 className="font-display text-base font-black leading-tight text-ink-chalk">Менеджер</h1>
+            <TransferLight open={open} until={data.season.preseason_ends_at} />
+          </span>
+        </div>
         {errorLine}
         <FoundClub {...props} />
         <MeCorner {...props} />
@@ -190,22 +203,15 @@ export default function ManagerPage() {
     { id: "office", icon: "💼", label: "Кабинет" },
     { id: "staff", icon: "👥", label: "Персонал", locked: !staff, dot: staff && !seen.includes("staff") && club.seasons_played === 0 },
   ];
-  const open = windowOpen(data.season, club);
-  const art = artOf("manager");
   return (
     <div className="flex flex-col gap-4" data-testid="manager-page">
       {/* One sticky bar like Card Arena's: the mode's avatar (its ring is the transfer window's light) and the tabs. */}
-      <div className="sticky z-20 -mx-1 flex items-stretch gap-1 rounded-2xl bg-bg-base p-1 shadow-[0_8px_16px_-8px_rgba(0,0,0,0.9)] ring-1 ring-white/5" style={{ top: stickTop }}>
+      <div className={barClass} style={{ top: stickTop }}>
         <h1 className="sr-only">Менеджер</h1>
         <button onClick={() => setWindowSheet(true)} data-testid="hero-transfers"
           aria-label={`Трансферное окно ${open ? "открыто" : "закрыто"}`}
-          className="relative flex w-[52px] shrink-0 items-center justify-center active:scale-95">
-          <span className={`relative block h-12 w-12 overflow-hidden rounded-full ring-[3px] ${open ? "ring-emerald-400 shadow-[0_0_14px_-2px_rgba(52,211,153,0.9)]" : "ring-red-400/90"}`}>
-            {art ? <img src={art} alt="" className="h-full w-full object-cover" /> : <span className="flex h-full w-full items-center justify-center bg-bg-raised text-2xl">💼</span>}
-          </span>
-          <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 rounded-full px-1 text-[8px] font-black uppercase leading-tight text-bg-base ${open ? "bg-emerald-400" : "bg-red-400"}`}>
-            {open ? "live" : "стоп"}
-          </span>
+          className="flex shrink-0 active:scale-95">
+          {avatar}
         </button>
       <nav className="grid min-w-0 flex-1 grid-cols-4 gap-1" data-testid="manager-tabs">
         {tabs.map((t) => (
@@ -1188,6 +1194,16 @@ function LeagueTable({ league, onClub }: { league: ManagerLeague; onClub: (id: n
                   })}
                 </div>
               )}
+              {(() => {
+                // My side's substitutions: who the coach brought on and when.
+                const myName = league.table.find((t) => t.is_mine)?.name;
+                const subs = (mine.subs ?? []).filter((s) => (s.home ? mine.home : mine.away) === myName);
+                return subs.length > 0 && (
+                  <p className="mt-1 pl-10 text-micro leading-snug text-ink-mist" data-testid="match-subs">
+                    🔄 {subs.map((s) => `${s.minute}′ ${s.in} ← ${s.out}`).join(", ")}
+                  </p>
+                );
+              })()}
             </div>
           );
         })}

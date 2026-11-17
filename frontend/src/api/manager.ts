@@ -208,6 +208,8 @@ export interface ManagerLeagueMatch {
   hs?: number;
   away_score?: number;
   goals?: { team: "a" | "b"; minute: number | null; name: string; home: boolean }[];
+  /** Substitutions of both sides (`home` = the home side's). */
+  subs?: { minute: number; in: string; out: string; home: boolean }[];
   /** [home, away] styles / formations of a played match. */
   styles?: [ManagerStyle, ManagerStyle] | null;
   formations?: [string, string] | null;

@@ -116,3 +116,23 @@ async def test_manager_formations_and_the_grant(db_session):
     base = config.manager_division_budget[config.manager_divisions - 1]
     grant = manager_service.season_grant(config.manager_divisions, snap, config)["grant"]
     assert grant == manager_service._nice(base * manager_finance.DEFAULTS["grant_pct"] / 100) > base
+
+
+async def test_pro_matchday_squad_and_five_substitutions(db_session):
+    """A matchday squad of 23 (UEFA) and five substitutions, one a window."""
+    config = await get_config(db_session)
+    fc = manager_finance.DEFAULTS
+    assert 11 + fc["bench_size"] == 23 and fc["subs_max"] == 5 and len(fc["sub_minutes"]) >= fc["subs_max"]
+    slots = get_formation_slots("4-3-3")
+    positions = {"GK": "GK", "DEF": "CB", "MID": "CM", "FWD": "ST"}
+    xi = [{**_entry(f"s{i}", positions[s.category], 60), "slot": s.code} for i, s in enumerate(slots)]
+    bench = manager_service.matchday_bench([_entry(f"b{i}", ("CB", "CM", "ST")[i % 3], 70) for i in range(14)], fc["bench_size"])
+    assert len(bench) == 12
+    spec = {"xi": xi, "bench": bench, "cards": {}, "index": 0, "name": "Совы", "formation": "4-3-3", "mods": {}}
+    bot = {"xi": [{**p, "kind": "bot"} for p in xi], "cards": {}, "index": 1, "name": "Бот", "formation": "4-3-3", "mods": {}}
+    subs = manager_service._Subs({"a": spec, "b": bot}, config)
+    for minute in range(46, 91):
+        subs.before_phase(minute, 0, 0)
+    made = [x for x in subs.subs if x["side"] == "a"]
+    assert len(made) == 5 and len({x["minute"] for x in made}) == 5
+    assert len(subs.played("a")) == 16

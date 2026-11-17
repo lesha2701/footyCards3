@@ -51,13 +51,15 @@ from app.services.notification_service import notify
 DEFAULTS: dict = {
     "enabled": True,
     # Squad: the season grant is grant_pct % of the division budget (the
-    # division budget G itself stays the base of every other %); up to
-    # academy_slots «Академия» cards start; a matchday squad is the XI plus
-    # bench_size; from each of sub_minutes the starters are tired by tired_pct
-    # (same index) % and the coach brings on a fresher one of the same line,
-    # at most subs_max a match.
-    "grant_pct": 125, "academy_slots": 2, "bench_size": 5, "subs_max": 3,
-    "sub_minutes": [60, 70, 80], "tired_pct": [3, 5, 7],
+    # division budget G itself stays the base of every other %) — enough for
+    # the XI and most of a pro bench in the first season; up to academy_slots
+    # «Академия» cards start; a matchday squad is the XI plus bench_size (23
+    # as in UEFA competitions); from each of sub_minutes the starters are
+    # tired by tired_pct (same index) % and the coach brings on a fresher one
+    # of the same line, one a window, at most subs_max a match (5, as in pro
+    # football).
+    "grant_pct": 170, "academy_slots": 2, "bench_size": 12, "subs_max": 5,
+    "sub_minutes": [60, 65, 70, 75, 80], "tired_pct": [3, 4, 5, 6, 7],
     # Sponsors: % of G. place_pct = by place (index 0 = champion); rest_pct =
     # any other place that is not relegated; relegated_pct = relegated.
     "sponsors": [

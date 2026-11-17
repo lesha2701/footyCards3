@@ -294,7 +294,7 @@ async def base_snapshot(db: AsyncSession, owner_id: int, config) -> dict:
 
 def season_grant(division: int, snap: dict, config) -> dict:
     base = _pick(config.manager_division_budget, division - 1, 2_000_000)
-    # A little above the division budget, so a full XI leaves room for a substitute or two.
+    # Above the division budget: the XI and most of a matchday bench (bench_size) in the first season.
     grant = _nice(base * int(finance.cfg(config)["grant_pct"]) / 100)
     raw =config.manager_budget_per_base_level * snap["level"] + config.manager_sponsor_eur_per_level * snap["marketing"] \
         + config.manager_merch_eur_per_level * snap["shop"]
@@ -2252,6 +2252,8 @@ def _league_out(league: ManagerLeague, my_club_ids: set[int], depth: int, config
                 "live": bool(teams[h]["club_id"] and teams[a]["club_id"]),
                 **({"hs": m["hs"], "away_score": m["as"],
                     "goals": [{**g, "home": g["team"] == "a"} for g in m.get("goals") or []],
+                    "subs": [{"minute": x["minute"], "in": x["in"], "out": x["out"], "home": x["team"] == h}
+                             for x in m.get("subs") or []],
                     "styles": m.get("styles"), "formations": m.get("formations")} if m else {}),
             })
         rounds.append({"index": r, "at": schedule[r] if r < len(schedule) else None, "matches": matches})

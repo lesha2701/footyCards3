@@ -190,6 +190,8 @@ describe("ManagerPage", () => {
     renderPage();
     expect(await screen.findByTestId("found-club")).toBeInTheDocument();
     expect(screen.queryByTestId("manager-tabs")).toBeNull();
+    // The same bar as a club's: the avatar with the window light and the mode's name.
+    expect(screen.getByTestId("hero-transfers")).toHaveTextContent("Менеджер");
     expect(screen.queryByText(/До 5 «Моих игроков»|«Моих игроков» других пользователей/)).toBeNull();
     fireEvent.click(screen.getByTestId("found-rules"));
     expect(screen.getByText(/«Моих игроков» других пользователей/)).toBeInTheDocument();
@@ -288,6 +290,25 @@ describe("ManagerPage", () => {
     expect(await screen.findByText("🏟 Ястреб Арена")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Шарф/ }));
     await waitFor(() => expect(buyManagerMerch).toHaveBeenCalledWith(7, "scarf"));
+  });
+
+  it("shows my club's substitutions under a played match", async () => {
+    const played = {
+      ...league,
+      rounds: [{ index: 0, at: "2026-10-22T10:00:00Z", matches: [{
+        home: "Ночные Совы", away: "Ястребы", mine: true, live: true, hs: 2, away_score: 1, goals: [],
+        subs: [
+          { minute: 60, in: "Свежий Пётр", out: "Уставший Иван", home: true },
+          { minute: 65, in: "Чужой Запасной", out: "Чужой Игрок", home: false },
+        ],
+      }] }],
+    };
+    fetchManager.mockResolvedValue({ ...base, club, league: played });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Лига" }));
+    const subs = screen.getByTestId("match-subs");
+    expect(subs).toHaveTextContent("60′ Свежий Пётр ← Уставший Иван");
+    expect(subs).not.toHaveTextContent("Чужой");
   });
 
   it("buys a style item for coins", async () => {
