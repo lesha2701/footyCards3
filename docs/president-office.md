@@ -175,7 +175,7 @@ frontend `components/manager/ExchangePanel.tsx` («📈 Биржа» section).
   `target`; the frontend (`lib/managerFocus.ts`) opens its tab and sub-section
   and lights `[data-focus=<target>]`; the home tile links `?go=<tab>:<target>`.
 
-## «Штат»: the round table (migration `0302_manager_staff_departments`)
+## «Штат»: the round table (migration `0308_manager_staff_departments`)
 
 Ten departments sit around the table with the president at its head (his
 Telegram photo): coach, sporting director, scout, academy director (rating

@@ -1,15 +1,15 @@
 """«Штаб»: the driver becomes the head of the transport department, the agent
 seat goes to the academy director.
 
-Revision ID: 0302
-Revises: 0301
+Revision ID: 0308
+Revises: 0307
 """
 from typing import Sequence, Union
 
 from alembic import op
 
-revision: str = "0302"
-down_revision: Union[str, None] = "0301"
+revision: str = "0308"
+down_revision: Union[str, None] = "0307"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
