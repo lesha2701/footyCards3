@@ -25,7 +25,7 @@ import { CoachProfileCard, ObjectiveCard, ProgramCard, TrainingCard } from "@/co
 import CupCard from "@/components/career/CupCard";
 import { FlankDuelsCard } from "@/components/career/FlankDuels";
 import { CoachSpecCard, MoraleCard } from "@/components/career/Morale";
-import { LiveMatchCenter } from "@/components/career/CareerLive";
+import { LiveBar, LiveMatchCenter } from "@/components/career/CareerLive";
 import { FansCard, HotSeatBanner, LegendsCard, MomentCard, NewsFeed } from "@/components/career/CareerClub";
 import { FoldCard } from "@/components/career/FoldCard";
 import { AwaySummaryCard, PostMatchCard, PreMatchCard, useAwaySummary } from "@/components/career/MatchScreens";
@@ -90,7 +90,7 @@ export default function CareerPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <GameHero game="career" title="Карьера тренера" />
+      <GameHero game="career" title="Карьера тренера" compact />
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
 
       {data.invite && <InviteCard view={data} onView={onView} onError={onError} />}
@@ -342,6 +342,8 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
   const [tab, setTab] = useState<Tab>("prep");
   const [prep, setPrep] = useState<PrepTab>(season.scouting && hasTactics ? "tactic" : "squad");
   const [cal, setCal] = useState<CalendarTab>("table");
+  // Off «Подготовка» the match at the break is a one-row bar until opened.
+  const [liveOpen, setLiveOpen] = useState(false);
   const prepTabs = useRef<HTMLDivElement>(null);
   // The section opens below the tiles: bring it into view.
   const openPrep = (next: PrepTab) => {
@@ -368,8 +370,17 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
 
   return (
     <>
-      {season.live && <LiveMatchCenter live={season.live} catalog={catalog} seasonId={season.id} talks={season.morale?.talks}
-        onView={onView} onError={onError} />}
+      {season.live && (tab === "prep" || liveOpen ? (
+        <>
+          <LiveMatchCenter live={season.live} catalog={catalog} seasonId={season.id} talks={season.morale?.talks}
+            onView={onView} onError={onError} />
+          {tab !== "prep" && (
+            <button type="button" onClick={() => setLiveOpen(false)} className="-mt-1 self-center text-micro font-semibold text-ink-mist underline underline-offset-2">
+              Свернуть матч
+            </button>
+          )}
+        </>
+      ) : <LiveBar live={season.live} onOpen={() => setLiveOpen(true)} />)}
       {season.second_half && (
         <button
           type="button"
