@@ -9,8 +9,8 @@ day), and Элена, the general director (+3 % rent). New sets «Сила и
 completed set breaks. Inserted only where the picture is not in the
 catalog yet, after the admin's own residents.
 
-Revision ID: 0312
-Revises: 0311
+Revision ID: 0316
+Revises: 0315
 Create Date: 2026-11-18
 """
 from typing import Sequence, Union
@@ -18,8 +18,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0312"
-down_revision: Union[str, None] = "0311"
+revision: str = "0316"
+down_revision: Union[str, None] = "0315"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

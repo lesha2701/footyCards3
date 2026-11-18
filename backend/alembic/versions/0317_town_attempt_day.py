@@ -1,8 +1,8 @@
 """«Жители города» game_attempts (Матилде): one extra rewarded attempt a day
 for one game — the day and the game that took it on the user.
 
-Revision ID: 0313
-Revises: 0312
+Revision ID: 0317
+Revises: 0316
 Create Date: 2026-11-18
 """
 from typing import Sequence, Union
@@ -10,8 +10,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0313"
-down_revision: Union[str, None] = "0312"
+revision: str = "0317"
+down_revision: Union[str, None] = "0316"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
