@@ -308,7 +308,7 @@ function Term({ label, value, strong }: { label: string; value: string; strong?:
 
 // --- bank ---------------------------------------------------------------------------------------
 
-function Bank({ office, onDone, onError, ask }: {
+export function Bank({ office, onDone, onError, ask }: {
   office: ManagerOffice; onDone: (o: ManagerOffice) => void; onError: (e: unknown) => void; ask: (t: string, x: string, run: () => void) => void;
 }) {
   const bank = office.loan;
@@ -379,6 +379,11 @@ function Bank({ office, onDone, onError, ask }: {
                 className="mt-3 w-full rounded-2xl bg-gradient-to-r from-amber-300 to-amber-500 py-2.5 text-sm font-black text-bg-base disabled:opacity-40">
                 Получить деньги
               </button>
+              {!office.window_open && (
+                <p className="mt-2 text-center text-micro text-ink-mist" data-testid="loan-window-closed">
+                  🔒 Окно закрыто — кредит можно взять в межсезонье
+                </p>
+              )}
             </>
           )}
         </Card>

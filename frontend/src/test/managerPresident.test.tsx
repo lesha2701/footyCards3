@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ManagerOffice, ManagerRating } from "@/api/manager";
 import MatchdayPanel from "@/components/manager/MatchdayPanel";
+import { Bank } from "@/components/manager/PresidentTab";
 import PresidentRating from "@/components/manager/PresidentRating";
 
 const setManagerTickets = vi.fn();
@@ -67,5 +68,24 @@ describe("PresidentRating", () => {
     expect(screen.getByText("Ястребы")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "💰 Капитал" }));
     expect(screen.getByText("#1")).toBeInTheDocument();
+  });
+});
+
+describe("Bank", () => {
+  const bankOffice = (window_open: boolean) => ({
+    ...office, window_open, budget: 1_000_000, levels: { accounting: 0 },
+    loan: { open: null, limit: 2_000_000, min: 100_000, rate_pct: 12, base_rate_pct: 12, seasons_max: 3, penalty_pct: 10 },
+  }) as unknown as ManagerOffice;
+
+  it("explains why the loan button is off during the season", () => {
+    wrap(<Bank office={bankOffice(false)} onDone={() => {}} onError={() => {}} ask={() => {}} />);
+    expect(screen.getByRole("button", { name: "Получить деньги" })).toBeDisabled();
+    expect(screen.getByTestId("loan-window-closed")).toHaveTextContent("Окно закрыто — кредит можно взять в межсезонье");
+  });
+
+  it("no note while the window is open", () => {
+    wrap(<Bank office={bankOffice(true)} onDone={() => {}} onError={() => {}} ask={() => {}} />);
+    expect(screen.getByRole("button", { name: "Получить деньги" })).toBeEnabled();
+    expect(screen.queryByTestId("loan-window-closed")).toBeNull();
   });
 });
