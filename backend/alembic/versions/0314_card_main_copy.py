@@ -1,8 +1,8 @@
 """«Основная копия»: the owner picks which copy of a player plays and levels
 up (user_cards.is_main, at most one per owner and player).
 
-Revision ID: 0312
-Revises: 0311
+Revision ID: 0314
+Revises: 0313
 Create Date: 2026-11-18
 """
 from typing import Sequence, Union
@@ -10,8 +10,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0312"
-down_revision: Union[str, None] = "0311"
+revision: str = "0314"
+down_revision: Union[str, None] = "0313"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

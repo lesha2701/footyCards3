@@ -40,7 +40,7 @@ class UserCard(Base):
     # The owner's own «замок» (migration 0161): protects this copy from being
     # sold or burned as material — it still plays in squads and can be traded.
     is_user_locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    # «Основная копия» (migration 0312): the owner's chosen copy of this player
+    # «Основная копия» (migration 0314): the owner's chosen copy of this player
     # — at most one per owner and player (partial unique index), always under
     # the «замок», listed as its own tile so it is the one played and levelled.
     # Cleared when the card changes hands.
