@@ -74,6 +74,7 @@ const MusesPage = lazy(() => import("@/pages/MusesPage"));
 const AdminMonetizationPage = lazy(() => import("@/admin/pages/AdminMonetizationPage"));
 const AdminMatchDayPage = lazy(() => import("@/admin/pages/AdminMatchDayPage"));
 const BlackjackPage = lazy(() => import("@/pages/BlackjackPage"));
+const LuckyBoardPage = lazy(() => import("@/pages/LuckyBoardPage"));
 const PacksPage = lazy(() => import("@/pages/PacksPage"));
 const PackOpenPage = lazy(() => import("@/pages/PackOpenPage"));
 const PlayPage = lazy(() => import("@/pages/PlayPage"));
@@ -401,6 +402,7 @@ export default function App() {
         <Route path="/play/free-kick-classic" element={<FreeKickGamePage />} />
         <Route path="/play/hangman" element={<HangmanGamePage />} />
         <Route path="/play/blackjack" element={<BlackjackPage />} />
+        <Route path="/play/lucky-board" element={<LuckyBoardPage />} />
         <Route path="/play/pairs" element={<PairsGamePage />} />
         <Route path="/play/fut-draft" element={<FutDraftGamePage />} />
         <Route path="/collection" element={<CollectionPage />} />

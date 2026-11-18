@@ -34,6 +34,8 @@ interface Props {
   inSquad?: boolean;
   /** The owner's «замок» on this copy: a lock mark at the top centre. */
   userLocked?: boolean;
+  /** «Основная копия»: a crown instead of the lock mark (it is locked too). */
+  mainCopy?: boolean;
   /** Press and hold (~0.45 s): quick actions without opening the card. */
   onLongPress?: () => void;
   /** This copy's number: a numbered edition shows «№37/100». */
@@ -52,7 +54,7 @@ const NAME_TEXT = { sm: "text-caption", md: "text-xs", lg: "text-sm" } as const;
 
 function PlayerCard({
   player, size = "md", badge, footer, onClick, selected, dimmed, stars = 0, pathStage, prestige = 0, talentOverride,
-  animated = false, inSquad = false, userLocked = false, onLongPress, serial,
+  animated = false, inSquad = false, userLocked = false, mainCopy = false, onLongPress, serial,
 }: Props) {
   // Long press: a timer started on pointer down; moving the finger (scroll)
   // or lifting it early cancels it, and the click that follows a fired long
@@ -120,7 +122,7 @@ function PlayerCard({
       disabled={!onClick}
       aria-label={`${player.display_name}, ${player.position}, рейтинг ${player.rating}, ${RARITY_LABELS[player.rarity]}${
         isPath ? ", Академия" : ""
-      }${inSquad ? ", в составе" : ""}${userLocked ? ", под замком" : ""}`}
+      }${inSquad ? ", в составе" : ""}${mainCopy ? ", основная копия" : userLocked ? ", под замком" : ""}`}
       className={`group relative flex select-none [-webkit-touch-callout:none] aspect-[3/4] w-full flex-col overflow-hidden rounded-2xl bg-gradient-to-b ${frame} ${
         isPath ? "p-[3px]" : "p-[2px]"
       }${hwSkin ? ` hw-frame-${hwSkin}` : ""}${fanSkin ? " fans-frame" : ""}${goldSkin ? " gold100-frame" : ""} transition-transform active:scale-[0.97] ${
@@ -163,7 +165,11 @@ function PlayerCard({
               </span>
             </div>
           )}
-          {userLocked && (
+          {mainCopy ? (
+            <div className="absolute left-1/2 top-1 -translate-x-1/2 rounded-md bg-amber-400 px-1 text-[10px] leading-4" aria-hidden>
+              👑
+            </div>
+          ) : userLocked && (
             <div className="absolute left-1/2 top-1 -translate-x-1/2 rounded-md bg-amber-400 p-0.5 text-bg-base" aria-hidden>
               <IconLock size={size === "sm" ? 10 : 12} />
             </div>

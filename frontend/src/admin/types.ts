@@ -706,6 +706,15 @@ export interface GameConfig {
   blackjack_stars_cost: number;
   blackjack_paid_daily_limit: number;
   blackjack_consolation_coins: number;
+  lucky_board_enabled: boolean;
+  lucky_board_free_per_day: number;
+  lucky_board_stars_cost: number;
+  lucky_board_paid_daily_limit: number;
+  lucky_board_hourly_limit: number;
+  lucky_board_shards_per_token: number;
+  lucky_board_outcomes: LuckyBoardOutcomeConfig[];
+  lucky_board_cosmetic_ids: number[];
+  lucky_board_badge_id: number | null;
   mordoboi_enabled: boolean;
   mordoboi_rounds: number;
   mordoboi_exchanges_per_round: number;
@@ -1540,4 +1549,26 @@ export interface AdminTownResidentCatalog {
   rarities: string[];
   bonuses: { code: string; label: string }[];
   residents: AdminTownResident[];
+}
+
+// «Табло удачи» outcome table (GameConfig.lucky_board_outcomes).
+export interface LuckyBoardSideConfig {
+  coins: number;
+  tokens: number;
+  shards: number;
+  cosmetic: boolean;
+}
+
+export interface LuckyBoardOutcomeConfig {
+  code: "cup" | "ball" | "glove" | "boot" | "pair" | "miss";
+  label: string;
+  free_weight: number;
+  paid_weight: number;
+  free: LuckyBoardSideConfig;
+  paid: LuckyBoardSideConfig;
+}
+
+export interface LuckyBoardEstimate {
+  free: { coins: number; tokens: number; shards: number; cosmetic_chance: number };
+  paid: { coins: number; tokens: number; shards: number; cosmetic_chance: number };
 }

@@ -94,7 +94,7 @@ def _stands_alone(card, personal_squad_ids: set[int]) -> bool:
     reach exactly that copy, and a squad copy is shown with its lock."""
     return bool(
         card.skill_code or _invested(card) or card.is_in_lineup or card.is_in_tactico_squad
-        or card.is_user_locked or card.id in personal_squad_ids
+        or card.is_user_locked or card.is_main or card.id in personal_squad_ids
     )
 
 
@@ -163,12 +163,13 @@ async def list_user_cards(
     light = (await db.execute(query.with_only_columns(
         UserCard.id, UserCard.player_id, UserCard.skill_code, UserCard.stars, UserCard.star_progress,
         UserCard.path_level, UserCard.path_stage, UserCard.prestige, Player.rarity,
-        UserCard.is_in_lineup, UserCard.is_in_tactico_squad, UserCard.is_user_locked,
+        UserCard.is_in_lineup, UserCard.is_in_tactico_squad, UserCard.is_user_locked, UserCard.is_main,
     ))).all()
     all_cards = [
         SimpleNamespace(
             id=r.id, player_id=r.player_id, skill_code=r.skill_code, rarity=r.rarity,
             is_in_lineup=r.is_in_lineup, is_in_tactico_squad=r.is_in_tactico_squad, is_user_locked=r.is_user_locked,
+            is_main=r.is_main,
             has_star_investment=(lambda r=r: bool(r.stars or r.star_progress)),
             has_path_progress=(lambda r=r: bool(r.path_level or r.path_stage or r.prestige)),
         )
@@ -822,6 +823,48 @@ async def set_cards_user_locked(db: AsyncSession, user: User, card_ids: List[int
         card.is_user_locked = locked
     await db.commit()
     return [c.id for c in cards]
+
+
+async def list_player_copies(db: AsyncSession, user_id: int, player_id: int) -> list[UserCardListItem]:
+    """Every copy of one player the owner has, oldest number first — the list
+    collapses plain duplicates, so «Копии» in the card sheet reads them here."""
+    cards = (await db.execute(
+        select(UserCard).where(UserCard.owner_id == user_id, UserCard.player_id == player_id)
+        .options(joinedload(UserCard.player)).order_by(UserCard.serial_number.asc().nulls_last(), UserCard.id)
+    )).unique().scalars().all()
+    squad_ids = await _owner_personal_squad_ids(db, user_id)
+    items = []
+    for card in cards:
+        item = UserCardListItem.model_validate(card)
+        item.duplicate_count = len(cards)
+        item.in_personal_squad = card.id in squad_ids
+        items.append(item)
+    return items
+
+
+async def set_main_copy(db: AsyncSession, user: User, card_id: int, main: bool) -> int:
+    """Makes this copy the owner's «основная» for its player (or takes the mark
+    off). The new main copy goes under the «замок», so it is never sold or fed
+    as material; the previous one loses the mark but keeps its lock. Under
+    the user row lock, so it serializes with selling."""
+    await lock_user_for_update(db, user.id)
+    card = (await db.execute(select(UserCard).where(UserCard.id == card_id).with_for_update())).scalar_one_or_none()
+    if card is None or card.owner_id != user.id:
+        raise NotFoundError("Card not found")
+    if main:
+        others = (await db.execute(
+            select(UserCard).where(
+                UserCard.owner_id == user.id, UserCard.player_id == card.player_id,
+                UserCard.is_main.is_(True), UserCard.id != card.id,
+            ).with_for_update()
+        )).scalars().all()
+        for other in others:
+            other.is_main = False
+        await db.flush()  # the partial unique index allows one main copy at a time
+        card.is_user_locked = True
+    card.is_main = main
+    await db.commit()
+    return card.id
 
 
 async def card_filter_options(db: AsyncSession, user_id: int) -> dict:

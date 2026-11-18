@@ -134,6 +134,7 @@ class TransactionType(str, enum.Enum):
     weekly_top_reward = "weekly_top_reward"
     newbie_reward = "newbie_reward"
     blackjack_consolation = "blackjack_consolation"
+    lucky_board_reward = "lucky_board_reward"
     magnate_reward = "magnate_reward"
     card_star_upgrade = "card_star_upgrade"
     path_attempt_purchase = "path_attempt_purchase"

@@ -15,6 +15,8 @@ from app.schemas.collection import (
     CardFilterDefault,
     CardFilterOptionsOut,
     SetCardsLockedOut,
+    SetMainCopyOut,
+    SetMainCopyRequest,
     SetCardsLockedRequest,
     AlbumCollectionDetailOut,
     AlbumOverviewOut,
@@ -119,6 +121,25 @@ async def set_cards_locked(
 
     ids = await set_cards_user_locked(db, user, payload.card_ids, payload.locked)
     return SetCardsLockedOut(card_ids=ids, locked=payload.locked)
+
+
+@router.get("/players/{player_id}/copies", response_model=list[UserCardListItem])
+async def get_player_copies(player_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Every copy of this player the user owns, oldest number first."""
+    from app.services.collection_service import list_player_copies
+
+    return await list_player_copies(db, user.id, player_id)
+
+
+@router.post("/cards/{card_id}/main", response_model=SetMainCopyOut)
+async def set_card_main(
+    card_id: int, payload: SetMainCopyRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    """«Основная копия»: the copy of this player that plays and levels up (goes under the «замок»)."""
+    from app.services.collection_service import set_main_copy
+
+    await set_main_copy(db, user, card_id, payload.main)
+    return SetMainCopyOut(card_id=card_id, main=payload.main)
 
 
 @router.get("/filter-options", response_model=CardFilterOptionsOut)

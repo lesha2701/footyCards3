@@ -298,6 +298,8 @@ export default function MyCardsTab() {
 
       {detailCard && (
         <CardDetailModal
+          key={detailCard.id}
+          onOpenCopy={setDetailCard}
           card={detailCard}
           onClose={() => setDetailCard(null)}
           onSell={() => setConfirmSell({ ids: [detailCard.id], lastCopy: false, skillLoss: losesProgress(detailCard) })}

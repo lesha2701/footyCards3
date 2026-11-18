@@ -10,7 +10,8 @@ Keys: "calendar_catchup:<YYYY-MM-DD>", "cosmetic:<id>", "club_pass",
 "club_emblem:<club_id>:<item_id>", "club_donation:<club_id>:<coins>",
 "club_stars:<club_id>", "muse_accessory:<user_muse_id>:<accessory_id>",
 "free_kick_refill:<YYYY-MM-DD>", "agent_license", "streak_save:<saved days>",
-"magic_run:<mode>:<YYYY-MM-DD>", "magic_retry:<run_id>", "magic_pack:1", "magic_heal:1"."""
+"magic_run:<mode>:<YYYY-MM-DD>", "magic_retry:<run_id>", "magic_pack:1", "magic_heal:1",
+"lucky_board:1"."""
 import secrets
 from datetime import date
 from typing import Optional
@@ -50,6 +51,7 @@ LABELS = {
     "magic_retry": "Мяч и Магия: второй шанс",
     "magic_pack": "Мяч и Магия: магический пак",
     "magic_heal": "Мяч и Магия: лечение раненых",
+    "lucky_board": "Табло удачи",
 }
 
 
@@ -177,6 +179,10 @@ async def validate(db: AsyncSession, invoice: StarsInvoice) -> tuple[bool, str]:
         from app.services import magic_service
 
         return await magic_service.validate_heal_stars(db, invoice.user_id, invoice.stars_amount)
+    if kind == "lucky_board":
+        from app.services import lucky_board_service
+
+        return await lucky_board_service.validate_stars(db, invoice)
     return False, "Unknown order"
 
 
@@ -272,4 +278,8 @@ async def deliver(
         from app.services import magic_service
 
         return await magic_service.deliver_heal_stars(db, user)
+    if kind == "lucky_board":
+        from app.services import lucky_board_service
+
+        return await lucky_board_service.deliver_stars(db, user)
     raise NotFoundError("Unknown product")

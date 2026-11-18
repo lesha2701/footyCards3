@@ -42,6 +42,7 @@ from app.models.user_activity import UserDailyActivity
 from app.models.enums import TradeCardSide, TradeStatus
 from app.models.trade import TradeOffer, TradeOfferCard
 from app.models.wheel import WheelSpin
+from app.models.lucky_board import LuckyBoardSpin
 from app.services.game_config_service import get_config
 
 RETENTION_DAYS = (1, 7, 30)
@@ -104,6 +105,7 @@ MODE_SOURCES: tuple[_Source, ...] = (
         (PenaltyMatch.user_id, PenaltyMatch.opponent_user_id),
     ),
     _Source("blackjack", "21: Добавленное время", BlackjackMatch, BlackjackMatch.created_at, (BlackjackMatch.user_id,)),
+    _Source("lucky_board", "Табло удачи", LuckyBoardSpin, LuckyBoardSpin.created_at, (LuckyBoardSpin.user_id,)),
     _Source(
         "magnate", "Футбольный магнат", MagnateSeat, MagnateSeat.joined_at, (MagnateSeat.user_id,),
         game_key=MagnateSeat.match_id,

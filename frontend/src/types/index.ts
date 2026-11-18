@@ -141,6 +141,9 @@ export interface UserCard {
   hidden_from_trade: boolean;
   /** The owner's own «замок»: can't be sold or burned as material. */
   is_user_locked?: boolean;
+  /** «Основная копия»: the copy of this player the owner plays and levels up
+   * (always under the «замок»; one per player). */
+  is_main?: boolean;
   /** «Путь дебютанта» gift: no trade, sale or burning until this moment. */
   bound_until?: string | null;
   /** Stands in a player-tournament squad (no flag of its own on the card). */
@@ -502,6 +505,74 @@ export interface BlackjackStatus {
   active_match: BlackjackMatch | null;
   golden_prizes: WheelPrize[];
   jackpot_prizes: WheelPrize[];
+}
+
+// «Табло удачи» (backend lucky_board_service.py)
+export type LuckyBoardSymbol = "ball" | "boot" | "glove" | "cup" | "flag" | "whistle";
+export type LuckyBoardOutcomeCode = "cup" | "ball" | "glove" | "boot" | "pair" | "miss";
+
+export interface LuckyBoardSide {
+  coins: number;
+  tokens: number;
+  shards: number;
+  cosmetic: boolean;
+}
+
+export interface LuckyBoardOutcome {
+  code: LuckyBoardOutcomeCode;
+  label: string;
+  symbol: LuckyBoardSymbol | null;
+  free_pct: number;
+  paid_pct: number;
+  free: LuckyBoardSide;
+  paid: LuckyBoardSide;
+}
+
+export interface LuckyBoardStatus {
+  enabled: boolean;
+  free_per_day: number;
+  free_remaining: number;
+  paid_spins: number;
+  paid_bought_today: number;
+  paid_daily_limit: number;
+  stars_cost: number;
+  hourly_limit: number;
+  hourly_remaining: number;
+  hour_resets_at: string | null;
+  shards: number;
+  shards_per_token: number;
+  next_reset_at: string;
+  symbols: LuckyBoardSymbol[];
+  outcomes: LuckyBoardOutcome[];
+  cosmetics_left: number;
+}
+
+export interface LuckyBoardToken {
+  skill_code: string;
+  skill_name: string;
+  skill_icon: string;
+  quantity: number;
+}
+
+export interface LuckyBoardPrize {
+  coins: number;
+  tokens: LuckyBoardToken[];
+  shards: number;
+  crafted_tokens: LuckyBoardToken[];
+  cosmetic: { id: number; name: string; kind: string } | null;
+  badge: Badge | null;
+  blocked: boolean;
+}
+
+export interface LuckyBoardSpin {
+  id: number;
+  source: "free" | "paid";
+  outcome: LuckyBoardOutcomeCode;
+  label: string;
+  reels: LuckyBoardSymbol[];
+  prize: LuckyBoardPrize;
+  new_balance: number;
+  status: LuckyBoardStatus;
 }
 
 export interface WheelSpinResult {

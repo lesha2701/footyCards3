@@ -372,6 +372,18 @@ class User(TimestampMixin, Base):
     blackjack_paid_entries: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     blackjack_replay_entries: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
+    # «Табло удачи» (see lucky_board_service.py). The *_today pair resets at
+    # local midnight (lucky_board_day_reset_at); bought spins and shards
+    # don't expire. The hourly pair is the usual rolling 1h window, with its
+    # own cap (GameConfig.lucky_board_hourly_limit).
+    lucky_board_free_used_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    lucky_board_paid_bought_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    lucky_board_day_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    lucky_board_paid_spins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    lucky_board_shards: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    lucky_board_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    lucky_board_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     # Referrals
     referred_by_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True

@@ -22,6 +22,8 @@ export const FRAME_STYLES: Record<string, string> = {
   // 100 players, «Старожил» — 100 days in the game.
   pioneer: "bg-[conic-gradient(from_45deg,#fff7d6,#f59e0b,#7c2d12,#fbbf24,#fff7d6)] shadow-[0_0_20px_rgba(251,191,36,0.7)]",
   oldtimer: "bg-[conic-gradient(from_0deg,#bbf7d0,#16a34a,#064e3b,#4ade80,#bbf7d0)] shadow-[0_0_18px_rgba(74,222,128,0.6)]",
+  // «Табло удачи» prize (lucky_board_service), never sold: stadium lights on the board's green.
+  lucky_board: "bg-[conic-gradient(from_0deg,#fde68a,#065f46,#fbbf24,#022c22,#fde68a)] shadow-[0_0_18px_rgba(251,191,36,0.6)]",
 };
 
 /** Profile header backgrounds. */

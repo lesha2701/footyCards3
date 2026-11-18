@@ -27,6 +27,8 @@ class UserCardListItem(BaseModel):
     hidden_from_trade: bool
     # The owner's own «замок»: no selling, no burning as material.
     is_user_locked: bool = False
+    # «Основная копия»: the owner's chosen copy of this player.
+    is_main: bool = False
     # Standing in a player-tournament squad (those don't set a flag on the
     # card); filled by the endpoints that list cards for picking.
     in_personal_squad: bool = False
@@ -83,6 +85,7 @@ class UserCardListItem(BaseModel):
             "is_in_tactico_squad": data.is_in_tactico_squad,
             "hidden_from_trade": data.hidden_from_trade,
             "is_user_locked": bool(getattr(data, "is_user_locked", False)),
+            "is_main": bool(getattr(data, "is_main", False)),
             "diamond_rating_bonus": getattr(data, "diamond_rating_bonus", 0) or 0,
             "stars": getattr(data, "stars", 0) or 0,
             "star_progress": getattr(data, "star_progress", 0) or 0,
@@ -160,6 +163,15 @@ class SetCardsLockedRequest(BaseModel):
 class SetCardsLockedOut(BaseModel):
     card_ids: List[int]
     locked: bool
+
+
+class SetMainCopyRequest(BaseModel):
+    main: bool = True
+
+
+class SetMainCopyOut(BaseModel):
+    card_id: int
+    main: bool
 
 
 class CardFilterOptionsOut(BaseModel):

@@ -3,6 +3,7 @@ from app.models.arena_cup import ArenaCupRun
 from app.models.auction import AgentLicense, AuctionBid, AuctionLot
 from app.models.badge import Badge, UserBadge
 from app.models.blackjack import BlackjackMatch
+from app.models.lucky_board import LuckyBoardSpin
 from app.models.card import CardStarLedger, UserCard
 from app.models.card_path import AcademyLedger, UserAcademy, CardPath, PathAttemptPurchase, PathPrestigeLedger, PathStage, PathStageTask, PathTalent, PathXpEvent
 from app.models.card_skill import CardSkill, CardSkillLedger, UserSkillToken
@@ -175,6 +176,7 @@ __all__ = [
     "ManagerValueHistory",
     "AdminAction",
     "BlackjackMatch",
+    "LuckyBoardSpin",
     "StrategoMatch",
     "MordoboiMatch",
     "KontraBattle",

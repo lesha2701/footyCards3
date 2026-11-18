@@ -28,7 +28,7 @@ from app.models.user import User
 TRACK_EVERY = timedelta(minutes=5)
 # API prefixes (after /api/v1) whose POSTs are game actions.
 GAME_PREFIXES = (
-    "/games", "/matches", "/tactico", "/stratego", "/magnate", "/blackjack", "/mordoboi", "/kontra", "/magic",
+    "/games", "/matches", "/tactico", "/stratego", "/magnate", "/blackjack", "/lucky-board", "/mordoboi", "/kontra", "/magic",
     "/path", "/career", "/player-career", "/manager", "/my-player",
 )
 

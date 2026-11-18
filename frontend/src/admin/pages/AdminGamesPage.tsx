@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import LuckyBoardAdminSection from "@/admin/components/LuckyBoardAdminSection";
 import { useEffect, useState } from "react";
 import AdminCareerClubs from "@/admin/pages/AdminCareerClubs";
 import AdminCareerRivalries from "@/admin/pages/AdminCareerRivalries";
@@ -1051,6 +1052,8 @@ export default function AdminGamesPage() {
           {field("blackjack_consolation_coins", "Утешительный приз за поражение, монеты")}
         </div>
       </section>
+
+      <LuckyBoardAdminSection form={form} setForm={setForm} />
 
       <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
         <p className="mb-3 font-display text-base font-bold">Пак в чате (команда «вкарта»)</p>

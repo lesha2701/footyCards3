@@ -49,7 +49,7 @@ describe("card locks", () => {
     expect(inSquad(card({ is_in_lineup: true }))).toBe(true);
     expect(inSquad(card({ in_personal_squad: true }))).toBe(true);
     expect(squadLabel(card({ is_in_tactico_squad: true }))).toBe("в составе Тактико");
-    expect(cardLockProps(card({ is_user_locked: true }))).toEqual({ inSquad: false, userLocked: true });
+    expect(cardLockProps(card({ is_user_locked: true }))).toEqual({ inSquad: false, userLocked: true, mainCopy: false });
   });
 
   it("shades a squad copy and marks a locked one on the card face", () => {
