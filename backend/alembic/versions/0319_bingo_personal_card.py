@@ -3,8 +3,8 @@ closed row, +500 and the legendary coin pack for all three; the server's
 common goal (2000 coins) now pays only those with a closed row. The «обмены» common goal, out of reach since the trade
 limits, is switched off — for the running week too.
 
-Revision ID: 0316
-Revises: 0315
+Revision ID: 0319
+Revises: 0318
 Create Date: 2026-11-18
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0316"
-down_revision: Union[str, None] = "0315"
+revision: str = "0319"
+down_revision: Union[str, None] = "0318"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

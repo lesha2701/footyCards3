@@ -1200,7 +1200,7 @@ class GameConfig(TimestampMixin, Base):
     bingo_reward_pack_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # The player's own 3×3 card (bingo_service): coins for each closed row,
     # on top for all three rows (+ a pack, the legendary coin pack by
-    # migration 0316), and the pool of cells
+    # migration 0319), and the pool of cells
     # [{"metric", "label", "min", "max"}] — empty = bingo_service.DEFAULT_POOL.
     # The community reward above goes only to players with a closed line.
     bingo_line_coins: Mapped[int] = mapped_column(Integer, default=500, nullable=False)
