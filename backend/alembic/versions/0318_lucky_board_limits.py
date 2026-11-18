@@ -1,8 +1,8 @@
 """«Табло удачи»: up to 25 Stars spins a day and no hourly cap
 (lucky_board_hourly_limit 0 = no cap).
 
-Revision ID: 0316
-Revises: 0315
+Revision ID: 0318
+Revises: 0317
 Create Date: 2026-11-18
 """
 from typing import Sequence, Union
@@ -10,8 +10,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0316"
-down_revision: Union[str, None] = "0315"
+revision: str = "0318"
+down_revision: Union[str, None] = "0317"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
