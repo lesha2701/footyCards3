@@ -203,6 +203,10 @@ class User(TimestampMixin, Base):
     stratego_rating: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # «Задача дня»: local day last solved (reward once a day) and lifetime count.
     stratego_puzzle_day: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # «Жители города» game_attempts (Матилде): the day's one extra rewarded
+    # attempt and the game that took it (club_pass_service.extra_rewarded_attempts).
+    town_attempt_day: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    town_attempt_game: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     stratego_puzzles_solved: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     stratego_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     stratego_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -131,8 +131,12 @@ function ResidentCard({ resident: r, busy, enabled, settledOnly, onSell, onClose
 }) {
   const home = r.district ? districtOf(r.district) : undefined;
   return (
-    <section className="flex gap-3 rounded-2xl border border-white/10 bg-bg-surface p-3" aria-label={r.name}>
-      <MuseArt muse={r} locked={!r.owned} className="aspect-[3/4] w-20 shrink-0 rounded-xl" iconClass="text-3xl" />
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={onClose}>
+    <section
+      className="flex max-h-[85vh] w-full max-w-md gap-3 overflow-y-auto rounded-t-3xl border-t border-white/10 bg-bg-surface p-4 pb-8"
+      aria-label={r.name} role="dialog" onClick={(e) => e.stopPropagation()}
+    >
+      <MuseArt muse={r} locked={!r.owned} className="aspect-[3/4] w-28 shrink-0 rounded-xl" iconClass="text-3xl" />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -143,6 +147,7 @@ function ResidentCard({ resident: r, busy, enabled, settledOnly, onSell, onClose
         </div>
         <p className="text-xs font-semibold text-cyan-300">{r.effect_label}</p>
         {r.description && <p className="text-[11px] text-ink-mist">{r.description}</p>}
+        {!r.owned && r.bonus !== "none" && settledOnly && <p className="text-[10px] text-ink-mist">Бонус работает, пока житель живёт в районе.</p>}
         <p className="text-[11px] text-ink-mist">{r.owned ? `Копий: ${r.copies}` : "Ещё не живёт в твоём городе"}</p>
         {r.owned && home && <p className="text-[11px] text-accent-lime">{home.emoji} Живёт: {home.name}{r.bonus !== "none" ? " — бонус работает" : ""}</p>}
         {r.owned && !home && settledOnly && r.bonus !== "none" && (
@@ -158,21 +163,27 @@ function ResidentCard({ resident: r, busy, enabled, settledOnly, onSell, onClose
         )}
       </div>
     </section>
+    </div>
   );
 }
 
 /** «Наборы жителей»: progress of each set, a badge for a whole one. */
 function SetsPanel({ album }: { album: TownResidentsAlbum }) {
+  const [open, setOpen] = useState(false);
   const sets = album.sets ?? [];
   if (sets.length === 0) return null;
   const names = new Map(album.residents.map((r) => [r.id, r]));
+  const done = sets.filter((s) => s.complete).length;
   return (
     <section className="flex flex-col gap-2 rounded-2xl border border-amber-300/25 bg-amber-400/5 p-3" aria-label="Наборы жителей" data-testid="town-sets">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-bold text-ink-chalk">🧩 Наборы жителей</p>
-        {!!album.sets_pct && <span className="text-xs font-bold text-amber-200">+{album.sets_pct}% к ренте домов</span>}
-      </div>
-      {sets.map((s) => (
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex min-h-[32px] items-center justify-between gap-2 text-left">
+        <span className="text-sm font-bold text-ink-chalk">🧩 Наборы жителей · {done} из {sets.length}</span>
+        <span className="flex shrink-0 items-center gap-2">
+          {!!album.sets_pct && <span className="text-xs font-bold text-amber-200">+{album.sets_pct}% к ренте</span>}
+          <span className="text-xs text-ink-mist">{open ? "▲" : "▼"}</span>
+        </span>
+      </button>
+      {open && sets.map((s) => (
         <div key={s.name} className="flex flex-col gap-1">
           <div className="flex items-center justify-between gap-2">
             <p className={`truncate text-xs font-semibold ${s.complete ? "text-amber-200" : "text-ink-chalk"}`}>
@@ -195,7 +206,7 @@ function SetsPanel({ album }: { album: TownResidentsAlbum }) {
           </div>
         </div>
       ))}
-      {!!album.sets_max_pct && <p className="text-[10px] text-ink-mist">Все наборы вместе — не больше +{album.sets_max_pct}%.</p>}
+      {open && !!album.sets_max_pct && <p className="text-[10px] text-ink-mist">Все наборы вместе — не больше +{album.sets_max_pct}%.</p>}
     </section>
   );
 }

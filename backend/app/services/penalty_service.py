@@ -252,9 +252,7 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> Penalty
     if session.is_rewarded:
         raise ConflictError("Reward for this session has already been claimed")
     await _ensure_daily_reset(db, locked_user)
-    daily_cap_reached = locked_user.penalty_rewarded_attempts_today >= config.penalty_daily_limit + await extra_rewarded_attempts(
-        db, locked_user.id, config
-    )
+    daily_cap_reached = locked_user.penalty_rewarded_attempts_today >= config.penalty_daily_limit + await extra_rewarded_attempts(db, locked_user.id, config, game="penalty", used=locked_user.penalty_rewarded_attempts_today, base=config.penalty_daily_limit)
 
     reward = 0 if (locked_user.game_rewards_blocked or daily_cap_reached) else session.reward_coins
     session.is_rewarded = True

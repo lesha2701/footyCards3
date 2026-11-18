@@ -187,9 +187,7 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> MemoryC
             best_score=locked_user.memory_best_score,
         )
     await _ensure_daily_reset(db, locked_user)
-    daily_cap_reached = locked_user.memory_rewarded_attempts_today >= config.memory_daily_reward_limit + await extra_rewarded_attempts(
-        db, locked_user.id, config
-    )
+    daily_cap_reached = locked_user.memory_rewarded_attempts_today >= config.memory_daily_reward_limit + await extra_rewarded_attempts(db, locked_user.id, config, game="memory", used=locked_user.memory_rewarded_attempts_today, base=config.memory_daily_reward_limit)
 
     reward = 0 if (locked_user.game_rewards_blocked or daily_cap_reached) else min(session.score, config.memory_reward_cap)
     session.is_rewarded = True

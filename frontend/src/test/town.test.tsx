@@ -360,6 +360,10 @@ describe("TownPage", () => {
     });
     at("/town/residents");
     const panel = await screen.findByTestId("town-sets");
+    // Closed by default: one line with the progress, opened on a tap.
+    expect(panel).toHaveTextContent("Наборы жителей · 1 из 2");
+    expect(panel).not.toHaveTextContent("Пляжная банда");
+    fireEvent.click(screen.getByRole("button", { name: /Наборы жителей/ }));
     expect(panel).toHaveTextContent("🏅 Пляжная банда");
     expect(panel).toHaveTextContent("собран · +5%");
     expect(panel).toHaveTextContent("1/2 · соберёшь — +5%");

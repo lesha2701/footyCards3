@@ -485,7 +485,7 @@ async def get_info(db: AsyncSession, user: User) -> StrategoInfoOut:
         challenge_expiry_hours=config.stratego_challenge_expiry_hours,
         max_auto_moves=config.stratego_max_auto_moves,
         reward_win=config.stratego_reward_win, reward_draw=config.stratego_reward_draw,
-        reward_loss=config.stratego_reward_loss, daily_limit=config.stratego_daily_limit,
+        reward_loss=config.stratego_reward_loss, daily_limit=config.stratego_daily_limit + await _extra_attempts(db, user.id, config, game="stratego"),
         rewarded_today=user.stratego_rewarded_attempts_today if reset_day == local_today() else 0,
         max_legendary=config.stratego_max_legendary_cards, max_diamond=config.stratego_max_diamond_cards,
         max_path=config.stratego_max_path_cards,
@@ -1019,7 +1019,8 @@ async def _grant_reward(
     _ensure_daily_reset(user)
     from app.services.club_pass_service import extra_rewarded_attempts
 
-    limit = config.stratego_daily_limit + await extra_rewarded_attempts(db, user.id, config)
+    limit = config.stratego_daily_limit + await extra_rewarded_attempts(
+        db, user.id, config, game="stratego", used=user.stratego_rewarded_attempts_today, base=config.stratego_daily_limit)
     if user.game_rewards_blocked or user.stratego_rewarded_attempts_today >= limit:
         db.add(user)
         return 0
@@ -1599,3 +1600,10 @@ async def set_note(db: AsyncSession, user: User, match_id: int, piece_id: int, t
     await db.commit()
     await db.refresh(match)
     return await _hydrate_match(db, match, user)
+
+
+async def _extra_attempts(db, user_id: int, config, **kw) -> int:
+    """+N rewarded attempts a day: the club pass and «Жители города» (Матилде)."""
+    from app.services.club_pass_service import extra_rewarded_attempts
+
+    return await extra_rewarded_attempts(db, user_id, config, **kw)

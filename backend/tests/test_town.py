@@ -434,6 +434,21 @@ async def test_sport_and_build_bonuses_work_outside_the_town(client, db_session,
     await db_session.commit()
 
     assert await extra_rewarded_attempts(db_session, user.id, config) == 2
+    # The extra attempt shows in the games' own limits (Матилде's complaint).
+    from app.services import magnate_service, stratego_service
+    assert (await stratego_service.get_info(db_session, user)).daily_limit == config.stratego_daily_limit + 2
+    assert (await magnate_service.get_info(db_session, user)).daily_limit == config.magnate_daily_limit + 2
+    # One game a day: a claim past the base cap in «Пенальти» takes the attempt,
+    # the other games show and give their base cap until tomorrow.
+    base = config.penalty_daily_limit
+    assert await extra_rewarded_attempts(db_session, user.id, config, game="penalty", used=base - 1, base=base) == 2
+    assert user.town_attempt_game is None  # still within the base cap
+    assert await extra_rewarded_attempts(db_session, user.id, config, game="penalty", used=base, base=base) == 2
+    assert user.town_attempt_game == "penalty"
+    assert await extra_rewarded_attempts(db_session, user.id, config, game="penalty", used=base + 1, base=base) == 2
+    assert (await stratego_service.get_info(db_session, user)).daily_limit == config.stratego_daily_limit
+    assert await extra_rewarded_attempts(db_session, user.id, config, game="memory", used=0, base=1) == 0
+    await db_session.commit()
     assert await my_player_service.xp_bonus_pct(db_session, user.id) == 10
     state = (await client.get(f"{API}/club-base", headers=headers)).json()
     assert state["buildings"][0]["next_hours"] == hq_hours["next_hours"] * 0.75

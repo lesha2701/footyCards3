@@ -653,7 +653,7 @@ async def get_arena(db: AsyncSession, user: User, refresh: bool = False) -> Kont
     ranking = await ranking_service.get_ranking(db, RankingMetric.kontra_rating, user)
     return KontraArenaOut(
         rating=user.kontra_rating, rank=ranking.me.rank if ranking.me else None, offers=offers,
-        rewarded_today=user.kontra_rewarded_attempts_today, daily_limit=config.kontra_daily_limit,
+        rewarded_today=user.kontra_rewarded_attempts_today, daily_limit=config.kontra_daily_limit + await _extra_attempts(db, user.id, config, game="kontra"),
         reward_win=config.kontra_arena_reward_win, reward_loss=config.kontra_arena_reward_loss,
         rating_win=config.kontra_rating_win, rating_loss=config.kontra_rating_loss,
         tactic=_tactic_out(_saved_tactic(user)), tactics=[_tactic_out(code) for code in engine.TACTICS],
@@ -939,7 +939,7 @@ async def _finish(db: AsyncSession, battle: KontraBattle, state: dict, config: G
             user.kontra_week_best = max(user.kontra_week_best, user.kontra_rating)
         _ensure_daily_reset(user)
         reward = 0
-        if not state.get("forfeit") and not user.game_rewards_blocked and user.kontra_rewarded_attempts_today < config.kontra_daily_limit:
+        if not state.get("forfeit") and not user.game_rewards_blocked and user.kontra_rewarded_attempts_today < config.kontra_daily_limit + await _extra_attempts(db, user.id, config, game="kontra", used=user.kontra_rewarded_attempts_today, base=config.kontra_daily_limit):
             reward = config.kontra_arena_reward_win if won else config.kontra_arena_reward_loss
             user.kontra_rewarded_attempts_today += 1
             if reward > 0:
@@ -1083,3 +1083,10 @@ async def deliver_stars(db: AsyncSession, user: User, invoice) -> dict:
         db.add(KontraGear(user_id=user.id, source="stars", source_ref=invoice.payload_token, **piece))
         await db.flush()
     return {"kind": "kontra_chest"}
+
+
+async def _extra_attempts(db, user_id: int, config, **kw) -> int:
+    """+N rewarded attempts a day: the club pass and «Жители города» (Матилде)."""
+    from app.services.club_pass_service import extra_rewarded_attempts
+
+    return await extra_rewarded_attempts(db, user_id, config, **kw)
