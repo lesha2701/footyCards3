@@ -197,3 +197,41 @@ async def test_filter_options_and_saved_default(client, db_session, bot_token):
 
     cleared = await client.put(f"{API}/filter-default", headers=headers, json={})
     assert cleared.json() is None
+
+
+async def test_main_copy_is_chosen_by_the_owner_listed_alone_and_kept_from_sale(client, db_session, bot_token):
+    user = await _register(client, db_session, 880021, bot_token)
+    await _register(client, db_session, 880022, bot_token)
+    player = await create_player(db_session, rarity=Rarity.rare)
+    first = await _give(db_session, user.id, player.id, 1)
+    second = await _give(db_session, user.id, player.id, 2)
+    newest = await _give(db_session, user.id, player.id, 3)
+    headers = telegram_headers(880021, bot_token)
+
+    copies = (await client.get(f"{API}/players/{player.id}/copies", headers=headers)).json()
+    assert [c["serial_number"] for c in copies] == [1, 2, 3] and not any(c["is_main"] for c in copies)
+    # Before any choice the plain copies collapse into one tile.
+    assert len((await client.get(f"{API}/cards", headers=headers)).json()["items"]) == 1
+
+    resp = await client.post(f"{API}/cards/{first.id}/main", headers=headers, json={"main": True})
+    assert resp.status_code == 200 and resp.json() == {"card_id": first.id, "main": True}
+    card = await _card(db_session, first.id)
+    assert card.is_main and card.is_user_locked
+    items = {i["id"]: i for i in (await client.get(f"{API}/cards", headers=headers)).json()["items"]}
+    assert len(items) == 2 and items[first.id]["is_main"] is True
+    # The main copy is never sold or fed as a spare duplicate.
+    assert (await client.post(f"{API}/cards/sell", headers=headers, json={"user_card_id": first.id})).status_code == 409
+    dupes = (await client.post(f"{API}/cards/sell-duplicates", headers=headers, json={"preview": True})).json()
+    assert first.id not in dupes.get("card_ids", [])
+
+    # Switching moves the mark (one main copy per player); the old one keeps its lock.
+    assert (await client.post(f"{API}/cards/{second.id}/main", headers=headers, json={"main": True})).status_code == 200
+    assert (await _card(db_session, first.id)).is_main is False
+    assert (await _card(db_session, first.id)).is_user_locked is True
+    assert (await _card(db_session, second.id)).is_main is True
+    assert (await client.post(f"{API}/cards/{second.id}/main", headers=headers, json={"main": False})).status_code == 200
+    assert (await _card(db_session, second.id)).is_main is False
+
+    # Someone else's copy can't be marked.
+    other = await client.post(f"{API}/cards/{newest.id}/main", headers=telegram_headers(880022, bot_token), json={"main": True})
+    assert other.status_code == 404

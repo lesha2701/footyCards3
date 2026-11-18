@@ -1,7 +1,9 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import JSON, BigInteger, Boolean, CheckConstraint, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    JSON, BigInteger, Boolean, CheckConstraint, DateTime, Enum, ForeignKey, Index, Integer, String, UniqueConstraint, false, text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -38,6 +40,11 @@ class UserCard(Base):
     # The owner's own «замок» (migration 0161): protects this copy from being
     # sold or burned as material — it still plays in squads and can be traded.
     is_user_locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # «Основная копия» (migration 0312): the owner's chosen copy of this player
+    # — at most one per owner and player (partial unique index), always under
+    # the «замок», listed as its own tile so it is the one played and levelled.
+    # Cleared when the card changes hands.
+    is_main: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
     # What this very copy did in Card Arena.
     arena_goals: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     arena_assists: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -139,6 +146,10 @@ class UserCard(Base):
 
     __table_args__ = (
         UniqueConstraint("player_id", "serial_number", name="uq_user_cards_player_serial"),
+        Index(
+            "uq_user_cards_owner_player_main", "owner_id", "player_id", unique=True,
+            postgresql_where=text("is_main"), sqlite_where=text("is_main = 1"),
+        ),
         CheckConstraint(
             "(skill_code IS NULL AND skill_level IS NULL) OR "
             "(skill_code IS NOT NULL AND skill_level IS NOT NULL AND skill_level BETWEEN 1 AND 3)",

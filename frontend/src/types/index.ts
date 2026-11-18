@@ -141,6 +141,9 @@ export interface UserCard {
   hidden_from_trade: boolean;
   /** The owner's own «замок»: can't be sold or burned as material. */
   is_user_locked?: boolean;
+  /** «Основная копия»: the copy of this player the owner plays and levels up
+   * (always under the «замок»; one per player). */
+  is_main?: boolean;
   /** «Путь дебютанта» gift: no trade, sale or burning until this moment. */
   bound_until?: string | null;
   /** Stands in a player-tournament squad (no flag of its own on the card). */

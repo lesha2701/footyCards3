@@ -117,6 +117,18 @@ export async function setCardsLocked(cardIds: number[], locked: boolean): Promis
   return data;
 }
 
+/** Every copy of one player the user owns, oldest number first. */
+export async function fetchPlayerCopies(playerId: number): Promise<UserCard[]> {
+  const { data } = await api.get<UserCard[]>(`/collection/players/${playerId}/copies`);
+  return data;
+}
+
+/** «Основная копия»: the copy that plays and levels up (goes under the «замок»). */
+export async function setMainCopy(cardId: number, main: boolean): Promise<{ card_id: number; main: boolean }> {
+  const { data } = await api.post<{ card_id: number; main: boolean }>(`/collection/cards/${cardId}/main`, { main });
+  return data;
+}
+
 export interface CardFilterOptions {
   countries: string[];
   clubs: string[];

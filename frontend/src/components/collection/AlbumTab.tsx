@@ -281,6 +281,8 @@ function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: (
 
       {detailCard && (
         <CardDetailModal
+          key={detailCard.id}
+          onOpenCopy={setDetailCard}
           card={detailCard}
           onClose={() => setDetailCard(null)}
           onSell={() => setConfirmSell({ ids: [detailCard.id], lastCopy: false, skillLoss: losesProgress(detailCard) })}
