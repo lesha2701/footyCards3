@@ -1043,8 +1043,8 @@ class GameConfig(TimestampMixin, Base):
     lucky_board_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     lucky_board_free_per_day: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     lucky_board_stars_cost: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    lucky_board_paid_daily_limit: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
-    lucky_board_hourly_limit: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    lucky_board_paid_daily_limit: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
+    lucky_board_hourly_limit: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # 0 = no hourly cap
     lucky_board_shards_per_token: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     lucky_board_outcomes: Mapped[list] = mapped_column(
         JSON, default=lambda: [dict(o) for o in LUCKY_BOARD_DEFAULT_OUTCOMES], nullable=False,

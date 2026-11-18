@@ -112,8 +112,8 @@ def test_roll_follows_the_weights():
 async def test_status_shows_the_server_odds(client, db_session, bot_token):
     _, headers = await _register(client, db_session, 880001, bot_token)
     status = (await client.get("/api/v1/lucky-board/status", headers=headers)).json()
-    assert status["free_remaining"] == 3 and status["stars_cost"] == 1 and status["paid_daily_limit"] == 20
-    assert status["hourly_limit"] == 10 and status["shards_per_token"] == 5
+    assert status["free_remaining"] == 3 and status["stars_cost"] == 1 and status["paid_daily_limit"] == 25
+    assert status["hourly_limit"] == 0 and status["hour_resets_at"] is None and status["shards_per_token"] == 5
     by_code = {o["code"]: o for o in status["outcomes"]}
     assert by_code["cup"]["free_pct"] == 1.0 and by_code["pair"]["paid_pct"] == 35.0
     assert sum(o["free_pct"] for o in status["outcomes"]) == pytest.approx(100)
@@ -220,6 +220,18 @@ async def test_hourly_limit(client, db_session, bot_token, monkeypatch):
     user.lucky_board_hour_started_at = datetime.now(timezone.utc) - timedelta(hours=1, seconds=1)
     await db_session.commit()
     assert (await _spin(client, headers)).status_code == 200
+
+
+async def test_no_hourly_cap_by_default(client, db_session, bot_token, monkeypatch):
+    _force(monkeypatch, "miss")
+    user, headers = await _register(client, db_session, 880017, bot_token)
+    user = await get_user_by_telegram_id(db_session, 880017)
+    user.lucky_board_paid_spins = 12
+    await db_session.commit()
+    for _ in range(15):  # 3 free + 12 bought in one go
+        assert (await _spin(client, headers)).status_code == 200
+    status = (await client.get("/api/v1/lucky-board/status", headers=headers)).json()
+    assert status["free_remaining"] == 0 and status["paid_spins"] == 0 and status["hour_resets_at"] is None
 
 
 async def test_blocked_rewards_show_outcome_but_pay_nothing(client, db_session, bot_token, monkeypatch):

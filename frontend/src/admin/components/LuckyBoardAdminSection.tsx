@@ -50,7 +50,7 @@ export default function LuckyBoardAdminSection({ form, setForm }: { form: GameCo
         {num("lucky_board_free_per_day", "Бесплатных запусков в день")}
         {num("lucky_board_stars_cost", "Платный запуск, ⭐")}
         {num("lucky_board_paid_daily_limit", "Платных запусков в день (покупок, 0 = выкл)")}
-        {num("lucky_board_hourly_limit", "Запусков в час (все)")}
+        {num("lucky_board_hourly_limit", "Запусков в час (все, 0 = без ограничений)")}
         {num("lucky_board_shards_per_token", "Осколков на 1 жетон")}
         <label className="flex flex-col gap-1">
           <span className="text-xs text-slate-400">ID значка за «Бутсу» (пусто = нет)</span>

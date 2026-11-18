@@ -250,7 +250,8 @@ export default function LuckyBoardPage() {
   const spinsLeft = status.free_remaining + status.paid_spins;
   const paidOn = status.paid_daily_limit > 0;
   const paidLeftToday = Math.max(0, status.paid_daily_limit - status.paid_bought_today);
-  const cooling = status.hourly_remaining === 0;
+  const hourlyCap = status.hourly_limit > 0;
+  const cooling = hourlyCap && status.hourly_remaining === 0;
   const shardPct = Math.min(100, (status.shards / Math.max(1, status.shards_per_token)) * 100);
   const won = result && result.outcome !== "miss";
 
@@ -361,13 +362,20 @@ export default function LuckyBoardPage() {
             <button
               onClick={() => buyMutation.mutate()}
               disabled={buyMutation.isPending || paidLeftToday === 0 || busy}
-              className="w-full rounded-xl bg-white/5 py-3 text-sm font-bold text-ink-chalk active:scale-95 disabled:opacity-40"
+              className="flex w-full flex-col items-center rounded-xl bg-white/5 py-2.5 text-ink-chalk active:scale-95 disabled:opacity-40"
             >
-              {buyMutation.isPending
-                ? "Ждём оплату…"
-                : paidLeftToday === 0
-                  ? "Лимит покупок на сегодня исчерпан"
-                  : `Купить запуск за ⭐ ${status.stars_cost} · осталось ${paidLeftToday}`}
+              <span className="text-sm font-bold">
+                {buyMutation.isPending
+                  ? "Ждём оплату…"
+                  : paidLeftToday === 0
+                    ? "Лимит покупок на сегодня исчерпан"
+                    : `Купить запуск за ⭐ ${status.stars_cost}`}
+              </span>
+              <span className="text-caption text-ink-mist">
+                {paidLeftToday === 0
+                  ? `до ${status.paid_daily_limit} в день · новые завтра`
+                  : `сегодня осталось ${paidLeftToday} из ${status.paid_daily_limit}${hourlyCap ? "" : " · без лимита в час"}`}
+              </span>
             </button>
           )}
         </div>
@@ -401,9 +409,12 @@ export default function LuckyBoardPage() {
         <ul className="mt-2 list-disc space-y-1 pl-4">
           <li>{status.free_per_day} {plural(status.free_per_day, "бесплатный запуск", "бесплатных запуска", "бесплатных запусков")} в день, сначала тратятся они.</li>
           {paidOn && (
-            <li>Дальше — запуск за ⭐ {status.stars_cost}, не больше {status.paid_daily_limit} покупок в день. Ставок нет: цена всегда одна.</li>
+            <li>
+              Дальше — запуск за ⭐ {status.stars_cost}: до {status.paid_daily_limit} {plural(status.paid_daily_limit, "покупки", "покупок", "покупок")} в день
+              {hourlyCap ? "" : ", крути подряд — без лимита в час"}. Ставок нет: цена всегда одна.
+            </li>
           )}
-          <li>Не больше {status.hourly_limit} запусков в час.</li>
+          {hourlyCap && <li>Не больше {status.hourly_limit} {plural(status.hourly_limit, "запуска", "запусков", "запусков")} в час.</li>}
           <li>Исход решает сервер; табло только показывает его.</li>
           <li>Жетон навыка выпадает на случайный доступный навык.</li>
           <li className="flex items-center gap-1">Монеты бывают только в бесплатных запусках <IconCoin size={14} /></li>

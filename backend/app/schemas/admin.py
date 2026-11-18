@@ -732,8 +732,8 @@ class GameConfigOut(BaseModel):
     lucky_board_enabled: bool = True
     lucky_board_free_per_day: int = 3
     lucky_board_stars_cost: int = 1
-    lucky_board_paid_daily_limit: int = 20
-    lucky_board_hourly_limit: int = 10
+    lucky_board_paid_daily_limit: int = 25
+    lucky_board_hourly_limit: int = 0
     lucky_board_shards_per_token: int = 5
     lucky_board_outcomes: list[dict] = []
     lucky_board_cosmetic_ids: list[int] = []
@@ -1664,7 +1664,7 @@ class GameConfigUpdate(BaseModel):
     lucky_board_free_per_day: Optional[int] = Field(default=None, ge=0, le=50)
     lucky_board_stars_cost: Optional[int] = Field(default=None, ge=1, le=10000)
     lucky_board_paid_daily_limit: Optional[int] = Field(default=None, ge=0, le=500)
-    lucky_board_hourly_limit: Optional[int] = Field(default=None, ge=1, le=500)
+    lucky_board_hourly_limit: Optional[int] = Field(default=None, ge=0, le=500)
     lucky_board_shards_per_token: Optional[int] = Field(default=None, ge=1, le=1000)
     # Validated by lucky_board_service.validate_outcomes in the router.
     lucky_board_outcomes: Optional[list[dict]] = None

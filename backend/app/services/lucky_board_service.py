@@ -95,12 +95,17 @@ def _hour_window_open(user: User) -> bool:
 
 
 def _hourly_remaining(user: User, limit: int) -> int:
+    """Spins left this hour; a limit of 0 means no hourly cap (reported as 0)."""
+    if limit <= 0:
+        return 0
     if _hour_window_open(user):
         return limit
     return max(0, limit - user.lucky_board_hourly_attempts)
 
 
 def _take_hourly_attempt(db: AsyncSession, user: User, limit: int) -> None:
+    if limit <= 0:
+        return  # no hourly cap
     if _hour_window_open(user):
         user.lucky_board_hourly_attempts = 0
         user.lucky_board_hour_started_at = _now()
@@ -229,7 +234,7 @@ async def get_status(db: AsyncSession, user: User, config: Optional[GameConfig] 
     free_odds, paid_odds = odds(table, "free"), odds(table, "paid")
     hourly_remaining = _hourly_remaining(user, config.lucky_board_hourly_limit)
     hour_resets_at = None
-    if hourly_remaining == 0 and user.lucky_board_hour_started_at is not None:
+    if config.lucky_board_hourly_limit > 0 and hourly_remaining == 0 and user.lucky_board_hour_started_at is not None:
         hour_resets_at = ensure_aware(user.lucky_board_hour_started_at) + timedelta(hours=1)
     return LuckyBoardStatusOut(
         enabled=config.lucky_board_enabled,
