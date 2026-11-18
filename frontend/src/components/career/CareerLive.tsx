@@ -21,6 +21,7 @@ import { TIRED_AT, benchFor, byFatigue, suggestSubs, type Sub } from "@/lib/care
 import { MENTALITIES } from "@/lib/clubTactics";
 import { haptic, hapticSelection } from "@/lib/telegram";
 import type { MatchEvent } from "@/types";
+import { CareerCrest } from "@/components/career/CareerCrest";
 
 type Handlers = { onView: (v: CareerView) => void; onError: (e: unknown) => void };
 
@@ -241,9 +242,9 @@ export function LiveMatchCenter({ live, catalog, seasonId, talks, onView, onErro
       {!withViewer && (
         <>
           <div className="flex items-center justify-center gap-3 text-center">
-            <p className="min-w-0 flex-1 truncate text-right text-sm font-semibold text-ink-chalk">{live.home_name}</p>
+            <p className="flex min-w-0 flex-1 items-center justify-end gap-1.5 text-right text-sm font-semibold text-ink-chalk"><span className="truncate">{live.home_name}</span><CareerCrest name={live.home_name} size={24} /></p>
             <p className="font-mono text-2xl font-bold text-ink-chalk">{live.hs}:{live.as}</p>
-            <p className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-ink-chalk">{live.away_name}</p>
+            <p className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-sm font-semibold text-ink-chalk"><CareerCrest name={live.away_name} size={24} /><span className="truncate">{live.away_name}</span></p>
           </div>
           <div className="grid grid-cols-3 gap-1 text-center text-caption text-ink-mist">
             <span className="font-mono text-ink-chalk">{stats[0].shots}</span><span>удары</span><span className="font-mono text-ink-chalk">{stats[1].shots}</span>

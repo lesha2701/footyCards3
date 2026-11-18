@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { setCareerCupRotation, type CareerSeason, type CareerView } from "@/api/career";
 import { IconCoin, IconTrophy } from "@/components/icons";
 import { haptic } from "@/lib/telegram";
+import { CareerCrest } from "@/components/career/CareerCrest";
 
 type Handlers = { onView: (v: CareerView) => void; onError: (e: unknown) => void };
 
@@ -82,7 +83,7 @@ export default function CupCard({ season, onView, onError }: { season: CareerSea
                 const played = tie.sa !== null && tie.sb !== null;
                 const row = (name: string, score: number | null, pen: number | null, win: boolean) => (
                   <span className={`flex items-center justify-between gap-2 ${played && !win ? "text-ink-mist" : "text-ink-chalk"}`}>
-                    <span className={`min-w-0 truncate ${win ? "font-bold" : ""}`}>{name}</span>
+                    <span className="flex min-w-0 items-center gap-1.5"><CareerCrest name={name} size={16} /><span className={`truncate ${win ? "font-bold" : ""}`}>{name}</span></span>
                     <span className="shrink-0 font-mono">{played ? score : "—"}{pen !== null ? <span className="text-micro text-ink-mist"> ({pen})</span> : null}</span>
                   </span>
                 );

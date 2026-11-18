@@ -45,6 +45,7 @@ import { FORMATIONS, MENTALITIES, PLAYSTYLES } from "@/lib/clubTactics";
 import { formatGameError } from "@/lib/errors";
 import { CATEGORY_POSITIONS } from "@/lib/formation";
 import { haptic } from "@/lib/telegram";
+import { CareerCrest } from "@/components/career/CareerCrest";
 
 type Tab = "prep" | "calendar" | "club" | "profile";
 type CalendarTab = "table" | "rounds" | "scorers" | "cup";
@@ -367,8 +368,9 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
           {opponent && myMatch && (
             <>
               <p className="mt-3 text-micro uppercase tracking-wider text-ink-mist">Следующий матч · {formatWhen(nextRound.at)}</p>
-              <p className="break-words font-display text-base font-bold text-ink-chalk">
-                {myMatch.home === season.my_team_index ? "Дома" : "В гостях"}: {opponent.name}
+              <p className="flex items-center gap-2 break-words font-display text-base font-bold text-ink-chalk">
+                <CareerCrest name={opponent.name} size={28} />
+                <span className="min-w-0">{myMatch.home === season.my_team_index ? "Дома" : "В гостях"}: {opponent.name}</span>
               </p>
               <p className="text-xs text-ink-mist">
                 {opponent.is_bot ? `Сила соперника ~${opponent.strength ?? "?"}` : "Матч с другом"}
@@ -542,7 +544,7 @@ function StandingsTable({ season }: { season: CareerSeason }) {
           return (
             <tr key={row.team_index} className={me ? "font-bold text-accent-lime" : !team.is_bot ? "text-accent-cyan" : "text-ink-chalk"}>
               <td className={`py-1 pl-1 ${zone}`}>{i + 1}</td>
-              <td className="max-w-[10rem] truncate py-1">{team.name}</td>
+              <td className="max-w-[10rem] py-1"><span className="flex min-w-0 items-center gap-1.5"><CareerCrest name={team.name} size={18} /><span className="truncate">{team.name}</span></span></td>
               <td className="py-1 text-right font-mono">{row.played}</td>
               <td className="py-1 text-right font-mono">{row.gf - row.ga > 0 ? "+" : ""}{row.gf - row.ga}</td>
               <td className="py-1 text-right font-mono">{row.points}</td>
@@ -576,6 +578,7 @@ function Calendar({ season }: { season: CareerSeason }) {
             className="flex items-center gap-3 rounded-2xl bg-bg-surface px-3 py-2.5 text-left disabled:cursor-default"
           >
             <span className="w-10 shrink-0 font-mono text-caption text-ink-mist">Тур {round.index + 1}</span>
+            <CareerCrest name={opp.name} size={28} />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm text-ink-chalk">{home ? "vs" : "@"} {opp.name}</span>
               <span className="block text-micro text-ink-mist-dim">{formatWhen(round.at)}</span>
