@@ -243,9 +243,7 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> PairsCl
         await db.refresh(locked_user)
         return PairsClaimOut(reward_coins=muse_coins, new_balance=locked_user.balance)
     await _ensure_daily_reset(db, locked_user)
-    daily_cap_reached = locked_user.pairs_rewarded_attempts_today >= config.pairs_daily_limit + await extra_rewarded_attempts(
-        db, locked_user.id, config
-    )
+    daily_cap_reached = locked_user.pairs_rewarded_attempts_today >= config.pairs_daily_limit + await extra_rewarded_attempts(db, locked_user.id, config, game="pairs", used=locked_user.pairs_rewarded_attempts_today, base=config.pairs_daily_limit)
 
     reward = 0 if (locked_user.game_rewards_blocked or daily_cap_reached) else session.reward_coins
     session.is_rewarded = True

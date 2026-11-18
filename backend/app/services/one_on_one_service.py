@@ -211,9 +211,7 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> OneOnOn
     if session.is_rewarded:
         raise ConflictError("Reward for this session has already been claimed")
     await _ensure_daily_reset(db, locked)
-    daily_cap_reached = locked.one_on_one_rewarded_attempts_today >= config.one_on_one_daily_limit + await extra_rewarded_attempts(
-        db, locked.id, config
-    )
+    daily_cap_reached = locked.one_on_one_rewarded_attempts_today >= config.one_on_one_daily_limit + await extra_rewarded_attempts(db, locked.id, config, game="one_on_one", used=locked.one_on_one_rewarded_attempts_today, base=config.one_on_one_daily_limit)
 
     reward = 0 if (locked.game_rewards_blocked or daily_cap_reached) else session.reward_coins
     session.is_rewarded = True
