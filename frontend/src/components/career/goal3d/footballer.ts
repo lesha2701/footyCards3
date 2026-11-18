@@ -1,5 +1,5 @@
 /** The skinned footballer of the 3D goal replay: the Mixamo model and clips
- * of the free-kick prototype (public/career-3d/footballer.glb, meshopt)
+ * of the free-kick prototype (src/assets/3d/footballer.glb, meshopt)
  * plus Mixamo's run, sprint, backpedal, header and celebrations on the same
  * rig (footballer-moves.glb, tools/career-replay-3d/build_moves.py),
  * prepared for 22 players whose positions come from the key frames: clips
@@ -14,8 +14,13 @@ import { DEFAULT_TIMING, type ClipName, type ClipTiming } from "@/lib/footballer
 
 import { printNumber } from "./shirtNumber";
 
-export const FOOTBALLER_URL = "/career-3d/footballer.glb";
-export const MOVES_URL = "/career-3d/footballer-moves.glb";
+// Imported (not in public/) so the build names them by content hash and
+// nginx can cache them for good — see the "immutable" rule in nginx.conf.
+import footballerUrl from "@/assets/3d/footballer.glb?url";
+import movesUrl from "@/assets/3d/footballer-moves.glb?url";
+
+export const FOOTBALLER_URL = footballerUrl;
+export const MOVES_URL = movesUrl;
 
 export interface FootballerAsset {
   gltf: GLTF;

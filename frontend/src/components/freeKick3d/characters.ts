@@ -1,5 +1,8 @@
 import * as THREE from "three";
 
+import blondUrl from "@/assets/3d/blond.glb?url";
+import brownUrl from "@/assets/3d/brown.glb?url";
+
 /** The generated footballers (one skinned mesh, a plain white kit; built by
  * tools/free-kick-3d/build_character.py with the Soccer pack's clips). The
  * kit is told apart from skin and hair by colour, and shirt / shorts /
@@ -20,14 +23,14 @@ export type Character = {
 
 export const CHARACTERS = {
   blond: {
-    url: "/free-kick-3d/blond.glb",
+    url: blondUrl,
     toe: new THREE.Vector3(-1.08, 0, 2.32),
     socksTop: 0.31,
     shirtHem: 0.51,
     hairline: 0.95,
   },
   brown: {
-    url: "/free-kick-3d/brown.glb",
+    url: brownUrl,
     toe: new THREE.Vector3(-1.03, 0, 2.2),
     socksTop: 0.315,
     shirtHem: 0.52,

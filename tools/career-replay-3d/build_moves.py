@@ -3,7 +3,7 @@
     python build_moves.py
 
 Mounts (see README.md): the "Soccer" pack at /pack (its Ch38_nonPBR.fbx is
-the rig of public/career-3d/footballer.glb), the downloaded clips at /moves,
+the rig of frontend/src/assets/3d/footballer.glb), the downloaded clips at /moves,
 this folder at /work.
 
 Only the skeleton and the clips go out (no mesh): the replay loads them next
@@ -15,7 +15,7 @@ the ratio of the two hip heights (as tools/free-kick-3d/build_character.py).
 Then, with Node (gltf-transform 4.1.1): strip_moves.mjs drops the fingers,
 scale channels and the rig's own empty take (the exporter samples every
 bone), and `gltf-transform optimize ... --compress meshopt --simplify false
---join false --flatten false` gives public/career-3d/footballer-moves.glb
+--join false --flatten false` gives frontend/src/assets/3d/footballer-moves.glb
 (~140 KB). Docker commands: see the free-kick tools' README (same image).
 Clip names are the ones lib/footballerMotion.ts plays."""
 import os

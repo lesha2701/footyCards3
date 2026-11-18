@@ -9,7 +9,9 @@ import { ONE_ON_ONE_MOVES_URL, prepareMoves, type Moves } from "@/components/one
 import { bakeClips, mergeModel, simplify, type Baked, type Merged } from "./baked";
 import type { Paces } from "./motion";
 
-export const MATCH_MOVES_URL = "/match-3d/moves.glb";
+import matchMovesUrl from "@/assets/3d/match-moves.glb?url";
+
+export const MATCH_MOVES_URL = matchMovesUrl;
 /** The light model everybody far from the camera wears. */
 const FAR_TRIS = 3200;
 

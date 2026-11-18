@@ -1,8 +1,8 @@
 # 11-a-side 3D match: extra moves
 
-`frontend/public/match-3d/moves.glb` (492 KB, 30 clips, 39.9 s): skeleton and
-clips only, played by bone name on `public/career-3d/footballer.glb`, like
-`public/one-on-one-3d/moves.glb`. Neither source pack is in the repo.
+`frontend/src/assets/3d/match-moves.glb` (401 KB, 30 clips, 39.9 s): skeleton and
+clips only, played by bone name on `frontend/src/assets/3d/footballer.glb`, like
+`frontend/src/assets/3d/one-on-one-moves.glb`. Neither source pack is in the repo.
 
 - `build_moves.py`: the clips -> `out/moves-raw.glb`; its `REPORT` lines give
   what each clip does (travel, hips turn, foot and hand peaks, seams).
@@ -26,10 +26,10 @@ packages).
 ```bash
 export MSYS_NO_PATHCONV=1
 W="$(cd tools/match-3d && pwd -W)"; S="$(cd tools/career-replay-3d && pwd -W)"
-O="$(cd frontend/public/match-3d && pwd -W)"
+O="$(cd frontend/src/assets/3d && pwd -W)"
 mkdir -p tools/match-3d/out/ref
-cp frontend/public/career-3d/footballer.glb tools/match-3d/out/ref/
-cp frontend/public/one-on-one-3d/moves.glb tools/match-3d/out/ref/one-on-one-moves.glb
+cp frontend/src/assets/3d/footballer.glb tools/match-3d/out/ref/
+cp frontend/src/assets/3d/one-on-one-moves.glb tools/match-3d/out/ref/one-on-one-moves.glb
 
 # 1. Blender: -> out/moves-raw.glb, out/build.log (several minutes)
 docker run -d --name fc-bpy-match3d -v "<pack>:/pack:ro" -v "<mocap>:/mocap:ro" -v "$W:/work" <bpy image> sleep infinity
@@ -40,9 +40,9 @@ docker run -d --name fc-gltf-match3d -v "$W:/work" -v "$S:/strip:ro" -v "$O:/dis
 docker exec fc-gltf-match3d sh -c 'mkdir -p /opt/gt && cd /opt/gt \
   && cp /work/package.json /work/verify_moves.mjs /strip/strip_moves.mjs . && npm install --no-audit --no-fund \
   && node strip_moves.mjs /work/out/moves-raw.glb /work/out/moves-stripped.glb \
-  && npx --no-install gltf-transform optimize /work/out/moves-stripped.glb /dist/moves.glb \
+  && npx --no-install gltf-transform optimize /work/out/moves-stripped.glb /dist/match-moves.glb \
        --compress meshopt --simplify false --join false --flatten false \
-  && node verify_moves.mjs /dist/moves.glb /work/out/ref/footballer.glb /work/out/ref/one-on-one-moves.glb'
+  && node verify_moves.mjs /dist/match-moves.glb /work/out/ref/footballer.glb /work/out/ref/one-on-one-moves.glb'
 ```
 
 ## Conventions
