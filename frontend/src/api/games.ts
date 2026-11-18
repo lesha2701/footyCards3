@@ -102,10 +102,15 @@ export async function claimSaboteurReward(sessionId: number): Promise<SaboteurCl
   return data;
 }
 
+/** Who plays a mini-game: a card, or — `prospect` (by default when there is
+ * no card) — the «Воспитанник Академии». */
+const playerBody = (userCardId: number | null, prospect: boolean) =>
+  prospect ? { prospect: true } : { user_card_id: userCardId };
+
 // --- Penalty ---
 
-export async function startPenalty(userCardId: number): Promise<PenaltyStartResult> {
-  const { data } = await api.post<PenaltyStartResult>("/games/penalty/start", { user_card_id: userCardId });
+export async function startPenalty(userCardId: number | null, prospect = userCardId === null): Promise<PenaltyStartResult> {
+  const { data } = await api.post<PenaltyStartResult>("/games/penalty/start", playerBody(userCardId, prospect));
   return data;
 }
 
@@ -131,8 +136,8 @@ export async function fetchPenaltyStats(): Promise<PenaltyStats> {
 
 // --- Free Kick ---
 
-export async function startFreeKick(userCardId: number): Promise<FreeKickStartResult> {
-  const { data } = await api.post<FreeKickStartResult>("/games/free-kick/start", { user_card_id: userCardId });
+export async function startFreeKick(userCardId: number | null, prospect = userCardId === null): Promise<FreeKickStartResult> {
+  const { data } = await api.post<FreeKickStartResult>("/games/free-kick/start", playerBody(userCardId, prospect));
   return data;
 }
 
@@ -163,8 +168,8 @@ export async function shootFreeKickChallenge(sessionId: number, swipe: Quantized
   return data;
 }
 
-export async function startFreeKick3D(userCardId: number): Promise<FreeKick3DStartResult> {
-  const { data } = await api.post<FreeKick3DStartResult>("/games/free-kick-3d/start", { user_card_id: userCardId });
+export async function startFreeKick3D(userCardId: number | null, prospect = userCardId === null): Promise<FreeKick3DStartResult> {
+  const { data } = await api.post<FreeKick3DStartResult>("/games/free-kick-3d/start", playerBody(userCardId, prospect));
   return data;
 }
 
@@ -196,8 +201,8 @@ export async function createFreeKickRefillInvoice(): Promise<StarsInvoiceCreate>
   return data;
 }
 
-export async function startPenalty3D(userCardId: number): Promise<Penalty3DStartResult> {
-  const { data } = await api.post<Penalty3DStartResult>("/games/penalty-3d/start", { user_card_id: userCardId });
+export async function startPenalty3D(userCardId: number | null, prospect = userCardId === null): Promise<Penalty3DStartResult> {
+  const { data } = await api.post<Penalty3DStartResult>("/games/penalty-3d/start", playerBody(userCardId, prospect));
   return data;
 }
 
@@ -227,8 +232,8 @@ export async function claimFreeKickReward(sessionId: number): Promise<FreeKickCl
 
 // --- «Атака 1 на 1» ---
 
-export async function startOneOnOne(userCardId: number): Promise<OneOnOneStartResult> {
-  const { data } = await api.post<OneOnOneStartResult>("/games/one-on-one/start", { user_card_id: userCardId });
+export async function startOneOnOne(userCardId: number | null, prospect = userCardId === null): Promise<OneOnOneStartResult> {
+  const { data } = await api.post<OneOnOneStartResult>("/games/one-on-one/start", playerBody(userCardId, prospect));
   return data;
 }
 
@@ -253,8 +258,10 @@ export async function claimOneOnOneReward(sessionId: number): Promise<OneOnOneCl
 
 // --- «Ответка» ---
 
-export async function startOtvetka(userCardId: number): Promise<OtvetkaStartResult> {
-  const { data } = await api.post<OtvetkaStartResult>("/games/otvetka/start", { user_card_id: userCardId });
+/** A card plays, or — `userCardId` null — the «Воспитанник Академии». */
+export async function startOtvetka(userCardId: number | null, duelId?: number | null): Promise<OtvetkaStartResult> {
+  const body = userCardId === null ? { prospect: true, ...(duelId ? { duel_id: duelId } : {}) } : { user_card_id: userCardId };
+  const { data } = await api.post<OtvetkaStartResult>("/games/otvetka/start", body);
   return data;
 }
 
@@ -271,8 +278,8 @@ export async function playOtvetkaEpisode(
   return data;
 }
 
-export async function claimOtvetkaReward(sessionId: number): Promise<OneOnOneClaimResult> {
-  const { data } = await api.post<OneOnOneClaimResult>(`/games/otvetka/${sessionId}/claim`);
+export async function claimOtvetkaReward(sessionId: number): Promise<OneOnOneClaimResult & { prospect_xp?: number | null }> {
+  const { data } = await api.post<OneOnOneClaimResult & { prospect_xp?: number | null }>(`/games/otvetka/${sessionId}/claim`);
   return data;
 }
 

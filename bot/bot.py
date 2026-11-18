@@ -28,6 +28,7 @@ from services.auction_scheduler import run_auction_sweep_loop
 from services.magnate_scheduler import run_magnate_sweep_loop
 from services.match_day_scheduler import run_match_day_sync_loop
 from services.manager_scheduler import run_manager_sweep_loop
+from services.prospect_scheduler import run_prospect_sweep_loop
 from services.weekly_top_scheduler import run_weekly_top_loop
 from services.watchdog import run_watchdog_loop
 from services.comeback import run_comeback_loop
@@ -88,6 +89,7 @@ async def run_polling() -> None:
         asyncio.create_task(run_club_league_loop()),
         asyncio.create_task(run_magnate_sweep_loop()),
         asyncio.create_task(run_manager_sweep_loop()),
+        asyncio.create_task(run_prospect_sweep_loop()),
         asyncio.create_task(run_match_day_sync_loop()),
         asyncio.create_task(run_club_base_sweep_loop()),
         asyncio.create_task(run_weekly_top_loop()),
@@ -135,6 +137,7 @@ async def run_webhook() -> None:
     asyncio.create_task(run_club_league_loop())
     asyncio.create_task(run_magnate_sweep_loop())
     asyncio.create_task(run_manager_sweep_loop())
+    asyncio.create_task(run_prospect_sweep_loop())
     asyncio.create_task(run_match_day_sync_loop())
     asyncio.create_task(run_club_base_sweep_loop())
     asyncio.create_task(run_weekly_top_loop())

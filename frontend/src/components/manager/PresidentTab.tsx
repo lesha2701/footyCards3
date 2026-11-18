@@ -21,10 +21,18 @@ import { AwayReport, DeskOverlay, Diary } from "@/components/manager/OfficeDesk"
 import { useOfficeStaff } from "@/components/manager/useOfficeStaff";
 import OfficeScene from "@/components/manager/OfficeScene";
 import PresidentRating from "@/components/manager/PresidentRating";
+import { AchievementsPanel, BudgetPanel } from "@/components/manager/PresidentDecisions";
+import { useFocusTarget } from "@/lib/managerFocus";
+import { MIcon } from "@/lib/managerIcons";
 import { eur } from "@/lib/managerMoney";
 import { hapticNotify } from "@/lib/telegram";
 
-type Section = "report" | "sponsor" | "bank" | "deals" | "matchday" | "exchange" | "rating";
+type Section = "report" | "budget" | "awards" | "sponsor" | "bank" | "deals" | "matchday" | "exchange" | "rating";
+
+/** Where a «Сегодня в клубе» target lives. */
+const FOCUS: Record<string, Section> = {
+  budget: "budget", achievements: "awards", sponsor: "sponsor", deals: "deals", injuries: "matchday", bank: "bank",
+};
 
 /** ISO week key "2026-W45" → "неделя 45". */
 function weekOf(key: string): string {
@@ -46,6 +54,7 @@ export default function PresidentTab({ onError, onTab = () => {} }: { onError: (
   const { data } = useQuery({ queryKey: ["manager", "office"], queryFn: fetchManagerOffice });
   const [section, setSection] = useState<Section>("report");
   const [confirm, setConfirm] = useState<{ title: string; text: string; run: () => void } | null>(null);
+  useFocusTarget((t) => { if (FOCUS[t]) setSection(FOCUS[t]); });
   const done = (office: ManagerOffice) => {
     hapticNotify("success");
     queryClient.setQueryData(["manager", "office"], office);
@@ -57,40 +66,51 @@ export default function PresidentTab({ onError, onTab = () => {} }: { onError: (
   });
   if (!data) return <ListSkeleton />;
   const ask = (title: string, text: string, run: () => void) => setConfirm({ title, text, run });
-  const sections: [Section, string, string][] = [
-    ["report", "📊", "Отчёт"], ["sponsor", "🤝", "Спонсор"], ["bank", "🏦", "Банк"], ["deals", "💼", "Сделки"],
-    ["matchday", "🏟️", "Матчдей"], ["exchange", "📈", "Биржа"], ["rating", "🏆", "Рейтинг"],
+  // Three groups instead of nine equal buttons: money, the stadium, prestige.
+  const groups: { title: string; cols: string; items: [Section, string, string][] }[] = [
+    { title: "Финансы", cols: "col-span-4 grid-cols-5", items: [["report", "📊", "Отчёт"], ["budget", "📒", "Бюджет"], ["bank", "🏦", "Банк"], ["deals", "💼", "Сделки"], ["sponsor", "🤝", "Спонсор"]] },
+    { title: "Матчдей", cols: "col-span-1 grid-cols-1", items: [["matchday", "🏟️", "Стадион"]] },
+    { title: "Престиж", cols: "col-span-3 grid-cols-3", items: [["awards", "🏅", "Награды"], ["rating", "🏆", "Рейтинг"], ["exchange", "📈", "Биржа"]] },
   ];
   return (
     <div className="flex flex-col gap-4" data-testid="president-tab">
       <OfficeHero office={data} onTab={onTab} />
-      <AwayReport onTab={onTab} />
-      <Diary onTab={onTab} />
-      <div className="grid grid-cols-4 gap-1.5">
-        {sections.map(([id, icon, label]) => (
-          <button key={id} onClick={() => setSection(id)}
-            className={`flex flex-col items-center gap-0.5 rounded-2xl py-2 text-micro font-bold transition ${section === id
-              ? "bg-gradient-to-b from-amber-300 to-amber-500 text-bg-base shadow-[0_6px_18px_-6px_rgba(251,191,36,0.8)]"
-              : "bg-bg-surface text-ink-mist"}`}>
-            <span className="text-lg leading-none">{icon}</span>{label}
-          </button>
+      <div className="grid grid-cols-4 gap-x-1.5 gap-y-2" data-testid="office-sections">
+        {groups.map((g) => (
+          <div key={g.title} className={`flex flex-col gap-1 ${g.cols.split(" ")[0]}`}>
+            <p className="px-1 text-[10px] font-bold uppercase tracking-wide text-ink-mist">{g.title}</p>
+            <div className={`grid gap-1 ${g.cols.split(" ")[1]}`}>
+              {g.items.map(([id, icon, label]) => (
+                <button key={id} onClick={() => setSection(id)}
+                  className={`flex min-w-0 flex-col items-center gap-0.5 rounded-2xl px-0.5 py-2 text-[10px] font-bold transition ${section === id
+                    ? "bg-gradient-to-b from-amber-300 to-amber-500 text-bg-base shadow-[0_6px_18px_-6px_rgba(251,191,36,0.8)]"
+                    : "bg-bg-surface text-ink-mist"}`}>
+                  <MIcon code={`pres_${id}`} emoji={icon} className="h-10 w-10" emojiClass="text-xl" /><span className="w-full truncate text-center">{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
-      {!data.window_open && !["report", "exchange", "rating"].includes(section) && (
+      {!data.window_open && !["report", "budget", "awards", "exchange", "rating"].includes(section) && (
         <p className="rounded-xl bg-amber-400/10 px-3 py-2 text-caption text-amber-200">
           ⏳ Идёт сезон. Новые сделки и кредит — в межсезонье, на следующий сезон. Погасить кредит можно в любой момент.
         </p>
       )}
       {section === "report" && <Report office={data} />}
-      {section === "sponsor" && <Sponsors office={data} busy={deal.isPending}
-        onSign={(s) => ask(`Подписать «${s.brand}»?`, "Спонсор — один на сезон, контракт не расторгается.", () => deal.mutate({ kind: "sponsor", option: s.code }))} />}
+      {section === "budget" && <BudgetPanel onError={onError} onTab={onTab} />}
+      {section === "awards" && <AchievementsPanel onError={onError} />}
+      {section === "sponsor" && <div data-focus="sponsor"><Sponsors office={data} busy={deal.isPending}
+        onSign={(s) => ask(`Подписать «${s.brand}»?`, "Спонсор — один на сезон, контракт не расторгается.", () => deal.mutate({ kind: "sponsor", option: s.code }))} /></div>}
       {section === "bank" && <Bank office={data} onDone={done} onError={onError} ask={ask} />}
       {section === "exchange" && <ExchangePanel onError={onError} />}
       {section === "matchday" && <MatchdayPanel office={data} onDone={done} onError={onError} busy={deal.isPending}
         onInsure={() => ask("Застраховать игроков?", `${eur(data.offers.insurance.premium)} за сезон — страховка оплатит ${pct(data.offers.insurance.cover_pct)} лечения травм.`,
           () => deal.mutate({ kind: "insurance" }))} />}
       {section === "rating" && <PresidentRating />}
-      {section === "deals" && <Deals office={data} busy={deal.isPending} ask={ask} sign={(kind, body) => deal.mutate({ kind, ...body })} />}
+      {section === "deals" && <div data-focus="deals"><Deals office={data} busy={deal.isPending} ask={ask} sign={(kind, body) => deal.mutate({ kind, ...body })} /></div>}
+      <AwayReport onTab={onTab} />
+      <Diary onTab={onTab} />
       <ConfirmDialog
         open={!!confirm} title={confirm?.title ?? ""} description={confirm?.text} confirmLabel="Подписать"
         onConfirm={() => { confirm?.run(); setConfirm(null); }} onCancel={() => setConfirm(null)}
@@ -495,6 +515,7 @@ function DealPanel({ kind, office, busy, ask, sign }: {
           ))}
         </div>
         {boost("🏨", t.hotel_cut_pct > 0 ? `Клубный отель ур. ${lv.hotel}: расходы −${pct(t.hotel_cut_pct)}` : "Клубный отель удешевит турне")}
+        {!!t.villa_cut_pct && boost("🚁", `Свой транспорт на вилле: турне −${pct(t.villa_cut_pct)}`)}
         {boost("🎥", t.media_fans_pct > 0 ? `Медиацентр ур. ${lv.media}: фанатов +${pct(t.media_fans_pct)}` : "Медиацентр приведёт больше фанатов")}
         {button("Отправиться в турне", !picked || office.free_budget < (picked?.cost ?? 0), `${picked?.name}?`,
           `Доход ${eur(picked?.revenue ?? 0)}, расходы ${eur(picked?.cost ?? 0)}. Первые ${picked?.fatigue_rounds} туров команда будет слабее на ${pct(picked?.fatigue_pct ?? 0)}.`,

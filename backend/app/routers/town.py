@@ -131,6 +131,16 @@ async def villa_week(db: AsyncSession = Depends(get_db), user: User = Depends(ge
     return await town_villa_service.villa_week(db, user)
 
 
+@router.post("/villa/income")
+async def villa_income(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await town_villa_service.collect_income(db, user)
+
+
+@router.post("/villa/party")
+async def villa_party(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await town_villa_service.throw_party(db, user)
+
+
 @router.post("/villa/upgrade")
 async def villa_upgrade(payload: VillaUpgradeRequest, db: AsyncSession = Depends(get_db),
                         user: User = Depends(get_current_user)):

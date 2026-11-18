@@ -45,11 +45,13 @@ export default function TrainingSection({ view, onSaved, onStart }: Props) {
   };
 
   const status = !t.done_today
-    ? `До +${maxXp} опыта сверх лимита · +${t.freshness_bonus} свежести`
-    : t.extra_credits > 0
-      ? `Дополнительных тренировок: ${t.extra_credits}`
-      : "Бесплатная на сегодня пройдена";
-  const canBuy = t.done_today && t.extra_credits === 0 && t.extra_left_today > 0;
+    ? `До +${maxXp} опыта сверх лимита · +${t.freshness_bonus} свежести${t.villa_perk ? " · ⚽ +1 от виллы" : ""}`
+    : t.villa_left
+      ? "⚽ Ещё одна бесплатная — от поля на вилле"
+      : t.extra_credits > 0
+        ? `Дополнительных тренировок: ${t.extra_credits}`
+        : "Бесплатная на сегодня пройдена";
+  const canBuy = t.done_today && !t.villa_left && t.extra_credits === 0 && t.extra_left_today > 0;
   // Dots for the current streak window; today's dot is lit once done.
   const filled = t.streak % t.streak_days || (t.streak > 0 ? t.streak_days : 0);
 

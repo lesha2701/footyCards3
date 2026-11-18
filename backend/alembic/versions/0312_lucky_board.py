@@ -2,8 +2,8 @@
 spins, then fixed-price spins for Telegram Stars (shop product «lucky_board»);
 lucky_board_spins, users.lucky_board_*, game_config.lucky_board_*.
 
-Revision ID: 0306
-Revises: 0305
+Revision ID: 0312
+Revises: 0311
 Create Date: 2026-11-17
 """
 import json
@@ -37,8 +37,8 @@ LUCKY_BOARD_DEFAULT_OUTCOMES = [
 BADGE = ("Кубок табло", "🏆", "badges/lucky_board.webp", 960)
 FRAME = ("Табло удачи", "Приз «Табло удачи» — горит огнями стадиона", "lucky_board", 961)
 
-revision: str = "0306"
-down_revision: Union[str, None] = "0305"
+revision: str = "0312"
+down_revision: Union[str, None] = "0311"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

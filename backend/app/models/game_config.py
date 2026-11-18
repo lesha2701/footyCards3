@@ -19,7 +19,7 @@ NEWBIE_DEFAULT_TASKS = [
     {"code": "fergie_time", "label": "Вырви победу в «Ферги Тайм»", "mode": "game:fergie_time", "path": "/play/fergie-time", "coins": 1000},
 ]
 
-# «Табло удачи» default table (lucky_board_service.py; the 0306 migration
+# «Табло удачи» default table (lucky_board_service.py; the 0312 migration
 # writes the same). Weights are per mille. Each side's prize: coins (free side
 # only), tokens (skill tokens of one random skill), shards (N → 1 token),
 # cosmetic (paid «Бутса»: a pool cosmetic or badge, else the shards).
@@ -818,6 +818,8 @@ class GameConfig(TimestampMixin, Base):
     player_career_chest_token_pct: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     # Weekly task: goals.
     player_career_weekly_goals: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    # Weekly task for defenders and goalkeepers: clean sheets (instead of goals).
+    player_career_weekly_clean_sheets: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     # Weekly task: matches.
     player_career_weekly_matches: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     # Weekly task: average rating x10 (70 = 7.0) over 5+ matches.
@@ -866,6 +868,9 @@ class GameConfig(TimestampMixin, Base):
     # club value. Only the overridden numbers are stored; manager_finance.DEFAULTS
     # fills the rest.
     manager_finance: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # «Воспитанник Академии» (prospect_service): only the overridden numbers
+    # are stored; prospect_service.DEFAULTS fills the rest.
+    prospect: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     manager_value_ratings: Mapped[list] = mapped_column(JSON, default=lambda: [45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95], nullable=False)
     manager_value_eur: Mapped[list] = mapped_column(JSON, default=lambda: [50000, 80000, 150000, 400000, 1000000, 3500000, 12000000, 35000000, 80000000, 160000000, 220000000], nullable=False)
     manager_division_budget: Mapped[list] = mapped_column(JSON, default=lambda: [120000000, 70000000, 40000000, 22000000, 12000000, 7000000, 4500000, 3000000, 2500000, 2000000], nullable=False)

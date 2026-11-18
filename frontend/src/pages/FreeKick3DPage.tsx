@@ -12,6 +12,7 @@ import {
   startFreeKick3D,
 } from "@/api/games";
 import CardPickerModal from "@/components/cards/CardPickerModal";
+import { ProspectPickOption, ProspectXpNote } from "@/components/cards/ProspectPickOption";
 import ErrorBoundary from "@/components/common/ErrorBoundary";
 import GameHero from "@/components/common/GameHero";
 import { IconCoin } from "@/components/icons";
@@ -35,6 +36,7 @@ import {
 import { payShopWithStars } from "@/lib/shopStars";
 import { audio } from "@/lib/sound";
 import { haptic, hapticNotify, showConfirm } from "@/lib/telegram";
+import { prospectPrint, useProspectPick } from "@/lib/useProspectPick";
 import { useAuthStore } from "@/store/authStore";
 import type { FreeKick3DKick, FreeKick3DShotResult, FreeKick3DStartResult, UserCard } from "@/types";
 
@@ -50,7 +52,8 @@ const BONUS: Record<FreeKick3DShotResult["bonuses"][number], string> = {
   curl: "с закруткой",
 };
 
-type Series = FreeKick3DStartResult & { card: UserCard };
+// card null = the «Воспитанник Академии» shoots (`print` on his back).
+type Series = FreeKick3DStartResult & { card: UserCard | null; print: { name: string; number: number } };
 
 /** «Штрафной удар» in 3D: pick a card, then a series of free kicks from
  * server-chosen positions. Each swipe is simulated here for the show and
@@ -74,7 +77,12 @@ export default function FreeKick3DPage() {
   });
 
   const start = useMutation({
-    mutationFn: (card: UserCard) => startFreeKick3D(card.id).then((data) => ({ ...data, card })),
+    mutationFn: (card: UserCard | null) =>
+      startFreeKick3D(card ? card.id : null).then((data) => ({
+        ...data,
+        card,
+        print: card ? shirtPrint(card.player) : prospectPrint(data.prospect_name, prospect),
+      })),
     onSuccess: (data) => {
       setSeries(data);
       setKick(data.kick);
@@ -92,6 +100,7 @@ export default function FreeKick3DPage() {
     onSuccess: (data) => {
       updateBalance(data.new_balance);
       hapticNotify("success");
+      if (data.prospect_xp !== null && data.prospect_xp !== undefined) void queryClient.invalidateQueries({ queryKey: ["prospect"] });
     },
   });
 
@@ -102,6 +111,9 @@ export default function FreeKick3DPage() {
     enabled: !series || finished,
     refetchInterval: 30_000,
   });
+  const canPick = !series && !refillLoading && !refill?.on_cooldown;
+  // From the prospect's page (?prospect=1): straight to the spot with him.
+  const { prospect, holdPicker } = useProspectPick(canPick, () => start.mutate(null));
 
   if (!series || !kick) {
     return (
@@ -123,13 +135,14 @@ export default function FreeKick3DPage() {
           </>
         )}
         <CardPickerModal
-          open={!start.isPending && !refillLoading && !refill?.on_cooldown}
+          open={canPick && !start.isPending && !(holdPicker && !start.isError)}
           title="Кто бьёт?"
           cards={collection?.items ?? []}
           onSelect={(card) => start.mutate(card)}
           onClose={() => navigate("/play")}
           searchValue={cardSearch}
           onSearchChange={setCardSearch}
+          header={prospect && <ProspectPickOption prospect={prospect} onPick={() => start.mutate(null)} />}
         />
       </div>
     );
@@ -163,6 +176,7 @@ export default function FreeKick3DPage() {
               Ты получил +{claim.data.reward_coins}
               <IconCoin size={16} />
             </p>
+            <ProspectXpNote xp={claim.data.prospect_xp} />
             {claim.data.reward_coins === 0 && total > 0 && (
               <p className="mt-1 text-xs text-ink-mist">Лимит наградных серий на сегодня исчерпан</p>
             )}
@@ -410,7 +424,7 @@ function SeriesKick({
           onReady={onReady}
           fpsRef={fpsRef}
           kickerCelebration={series.celebration === "cel_silly" ? "silly_dance" : "celebrate"}
-          gear={{ ball: series.ball, kickerBoots: series.boots, kickerPrint: shirtPrint(series.card.player) }}
+          gear={{ ball: series.ball, kickerBoots: series.boots, kickerPrint: series.print }}
         />
       </ErrorBoundary>
 
@@ -453,7 +467,7 @@ function SeriesKick({
             Удар {kick.kick_index + 1} / {series.total_kicks}
           </div>
           <div className="flex items-center justify-end gap-1 text-caption text-ink-mist">
-            {series.card.player.display_name} · {series.rating} · {distance} м ·
+            {series.card ? series.card.player.display_name : series.print.name} · {series.rating} · {distance} м ·
             <span className="inline-flex items-center gap-0.5 font-mono text-accent-lime">
               {total}
               <IconCoin size={11} />

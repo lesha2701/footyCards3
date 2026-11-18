@@ -194,6 +194,9 @@ export interface MyPlayerView {
     /** A run can start now (free one left, or a bought credit). */
     can_train: boolean;
     extra_credits: number;
+    /** «Моя вилла»: a pitch on the plot gives one more free training a day; villa_left — not done yet today. */
+    villa_perk?: boolean;
+    villa_left?: boolean;
     extra_bought_today: number;
     extra_max: number;
     extra_left_today: number;

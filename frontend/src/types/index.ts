@@ -1772,6 +1772,8 @@ export interface PenaltyStartResult {
   session_id: number;
   player_rating: number;
   first_kicker: "player" | "bot";
+  /** Set when the «Воспитанник Академии» plays: his name. */
+  prospect_name?: string | null;
 }
 
 export interface PenaltyKickResult {
@@ -1792,6 +1794,8 @@ export interface PenaltyClaimResult {
   reward_coins: number;
   new_balance: number;
   result: string;
+  /** XP the «Воспитанник Академии» got, when he played. */
+  prospect_xp?: number | null;
 }
 
 export interface PenaltyForfeitResult {
@@ -1888,6 +1892,8 @@ export interface OneOnOneStartResult {
   rating: number;
   total_attacks: number;
   attack: OneOnOneAttack;
+  /** Set when the «Воспитанник Академии» plays: his name. */
+  prospect_name?: string | null;
   celebration?: string | null;
   ball?: string | null;
   boots?: string | null;
@@ -1913,6 +1919,8 @@ export interface OneOnOneResult {
 export interface OneOnOneClaimResult {
   reward_coins: number;
   new_balance: number;
+  /** XP the «Воспитанник Академии» got, when he played. */
+  prospect_xp?: number | null;
 }
 
 /** «Ответка»: the episodes a match is drawn from. */
@@ -1936,6 +1944,10 @@ export interface OtvetkaStartResult {
   win_coins: number;
   loss_coins: number;
   episode: OtvetkaEpisode;
+  /** Set when the «Воспитанник Академии» plays. */
+  prospect_name?: string | null;
+  /** A friends' duel of prospects this match is a side of. */
+  duel_id?: number | null;
   celebration?: string | null;
   ball?: string | null;
   boots?: string | null;
@@ -1963,6 +1975,8 @@ export interface FreeKick3DStartResult {
   rating: number;
   total_kicks: number;
   kick: FreeKick3DKick;
+  /** Set when the «Воспитанник Академии» plays: his name. */
+  prospect_name?: string | null;
   /** Goals in a row so far («Серия без промахов»), across series. */
   streak: number;
   /** «Мой игрок» gear worn in the scene (cosmetic codes; null = default). */
@@ -2056,6 +2070,8 @@ export interface Penalty3DStartResult {
   session_id: number;
   rating: number;
   kick: Penalty3DKick;
+  /** Set when the «Воспитанник Академии» plays: his name. */
+  prospect_name?: string | null;
   /** «Мой игрок» gear worn in the scene (cosmetic codes; null = default). */
   celebration?: string | null;
   ball?: string | null;
@@ -2078,6 +2094,8 @@ export interface Penalty3DResult {
 export interface FreeKickClaimResult {
   reward_coins: number;
   new_balance: number;
+  /** XP the «Воспитанник Академии» got, when he played. */
+  prospect_xp?: number | null;
 }
 
 export interface HangmanStartResult {

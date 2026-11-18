@@ -123,7 +123,7 @@ async def test_series_is_replayed_on_the_server_and_paid_once(client, db_session
     before = (await get_user_by_telegram_id(db_session, 870001)).balance
     claim = await client.post(f"/api/v1/games/one-on-one/{session_id}/claim", headers=headers)
     assert claim.status_code == 200
-    assert claim.json() == {"reward_coins": expected_total, "new_balance": before + expected_total}
+    assert claim.json() == {"reward_coins": expected_total, "new_balance": before + expected_total, "prospect_xp": None}
     twice = await client.post(f"/api/v1/games/one-on-one/{session_id}/claim", headers=headers)
     assert twice.status_code == 409
 

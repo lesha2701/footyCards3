@@ -326,7 +326,7 @@ export interface FriendsLeague {
   rounds_played: number;
   total_rounds: number;
   next_round_at: string | null;
-  members: { user_id: number; name: string; status: "invited" | "accepted" | "declined" }[];
+  members: { user_id: number; name: string; status: "invited" | "accepted" | "declined" | "left" }[];
   table: (CareerTableRow & { name: string; owner_name: string | null; is_me: boolean; is_friend: boolean })[];
   rounds: {
     index: number;
@@ -431,6 +431,11 @@ export async function respondFriendsLeague(leagueId: number, accept: boolean): P
 
 export async function startFriendsLeague(leagueId: number): Promise<FriendsLeagueView> {
   const { data } = await api.post<FriendsLeagueView>(`/player-career/friends/${leagueId}/start`);
+  return data;
+}
+
+export async function leaveFriendsLeague(leagueId: number): Promise<FriendsLeagueView> {
+  const { data } = await api.post<FriendsLeagueView>(`/player-career/friends/${leagueId}/leave`);
   return data;
 }
 

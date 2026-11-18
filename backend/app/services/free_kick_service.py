@@ -25,7 +25,7 @@ from app.schemas.game import (
     FreeKickStartOut,
 )
 from app.services import free_kick_3d_engine as engine
-from app.services import my_player_service
+from app.services import my_player_service, prospect_games
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
 from app.services.club_pass_service import extra_rewarded_attempts
@@ -131,20 +131,31 @@ async def _own_card(db: AsyncSession, user: User, user_card_id: int) -> UserCard
     return card
 
 
-async def start_session(db: AsyncSession, user: User, user_card_id: int) -> FreeKickStartOut:
+async def _kicker_rating(db: AsyncSession, user: User, user_card_id: int | None, prospect) -> int:
+    """The card's rating, or the prospect's."""
+    if prospect is not None:
+        return prospect.rating
+    return (await _own_card(db, user, user_card_id)).player.rating
+
+
+async def start_session(db: AsyncSession, user: User, user_card_id: int | None, prospect: bool = False) -> FreeKickStartOut:
+    """A card of the collection, or — `prospect` — the «Воспитанник
+    Академии» at his age-relative rating (prospect_games); he then gets XP
+    at the claim."""
     config = await get_config(db)
     locked_user = await lock_user_for_update(db, user.id)
+    entry = await prospect_games.entry(db, locked_user.id, user_card_id, prospect)
     await _take_hourly_attempt(db, locked_user, config.hourly_game_limit)
 
     await _ensure_daily_reset(db, locked_user)
-    card = await _own_card(db, locked_user, user_card_id)
+    rating = await _kicker_rating(db, locked_user, user_card_id, entry)
 
-    half_width = half_width_for_rating(card.player.rating)
+    half_width = half_width_for_rating(rating)
     first_kick = _roll_kick(config, half_width)
     session = GameSession(
         user_id=locked_user.id, game_type=GameType.free_kick, status=GameSessionStatus.in_progress,
         server_state={
-            "player_rating": card.player.rating, "kicks": [first_kick],
+            "player_rating": rating, "prospect": entry is not None, "kicks": [first_kick],
             "current_kick_index": 0, "total_coins": 0,
         },
     )
@@ -248,11 +259,21 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> FreeKic
             db, locked_user, reward, TransactionType.game_reward,
             "Награда за Штрафной удар", related_object_type="game_session", related_object_id=session.id,
         )
+    # The prospect's XP. goals: the 3D series' kicks that went in (classic:
+    # every tier but a miss); a series has no opponent to beat, so «won» =
+    # at least one goal.
+    state = session.server_state or {}
+    kicks = state.get("kicks") or []
+    if state.get("mode") == MODE_3D:
+        goals = sum(1 for k in kicks if k.get("outcome") == "goal")
+    else:
+        goals = sum(1 for k in kicks if k.get("tier") not in (None, "miss"))
+    prospect_xp = await prospect_games.award(db, locked_user, state, goals, goals > 0, "free_kick")
     db.add(session)
     await db.commit()
     await db.refresh(locked_user)
 
-    return FreeKickClaimOut(reward_coins=reward, new_balance=locked_user.balance)
+    return FreeKickClaimOut(reward_coins=reward, new_balance=locked_user.balance, prospect_xp=prospect_xp)
 
 
 # ---------------------------------------------------------------------------
@@ -302,9 +323,11 @@ def streak_bonus(config, streak: int) -> int:
     return 0
 
 
-async def start_3d(db: AsyncSession, user: User, user_card_id: int) -> FreeKick3DStartOut:
+async def start_3d(db: AsyncSession, user: User, user_card_id: int | None, prospect: bool = False) -> FreeKick3DStartOut:
+    """A card, or — `prospect` — the «Воспитанник Академии» (see start_session)."""
     config = await get_config(db)
     locked_user = await lock_user_for_update(db, user.id)
+    entry = await prospect_games.entry(db, locked_user.id, user_card_id, prospect)
     await _ensure_hourly_reset(db, locked_user)
     if locked_user.free_kick_hourly_attempts >= config.free_kick_hourly_limit and locked_user.free_kick_bonus_series > 0:
         # The hour's series is used up: a bought refill plays instead.
@@ -313,14 +336,14 @@ async def start_3d(db: AsyncSession, user: User, user_card_id: int) -> FreeKick3
     else:
         await _take_hourly_attempt(db, locked_user, config.free_kick_hourly_limit)
     await _ensure_daily_reset(db, locked_user)
-    card = await _own_card(db, locked_user, user_card_id)
+    rating = await _kicker_rating(db, locked_user, user_card_id, entry)
 
     first = _new_3d_kick()
     total = max(1, config.free_kick_3d_kicks)
     session = GameSession(
         user_id=locked_user.id, game_type=GameType.free_kick, status=GameSessionStatus.in_progress,
         server_state={
-            "mode": MODE_3D, "player_rating": card.player.rating, "total_kicks": total,
+            "mode": MODE_3D, "player_rating": rating, "prospect": entry is not None, "total_kicks": total,
             "kicks": [first], "current_kick_index": 0, "total_coins": 0,
         },
     )
@@ -328,7 +351,7 @@ async def start_3d(db: AsyncSession, user: User, user_card_id: int) -> FreeKick3
     await db.commit()
     await db.refresh(session)
     return FreeKick3DStartOut(
-        session_id=session.id, rating=card.player.rating, total_kicks=total,
+        session_id=session.id, rating=rating, total_kicks=total, prospect_name=entry.name if entry else None,
         kick=FreeKick3DKickOut(kick_index=0, seed=first["seed"]), streak=locked_user.free_kick_goal_streak,
         **await my_player_service.game_gear(db, locked_user.id),
     )

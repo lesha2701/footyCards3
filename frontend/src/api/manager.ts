@@ -12,11 +12,17 @@ export interface ManagerSquadPlayer {
   key?: string;
   /** own = my «Мой игрок», academy = my academy card (both always start),
    * live = another user's «Мой игрок», npc = a catalog footballer, kid = an academy kid in an empty slot. */
-  kind: "own" | "academy" | "live" | "npc" | "kid";
+  kind: "own" | "academy" | "live" | "npc" | "kid" | "prospect" | "graduate";
   name: string;
   position: string;
   rating: number;
   value?: number;
+  /** Whose footballer a user entry is: «Мой игрок» or a «Воспитанник Академии». */
+  subject?: ManagerSubject;
+  /** My own prospect (kind "prospect"): always in the XI. */
+  starts?: boolean;
+  /** On the bench of the match day (comes on for a tired starter). */
+  sub?: boolean;
   user_id?: number;
   owner_name?: string;
   player_id?: number;
@@ -29,9 +35,36 @@ export interface ManagerSquadPlayer {
   photo?: string | null;
 }
 
+/** player = a user's «Мой игрок», prospect = his «Воспитанник Академии»,
+ * graduate = that prospect after «Выпускной» (frozen rating). */
+export type ManagerSubject = "player" | "prospect" | "graduate";
+
+/** My «Воспитанник Академии» in «Менеджер». */
+export interface ManagerProspect {
+  name: string;
+  position: string;
+  rating: number;
+  age: number;
+  /** Old enough for clubs (from the min_stage stage). */
+  eligible: boolean;
+  min_stage: string;
+  stage: string;
+  market_open: boolean;
+  value: number;
+  /** His contract at another club. */
+  contract: ManagerContract | null;
+  appearance: MyPlayerAppearance;
+  number: number;
+  subject?: ManagerSubject;
+  /** Value change over the last seasons, %. */
+  trend_pct?: number | null;
+  generation?: number;
+}
+
 export interface ManagerContract {
   id: number;
   user_id: number;
+  subject?: ManagerSubject;
   /** renew = the club's new contract for its own player (an offer only). */
   kind: "sign" | "transfer" | "loan" | "renew";
   status: "offered" | "active" | "on_loan" | "ended" | "declined" | "cancelled" | "accepted";
@@ -124,7 +157,8 @@ export interface ManagerClub {
   base: ManagerBase;
   next_grant: { grant: number; bonus: number; bonus_raw: number; total: number };
   ticket_per_home_match: number;
-  squad: { xi: ManagerSquadPlayer[]; bench: ManagerSquadPlayer[]; rating: number; kids: number; formation: string };
+  /** bench: the matchday substitutes first (`sub`), then the ones left out of the squad. */
+  squad: { xi: ManagerSquadPlayer[]; bench: ManagerSquadPlayer[]; rating: number; kids: number; formation: string; bench_size?: number; subs_max?: number; sub_from?: number };
   contracts: ManagerContract[];
   offers_sent: ManagerContract[];
   /** Other clubs asking for my players. */
@@ -141,6 +175,11 @@ export interface ManagerClub {
   next_match: ManagerNextMatch | null;
   live_count: number;
   academy_card_id: number | null;
+  /** My «Воспитанник Академии» is always in the XI. */
+  prospect_starts?: boolean;
+  /** Every «Академия» slot, the chosen card or null. */
+  academy_card_ids?: (number | null)[];
+  coach?: ManagerCoach | null;
   /** The brand on the shirt («Кабинет президента», this or the coming season). */
   kit_sponsor: string | null;
   academy_options: { card_id: number; name: string; position: string; rating: number }[];
@@ -164,6 +203,27 @@ export interface ManagerNextMatch {
   edge: "win" | "lose" | "even";
   /** % on my lines' ratings in that match (style + formation + edge). */
   mods: Record<ManagerLine, number>;
+  /** The style my side plays it with (the coach's when he sets the tactics). */
+  my_style?: ManagerStyle;
+  by_coach?: boolean;
+}
+
+/** «Главный тренер» with a character (manager_coach). */
+export interface ManagerCoach {
+  trait: string;
+  name: string;
+  /** The character: «Испанец», «Стратег», … */
+  nation: string;
+  title: string;
+  emoji: string;
+  about: string;
+  quote: string;
+  /** He sets the formation, style and «Установка на матч» (else the president). */
+  auto: boolean;
+  formation: string;
+  style: string;
+  /** The line he asks to strengthen. */
+  ask?: { line: string; text: string } | null;
 }
 
 export interface ManagerTacticsRules {
@@ -181,6 +241,8 @@ export interface ManagerLeagueMatch {
   hs?: number;
   away_score?: number;
   goals?: { team: "a" | "b"; minute: number | null; name: string; home: boolean }[];
+  /** Substitutions of both sides (`home` = the home side's). */
+  subs?: { minute: number; in: string; out: string; home: boolean }[];
   /** [home, away] styles / formations of a played match. */
   styles?: [ManagerStyle, ManagerStyle] | null;
   formations?: [string, string] | null;
@@ -283,17 +345,26 @@ export interface ManagerView {
   /** My own «Мой игрок» at another club. */
   contract: ManagerContract | null;
   offers: ManagerContract[];
+  prospect?: ManagerProspect | null;
+  /** My graduate (after «Выпускной»). */
+  graduate?: ManagerProspect | null;
+  /** Wage cap of a contract with a prospect / graduate, coins a season. */
+  youth_wage_max?: number;
   league: ManagerLeague | null;
   shop: ManagerShop;
 }
 
 export interface ManagerMarketPlayer {
   user_id: number;
+  subject?: ManagerSubject;
+  /** A prospect's age (years). */
+  age?: number;
   player_name: string;
   owner_name: string;
   position: string;
   rating: number;
-  level: number;
+  /** null for a prospect. */
+  level: number | null;
   value: number;
   trend_pct: number | null;
   is_friend: boolean;
@@ -354,11 +425,13 @@ export interface ManagerTodayItem {
   icon: string;
   text: string;
   tab: ManagerTodayTab;
+  /** Where in the tab the action is (`data-focus`), see lib/managerFocus. */
+  target?: string;
   urgent: boolean;
 }
 
 export interface ManagerChecklist {
-  steps: { code: string; title: string; done: boolean; tab: ManagerTodayTab }[];
+  steps: { code: string; title: string; done: boolean; tab: ManagerTodayTab; target?: string }[];
   bonus: number;
   ready: boolean;
 }
@@ -417,6 +490,8 @@ export interface ManagerClubEvent {
   result: ManagerEventOption | null;
   /** «Пресс-конференция» (an event after its round). */
   press?: boolean;
+  /** «Конфликты в штабе»: two of the staff argue. */
+  conflict?: boolean;
   /** Who decided: "assistant" = «Помощник» while the president was away. */
   by?: string | null;
 }
@@ -655,14 +730,15 @@ export async function foundManagerClub(name: string): Promise<ManagerView> {
 }
 
 export async function updateManagerClub(patch: {
-  name?: string; formation?: string; style?: ManagerStyle; academy_card_id?: number; clear_academy?: boolean;
+  name?: string; formation?: string; style?: ManagerStyle; academy_card_id?: number; clear_academy?: boolean; academy_slot?: number; coach_auto?: boolean;
+  prospect_starts?: boolean;
 }): Promise<ManagerView> {
   const { data } = await api.patch<ManagerView>("/manager/club", patch);
   return data;
 }
 
 export async function offerManagerContract(offer: {
-  user_id: number; wage: number; seasons: number; fee?: number; kind?: "sign" | "transfer" | "loan";
+  user_id: number; wage: number; seasons: number; fee?: number; kind?: "sign" | "transfer" | "loan"; subject?: ManagerSubject;
 }): Promise<ManagerView> {
   const { data } = await api.post<ManagerView>("/manager/offers", offer);
   return data;
@@ -689,8 +765,8 @@ export async function renewManagerContract(contractId: number, wage: number, sea
   return data;
 }
 
-export async function setManagerMarket(open: boolean): Promise<ManagerView> {
-  const { data } = await api.post<ManagerView>("/manager/market", { open });
+export async function setManagerMarket(open: boolean, subject: ManagerSubject = "player"): Promise<ManagerView> {
+  const { data } = await api.post<ManagerView>("/manager/market", { open, subject });
   return data;
 }
 
@@ -820,7 +896,7 @@ export interface ManagerOffice {
   offers: {
     /** Shirt sponsor: `worn` = the brand on the shirt now (this or the coming season). */
     kit: { taken: boolean; shop: number; brands: string[]; worn: string | null; prices: number[] };
-    tour: { taken: boolean; options: ManagerTourOption[]; hotel_cut_pct: number; media_fans_pct: number };
+    tour: { taken: boolean; options: ManagerTourOption[]; hotel_cut_pct: number; media_fans_pct: number; villa_cut_pct?: number };
     tv: { taken: boolean; estimate: number; discount_pct: number; advance: number };
     deposit: { taken: boolean; rate_pct: number; min: number; max: number; blocked: boolean };
     venture: { taken: boolean; win_pct: number; multiplier: number; min: number; max: number; max_pct: number };
@@ -1019,7 +1095,9 @@ export async function repayManagerBond(bondId: number): Promise<ManagerExchange>
 // --- «Штаб президента»: the VIP assistant and analyst, the club staff, the president's status ---
 
 export type ManagerVipRole = "assistant" | "analyst";
-export type ManagerStaffRole = "coach" | "physio" | "agent" | "marketing" | "scout" | "press" | "driver";
+/** The ten seats of the round table, clockwise from the president. */
+export type ManagerStaffRole =
+  | "coach" | "director" | "scout" | "academy" | "physio" | "transport" | "stadium" | "press" | "marketing" | "finance";
 export type ManagerRarity = "common" | "rare" | "epic" | "legendary";
 
 /** How a skin, a car or a room is drawn (StaffPortrait / OfficeScene). */
@@ -1061,6 +1139,7 @@ export interface ManagerStaffMember {
   id: number;
   role: ManagerStaffRole;
   role_name: string;
+  dept?: string;
   emoji: string;
   resident_id: number;
   name: string;
@@ -1070,6 +1149,8 @@ export interface ManagerStaffMember {
   effect: number;
   effect_text: string;
   wage: number;
+  /** The head coach's character. */
+  coach?: ManagerCoach;
 }
 
 export interface ManagerStaffView {
@@ -1078,15 +1159,65 @@ export interface ManagerStaffView {
   staff: ManagerStaffMember[];
   slots: number;
   candidates: { resident_id: number; name: string; title: string | null; icon: string; image: string | null; rarity: ManagerRarity; wage: number }[];
-  roles: { code: ManagerStaffRole; name: string; emoji: string; effects: Record<ManagerRarity, string> }[];
+  roles: { code: ManagerStaffRole; name: string; dept: string; emoji: string; effects: Record<ManagerRarity, string> }[];
   wages: number;
   window: boolean;
   items: ManagerStaffItem[];
   worn: { assistant: ManagerStaffItem | null; analyst: ManagerStaffItem | null; car: ManagerStaffItem | null; room: ManagerStaffItem | null };
+  /** «Поручения»: one a season per department. */
+  orders: Partial<Record<ManagerStaffRole, ManagerStaffOrder>>;
+  /** «Транспортный департамент»: the bus and the plane. */
+  fleet: { kinds: ManagerFleetKind[] };
+}
+
+export interface ManagerStaffOrder {
+  emoji: string;
+  title: string;
+  about: string;
+  cost: number;
+  fans: number;
+  form_pct: number;
+  form_rounds: number;
+  /** Only between rounds of a running season. */
+  season: boolean;
+  done: boolean;
+}
+
+export interface ManagerFleetItem {
+  code: string;
+  name: string;
+  emoji: string;
+  price: number;
+  upkeep: number;
+  away_pct: number;
+  injury_pct: number;
+}
+
+export interface ManagerFleetKind {
+  kind: "bus" | "plane";
+  title: string;
+  level: number;
+  items: ManagerFleetItem[];
+}
+
+export async function buyManagerFleet(kind: "bus" | "plane"): Promise<ManagerStaffView> {
+  const { data } = await api.post<ManagerStaffView>(`/manager/staff/fleet/${kind}/buy`);
+  return data;
+}
+
+export async function orderManagerStaff(role: ManagerStaffRole): Promise<ManagerStaffView> {
+  const { data } = await api.post<ManagerStaffView>(`/manager/staff/orders/${role}`);
+  return data;
 }
 
 export interface ManagerAssistantRules {
   limit: number;
+  transfer_limit: number;
+  renew_limit: number;
+  min_sale: number;
+  /** Untouchables: "npc:<id>" / "live:<contract id>". */
+  keep: string[];
+  mode: "act" | "advise";
   sponsor: boolean;
   kit: boolean;
   fill: boolean;
@@ -1097,15 +1228,25 @@ export interface ManagerAssistantRules {
   plan: "auto" | "normal" | "off";
 }
 
-export interface ManagerAssistantLog { at: string; icon: string; text: string; eur: number }
+export interface ManagerAssistantLog {
+  id?: string;
+  at: string;
+  icon: string;
+  text: string;
+  eur: number;
+  /** Advice (mode «только советовать») the president does with one tap. */
+  action?: { kind: string; ref: string };
+  done?: boolean;
+}
 
 /** GET /manager/assistant: «Пока тебя не было». */
 export interface ManagerAssistantOffice {
   active: boolean;
   name: string;
   rules: ManagerAssistantRules;
-  report: { entries: ManagerAssistantLog[]; unseen: number; spent: number; earned: number };
+  report: { entries: ManagerAssistantLog[]; unseen: number; spent: number; earned: number; todo: number };
   trial: boolean;
+  squad: { key: string; name: string; rating: number | null; kind: string }[];
   /** After these rounds a press conference comes («Ежедневник»). */
   press_rounds: number[];
 }
@@ -1173,5 +1314,127 @@ export async function markManagerAssistantSeen(): Promise<ManagerAssistantOffice
 
 export async function checkManagerDeal(body: { kind: "live" | "npc"; target_id: number; fee?: number; wage?: number }): Promise<ManagerDealCheck> {
   const { data } = await api.post<ManagerDealCheck>("/manager/analytics/deal", body);
+  return data;
+}
+
+export async function doManagerAdvice(entryId: string): Promise<ManagerAssistantOffice> {
+  const { data } = await api.post<ManagerAssistantOffice>(`/manager/assistant/advice/${entryId}`);
+  return data;
+}
+
+// --- «Спортивный директор» ----------------------------------------------------------------------
+
+export interface ManagerDirectorOption {
+  player_id: number;
+  name: string;
+  position: string;
+  rating: number;
+  club: string | null;
+  loan_fee: number;
+  value: number;
+  wage_now: number;
+  can_loan: boolean;
+  can_buy: boolean;
+  fits: boolean;
+}
+
+export interface ManagerDirectorView {
+  name: string;
+  icon: string;
+  image: string | null;
+  rarity: ManagerRarity;
+  count: number;
+  budget: number;
+  grant: number;
+  window: boolean;
+  needs: { why: "empty" | "leaving"; title: string; options: ManagerDirectorOption[] }[];
+}
+
+export async function fetchManagerDirector(): Promise<ManagerDirectorView> {
+  const { data } = await api.get<ManagerDirectorView>("/manager/staff/director");
+  return data;
+}
+
+export async function setManagerDirectorBudget(budget: number): Promise<ManagerDirectorView> {
+  const { data } = await api.post<ManagerDirectorView>("/manager/staff/director/budget", { budget });
+  return data;
+}
+
+// --- «Решения президента»: the season budget, hands-on, achievements, the finance review ----------
+
+export interface ManagerBudgetArticle {
+  code: string;
+  name: string;
+  emoji: string;
+  plan: number | null;
+  spent: number;
+  left: number | null;
+  over: boolean;
+}
+
+export interface ManagerBudgetResult { ok: boolean; over: string[]; bonus: number; fans: number }
+
+export interface ManagerBudgetView {
+  key: string;
+  window: boolean;
+  pot: number;
+  plan: Record<string, number> | null;
+  reserve: number | null;
+  articles: ManagerBudgetArticle[];
+  suggest: Record<string, number>;
+  tolerance_pct: number;
+  fans_penalty: number;
+  bonus_pct: number;
+  bonus_max: number;
+  result: ManagerBudgetResult | null;
+  last: ({ key: string } & ManagerBudgetResult) | null;
+  acts: { me: number; assistant: number; total: number; share: number };
+  hands_on: { fans: number; money: number };
+  hands_on_min: number;
+}
+
+export interface ManagerAchievement {
+  code: string;
+  emoji: string;
+  name: string;
+  about: string;
+  goal: number;
+  progress: number;
+  done: boolean;
+  claimed: boolean;
+  reward: number;
+}
+
+export interface ManagerFinanceReview {
+  key: string;
+  finished: boolean;
+  income: number;
+  expense: number;
+  profit: number;
+  costs: { label: string; amount: number; share: number }[];
+  deals: { code: string; label: string; net: number }[];
+  budget: { result: ManagerBudgetResult | null; rows: { code: string; name: string; emoji: string; plan: number; spent: number }[] } | null;
+  advice: string[];
+}
+
+export interface ManagerDecisions {
+  budget: ManagerBudgetView;
+  achievements: ManagerAchievement[];
+  analyst: boolean;
+  review: ManagerFinanceReview | null;
+}
+
+export async function fetchManagerDecisions(): Promise<ManagerDecisions> {
+  const { data } = await api.get<ManagerDecisions>("/manager/decisions");
+  return data;
+}
+
+export async function setManagerBudget(alloc: Record<string, number>): Promise<ManagerDecisions> {
+  const { data } = await api.put<ManagerDecisions>("/manager/budget", { alloc });
+  return data;
+}
+
+export async function claimManagerAchievement(code: string): Promise<ManagerDecisions> {
+  const { data } = await api.post<ManagerDecisions>(`/manager/achievements/${code}/claim`);
   return data;
 }

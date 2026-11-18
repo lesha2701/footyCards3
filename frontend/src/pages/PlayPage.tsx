@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { fetchBlackjackStatus } from "@/api/blackjack";
@@ -10,6 +10,7 @@ import { fetchGameLimits, fetchPenaltyStats } from "@/api/games";
 import { fetchArenaStats } from "@/api/matches";
 import { fetchKontraHub } from "@/api/kontra";
 import { fetchMagicHub } from "@/api/magic";
+import { fetchManagerSummary } from "@/api/manager";
 import { fetchMordoboiInfo, fetchMordoboiMatches, fetchMordoboiStats } from "@/api/mordoboi";
 import { fetchPlayerTournamentCurrent } from "@/api/personalTournament";
 import { fetchStrategoStats } from "@/api/stratego";
@@ -37,6 +38,7 @@ import {
   type IconProps,
 } from "@/components/icons";
 import { Skeleton } from "@/components/common/Skeleton";
+import TransferLight, { windowOpen } from "@/components/manager/TransferLight";
 import { preloadShotArt } from "@/components/penalty/preloadShotArt";
 import { hapticSelection } from "@/lib/telegram";
 import { artOf } from "@/lib/gameArt";
@@ -88,6 +90,8 @@ interface GameDef {
   stat?: string;
   limitKey?: LimitKey;
   rightLabel?: string;
+  /** Live status on the right instead of a label (the manager's transfer window). */
+  rightNode?: ReactNode;
   noLimit?: boolean;
 }
 
@@ -133,6 +137,7 @@ export default function PlayPage() {
   const { data: career } = useQuery({ queryKey: ["career"], queryFn: fetchCareer, staleTime: 60_000 });
   const { data: weeklyCup } = useQuery({ queryKey: ["weekly-cup"], queryFn: fetchWeeklyCup, staleTime: 60_000 });
   const { data: matchDay } = useQuery({ queryKey: ["match-day"], queryFn: fetchMatchDay, staleTime: 60_000 });
+  const { data: managerSummary } = useQuery({ queryKey: ["manager", "summary"], queryFn: fetchManagerSummary, staleTime: 60_000, retry: false });
 
   // Flag-gated tiles remember whether they were on last time, so the grid
   // doesn't jump when their (slower) status queries land.
@@ -269,7 +274,10 @@ export default function PlayPage() {
     },
     {
       path: "/play/manager", art: artOf("manager"), Icon: IconChart, tint: "bg-indigo-500", title: "Менеджер", group: "long", time: "неделя",
-      description: "Свой клуб, трансферы и 10 дивизионов", rightLabel: "Новое",
+      description: "Свой клуб, трансферы и 10 дивизионов",
+      ...(managerSummary?.enabled
+        ? { rightNode: <TransferLight compact open={windowOpen(managerSummary.season, managerSummary.club)} /> }
+        : { rightLabel: "Новое" }),
     },
     {
       path: "/player-tournament", art: artOf("player-tournament"), Icon: IconTrophy, tint: "bg-amber-400", title: "Личный турнир", group: "long", time: "30 туров",
@@ -513,7 +521,7 @@ function GameRow({
           </span>
         </span>
         <span className="shrink-0 text-right">
-          {game.rightLabel !== undefined ? (
+          {game.rightNode ? game.rightNode : game.rightLabel !== undefined ? (
             <span className="block max-w-[72px] text-micro text-ink-mist-dim">{game.rightLabel}</span>
           ) : remaining !== undefined && limit !== undefined ? (
             used ? (

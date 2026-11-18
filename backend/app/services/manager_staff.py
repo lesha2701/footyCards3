@@ -8,12 +8,20 @@
   club's «Клубная база» snapshot (`base_snapshot`), so they freeze into the
   season like the base, within `staff_caps` together with the base:
     coach     — % on every line in league matches;
-    physio    — % off the injury chance;
-    agent     — % off the footballers' wages;
-    marketing — % on the matchday income;
+    director  — the sporting director: replacements for the empty places and
+                the leaving footballers within his budget (`director`);
     scout     — % off the catalog loan fees;
+    academy   — rating points to the academy kids on empty places;
+    physio    — % off the injury chance;
+    transport — % on every line away, plus the club's fleet (`fleet`: a bus
+                and a plane bought for club euros, upkeep each season);
+    stadium   — % on every line at home;
     press     — more fans from press conferences (manager_press);
-    driver    — the president's car with a driver (status only).
+    marketing — % on the matchday income;
+    finance   — percentage points off the loan rate (half on deposits).
+  Each department has one «поручение» a season (`staff_orders`, `order`).
+  The ten seats sit at the round table of the «Штаб» tab; `staff_slots`
+  limits how many are taken by division.
 - The VIP staff for Stars: «Аналитик» (the «Аналитика Pro» pass, code
   "analytics") and «Помощник» (code "assistant", manager_assistant), one
   bundle "staff_bundle" extends both; their names and skins.
@@ -41,14 +49,19 @@ from app.services.game_config_service import get_config
 RARITIES = ("common", "rare", "epic", "legendary")
 # `sign` + effect + `unit` is the effect's text ("" sign: no number).
 ROLES: dict[str, dict] = {
-    "coach": {"name": "Главный тренер", "emoji": "🧢", "sign": "+", "unit": "% к силе всех линий в лиге"},
-    "physio": {"name": "Физиотерапевт", "emoji": "🩺", "sign": "−", "unit": "% к шансу травмы"},
-    "agent": {"name": "Агент", "emoji": "🤝", "sign": "−", "unit": "% к зарплатам футболистов"},
-    "marketing": {"name": "Директор по маркетингу", "emoji": "📣", "sign": "+", "unit": "% к доходу с матчей"},
-    "scout": {"name": "Скаут", "emoji": "🔭", "sign": "−", "unit": "% к цене аренды из каталога"},
-    "press": {"name": "Пресс-атташе", "emoji": "🎙", "sign": "+", "unit": "% к итогам пресс-конференций"},
-    "driver": {"name": "Шофёр", "emoji": "🚘", "sign": "", "unit": "Возит президента на матчи — статус"},
+    # The seats of the round table, clockwise from the president.
+    "coach": {"name": "Главный тренер", "dept": "Тренерский штаб", "emoji": "🧢", "sign": "+", "unit": "% к силе всех линий в лиге"},
+    "director": {"name": "Спортивный директор", "dept": "Спортивный департамент", "emoji": "🧭", "sign": "", "unit": "вар. замены на каждое место"},
+    "scout": {"name": "Главный скаут", "dept": "Скаутинг", "emoji": "🔭", "sign": "−", "unit": "% к цене аренды из каталога"},
+    "academy": {"name": "Директор академии", "dept": "Академия", "emoji": "🌱", "sign": "+", "unit": " к рейтингу воспитанников в составе"},
+    "physio": {"name": "Главный врач", "dept": "Медицинский центр", "emoji": "🩺", "sign": "−", "unit": "% к шансу травмы"},
+    "transport": {"name": "Начальник транспорта", "dept": "Транспортный департамент", "emoji": "🚌", "sign": "+", "unit": "% к силе в гостях"},
+    "stadium": {"name": "Директор стадиона", "dept": "Стадион", "emoji": "🏟", "sign": "+", "unit": "% к силе дома"},
+    "press": {"name": "Пресс-атташе", "dept": "Пресс-служба", "emoji": "🎙", "sign": "+", "unit": "% к итогам пресс-конференций"},
+    "marketing": {"name": "Коммерческий директор", "dept": "Коммерция", "emoji": "📣", "sign": "+", "unit": "% к доходу с матчей"},
+    "finance": {"name": "Финансовый директор", "dept": "Финансы", "emoji": "💼", "sign": "−", "unit": " п.п. к ставке кредита"},
 }
+FLEET_KINDS = ("bus", "plane")
 VIP = {
     "analytics": {"role": "analyst", "name": "Аналитик", "emoji": "📊",
                   "about": "Думает за тебя: разбор соперника, совет на тур, оценка сделок, разбор матча, прогноз сезона, алерты по акциям"},
@@ -67,7 +80,9 @@ def _cfg(config) -> dict:
 
 
 def effect_of(role: str, rarity: str, config) -> int:
-    return int(finance._num(((_cfg(config)["staff_effects"] or {}).get(role) or {}).get(rarity)))
+    # A stored override written before a role existed falls back to the defaults.
+    table = {**finance.DEFAULTS["staff_effects"], **(_cfg(config)["staff_effects"] or {})}
+    return int(finance._num((table.get(role) or {}).get(rarity)))
 
 
 def wage_of(rarity: str, division: int, config) -> int:
@@ -113,7 +128,12 @@ async def effects(db: AsyncSession, owner_id: int, config) -> dict[str, int]:
     if not rows:
         return {}
     owned = await _owned_residents(db, owner_id)
-    return {s.role: effect_of(s.role, s.rarity, config) for s in rows if s.resident_id in owned}
+    out = {s.role: effect_of(s.role, s.rarity, config) for s in rows if s.resident_id in owned}
+    if "transport" in out:  # the fleet works with a head of transport
+        for v in fleet_items(club, config).values():
+            out["fleet_away"] = out.get("fleet_away", 0) + int(finance._num(v.get("away_pct")))
+            out["fleet_injury"] = out.get("fleet_injury", 0) + int(finance._num(v.get("injury_pct")))
+    return out
 
 
 def fold(snap: dict, staff: dict[str, int], config) -> dict:
@@ -123,17 +143,27 @@ def fold(snap: dict, staff: dict[str, int], config) -> dict:
     return {
         **snap,
         "matchday_pct": cap("matchday_pct", snap.get("matchday_pct", 0) + staff.get("marketing", 0)),
-        "discount_pct": cap("discount_pct", snap.get("discount_pct", 0) + staff.get("agent", 0)),
-        "injury_pct": cap("injury_pct", snap.get("injury_pct", 0) + staff.get("physio", 0)),
+        "injury_pct": cap("injury_pct", snap.get("injury_pct", 0) + staff.get("physio", 0) + staff.get("fleet_injury", 0)),
         "coach_pct": cap("coach_pct", staff.get("coach", 0)),
         "scout_pct": cap("scout_pct", staff.get("scout", 0)),
         "press_pct": staff.get("press", 0),
-        "driver": "driver" in staff,
+        "away_pct": cap("away_pct", staff.get("transport", 0) + staff.get("fleet_away", 0)),
+        "stadium_pct": cap("stadium_pct", staff.get("stadium", 0)),
+        "academy_pts": cap("academy_pts", staff.get("academy", 0)),
+        "finance_pts": cap("finance_pts", staff.get("finance", 0)),
+        "transport": "transport" in staff,
     }
 
 
-def coach_mods(mods: dict, base: dict) -> dict:
-    pct = finance._num((base or {}).get("coach_pct"))
+def coach_mods(mods: dict, base: dict, home: Optional[bool] = None) -> dict:
+    """The head coach on every line; the stadium director at home, the
+    transport department away."""
+    base = base or {}
+    pct = finance._num(base.get("coach_pct"))
+    if home is True:
+        pct += finance._num(base.get("stadium_pct"))
+    elif home is False:
+        pct += finance._num(base.get("away_pct"))
     if pct <= 0:
         return mods
     return {line: mods.get(line, 0) + pct for line in ("GK", "DEF", "MID", "FWD")}
@@ -158,6 +188,20 @@ async def pay(db: AsyncSession, club: ManagerClub, key: str, config) -> list[str
             continue
         if s.wage:
             await finance.book(db, club, "staff_wages", -s.wage, key, note=resident.name)
+    # The fleet's upkeep; a vehicle the club can't keep is sold off.
+    data = office(club)
+    fleet = dict(data.get("fleet") or {})
+    grant = finance.grant_of(club.division, config)
+    for kind, it in fleet_items(club, config).items():
+        cost = int(grant * finance._num(it.get("upkeep_pct")) / 100)
+        if cost > club.budget:
+            fleet[kind] = 0
+            notes.append(f"{it['name']}: не хватило на содержание — продан")
+            continue
+        await finance.book(db, club, "fleet_upkeep", -cost, key, ref=f"fleet_upkeep:{key}:{kind}", note=it["name"])
+    if fleet != (data.get("fleet") or {}):
+        data["fleet"] = fleet
+        save(club, data)
     return notes
 
 
@@ -200,6 +244,12 @@ async def hire(db: AsyncSession, user: User, resident_id: int, role: str) -> dic
                                 hired_at=datetime.now(timezone.utc)))
     except IntegrityError:
         raise ConflictError("Эта должность только что занята")
+    if role == "coach":  # «Главный тренер»: his character is rolled at the hiring
+        from app.services import manager_coach as coach
+
+        data = office(club)
+        data["coach"] = {"resident_id": resident_id, "trait": coach.roll()}
+        save(club, data)
     await db.commit()
     return await view(db, user)
 
@@ -209,6 +259,10 @@ async def fire(db: AsyncSession, user: User, staff_id: int) -> dict:
     row = await db.get(ManagerStaff, staff_id)
     if row is None or row.club_id != club.id:
         raise NotFoundError("Такого сотрудника нет")
+    if row.role == "coach":
+        data = office(club)
+        data.pop("coach", None)
+        save(club, data)
     await db.delete(row)
     await db.commit()
     return await view(db, user)
@@ -364,7 +418,16 @@ def worn(club: Optional[ManagerClub], config) -> dict:
 
 def effect_text(role: str, value: int) -> str:
     r = ROLES[role]
+    if role == "director":
+        return f"{value} {r['unit']}"
     return f"{r['sign']}{value}{r['unit']}" if r["sign"] else r["unit"]
+
+
+def coach_card(club: ManagerClub, resident: TownResident) -> dict:
+    from app.services import manager_coach as coach
+
+    trait = coach.trait_for(club, resident.id)
+    return coach.out({**coach.TRAITS[trait], "trait": trait, "person": resident.name, "auto": coach.auto(club)})
 
 
 async def view(db: AsyncSession, user: User) -> dict:
@@ -395,9 +458,12 @@ async def view(db: AsyncSession, user: User) -> dict:
         if r is None:
             continue
         value = effect_of(s.role, s.rarity, config)
-        staff.append({"id": s.id, "role": s.role, "role_name": ROLES[s.role]["name"], "emoji": ROLES[s.role]["emoji"],
+        if s.role not in ROLES:
+            continue
+        staff.append({"id": s.id, "role": s.role, "role_name": ROLES[s.role]["name"], "dept": ROLES[s.role]["dept"], "emoji": ROLES[s.role]["emoji"],
                       "resident_id": r.id, "name": r.name, "icon": r.icon, "image": r.image_path, "rarity": s.rarity,
-                      "effect": value, "effect_text": effect_text(s.role, value), "wage": s.wage})
+                      "effect": value, "effect_text": effect_text(s.role, value), "wage": s.wage,
+                      **({"coach": coach_card(club, r)} if s.role == "coach" else {})})
     candidates = [
         {"resident_id": r.id, "name": r.name, "title": r.title, "icon": r.icon, "image": r.image_path, "rarity": r.rarity,
          "wage": wage_of(r.rarity, club.division, config)}
@@ -407,9 +473,212 @@ async def view(db: AsyncSession, user: User) -> dict:
     return {
         "vip": vip, "bundle_stars": int(finance._num(f["staff_bundle_stars"])),
         "staff": staff, "slots": slots_of(club.division, config), "candidates": candidates,
-        "roles": [{"code": code, "name": r["name"], "emoji": r["emoji"],
+        "roles": [{"code": code, "name": r["name"], "dept": r["dept"], "emoji": r["emoji"],
                    "effects": {rar: effect_text(code, effect_of(code, rar, config)) for rar in RARITIES}} for code, r in ROLES.items()],
         "wages": sum(s["wage"] for s in staff), "window": not await ms.is_playing(db, club) and await ms.window_open(db, now),
         "items": [{**i, "owned": _free(i) or i["code"] in have} for i in items(config)],
         "worn": wear_now,
+        "orders": await _orders_view(db, club, config),
+        "fleet": _fleet_view(club, config),
     }
+
+
+
+# --- «Транспортный департамент»: the club's fleet ------------------------------------------
+
+def fleet_cfg(config) -> dict[str, list[dict]]:
+    raw = _cfg(config).get("fleet") or finance.DEFAULTS["fleet"]
+    return {kind: [i for i in (raw.get(kind) or []) if isinstance(i, dict) and i.get("code")] for kind in FLEET_KINDS}
+
+
+def fleet_levels(club: ManagerClub) -> dict[str, int]:
+    data = office(club).get("fleet") or {}
+    return {kind: max(0, int(finance._num(data.get(kind)))) for kind in FLEET_KINDS}
+
+
+def fleet_items(club: ManagerClub, config) -> dict[str, dict]:
+    """The vehicle of each kind the club has now."""
+    levels, table = fleet_levels(club), fleet_cfg(config)
+    return {kind: table[kind][min(level, len(table[kind])) - 1] for kind, level in levels.items() if level > 0 and table[kind]}
+
+
+async def buy_fleet(db: AsyncSession, user: User, kind: str) -> dict:
+    """The next vehicle of `kind` for club euros (window only, needs a head of transport)."""
+    from app.services import manager_budget, manager_service as ms
+
+    config = await get_config(db)
+    if kind not in FLEET_KINDS:
+        raise NotFoundError("Такого транспорта нет")
+    club = await _club(db, user, lock=True)
+    await ms._ensure_window(db, club)
+    if not any(s.role == "transport" for s in await staff_of(db, club.id)):
+        raise ConflictError("Сначала назначь начальника транспортного департамента")
+    levels, table = fleet_levels(club), fleet_cfg(config)
+    if levels[kind] >= len(table[kind]):
+        raise ConflictError("Это уже лучший транспорт")
+    nxt = table[kind][levels[kind]]
+    price = int(finance.grant_of(club.division, config) * finance._num(nxt.get("price_pct")) / 100)
+    reserved = await ms.start_bill(db, club, config)
+    if price > club.budget - reserved:
+        raise ConflictError(ms._short_of(price, club.budget, reserved))
+    key = await finance.club_key(db, club)
+    await finance.book(db, club, "fleet", -price, key, note=nxt.get("name"))
+    data = office(club)
+    data["fleet"] = {**(data.get("fleet") or {}), kind: levels[kind] + 1}
+    save(club, data)
+    manager_budget.act(club, key)
+    await db.commit()
+    return await view(db, user)
+
+
+def _fleet_view(club: ManagerClub, config) -> dict:
+    levels, table = fleet_levels(club), fleet_cfg(config)
+    grant = finance.grant_of(club.division, config)
+    kinds = []
+    for kind in FLEET_KINDS:
+        items_ = [{"code": i["code"], "name": i.get("name", i["code"]), "emoji": i.get("emoji", ""),
+                   "price": int(grant * finance._num(i.get("price_pct")) / 100), "upkeep": int(grant * finance._num(i.get("upkeep_pct")) / 100),
+                   "away_pct": finance._num(i.get("away_pct")), "injury_pct": finance._num(i.get("injury_pct"))} for i in table[kind]]
+        kinds.append({"kind": kind, "title": "Автобус" if kind == "bus" else "Самолёт", "level": min(levels[kind], len(items_)), "items": items_})
+    return {"kinds": kinds}
+
+
+# --- «Поручения» -----------------------------------------------------------------------------
+
+def orders_cfg(config) -> dict[str, dict]:
+    return {k: v for k, v in (_cfg(config).get("staff_orders") or finance.DEFAULTS["staff_orders"]).items() if k in ROLES and isinstance(v, dict)}
+
+
+async def _orders_done(db: AsyncSession, club_id: int, key: str) -> set[str]:
+    from app.models.manager_club import ManagerLedger
+
+    refs = (await db.execute(select(ManagerLedger.ref).where(
+        ManagerLedger.club_id == club_id, ManagerLedger.ref.like(f"order:%:{key}")))).scalars().all()
+    return {r.split(":")[1] for r in refs if r}
+
+
+async def order(db: AsyncSession, user: User, role: str, now: Optional[datetime] = None) -> dict:
+    """A department's «поручение» of the season: paid once (ledger ref), its
+    fans now, its form for the next rounds of the running league, or an
+    injured footballer back."""
+    from app.models.manager_club import ManagerLeague
+    from app.services import manager_budget, manager_service as ms
+
+    config = await get_config(db)
+    o = orders_cfg(config).get(role)
+    if o is None:
+        raise NotFoundError("У этого департамента нет поручений")
+    club = await _club(db, user, lock=True)
+    if not any(s.role == role for s in await staff_of(db, club.id)):
+        raise ConflictError(f"Сначала назначь: {ROLES[role]['name']}")
+    league = None
+    if club.league_id:
+        league = (await db.execute(select(ManagerLeague).where(ManagerLeague.id == club.league_id).with_for_update())).scalar_one_or_none()
+    running = league is not None and league.status == "active" and league.rounds_played < len((league.state or {}).get("fixtures") or [])
+    form, rounds = finance._num(o.get("form_pct")), int(finance._num(o.get("form_rounds")))
+    if (form and rounds > 0 or o.get("heal")) and not running:
+        raise ConflictError("Это поручение — во время сезона, между турами")
+    hurt_key = None
+    if o.get("heal"):
+        hurt = ((league.state or {}).get("injuries") or {}).get(str(club.id)) or {}
+        out = [(int(v.get("back", 0)), k) for k, v in hurt.items() if int(v.get("back", 0)) > league.rounds_played]
+        if not out:
+            raise ConflictError("Травмированных нет — врачу некого лечить")
+        hurt_key = max(out)[1]
+    key = await finance.club_key(db, club, now)
+    cost = int(finance.grant_of(club.division, config) * finance._num(o.get("cost_pct")) / 100)
+    if cost > club.budget:
+        raise ConflictError(f"Не хватает бюджета: нужно {ms.money(cost)}")
+    if not await finance.book(db, club, "staff_order", -cost, key, ref=f"order:{role}:{key}", note=o.get("title")):
+        raise ConflictError("Это поручение уже было в этом сезоне")
+    fans = int(finance._num(o.get("fans")))
+    if fans:
+        club.fans_bonus = max(0, int(club.fans_bonus or 0) + fans)
+    if form and rounds > 0:
+        start = league.rounds_played
+        club.buffs = [b for b in (club.buffs or []) if b.get("league_id") == league.id] + [
+            {"pct": form, "league_id": league.id, "from": start, "to": start + rounds, "order": role}]
+        flag_modified(club, "buffs")
+    if hurt_key:
+        state = dict(league.state or {})
+        state["injuries"][str(club.id)][hurt_key]["back"] = league.rounds_played
+        league.state = state
+        flag_modified(league, "state")
+    manager_budget.act(club, key)
+    await db.commit()
+    return await view(db, user)
+
+
+async def _orders_view(db: AsyncSession, club: ManagerClub, config) -> dict[str, dict]:
+    key = await finance.club_key(db, club)
+    done = await _orders_done(db, club.id, key)
+    grant = finance.grant_of(club.division, config)
+    return {role: {"emoji": o.get("emoji", ""), "title": o.get("title", ""), "about": o.get("about", ""),
+                   "cost": int(grant * finance._num(o.get("cost_pct")) / 100), "fans": int(finance._num(o.get("fans"))),
+                   "form_pct": finance._num(o.get("form_pct")), "form_rounds": int(finance._num(o.get("form_rounds"))),
+                   "season": bool(o.get("heal")) or bool(finance._num(o.get("form_pct"))), "done": role in done}
+            for role, o in orders_cfg(config).items()}
+
+
+# --- the sporting director -------------------------------------------------------------------
+
+DIRECTOR_NEEDS = 4
+
+
+async def director(db: AsyncSession, user: User, budget: Optional[int] = None) -> dict:
+    """The sporting director's picks: for each empty place of the XI and each
+    footballer whose contract runs out, `effect` catalog footballers the club
+    can loan or buy within the president's budget for him (`office["director_budget"]`)."""
+    from app.services import manager_service as ms
+    from app.services.club_formation_service import get_formation_slots
+    from app.services.lineup_service import on_ideal_position
+
+    config = await get_config(db)
+    club = await _club(db, user, lock=budget is not None)
+    row = next((s for s in await staff_of(db, club.id) if s.role == "director"), None)
+    owned = await _owned_residents(db, user.id)
+    if row is None or row.resident_id not in owned:
+        raise ConflictError("Назначь спортивного директора в штабе")
+    grant = finance.grant_of(club.division, config)
+    data = office(club)
+    if budget is not None:
+        data["director_budget"] = max(0, min(grant * 2, int(budget)))
+        save(club, data)
+        await db.commit()
+    limit = int(data.get("director_budget") or grant // 4)
+    count = max(1, effect_of("director", row.rarity, config))
+    squad = await ms.squad_view(db, club, config)
+    slots = {sl.code: sl for sl in get_formation_slots(ms.tactics.clean_formation(club.formation))}
+    needs = []
+    for kid in [p for p in squad["xi"] if p["kind"] == "kid"]:
+        slot = slots.get(kid["slot"])
+        if slot is not None:
+            needs.append({"why": "empty", "title": f"Пустое место: {slot.ideal_position.value}", "line": slot.category,
+                          "position": slot.ideal_position})
+    for n in await ms._npcs(db, club.id):
+        if n.seasons_left <= 0 and not n.auto:
+            p = await db.get(ms.Player, n.player_id)
+            if p is not None:
+                needs.append({"why": "leaving", "title": f"Уходит {p.display_name} ({p.position.value}, {p.rating})",
+                              "line": ms._category(p.position), "position": p.position})
+    out = []
+    seen: set[int] = set()
+    for need in needs[:DIRECTOR_NEEDS]:
+        page = await ms.npc_catalog(db, user, need["line"], None, 0, None, "rating", True)
+        options = []
+        for p in page["players"]:
+            if p["taken_by"] or p["player_id"] in seen:
+                continue
+            loan, buy = p["loan_fee"] + p["wage_now"] <= limit, p["value"] + p["wage_now"] <= limit
+            if loan or buy:
+                options.append({**{k: p[k] for k in ("player_id", "name", "position", "rating", "club", "loan_fee", "value", "wage_now")},
+                                "can_loan": loan, "can_buy": buy,
+                                "fits": on_ideal_position(ms.Position(p["position"]), need["position"])})
+        options.sort(key=lambda o: (not o["fits"], -o["rating"]))
+        picks = options[:count]
+        seen.update(o["player_id"] for o in picks)
+        out.append({"why": need["why"], "title": need["title"], "options": picks})
+    resident = owned[row.resident_id]
+    return {"name": resident.name, "icon": resident.icon, "image": resident.image_path, "rarity": row.rarity, "count": count,
+            "budget": limit, "grant": grant, "window": await ms.window_open(db, datetime.now(timezone.utc)) and not await ms.is_playing(db, club),
+            "needs": out}

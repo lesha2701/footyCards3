@@ -127,6 +127,50 @@ async def cancel(db: AsyncSession, user: User, league_id: int) -> dict:
     return await view(db, user, config)
 
 
+async def leave(db: AsyncSession, user: User, league_id: int) -> dict:
+    """Leaves a lobby or a running league. The owner leaving a lobby closes it
+    (as «Отменить»); in a running league the player's club plays out the
+    remaining rounds as a bot and the player is free for a new league. Rounds
+    already due are played first, so their rewards still reach the player."""
+    config = await get_config(db)
+    if (await db.get(PlayerCareerFriendLeague, league_id)) is None:
+        raise NotFoundError("Лига не найдена")
+    await resolve_league(db, league_id)
+    league = await _lock(db, league_id)
+    member = (await db.execute(
+        select(PlayerCareerFriendMember).where(PlayerCareerFriendMember.league_id == league_id, PlayerCareerFriendMember.user_id == user.id)
+        .with_for_update().execution_options(populate_existing=True)
+    )).scalar_one_or_none()
+    if member is None or member.status != "accepted" or league.status not in ("lobby", "active"):
+        raise ConflictError("Ты уже не в этой лиге")
+    if league.status == "lobby" and league.owner_id == user.id:
+        league.status = "cancelled"
+        others = (await db.execute(
+            select(PlayerCareerFriendMember.user_id).where(
+                PlayerCareerFriendMember.league_id == league.id, PlayerCareerFriendMember.user_id != user.id,
+                PlayerCareerFriendMember.status.in_(("accepted", "invited")),
+            )
+        )).scalars().all()
+        for uid in others:
+            await notify(
+                db, uid, NotificationType.player_career_event, "Лига друзей отменена",
+                f"{_name(user)} закрыл лигу друзей до старта",
+                related_object_type="player_career_friend_league", related_object_id=league.id,
+            )
+    else:
+        member.status = "left"
+        if league.status == "active":
+            state = copy.deepcopy(league.state)
+            for team in state.get("teams") or []:
+                if team.get("user_id") == user.id:
+                    team["user_id"] = None
+                    team["left"] = True
+            league.state = state
+            flag_modified(league, "state")
+    await db.commit()
+    return await view(db, user, config)
+
+
 async def _lock(db: AsyncSession, league_id: int) -> PlayerCareerFriendLeague:
     league = (await db.execute(
         select(PlayerCareerFriendLeague).where(PlayerCareerFriendLeague.id == league_id).with_for_update()

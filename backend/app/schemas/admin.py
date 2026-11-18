@@ -538,6 +538,7 @@ class GameConfigOut(BaseModel):
     player_career_chest_coins_max: int = 200
     player_career_chest_token_pct: int = 10
     player_career_weekly_goals: int = 5
+    player_career_weekly_clean_sheets: int = 3
     player_career_weekly_matches: int = 10
     player_career_weekly_rating_x10: int = 70
     player_career_weekly_coins: list[int] = []
@@ -594,6 +595,18 @@ class GameConfigOut(BaseModel):
     manager_slots: list[str] = []
     # Effective «Кабинет президента» numbers: the stored overrides over manager_finance.DEFAULTS.
     manager_finance: dict = {}
+
+    # Effective «Воспитанник Академии» numbers: the stored overrides over prospect_service.DEFAULTS.
+    prospect: dict = {}
+
+    @field_validator("prospect", mode="after")
+    @classmethod
+    def _prospect_with_defaults(cls, value: dict) -> dict:
+        from types import SimpleNamespace
+
+        from app.services.prospect_service import cfg
+
+        return cfg(SimpleNamespace(prospect=value or {}))
 
     @field_validator("manager_finance", mode="after")
     @classmethod
@@ -1474,6 +1487,7 @@ class GameConfigUpdate(BaseModel):
     player_career_chest_coins_max: Optional[int] = Field(default=None, ge=0, le=100000)
     player_career_chest_token_pct: Optional[int] = Field(default=None, ge=0, le=100)
     player_career_weekly_goals: Optional[int] = Field(default=None, ge=1, le=200)
+    player_career_weekly_clean_sheets: Optional[int] = Field(default=None, ge=1, le=200)
     player_career_weekly_matches: Optional[int] = Field(default=None, ge=1, le=200)
     player_career_weekly_rating_x10: Optional[int] = Field(default=None, ge=10, le=100)
     player_career_weekly_coins: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
@@ -1529,6 +1543,7 @@ class GameConfigUpdate(BaseModel):
     manager_place_budget: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
     manager_slots: Optional[list[str]] = Field(default=None, min_length=1, max_length=8)
     manager_finance: Optional[dict] = None
+    prospect: Optional[dict] = None
     manager_cosmetics: Optional[list[dict]] = Field(default=None, max_length=200)
     manager_merch: Optional[list[dict]] = Field(default=None, max_length=20)
     player_career_objective_coins: Optional[int] = Field(default=None, ge=0)

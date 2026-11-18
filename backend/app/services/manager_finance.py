@@ -50,6 +50,20 @@ from app.services.notification_service import notify
 
 DEFAULTS: dict = {
     "enabled": True,
+    # Squad: the season grant is grant_pct % of the division budget (the
+    # division budget G itself stays the base of every other %) — enough for
+    # the XI and most of a pro bench in the first season; up to academy_slots
+    # «Академия» cards start; a matchday squad is the XI plus bench_size (23
+    # as in UEFA competitions); from each of sub_minutes the starters are
+    # tired by tired_pct (same index) % and the coach brings on a fresher one
+    # of the same line, one a window, at most subs_max a match (5, as in pro
+    # football).
+    "grant_pct": 170, "academy_slots": 2, "bench_size": 12, "subs_max": 5,
+    "sub_minutes": [60, 65, 70, 75, 80], "tired_pct": [3, 4, 5, 6, 7],
+    # A one-off longer transfer window: season key → local "YYYY-MM-DDTHH:MM"
+    # it closes at instead of Monday + manager_preseason_hours (never earlier).
+    # 2026-W47: the update came on Tuesday — open till an hour before round 1.
+    "window_until": {"2026-W47": "2026-11-18T12:00"},
     # Sponsors: % of G. place_pct = by place (index 0 = champion); rest_pct =
     # any other place that is not relegated; relegated_pct = relegated.
     "sponsors": [
@@ -151,18 +165,113 @@ DEFAULTS: dict = {
     # «Штаб президента» (manager_staff): club jobs for the owner's «Жители города».
     # Places by division (top first); the effect by the resident's rarity; the
     # wage a season in % of the division grant; caps together with «Клубная база».
-    "staff_slots": [6, 6, 5, 5, 4, 4, 3, 3],
+    "staff_slots": [10, 9, 8, 7, 6, 5, 4, 4],
     "staff_effects": {
         "coach": {"common": 1, "rare": 2, "epic": 3, "legendary": 4},
         "physio": {"common": 10, "rare": 20, "epic": 30, "legendary": 40},
-        "agent": {"common": 3, "rare": 5, "epic": 8, "legendary": 12},
         "marketing": {"common": 4, "rare": 8, "epic": 12, "legendary": 18},
         "scout": {"common": 5, "rare": 10, "epic": 15, "legendary": 20},
         "press": {"common": 25, "rare": 50, "epic": 75, "legendary": 100},
-        "driver": {"common": 0, "rare": 0, "epic": 0, "legendary": 0},
+        # the finance director: percentage points off the bank loan rate (half of it on deposits)
+        "finance": {"common": 1, "rare": 2, "epic": 3, "legendary": 4},
+        # the academy director: rating points to the academy kids on empty places
+        "academy": {"common": 2, "rare": 4, "epic": 6, "legendary": 8},
+        # the stadium director: % to every line at home
+        "stadium": {"common": 1, "rare": 1, "epic": 2, "legendary": 3},
+        # the head of transport: % to every line away (plus the fleet's)
+        "transport": {"common": 1, "rare": 1, "epic": 2, "legendary": 2},
+        # how many replacements the sporting director brings for each need
+        "director": {"common": 1, "rare": 2, "epic": 3, "legendary": 4},
     },
+    # «Конфликты в штабе» (manager_conflicts, a «События клуба» event): after these
+    # rounds, when both roles of a template are hired, they argue and the president decides.
+    "conflict_rounds": [4, 10],
+    "staff_conflicts": [
+        {"code": "conflict_injury", "roles": ["physio", "coach"], "emoji": "🩺", "title": "Врач против тренера",
+         "text": "{physio} не пускает лидера на поле после ушиба, {coach} требует его в старт: «Это ключевой матч!»",
+         "options": [{"code": "physio", "label": "Прав врач — пусть восстановится", "form_pct": -1, "form_rounds": 1, "fans": -50},
+                     {"code": "coach", "label": "Прав тренер — играем", "form_pct": 3, "form_rounds": 1, "money_pct": -2}]},
+        {"code": "conflict_money", "roles": ["finance", "marketing"], "emoji": "💼", "title": "Финансист против маркетолога",
+         "text": "{marketing} хочет потратить деньги на рекламу с игроками, {finance} — сэкономить.",
+         "options": [{"code": "marketing", "label": "Рекламная кампания", "money_pct": -2, "fans": 350},
+                     {"code": "finance", "label": "Экономим", "money_pct": 2, "fans": -100}]},
+        {"code": "conflict_academy", "roles": ["academy", "director"], "emoji": "🌱", "title": "Академия против спортивного директора",
+         "text": "{academy} просит место в составе для воспитанника, {director} нашёл опытного игрока в аренду.",
+         "options": [{"code": "academy", "label": "Даём шанс воспитаннику", "fans": 250, "form_pct": -1, "form_rounds": 1},
+                     {"code": "director", "label": "Берём опытного", "money_pct": -2, "form_pct": 2, "form_rounds": 1}]},
+        {"code": "conflict_youth", "roles": ["scout", "coach"], "emoji": "🔭", "title": "Скаут против тренера",
+         "text": "{scout} нашёл молодого таланта и просит дать ему матч, {coach} не хочет рисковать результатом.",
+         "options": [{"code": "scout", "label": "Дать шанс молодому", "form_pct": -1, "form_rounds": 1, "fans": 200},
+                     {"code": "coach", "label": "Играют проверенные", "form_pct": 2, "form_rounds": 1}]},
+        {"code": "conflict_press", "roles": ["press", "coach"], "emoji": "🎙", "title": "Пресс-атташе против тренера",
+         "text": "{press} устроил открытую тренировку для журналистов, {coach} возмущён: «Соперник всё увидит!»",
+         "options": [{"code": "press", "label": "Открытая тренировка", "fans": 300, "form_pct": -1, "form_rounds": 1},
+                     {"code": "coach", "label": "Закрыть тренировку", "form_pct": 2, "form_rounds": 1, "fans": -50}]},
+        {"code": "conflict_trip", "roles": ["transport", "physio"], "emoji": "🚌", "title": "Транспорт против врача",
+         "text": "{transport} предлагает ехать на выезд ночью, чтобы сэкономить на отеле, {physio} против: игроки не выспятся.",
+         "options": [{"code": "transport", "label": "Едем ночью", "money_pct": 2, "form_pct": -2, "form_rounds": 1},
+                     {"code": "physio", "label": "Ночуем в отеле", "money_pct": -1, "form_pct": 1, "form_rounds": 1}]},
+    ],
+    # «Бюджет сезона» (manager_budget): the president splits the season's money by
+    # articles (ledger kinds); spending an article more than `budget_tolerance_pct` over
+    # its plan costs `budget_fans_penalty` fans, a season inside every article pays
+    # `budget_bonus_pct` % of the unspent plan (capped at `budget_bonus_max_pct` % of the grant).
+    "budget_articles": [
+        {"code": "wages", "name": "Зарплаты", "emoji": "💼", "kinds": ["wages", "staff_wages"]},
+        {"code": "transfers", "name": "Трансферы и аренды", "emoji": "🔁", "kinds": ["transfer_out", "npc_buy", "npc_loan"]},
+        {"code": "club", "name": "Клуб и матчдей", "emoji": "🏟", "kinds": ["injury", "insurance", "tour_cost", "farm", "event_out",
+                                                                    "fleet", "fleet_upkeep", "staff_order"]},
+    ],
+    # «Транспортный департамент» (manager_staff): vehicles bought for club euros
+    # (`price_pct` of the division grant), `upkeep_pct` a season, `away_pct` to every
+    # line away, `injury_pct` off the injury chance — they work with a head of transport.
+    "fleet": {
+        "bus": [
+            {"code": "minibus", "name": "Микроавтобус", "emoji": "🚐", "price_pct": 5, "upkeep_pct": 1, "away_pct": 1, "injury_pct": 0},
+            {"code": "coach_bus", "name": "Клубный автобус", "emoji": "🚌", "price_pct": 12, "upkeep_pct": 2, "away_pct": 2, "injury_pct": 0},
+            {"code": "liner", "name": "Люкс-лайнер", "emoji": "🚍", "price_pct": 25, "upkeep_pct": 3, "away_pct": 3, "injury_pct": 5},
+        ],
+        "plane": [
+            {"code": "charter", "name": "Чартерный самолёт", "emoji": "🛩", "price_pct": 20, "upkeep_pct": 4, "away_pct": 1, "injury_pct": 10},
+            {"code": "jet", "name": "Клубный джет", "emoji": "✈️", "price_pct": 45, "upkeep_pct": 6, "away_pct": 2, "injury_pct": 20},
+        ],
+    },
+    # «Поручения» of the staff: once a season per department, `cost_pct` of the grant;
+    # `fans`, `form_pct` for `form_rounds` (in a running league), `heal` injured back now.
+    "staff_orders": {
+        "coach": {"emoji": "🏕", "title": "Тренировочный сбор", "about": "Команда в тонусе на ближайшие туры",
+                  "cost_pct": 3, "form_pct": 3, "form_rounds": 2},
+        "physio": {"emoji": "💉", "title": "Ускоренное лечение", "about": "Травмированный игрок сразу возвращается в строй",
+                   "cost_pct": 3, "heal": 1},
+        "marketing": {"emoji": "🎉", "title": "Промо-акция", "about": "Реклама в городе — новые болельщики", "cost_pct": 2, "fans": 400},
+        "press": {"emoji": "📸", "title": "Медиа-день", "about": "Интервью и съёмки с игроками", "cost_pct": 1, "fans": 150},
+        "stadium": {"emoji": "🏟", "title": "День открытых дверей", "about": "Экскурсии по стадиону для горожан", "cost_pct": 2, "fans": 300},
+        "academy": {"emoji": "🌱", "title": "Турнир академии", "about": "Воспитанники играют на главной арене",
+                    "cost_pct": 1, "fans": 150, "form_pct": 1, "form_rounds": 1},
+        "transport": {"emoji": "🛫", "title": "Чартер на выезд", "about": "Команда летит на ближайший выезд без усталости",
+                      "cost_pct": 3, "form_pct": 2, "form_rounds": 1},
+    },
+    "budget_tolerance_pct": 10, "budget_fans_penalty": 150, "budget_bonus_pct": 10, "budget_bonus_max_pct": 5,
+    # «Стиль управления»: decisions made by the president himself vs the assistant in a
+    # season; at its end a club with `hands_on_min` decisions or more gets up to
+    # `hands_on_fans` fans and `hands_on_bonus_pct` % of the grant — by the share made by hand.
+    "hands_on_min": 5, "hands_on_fans": 300, "hands_on_bonus_pct": 3,
+    # «Достижения президента» (manager_budget): claimed once, the reward = % of the grant.
+    "president_achievements": [
+        {"code": "first_profit", "emoji": "📈", "name": "Первая прибыль", "about": "Закончи сезон в плюсе", "goal": 1, "reward_pct": 3},
+        {"code": "profit_3", "emoji": "💰", "name": "Три сезона в плюс", "about": "Три прибыльных сезона", "goal": 3, "reward_pct": 8},
+        {"code": "no_loan", "emoji": "🛡", "name": "Без долгов", "about": "Сыграй 3 сезона и ни разу не возьми кредит", "goal": 3, "reward_pct": 6},
+        {"code": "ipo", "emoji": "🔔", "name": "Звонок на бирже", "about": "Выведи клуб на IPO", "goal": 1, "reward_pct": 5},
+        {"code": "budget_keeper", "emoji": "📒", "name": "Бюджет под контролем", "about": "Уложись в план бюджета 3 сезона", "goal": 3, "reward_pct": 8},
+        {"code": "hands_on", "emoji": "✋", "name": "Сам себе помощник", "about": "Сезон, где все решения принял сам (от 5)", "goal": 1, "reward_pct": 4},
+        {"code": "full_staff", "emoji": "👥", "name": "Полный штаб", "about": "Займи все места в штабе клуба", "goal": 1, "reward_pct": 3},
+        {"code": "promotion", "emoji": "⬆️", "name": "Вверх по лестнице", "about": "Выйди в дивизион выше", "goal": 1, "reward_pct": 5},
+        {"code": "investor", "emoji": "🏦", "name": "Инвестор", "about": "Получи депозит с процентами или доход венчура", "goal": 1, "reward_pct": 3},
+        {"code": "big_sale", "emoji": "🤑", "name": "Сделка века", "about": "Продай игрока за 1 млн € или дороже", "goal": 1000000, "reward_pct": 5},
+    ],
     "staff_wage_pct": {"common": 1, "rare": 2, "epic": 3, "legendary": 5},
-    "staff_caps": {"matchday_pct": 40, "discount_pct": 40, "injury_pct": 80, "coach_pct": 5, "scout_pct": 30},
+    "staff_caps": {"matchday_pct": 40, "discount_pct": 40, "injury_pct": 80, "coach_pct": 5, "scout_pct": 30,
+                   "away_pct": 6, "stadium_pct": 4, "academy_pts": 10, "finance_pts": 5},
     # The VIP staff for Stars: «Помощник» (manager_assistant; «Аналитик» = analytics_*),
     # both at once, the one-time free week of the assistant, the report size,
     # what the assistant may spend in a window by default (% of the division grant).
@@ -312,6 +421,12 @@ KINDS: dict[str, tuple[str, str]] = {
     "cup": ("income", "Кубок менеджеров"),
     "event_out": ("expense", "События клуба"),
     "staff_wages": ("expense", "Зарплаты штаба"),
+    "fleet": ("expense", "Транспорт клуба"),
+    "fleet_upkeep": ("expense", "Содержание транспорта"),
+    "staff_order": ("expense", "Поручения штаба"),
+    "budget_bonus": ("income", "Бонус за бюджет сезона"),
+    "hands_on": ("income", "Бонус ручного управления"),
+    "achievement": ("income", "Достижения президента"),
 }
 REPORT_SEASONS = 6
 
@@ -351,7 +466,7 @@ def validate(raw: dict) -> dict:
             if not isinstance(value, list) or not value or not all(isinstance(x, dict) and x.get("code") for x in value):
                 raise ValueError(f"{key}: нужен список объектов с code")
             out[key] = value
-        elif key in ("cup_round_hours", "cup_prizes_pct"):
+        elif key in ("cup_round_hours", "cup_prizes_pct", "sub_minutes", "tired_pct"):
             if not isinstance(value, list) or not value or not all(isinstance(x, (int, float)) and x >= 0 for x in value):
                 raise ValueError(f"{key}: нужен список неотрицательных чисел")
             out[key] = value
@@ -359,6 +474,15 @@ def validate(raw: dict) -> dict:
             if not isinstance(value, list) or not all(isinstance(x, int) and x > 0 for x in value):
                 raise ValueError("event_rounds: нужен список номеров туров")
             out[key] = sorted(set(value))
+        elif key == "window_until":
+            if not isinstance(value, dict):
+                raise ValueError("window_until: нужен объект {\"2026-W47\": \"2026-11-18T12:00\"}")
+            for k, v in value.items():
+                try:
+                    datetime.fromisoformat(str(v))
+                except ValueError:
+                    raise ValueError(f"window_until: «{v}» — не дата YYYY-MM-DDTHH:MM") from None
+            out[key] = {str(k): str(v) for k, v in value.items()}
         elif key == "kit_brands":
             if not isinstance(value, list) or not value:
                 raise ValueError("kit_brands: нужен список названий")
@@ -467,12 +591,14 @@ def sponsor_terms(club: ManagerClub, snap: dict, config) -> list[dict]:
 def loan_rate_bp(snap: dict, config) -> int:
     f = cfg(config)
     rate = max(_num(f["loan_rate_min_pct"]), _num(f["loan_rate_pct"]) - _num(f["loan_rate_cut_per_level"]) * _lvl(snap, "accounting"))
+    rate = max(1.0, rate - _num((snap or {}).get("finance_pts")))  # the staff's finance director
     return int(round(rate * 100))
 
 
 def deposit_rate_bp(snap: dict, config) -> int:
     f = cfg(config)
-    return int(round((_num(f["deposit_rate_pct"]) + _num(f["deposit_rate_per_level"]) * _lvl(snap, "accounting")) * 100))
+    rate = _num(f["deposit_rate_pct"]) + _num(f["deposit_rate_per_level"]) * _lvl(snap, "accounting")
+    return int(round((rate + _num((snap or {}).get("finance_pts")) / 2) * 100))
 
 
 def tv_discount_pct(snap: dict, config) -> float:
@@ -503,6 +629,7 @@ def tour_terms(division: int, snap: dict, config) -> list[dict]:
     out = []
     for t in f["tours"]:
         cost = _share(grant, _num(t.get("cost_pct")) * (100 - hotel_cut) / 100)
+        cost = cost * (100 - int(snap.get("villa_tour_pct", 0))) // 100  # «Моя вилла»: own transport
         out.append({
             "code": str(t["code"]), "name": str(t.get("name") or t["code"]), "emoji": str(t.get("emoji") or "✈️"),
             "revenue": _share(grant, t.get("revenue_pct")), "cost": cost, "fans": int(_num(t.get("fans")) * fans_boost / 100),
@@ -1005,6 +1132,9 @@ async def sign(db: AsyncSession, user: User, kind: str, option: Optional[str] = 
         deal.data = {"keys": [key], "loan_cut_pct": terms["loan_cut_pct"], "kid_bonus": terms["kid_bonus"]}
         await _add_deal(db, deal)
         await book(db, club, "farm", -terms["fee"], key, ref=f"farm:{deal.id}")
+    from app.services import manager_budget
+
+    manager_budget.act(club, key)
     await db.commit()
     return await view(db, user, now)
 
@@ -1137,7 +1267,8 @@ async def view(db: AsyncSession, user: User, now: Optional[datetime] = None) -> 
                     "prices": [kit_price(division, snap, n, config) for n in range(1, int(_num(f["kit_seasons_max"], 3)) + 1)]},
             "tour": {"taken": "tour" in taken, "options": tour_terms(division, snap, config),
                      "hotel_cut_pct": min(90.0, _num(f["tour_hotel_cut_per_level"]) * _lvl(snap, "hotel")),
-                     "media_fans_pct": _num(f["tour_media_fans_pct_per_level"]) * _lvl(snap, "media")},
+                     "media_fans_pct": _num(f["tour_media_fans_pct_per_level"]) * _lvl(snap, "media"),
+                     "villa_cut_pct": int(snap.get("villa_tour_pct", 0))},
             "tv": {"taken": "tv" in taken, "estimate": estimate, "discount_pct": discount,
                    "advance": ms._nice(estimate * (100 - discount) / 100)},
             "deposit": {"taken": "deposit" in taken, "rate_pct": deposit_rate_bp(snap, config) / 100,

@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { fetchManagerSummary, type ManagerSummary } from "@/api/manager";
 import officeArt from "@/assets/manager/office.webp";
 import Emblem from "@/components/manager/Emblem";
+import TransferLight, { windowOpen } from "@/components/manager/TransferLight";
 import { eur } from "@/lib/managerMoney";
 
 function clock(iso: string | null): string {
@@ -19,6 +20,8 @@ interface Status {
   line: string;
   alert: boolean;
   chips: string[];
+  /** `?go=<tab>:<target>` — the tap goes straight to this action. */
+  go?: string;
 }
 
 /** One line of what is happening at my club right now, most urgent first. */
@@ -36,9 +39,9 @@ function statusOf(view: ManagerSummary): Status {
   const league = view.league?.status === "active" ? view.league : null;
   const chips = [club.division_name, `Бюджет ${eur(club.budget)}`];
   if (league && league.place > 0) chips.unshift(`${league.place} место`);
-  if (urgent && urgent.code !== "edge") return { kicker: club.name, line: `${urgent.icon} ${urgent.text}`, alert: true, chips };
+  if (urgent && urgent.code !== "edge") return { kicker: club.name, line: `${urgent.icon} ${urgent.text}`, alert: true, chips, go: goOf(urgent) };
   if (view.season.transfers_open && !club.trade_locked) {
-    return { kicker: club.name, line: `🔓 Трансферное окно до ${clock(view.season.preseason_ends_at)}`, alert: true, chips };
+    return { kicker: club.name, line: `🔓 Трансферное окно до ${clock(view.season.preseason_ends_at)}`, alert: true, chips, go: "transfers:market" };
   }
   if (league && club.next_match) {
     const m = club.next_match;
@@ -47,9 +50,14 @@ function statusOf(view: ManagerSummary): Status {
       line: `${m.home ? "Дома" : "В гостях"}: ${m.opponent}${m.at ? ` · ${clock(m.at)}` : ""}`,
       alert: m.edge === "lose",
       chips,
+      go: "club:tactics",
     };
   }
-  return { kicker: club.name, line: view.today[0] ? `${view.today[0].icon} ${view.today[0].text}` : "Загляни в клуб", alert: false, chips };
+  return { kicker: club.name, line: view.today[0] ? `${view.today[0].icon} ${view.today[0].text}` : "Загляни в клуб", alert: false, chips, go: view.today[0] ? goOf(view.today[0]) : undefined };
+}
+
+function goOf(item: ManagerSummary["today"][number]): string {
+  return item.target ? `${item.tab}:${item.target}` : item.tab;
 }
 
 /** «Менеджер» on the home screen: a wide tile over the modes grid with the
@@ -62,7 +70,7 @@ export default function ManagerFeature() {
   const s = statusOf(data);
   return (
     <button
-      onClick={() => navigate("/play/manager")}
+      onClick={() => navigate(s.go ? `/play/manager?go=${encodeURIComponent(s.go)}` : "/play/manager")}
       data-testid="manager-feature"
       className="relative mb-2 flex w-full items-center gap-3 overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500/25 via-[#1d1606] to-[#0b1220] p-3.5 pr-28 text-left ring-1 ring-amber-300/40 active:scale-[0.98]"
     >
@@ -71,6 +79,7 @@ export default function ManagerFeature() {
         alt=""
         className="pointer-events-none absolute -right-3 top-1/2 h-32 w-32 -translate-y-1/2 object-cover [mask-image:radial-gradient(circle,black_52%,transparent_72%)]"
       />
+      <TransferLight compact open={windowOpen(data.season, data.club)} className="absolute right-2.5 top-2.5 z-10" />
       {data.club && <Emblem look={data.club.look} size={44} className="relative shrink-0" />}
       <span className="relative min-w-0 flex-1">
         <span className="flex items-center gap-1.5 text-micro font-bold uppercase tracking-[0.18em] text-amber-200">

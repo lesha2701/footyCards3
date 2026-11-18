@@ -38,6 +38,7 @@ from app.schemas.game import (
     OtvetkaClaimOut,
     OtvetkaEpisodeRequest,
     OtvetkaResultOut,
+    OtvetkaStartRequest,
     OtvetkaStartOut,
     FergieFinishOut,
     FergieStartOut,
@@ -167,7 +168,7 @@ async def penalty_stats(db: AsyncSession = Depends(get_db), user: User = Depends
 @router.post("/penalty/start", response_model=PenaltyStartOut)
 async def penalty_start(payload: PenaltyStartRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     await check_rate_limit(f"penalty_start:{user.id}", max_calls=20, window_seconds=60)
-    return await penalty_service.start_session(db, user, payload.user_card_id)
+    return await penalty_service.start_session(db, user, payload.user_card_id, prospect=payload.prospect)
 
 
 @router.post("/penalty/{session_id}/kick", response_model=PenaltyKickOut)
@@ -181,7 +182,7 @@ async def penalty_kick(session_id: int, payload: PenaltyKickRequest, db: AsyncSe
 @router.post("/penalty-3d/start", response_model=Penalty3DStartOut)
 async def penalty_3d_start(payload: PenaltyStartRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     await check_rate_limit(f"penalty_start:{user.id}", max_calls=20, window_seconds=60)
-    return await penalty_service.start_3d(db, user, payload.user_card_id)
+    return await penalty_service.start_3d(db, user, payload.user_card_id, prospect=payload.prospect)
 
 
 @router.post("/penalty-3d/{session_id}/shot", response_model=Penalty3DResultOut)
@@ -211,7 +212,7 @@ async def penalty_forfeit(session_id: int, db: AsyncSession = Depends(get_db), u
 @router.post("/free-kick/start", response_model=FreeKickStartOut)
 async def free_kick_start(payload: FreeKickStartRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     await check_rate_limit(f"free_kick_start:{user.id}", max_calls=20, window_seconds=60)
-    return await free_kick_service.start_session(db, user, payload.user_card_id)
+    return await free_kick_service.start_session(db, user, payload.user_card_id, prospect=payload.prospect)
 
 
 @router.post("/free-kick/{session_id}/kick", response_model=FreeKickKickOut)
@@ -230,7 +231,7 @@ async def free_kick_claim(session_id: int, db: AsyncSession = Depends(get_db), u
 @router.post("/free-kick-3d/start", response_model=FreeKick3DStartOut)
 async def free_kick_3d_start(payload: FreeKickStartRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     await check_rate_limit(f"free_kick_start:{user.id}", max_calls=20, window_seconds=60)
-    return await free_kick_service.start_3d(db, user, payload.user_card_id)
+    return await free_kick_service.start_3d(db, user, payload.user_card_id, prospect=payload.prospect)
 
 
 @router.post("/free-kick-3d/{session_id}/shot", response_model=FreeKick3DShotOut)
@@ -302,7 +303,7 @@ async def hangman_claim(session_id: int, db: AsyncSession = Depends(get_db), use
 @router.post("/one-on-one/start", response_model=OneOnOneStartOut)
 async def one_on_one_start(payload: FreeKickStartRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     await check_rate_limit(f"one_on_one_start:{user.id}", max_calls=20, window_seconds=60)
-    return await one_on_one_service.start(db, user, payload.user_card_id)
+    return await one_on_one_service.start(db, user, payload.user_card_id, prospect=payload.prospect)
 
 
 @router.post("/one-on-one/{session_id}/attack", response_model=OneOnOneResultOut)
@@ -321,9 +322,10 @@ async def one_on_one_claim(session_id: int, db: AsyncSession = Depends(get_db), 
 # --- «Ответка» ---
 
 @router.post("/otvetka/start", response_model=OtvetkaStartOut)
-async def otvetka_start(payload: FreeKickStartRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+async def otvetka_start(payload: OtvetkaStartRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     await check_rate_limit(f"otvetka_start:{user.id}", max_calls=20, window_seconds=60)
-    return await otvetka_service.start(db, user, payload.user_card_id)
+    return await otvetka_service.start(db, user, payload.user_card_id, prospect=payload.prospect or payload.duel_id is not None,
+                                       duel_id=payload.duel_id)
 
 
 @router.post("/otvetka/{session_id}/episode", response_model=OtvetkaResultOut)

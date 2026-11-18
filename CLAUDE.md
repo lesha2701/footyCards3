@@ -13,6 +13,14 @@ Main features:
   matches along staged gates and carry a situational talent
   (`path_service.py` / `path_talent_effects.py` / `path_match_service.py`,
   see docs/path-cards.md);
+- «Воспитанник Академии» (`prospect_service.py`, docs/academy-prospect.md):
+  one own child footballer per user, 6 → 18 years by the calendar, stage
+  caps and a hidden potential; daily training, story forks, Stars extras
+  (key "prospect:<purchase>"); plays «Ответка» at an age-relative rating
+  and «Менеджер» (`ManagerContract.subject` = "prospect" / "graduate"), Пенальти /
+  Штрафной / «1 на 1»; talents, «Выпускной» + «Династия», a weekly cohort
+  tournament, friends' duels and gifts (`prospect_life.py`, bot sweep
+  `/internal/prospect/sweep`);
 - «Клубная база»: the player's own campus (stadium, HQ, medical, finance
   department, …) around the «Академия», one construction queue with it,
   career effects frozen per season (`club_base_service.py`, see
@@ -20,11 +28,17 @@ Main features:
 - «Моя вилла» in the town (`town_villa_service.py`): an isometric plot laid
   out by the player (villa / garage levels, cars, yard and Stars things on a
   grid checked by `check_layout` and its TS twin `lib/villa.ts`; the grid lies
-  on the lawn of `assets/town/villa/plot.webp` — `corner`/`unproject`, the
-  level opens grid × grid of grid_max), residents on staff posts by profession
-  (a post works only with its workplace placed, `POST_WORKPLACE`), side-by-side
+  on the meadow of `assets/town/villa/plot.webp` in strict isometry — `corner`/`unproject`; the
+  buildable cells are the meadow itself, centre first (`town_villa_plot.CELLS` and its twin
+  `lib/villaPlot.ts`, generated from the picture, both check `PLOT_CHECK`), a level opens the first
+  `cells_<level>` of them so the plot grows outwards, a layout that no longer fits is
+  repaired on read by `_repair`), residents on staff posts by profession
+  (a post works only with its workplace placed, `POST_WORKPLACE`), fence sections join their neighbours of the same fence (`FENCES`, `lib/villa.ts` `fencePieces`, rot = a gate), each sprite stands on its footprint by `lib/villaSprites.ts` (generated from the cut-outs), side-by-side
   `COMBOS`, prestige → capped +% to the town's house rent,
-  the chosen car on the town map, guests' villa likes and «Вилла недели»;
+  the chosen car on the town map, guests' villa likes and «Вилла недели»; in the game (`PERKS`):
+  a building gives one perk however many stand (pitch → +1 «Мой игрок» training, court / stable and
+  helipad / guest garage → «Менеджер» treatment / tours cheaper via `base_snapshot`, pavilion → trophies
+  for guests), a daily income by prestige, a weekly party (guests' likes pay them) and «Вилла месяца»;
 - game currency, daily rewards and a free periodic pack;
 - Card Arena (`match_service.py`, `arena_moments.py`, `arena_cup_service.py`): divisions, a live
   match with a server clock on each decision (`state["live"]`; a skip or a timeout is
@@ -78,7 +92,8 @@ Main features:
   run lazily on reads and from bot sweeps (`/internal/clubs/...`), idempotent via
   unique rows;
 - «Менеджер» (`manager_service.py`, `manager_shop.py`): every user's own club.
-  Squad: his «Мой игрок» and one «Академия» card (both always start), up to
+  Squad: his «Мой игрок» and up to two «Академия» cards (`academy_slots`; the
+  second in `office["academy2"]`; all of them always start), up to
   `manager_max_live` other users' «Мои игроки» on contracts for seasons (sign
   a free agent, or buy / loan from another club — the player and the selling
   club both consent) and catalog footballers bought or loaned (`manager_npc`,
@@ -99,9 +114,18 @@ Main features:
   `GET /manager/moves`, «Трансферы» → «Сделки»). Runs lazily
   and from the bot's manager sweep (`/internal/manager/sweep`). A club whose
   league runs can't trade. Users' wages are coins, capped per season.
-  Tactics (`manager_tactics.py`): a club formation plus one of four styles
+  Tactics (`manager_tactics.py`): a club formation (Card Arena's seven plus
+  the manager-only `EXTRA_FORMATIONS` 4-1-4-1 and 4-3-1-2) plus one of four styles
   in a circle (Card Arena's); the engine runs with neutral settings and the
-  tactics are a transparent % on each line's ratings for the match.
+  tactics are a transparent % on each line's ratings for the match. A league
+  match is the XI plus a bench of `bench_size` (`matchday_bench`): played
+  phase by phase (`_Subs`, `simulate_match_controlled`), starters tire by
+  `tired_pct` from `sub_minutes` and fresher subs of the same line come on
+  (`subs_max`). «Главный тренер» (`manager_coach.py`): a character of twelve
+  rolled at the hiring (`office["coach"]`) runs the match day — formation,
+  style, «Установка на матч», substitutions — unless the president takes the
+  tactics back (`office["coach_auto"]`), and asks for the player the XI lacks
+  («Сегодня в клубе»). The season grant is `grant_pct` % of the division budget.
   «Личный турнир» plays the same layer (`personal_squads.style`, GameConfig
   `ptour_style_edge_pct` / `ptour_formation_effect_pct`, `GET
   /player-tournaments/tactics` shows the next opponent's style); its old
@@ -140,7 +164,15 @@ Main features:
   «Пока тебя не было»; a free week once). Skins of both, cars and office
   rooms (`staff_items`, coins or Stars), gifts of style items to another
   club and the stadium skins (`manager_perks.py`, cosmetics kinds
-  "stands" / "poster") — convenience and style only. Numbers: GameConfig.manager_finance
+  "stands" / "poster") — convenience and style only. «Решения президента»
+  (`manager_budget.py`: the season budget by articles, the hands-on bonus,
+  achievements, the analyst's finance review), the assistant's fine rules and
+  «только советовать» mode, the sporting director (`manager_staff.director`)
+  and staff conflicts (`manager_conflicts.py`, slot CONFLICT_SLOT + round) —
+  see docs/president-office.md; «Сегодня в клубе» tips carry a `target`
+  (`lib/managerFocus.ts`). «Штат» is a round table of ten departments
+  (`manager_staff.ROLES`) with a sheet per seat, «поручения» `staff_orders` and
+  the transport department's fleet (`fleet`). Numbers: GameConfig.manager_finance
   over `manager_finance.DEFAULTS`;
 - «Мой игрок» extras (`my_player_extras.py`): a weekly «Спонсор» (one of
   three brands of `my_player_sponsors`, goals counted by hooks in the

@@ -531,6 +531,7 @@ export interface GameConfig {
   player_career_chest_coins_max: number;
   player_career_chest_token_pct: number;
   player_career_weekly_goals: number;
+  player_career_weekly_clean_sheets: number;
   player_career_weekly_matches: number;
   player_career_weekly_rating_x10: number;
   player_career_weekly_coins: number[];
@@ -587,6 +588,8 @@ export interface GameConfig {
   manager_slots: string[];
   /** «Кабинет президента»: effective numbers (manager_finance.DEFAULTS + overrides). */
   manager_finance: Record<string, unknown>;
+  /** «Воспитанник Академии»: effective numbers (prospect_service.DEFAULTS + overrides). */
+  prospect: Record<string, unknown>;
   manager_cosmetics: Record<string, unknown>[];
   manager_merch: Record<string, unknown>[];
   player_career_objective_coins: number;

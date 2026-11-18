@@ -5,6 +5,7 @@ import { fetchCareerLeaderboard, type CareerAchievements, type CareerLeaderboard
 import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconTrophy, IconUsers } from "@/components/icons";
+import titleCupArt from "@/assets/coach/title_cup.webp";
 
 const TROPHY_ICON: Record<string, string> = { title: "🏆", cup: "🏅", promotion: "⬆️" };
 
@@ -20,7 +21,11 @@ export function AchievementsPanel({ data }: { data: CareerAchievements }) {
           <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
             {data.trophies.map((t, i) => (
               <div key={i} className="flex w-24 shrink-0 flex-col items-center gap-1 rounded-2xl bg-bg-base/50 p-2 text-center">
-                <span className="text-2xl" aria-hidden>{TROPHY_ICON[t.kind] ?? "🏆"}</span>
+                {t.kind === "title" ? (
+                  <img src={titleCupArt} alt="" decoding="async" className="h-10 w-10 rounded-lg object-cover" />
+                ) : (
+                  <span className="text-2xl" aria-hidden>{TROPHY_ICON[t.kind] ?? "🏆"}</span>
+                )}
                 <span className="text-micro leading-tight text-ink-chalk">{t.label}</span>
                 <span className="text-micro text-ink-mist-dim">{new Date(t.at).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}</span>
               </div>

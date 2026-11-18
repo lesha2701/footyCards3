@@ -89,6 +89,9 @@ async def set_plan(db: AsyncSession, user: User, code: str) -> dict:
         if _plan(code, config) is None:
             raise NotFoundError("Такой установки нет")
         club.match_plan = {"league_id": league.id, "round": league.rounds_played, "code": code}
+    from app.services import manager_budget
+
+    manager_budget.act(club, league.season_key)
     await db.commit()
     return await view(db, user)
 
@@ -184,6 +187,9 @@ async def apply_choice(db: AsyncSession, club: ManagerClub, league: ManagerLeagu
     event.status, event.choice, event.decided_at = "chosen", option, now or datetime.now(timezone.utc)
     event.data = {**(event.data or {}), "result": out, **({"by": by} if by else {})}
     flag_modified(event, "data")
+    from app.services import manager_budget
+
+    manager_budget.act(club, league.season_key, "assistant" if by == "assistant" else "me")
     return out
 
 
@@ -191,7 +197,7 @@ def _event_out(e: ManagerEvent, grant: int, open_: bool, boost_pct: int = 0) -> 
     d = e.data or {}
     return {"id": e.id, "code": e.code, "title": d.get("title"), "text": d.get("text"), "emoji": d.get("emoji"),
             "status": "offered" if open_ else ("expired" if e.status == "offered" else e.status), "choice": e.choice,
-            "press": is_press(e), "by": d.get("by"),
+            "press": is_press(e), "conflict": str(e.code or "").startswith("conflict_"), "by": d.get("by"),
             "options": [_option_out(o, grant, boost_pct if is_press(e) else 0) for o in d.get("options") or []], "result": d.get("result")}
 
 
