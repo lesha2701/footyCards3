@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 
-import { IconChevronRight, IconClock, IconTarget } from "@/components/icons";
+import iconArt from "@/assets/bingo/icon.webp";
+import { IconChevronRight, IconClock } from "@/components/icons";
 import { bingoReady } from "@/lib/bingo";
 import type { BingoCurrent } from "@/types";
 
@@ -42,13 +43,7 @@ export default function WeeklyEventStrip({ bingo }: { bingo?: BingoCurrent | nul
         rewardReady ? "bg-accent-lime/10 ring-accent-lime/40" : "bg-fuchsia-500/10 ring-fuchsia-400/25"
       }`}
     >
-      <span
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-          rewardReady ? "bg-accent-lime/20 text-accent-lime" : "bg-fuchsia-400/20 text-fuchsia-300"
-        }`}
-      >
-        <IconTarget size={18} />
-      </span>
+      <img src={iconArt} alt="" className="h-10 w-10 shrink-0 drop-shadow" />
       <span className="min-w-0 flex-1">
         <span className="flex items-center justify-between gap-2">
           <span className="truncate font-display text-sm font-bold text-ink-chalk">Бинго недели</span>

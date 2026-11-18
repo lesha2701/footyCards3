@@ -3,8 +3,13 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { claimBingoCard, claimBingoReward, fetchCurrentBingo } from "@/api/bingo";
+import freeArt from "@/assets/bingo/free.webp";
+import heroArt from "@/assets/bingo/hero.webp";
+import iconArt from "@/assets/bingo/icon.webp";
+import rewardArt from "@/assets/bingo/reward.webp";
+import stampArt from "@/assets/bingo/stamp.webp";
 import EmptyState from "@/components/common/EmptyState";
-import { IconCheck, IconClock, IconCoin, IconPack, IconParty, IconTarget, IconUsers } from "@/components/icons";
+import { IconCheck, IconClock, IconCoin, IconPack, IconTarget, IconUsers } from "@/components/icons";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { communityReady } from "@/lib/bingo";
 import { hapticNotify } from "@/lib/telegram";
@@ -79,18 +84,18 @@ export default function BingoPage() {
 
   return (
     <div className="flex flex-col gap-5 pb-20">
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-fuchsia-500/25 via-purple-600/10 to-bg-surface p-5">
-        <div className="relative flex items-center gap-3">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-fuchsia-400/20 text-fuchsia-300">
-            <IconTarget size={24} />
-          </div>
+      <section className="relative overflow-hidden rounded-3xl bg-bg-surface">
+        <img src={heroArt} alt="" decoding="async" className="aspect-[12/5] w-full object-cover" />
+        <div className="absolute inset-x-0 top-0 aspect-[12/5] bg-gradient-to-b from-transparent via-transparent to-bg-surface" aria-hidden />
+        <div className="relative -mt-8 flex items-center gap-3 px-5">
+          <img src={iconArt} alt="" className="h-12 w-12 shrink-0 drop-shadow-lg" />
           <div>
             <h1 className="font-display text-xl font-bold text-ink-chalk">Бинго недели · неделя {data.week_number}</h1>
             <p className="text-xs text-ink-mist">Своя карточка 3×3: закрывай ряды и всю карточку целиком.</p>
           </div>
         </div>
         {data.ends_at && (
-          <div className="relative mt-4 flex items-center gap-1.5 rounded-2xl bg-black/20 px-3 py-2 text-xs text-ink-mist">
+          <div className="relative mx-5 mb-5 mt-4 flex items-center gap-1.5 rounded-2xl bg-black/20 px-3 py-2 text-xs text-ink-mist">
             <IconClock size={14} />
             До конца недели: <b className="text-ink-chalk">{formatTimeRemaining(data.ends_at)}</b>
           </div>
@@ -170,9 +175,7 @@ export default function BingoPage() {
           onClick={() => setClaimedCoins(null)}
         >
           <div className="w-full max-w-xs rounded-2xl border border-white/10 bg-bg-surface p-6 text-center" onClick={(e) => e.stopPropagation()}>
-            <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-accent-lime/15 text-accent-lime">
-              <IconParty size={32} />
-            </span>
+            <img src={rewardArt} alt="" className="mx-auto h-24 w-24 drop-shadow-lg" />
             <p className="mt-3 font-display text-lg font-bold text-ink-chalk">Награда получена!</p>
             <p className="mt-1 text-sm text-ink-mist">Монеты начислены на баланс.</p>
             <p className="mt-3 flex items-center justify-center gap-1.5 font-display text-2xl font-bold text-amber-300">
@@ -217,12 +220,15 @@ function CardSection({
             type="button"
             disabled={cell.free || !cell.path}
             onClick={() => cell.path && onOpen(cell.path)}
-            className={`flex aspect-square flex-col items-center justify-center gap-1 rounded-xl p-1.5 text-center active:scale-95 ${
+            className={`relative flex aspect-square flex-col items-center justify-center gap-1 rounded-xl p-1.5 text-center active:scale-95 ${
               cell.done ? "bg-accent-lime/15 text-accent-lime" : "bg-white/5 text-ink-mist"
             } ${inLine.has(i) ? "ring-2 ring-accent-lime/60" : ""}`}
           >
+            {cell.done && !cell.free && (
+              <img src={stampArt} alt="выполнено" className="absolute right-1 top-1 h-6 w-6 rotate-12 drop-shadow" />
+            )}
             {cell.free ? (
-              <span className="text-2xl" aria-hidden>⭐</span>
+              <img src={freeArt} alt="" className="h-10 w-10 drop-shadow-md" />
             ) : (
               <span className="font-mono text-base font-bold leading-none text-ink-chalk">
                 {cell.value}/{cell.target}
@@ -231,15 +237,19 @@ function CardSection({
             <span className="line-clamp-2 text-[10px] font-semibold leading-tight">
               {cell.free ? "Бесплатно" : cell.label}
             </span>
-            {cell.done && !cell.free && <IconCheck size={12} className="text-accent-lime" />}
           </button>
         ))}
       </div>
-      <p className="text-xs leading-relaxed text-ink-mist">
-        Считаются только твои игры этой недели. Каждый закрытый ряд —{" "}
-        <b className="text-accent-lime">+{card.line_coins}</b>, все три ряда — ещё{" "}
-        <b className="text-accent-lime">+{card.full_coins}</b>
-        {card.full_pack_name && <> и «{card.full_pack_name}»</>}. Нажми на клетку, чтобы перейти к игре.
+      <div className="flex items-center gap-3 rounded-xl bg-black/20 p-2.5">
+        <img src={rewardArt} alt="" className="h-16 w-16 shrink-0 drop-shadow-lg" />
+        <p className="text-xs leading-relaxed text-ink-mist">
+          Каждый закрытый ряд — <b className="text-accent-lime">+{card.line_coins}</b>, все три ряда — ещё{" "}
+          <b className="text-accent-lime">+{card.full_coins}</b>
+          {card.full_pack_name && <> и «{card.full_pack_name}»</>}.
+        </p>
+      </div>
+      <p className="text-micro text-ink-mist-dim">
+        Считаются только твои игры этой недели. Нажми на клетку, чтобы перейти к игре.
       </p>
       {card.can_claim ? (
         <button
