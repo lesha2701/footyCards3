@@ -13,6 +13,7 @@ import { fetchTown } from "@/api/town";
 import { ClubLogo } from "@/components/clubs/ClubLogo";
 import NewBadge from "@/components/common/NewBadge";
 import ManagerFeature from "@/components/home/ManagerFeature";
+import ProspectHomeCard from "@/components/home/ProspectHomeCard";
 import { IconBall, IconCampus, IconHome, IconProfile, IconTrophy, IconUsers, IconWhistle } from "@/components/icons";
 import { artOf } from "@/lib/gameArt";
 import { hapticNotify } from "@/lib/telegram";
@@ -88,6 +89,7 @@ export default function ModesGrid() {
     <section>
       <h2 className="mb-2 font-display text-base font-bold text-ink-chalk">Режимы</h2>
       <ManagerFeature />
+      <ProspectHomeCard />
       <div className="grid grid-cols-3 gap-2">
         {career?.enabled !== false && (
           <ModeTile

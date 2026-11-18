@@ -74,12 +74,14 @@ const MusesPage = lazy(() => import("@/pages/MusesPage"));
 const AdminMonetizationPage = lazy(() => import("@/admin/pages/AdminMonetizationPage"));
 const AdminMatchDayPage = lazy(() => import("@/admin/pages/AdminMatchDayPage"));
 const BlackjackPage = lazy(() => import("@/pages/BlackjackPage"));
+const LuckyBoardPage = lazy(() => import("@/pages/LuckyBoardPage"));
 const PacksPage = lazy(() => import("@/pages/PacksPage"));
 const PackOpenPage = lazy(() => import("@/pages/PackOpenPage"));
 const PlayPage = lazy(() => import("@/pages/PlayPage"));
 const MemoryGamePage = lazy(() => import("@/pages/MemoryGamePage"));
 const ArenaPage = lazy(() => import("@/pages/ArenaPage"));
 const AcademyPage = lazy(() => import("@/pages/AcademyPage"));
+const ProspectPage = lazy(() => import("@/pages/ProspectPage"));
 const TownPage = lazy(() => import("@/pages/TownPage"));
 const TownResidentsPage = lazy(() => import("@/pages/TownResidentsPage"));
 const TownGuestsPage = lazy(() => import("@/pages/TownGuestsPage"));
@@ -339,6 +341,7 @@ export default function App() {
         <Route path="/play/memory" element={<MemoryGamePage />} />
         <Route path="/play/arena" element={<ArenaPage />} />
         <Route path="/academy" element={<AcademyPage />} />
+        <Route path="/academy/prospect" element={<ProspectPage />} />
         <Route path="/base" element={<ClubBasePage />} />
         <Route path="/town" element={<TownPage />} />
         <Route path="/town/residents" element={<TownResidentsPage />} />
@@ -399,6 +402,7 @@ export default function App() {
         <Route path="/play/free-kick-classic" element={<FreeKickGamePage />} />
         <Route path="/play/hangman" element={<HangmanGamePage />} />
         <Route path="/play/blackjack" element={<BlackjackPage />} />
+        <Route path="/play/lucky-board" element={<LuckyBoardPage />} />
         <Route path="/play/pairs" element={<PairsGamePage />} />
         <Route path="/play/fut-draft" element={<FutDraftGamePage />} />
         <Route path="/collection" element={<CollectionPage />} />

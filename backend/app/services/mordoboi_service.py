@@ -204,7 +204,7 @@ async def get_info(db: AsyncSession, user: User) -> MordoboiInfoOut:
         exchanges_per_round=config.mordoboi_exchanges_per_round, base_hp=config.mordoboi_base_hp,
         reward_win=config.mordoboi_reward_win, reward_draw=config.mordoboi_reward_draw,
         reward_loss=config.mordoboi_reward_loss, reward_ko_bonus=config.mordoboi_reward_ko_bonus,
-        daily_limit=config.mordoboi_daily_limit,
+        daily_limit=config.mordoboi_daily_limit + await _extra_attempts(db, user.id, config, game="mordoboi"),
         rewarded_today=user.mordoboi_rewarded_attempts_today if reset_day == local_today() else 0,
         easy_reward_pct=config.mordoboi_bot_easy_reward_pct,
         move_timeout_hours=config.mordoboi_move_timeout_hours, live_move_seconds=config.mordoboi_live_move_seconds,
@@ -783,7 +783,8 @@ async def _grant_reward(
     _ensure_daily_reset(user)
     from app.services.club_pass_service import extra_rewarded_attempts
 
-    limit = config.mordoboi_daily_limit + await extra_rewarded_attempts(db, user.id, config)
+    limit = config.mordoboi_daily_limit + await extra_rewarded_attempts(
+        db, user.id, config, game="mordoboi", used=user.mordoboi_rewarded_attempts_today, base=config.mordoboi_daily_limit)
     if user.game_rewards_blocked or user.mordoboi_rewarded_attempts_today >= limit:
         db.add(user)
         return 0, False
@@ -1386,3 +1387,10 @@ async def cancel_search(db: AsyncSession, user: User) -> None:
         raise ConflictError("Соперник уже найден — бой начинается")
     await db.delete(entry)
     await db.commit()
+
+
+async def _extra_attempts(db, user_id: int, config, **kw) -> int:
+    """+N rewarded attempts a day: the club pass and «Жители города» (Матилде)."""
+    from app.services.club_pass_service import extra_rewarded_attempts
+
+    return await extra_rewarded_attempts(db, user_id, config, **kw)

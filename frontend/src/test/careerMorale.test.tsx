@@ -79,8 +79,12 @@ describe("Мораль команды", () => {
   it("coach specialization: the first choice goes straight away", async () => {
     wrap(<CoachSpecCard coach={coach()} {...handlers} />);
     expect(screen.getByText(/Выбери одну — работает только она/)).toBeInTheDocument();
-    expect(screen.getAllByText("не изучена")).toHaveLength(2);
+    expect(screen.getAllByText("не изучена")).toHaveLength(3);
     fireEvent.click(screen.getByRole("tab", { name: /Аналитик/ }));
+    // Only the current and the next level show; the table of ten is folded.
+    expect(screen.getByText("Аналитик 1")).toBeInTheDocument();
+    expect(screen.queryByText("Аналитик 10")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Все 10 уровней" }));
     expect(screen.getByText("Аналитик 10")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Выбрать «Аналитик»" }));
     await waitFor(() => expect(chooseCoachSpec).toHaveBeenCalledWith("analyst"));

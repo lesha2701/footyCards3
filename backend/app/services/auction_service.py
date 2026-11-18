@@ -261,6 +261,7 @@ async def _settle_sale(
     fee = fee_for(price, lot.fee_pct)
     card.owner_id = buyer.id
     card.is_locked_in_trade = False
+    card.is_main = False  # «основная» is the old owner's choice
     lot.status = SOLD
     lot.winner_id = buyer.id
     lot.final_price = price

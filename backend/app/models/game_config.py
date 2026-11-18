@@ -19,6 +19,31 @@ NEWBIE_DEFAULT_TASKS = [
     {"code": "fergie_time", "label": "Вырви победу в «Ферги Тайм»", "mode": "game:fergie_time", "path": "/play/fergie-time", "coins": 1000},
 ]
 
+# «Табло удачи» default table (lucky_board_service.py; the 0312 migration
+# writes the same). Weights are per mille. Each side's prize: coins (free side
+# only), tokens (skill tokens of one random skill), shards (N → 1 token),
+# cosmetic (paid «Бутса»: a pool cosmetic or badge, else the shards).
+LUCKY_BOARD_DEFAULT_OUTCOMES = [
+    {"code": "cup", "label": "Кубок", "free_weight": 10, "paid_weight": 10,
+     "free": {"coins": 1000, "tokens": 1, "shards": 0, "cosmetic": False},
+     "paid": {"coins": 0, "tokens": 3, "shards": 0, "cosmetic": False}},
+    {"code": "ball", "label": "Хет-трик", "free_weight": 30, "paid_weight": 30,
+     "free": {"coins": 0, "tokens": 1, "shards": 0, "cosmetic": False},
+     "paid": {"coins": 0, "tokens": 2, "shards": 0, "cosmetic": False}},
+    {"code": "glove", "label": "Сухарь", "free_weight": 80, "paid_weight": 80,
+     "free": {"coins": 300, "tokens": 0, "shards": 0, "cosmetic": False},
+     "paid": {"coins": 0, "tokens": 1, "shards": 0, "cosmetic": False}},
+    {"code": "boot", "label": "Бутса", "free_weight": 80, "paid_weight": 30,
+     "free": {"coins": 150, "tokens": 0, "shards": 0, "cosmetic": False},
+     "paid": {"coins": 0, "tokens": 0, "shards": 3, "cosmetic": True}},
+    {"code": "pair", "label": "Дубль", "free_weight": 300, "paid_weight": 350,
+     "free": {"coins": 0, "tokens": 0, "shards": 1, "cosmetic": False},
+     "paid": {"coins": 0, "tokens": 0, "shards": 2, "cosmetic": False}},
+    {"code": "miss", "label": "Мимо ворот", "free_weight": 500, "paid_weight": 500,
+     "free": {"coins": 25, "tokens": 0, "shards": 0, "cosmetic": False},
+     "paid": {"coins": 0, "tokens": 0, "shards": 1, "cosmetic": False}},
+]
+
 # «Клубная база» defaults (GameConfig.club_base_buildings / club_base_caps;
 # the 0180 migration writes the same values). Lists are per level.
 # 25 levels like the whole «Академия»: costs and build hours grow smoothly,
@@ -843,6 +868,9 @@ class GameConfig(TimestampMixin, Base):
     # club value. Only the overridden numbers are stored; manager_finance.DEFAULTS
     # fills the rest.
     manager_finance: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # «Воспитанник Академии» (prospect_service): only the overridden numbers
+    # are stored; prospect_service.DEFAULTS fills the rest.
+    prospect: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     manager_value_ratings: Mapped[list] = mapped_column(JSON, default=lambda: [45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95], nullable=False)
     manager_value_eur: Mapped[list] = mapped_column(JSON, default=lambda: [50000, 80000, 150000, 400000, 1000000, 3500000, 12000000, 35000000, 80000000, 160000000, 220000000], nullable=False)
     manager_division_budget: Mapped[list] = mapped_column(JSON, default=lambda: [120000000, 70000000, 40000000, 22000000, 12000000, 7000000, 4500000, 3000000, 2500000, 2000000], nullable=False)
@@ -1006,6 +1034,26 @@ class GameConfig(TimestampMixin, Base):
     blackjack_paid_daily_limit: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     blackjack_consolation_coins: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
 
+    # «Табло удачи» (lucky_board_service.py): a three-window football
+    # scoreboard. Fixed price per spin, no stakes. lucky_board_outcomes is the
+    # weight + prize table (shape: LUCKY_BOARD_DEFAULT_OUTCOMES) — the server
+    # rolls on it and the game shows the same odds. Paid-spin prizes are
+    # account-bound only (skill tokens, shards, cosmetics, a badge — never
+    # coins or cards); admin validation enforces it.
+    lucky_board_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    lucky_board_free_per_day: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    lucky_board_stars_cost: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    lucky_board_paid_daily_limit: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
+    lucky_board_hourly_limit: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # 0 = no hourly cap
+    lucky_board_shards_per_token: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    lucky_board_outcomes: Mapped[list] = mapped_column(
+        JSON, default=lambda: [dict(o) for o in LUCKY_BOARD_DEFAULT_OUTCOMES], nullable=False,
+    )
+    # Exclusive cosmetics / a badge a paid «Бутса» can give (one not yet
+    # owned, at random); none left → that outcome's fallback shards.
+    lucky_board_cosmetic_ids: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    lucky_board_badge_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
     # «Мордобой» (mordoboi_service.py): boxing on one card. Off by default.
     mordoboi_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     mordoboi_rounds: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
@@ -1150,6 +1198,15 @@ class GameConfig(TimestampMixin, Base):
 
     bingo_reward_coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     bingo_reward_pack_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # The player's own 3×3 card (bingo_service): coins for each closed row,
+    # on top for all three rows (+ a pack, the legendary coin pack by
+    # migration 0319), and the pool of cells
+    # [{"metric", "label", "min", "max"}] — empty = bingo_service.DEFAULT_POOL.
+    # The community reward above goes only to players with a closed line.
+    bingo_line_coins: Mapped[int] = mapped_column(Integer, default=500, nullable=False)
+    bingo_full_coins: Mapped[int] = mapped_column(Integer, default=500, nullable=False)
+    bingo_full_pack_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    bingo_pool: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
 
     ptour_match_reward_win: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
     ptour_match_reward_draw: Mapped[int] = mapped_column(Integer, default=40, nullable=False)

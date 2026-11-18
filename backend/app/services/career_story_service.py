@@ -71,10 +71,36 @@ def add_news(state: dict, team: int, round_index: int, icon: str, text: str, ton
     del feed[:-NEWS_KEEP]
 
 
+AUTO_SUB = "Автозамена в старте: "
+
+
+def _auto_subs_line(pairs: list[str]) -> str:
+    if len(pairs) == 1:
+        return AUTO_SUB + pairs[0]
+    return f"Автозамены в старте ({len(pairs)}): " + ", ".join(pairs)
+
+
 def news_out(state: dict, team: int, upto: Optional[int] = None) -> list[dict]:
-    """Newest first; `upto` leaves out a round still on air."""
+    """Newest first; `upto` leaves out a round still on air. A round's
+    automatic changes come as one line (older seasons stored one per player)."""
     feed = (state.get("news") or {}).get(str(team)) or []
-    return [n for n in reversed(feed) if upto is None or n["round"] < upto]
+    out: list[dict] = []
+    subs: dict[int, list[str]] = {}
+    for n in feed:
+        if upto is not None and n["round"] >= upto:
+            continue
+        if n.get("icon") == "⇄" and n["text"].startswith(AUTO_SUB):
+            pairs = subs.setdefault(n["round"], [])
+            if not pairs:
+                out.append({**n, "_subs": pairs})
+            pairs.append(n["text"][len(AUTO_SUB):])
+            continue
+        out.append(n)
+    for n in out:
+        pairs = n.pop("_subs", None)
+        if pairs is not None:
+            n["text"] = _auto_subs_line(pairs)
+    return list(reversed(out))
 
 
 # --- the stands ---------------------------------------------------------------------------
@@ -307,8 +333,8 @@ def after_round(state: dict, *, team: int, round_index: int, match: dict, own: i
         add_news(state, team, round_index, "✚", f"{name} получил травму", "bad")
     for name in report.get("red") or []:
         add_news(state, team, round_index, "🟥", f"{name} удалён и пропустит матч", "bad")
-    for text in report.get("auto_subs") or []:
-        add_news(state, team, round_index, "⇄", f"Автозамена в старте: {text}")
+    if report.get("auto_subs"):
+        add_news(state, team, round_index, "⇄", _auto_subs_line(report["auto_subs"]))
     for text in report.get("training") or []:
         add_news(state, team, round_index, "🏋", text)
     place, before = report.get("place"), None

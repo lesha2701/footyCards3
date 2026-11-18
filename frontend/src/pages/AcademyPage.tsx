@@ -1,3 +1,4 @@
+import { PROSPECT_ART } from "@/lib/prospectArt";
 import FirstVisitHint from "@/components/common/FirstVisitHint";
 import { useMarkSeen } from "@/lib/seenSections";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -208,6 +209,19 @@ export default function AcademyPage() {
           <p className="mt-2 text-center text-xs text-ink-mist">Стройка свободна — выбери корпус для улучшения</p>
         )}
       </section>
+
+      <button
+        type="button"
+        onClick={() => navigate("/academy/prospect")}
+        className="flex items-center gap-3 rounded-2xl border border-path/30 bg-gradient-to-r from-path/15 to-transparent p-3 text-left active:scale-[0.99]"
+      >
+        <img src={PROSPECT_ART.icon} alt="" aria-hidden className="h-14 w-14 shrink-0 rounded-2xl object-cover ring-1 ring-white/15" />
+        <span className="min-w-0 flex-1">
+          <span className="block font-display text-sm font-bold text-ink-chalk">Воспитанник Академии</span>
+          <span className="block text-xs text-ink-mist">Вырасти своего игрока с 6 лет до пика — двор, школа, юноши, U-19, дебют</span>
+        </span>
+        <span className="text-ink-mist" aria-hidden>›</span>
+      </button>
 
       {!state.enabled && <p className="rounded-xl bg-amber-400/10 px-3 py-2 text-xs text-legend">Академия временно закрыта.</p>}
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}

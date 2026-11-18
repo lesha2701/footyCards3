@@ -100,32 +100,38 @@ def _mark(progress: NewbieProgress, code: str, ref: Optional[int] = None) -> Non
     progress.claimed = claimed  # new dict: JSON columns don't track in-place edits
 
 
-async def _arena_matches(db: AsyncSession, user: User) -> int:
-    """Finished Card Arena matches since registration."""
+async def _arena_matches(db: AsyncSession, user: User, since: datetime, until: Optional[datetime] = None) -> int:
+    """Finished Card Arena matches in [since, until)."""
     from app.models.enums import MatchStatus
     from app.models.match import Match
 
-    return int((await db.execute(
-        select(func.count()).select_from(Match).where(
-            Match.user_id == user.id, Match.status != MatchStatus.in_progress,
-            Match.created_at >= ensure_aware(user.created_at),
-        )
-    )).scalar_one())
+    q = select(func.count()).select_from(Match).where(
+        Match.user_id == user.id, Match.status != MatchStatus.in_progress, Match.created_at >= since,
+    )
+    if until is not None:
+        q = q.where(Match.created_at < until)
+    return int((await db.execute(q)).scalar_one())
 
 
-async def games_played(db: AsyncSession, user: User, mode: str) -> int:
-    """Finished games of `mode` (a `known_modes` key) since registration:
-    what the «played:<mode>» tasks count."""
-    since = ensure_aware(user.created_at)
+async def games_played(
+    db: AsyncSession, user: User, mode: str, since: Optional[datetime] = None, until: Optional[datetime] = None,
+) -> int:
+    """Finished games of `mode` (a `known_modes` key) in [since, until) —
+    by default since registration: what the «played:<mode>» tasks count;
+    «Бинго недели» counts one week."""
+    since = since or ensure_aware(user.created_at)
     if mode == ARENA:
-        return await _arena_matches(db, user)
+        return await _arena_matches(db, user, since, until)
     if mode.startswith("game:"):
         from app.models.enums import GameSessionStatus
 
-        return int((await db.execute(select(func.count()).select_from(GameSession).where(
+        q = select(func.count()).select_from(GameSession).where(
             GameSession.user_id == user.id, GameSession.game_type == mode[5:], GameSession.created_at >= since,
             GameSession.status != GameSessionStatus.in_progress,
-        ))).scalar_one())
+        )
+        if until is not None:
+            q = q.where(GameSession.created_at < until)
+        return int((await db.execute(q)).scalar_one())
     from app.services.admin_analytics_service import MODE_SOURCES
 
     src = next((s for s in MODE_SOURCES if s.key == mode), None)
@@ -136,8 +142,37 @@ async def games_played(db: AsyncSession, user: User, mode: str) -> int:
         q = select(func.count()).select_from(src.model)
         if src.join is not None:
             q = q.join(*src.join)
-        total += int((await db.execute(q.where(col == user.id, src.ts >= since))).scalar_one())
+        q = q.where(col == user.id, src.ts >= since)
+        if until is not None:
+            q = q.where(src.ts < until)
+        total += int((await db.execute(q)).scalar_one())
     return total
+
+
+async def games_played_all(db: AsyncSession, mode: str, since: datetime, until: datetime) -> int:
+    """Games of `mode` by everyone in [since, until): one row = one game
+    (a PvP match counts once). "game:" alone = every finished mini-game
+    session. What the live «Бинго недели» server goals count."""
+    if mode.startswith("game:"):
+        from app.models.enums import GameSessionStatus
+
+        q = select(func.count()).select_from(GameSession).where(
+            GameSession.created_at >= since, GameSession.created_at < until,
+            GameSession.status != GameSessionStatus.in_progress,
+        )
+        if mode[5:]:
+            q = q.where(GameSession.game_type == mode[5:])
+        return int((await db.execute(q)).scalar_one())
+    from app.services.admin_analytics_service import MODE_SOURCES
+
+    src = next((s for s in MODE_SOURCES if s.key == mode), None)
+    if src is None:
+        return 0
+    q = select(func.count()).select_from(src.model)
+    if src.join is not None:
+        q = q.join(*src.join)
+    q = q.where(src.ts >= since, src.ts < until)
+    return int((await db.execute(q)).scalar_one())
 
 
 async def _played(db: AsyncSession, user: User, mode: str) -> bool:
@@ -273,7 +308,7 @@ async def first_arena_opponent(db: AsyncSession, user: User, config: GameConfig)
     (match_service._pending_opponent), else None — the regular ladder."""
     if not is_newbie(user, config):
         return None
-    played = await _arena_matches(db, user)
+    played = await _arena_matches(db, user, ensure_aware(user.created_at))
     if played >= len(FIRST_ARENA_BOT_RATIOS):
         return None
     import random

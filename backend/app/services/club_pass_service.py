@@ -53,15 +53,33 @@ async def get_subscription(db: AsyncSession, user_id: int, lock: bool = False) -
     return (await db.execute(query)).scalar_one_or_none()
 
 
-async def extra_rewarded_attempts(db: AsyncSession, user_id: int, config: GameConfig) -> int:
-    """Added to every mini-game's daily rewarded-attempt cap: the club pass
-    while active plus the «Жители города» bonus game_attempts."""
+async def extra_rewarded_attempts(
+    db: AsyncSession, user_id: int, config: GameConfig,
+    game: str | None = None, used: int | None = None, base: int | None = None,
+) -> int:
+    """Added to a mini-game's daily rewarded-attempt cap: the club pass while
+    active plus the «Жители города» bonus game_attempts (Матилде).
+
+    The residents' attempt is one a day for ONE game: the first game that
+    plays it (a rewarded attempt past base + pass, `used` / `base` given on a
+    claim) takes it for the day (`users.town_attempt_day/_game`), every other
+    game's cap — and its shown limit — goes without it until tomorrow."""
+    from app.core.timeutil import local_today
     from app.services import town_service
 
-    extra = await town_service.user_bonus(db, user_id, "game_attempts", config)
+    extra = 0
     if config.club_pass_extra_rewarded_attempts and is_active(await get_subscription(db, user_id)):
         extra += config.club_pass_extra_rewarded_attempts
-    return extra
+    town = await town_service.user_bonus(db, user_id, "game_attempts", config)
+    if town > 0 and game is not None:
+        user = await db.get(User, user_id)
+        today = local_today()
+        if user is not None and user.town_attempt_day == today and user.town_attempt_game != game:
+            town = 0  # spent in another game today
+        elif user is not None and used is not None and base is not None and base + extra <= used < base + extra + town:
+            user.town_attempt_day, user.town_attempt_game = today, game
+            db.add(user)
+    return extra + town
 
 
 async def _grant_perk_items(db: AsyncSession, user: User, config: GameConfig) -> None:

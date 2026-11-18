@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { setCareerCupRotation, type CareerSeason, type CareerView } from "@/api/career";
 import { IconCoin, IconTrophy } from "@/components/icons";
 import { haptic } from "@/lib/telegram";
+import { CareerCrest } from "@/components/career/CareerCrest";
+import { careerArt } from "@/lib/careerArt";
 
 type Handlers = { onView: (v: CareerView) => void; onError: (e: unknown) => void };
 
@@ -36,7 +38,9 @@ export default function CupCard({ season, onView, onError }: { season: CareerSea
     <section className="flex flex-col gap-4 rounded-3xl bg-bg-surface p-4">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
-          <IconTrophy size={22} className="text-rarity-legendary" />
+          {careerArt("scenes", "cup")
+            ? <img src={careerArt("scenes", "cup")} alt="" decoding="async" className="h-12 w-12 shrink-0 object-contain" />
+            : <IconTrophy size={22} className="text-rarity-legendary" />}
           <div>
             <p className="font-display text-base font-bold text-ink-chalk">Кубок</p>
             <p className="text-caption text-ink-mist">16 команд · матчи на вылет · ничья — серия пенальти</p>
@@ -82,7 +86,7 @@ export default function CupCard({ season, onView, onError }: { season: CareerSea
                 const played = tie.sa !== null && tie.sb !== null;
                 const row = (name: string, score: number | null, pen: number | null, win: boolean) => (
                   <span className={`flex items-center justify-between gap-2 ${played && !win ? "text-ink-mist" : "text-ink-chalk"}`}>
-                    <span className={`min-w-0 truncate ${win ? "font-bold" : ""}`}>{name}</span>
+                    <span className="flex min-w-0 items-center gap-1.5"><CareerCrest name={name} size={16} /><span className={`truncate ${win ? "font-bold" : ""}`}>{name}</span></span>
                     <span className="shrink-0 font-mono">{played ? score : "—"}{pen !== null ? <span className="text-micro text-ink-mist"> ({pen})</span> : null}</span>
                   </span>
                 );

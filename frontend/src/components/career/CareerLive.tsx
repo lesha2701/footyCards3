@@ -21,6 +21,7 @@ import { TIRED_AT, benchFor, byFatigue, suggestSubs, type Sub } from "@/lib/care
 import { MENTALITIES } from "@/lib/clubTactics";
 import { haptic, hapticSelection } from "@/lib/telegram";
 import type { MatchEvent } from "@/types";
+import { CareerCrest } from "@/components/career/CareerCrest";
 
 type Handlers = { onView: (v: CareerView) => void; onError: (e: unknown) => void };
 
@@ -143,6 +144,33 @@ function TacticsPanel({ catalog, mentality, setMentality, tactic, setTactic }: {
  * during the break (until second_half_at) the coach can change mentality,
  * tactical axes and make substitutions for the second half. With the 2D
  * viewer they are its "Замены" / "Тактика" tabs, next to the feed. */
+/** The match at the break on the tabs other than «Подготовка»: the score and
+ * the countdown in one row; the full match centre opens on a tap. */
+export function LiveBar({ live, onOpen }: { live: CareerLive; onOpen: () => void }) {
+  const left = useCountdown(live.second_half_at);
+  const mm = Math.floor(left / 60000);
+  const ss = Math.floor((left % 60000) / 1000);
+  return (
+    <button type="button" onClick={onOpen} aria-label="Открыть матч"
+      className="flex items-center gap-2 rounded-3xl bg-gradient-to-br from-bg-surface to-bg-raised px-3 py-2.5 text-left ring-1 ring-red-400/30 active:scale-[0.99]">
+      <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-red-400" />
+      <span className="flex min-w-0 flex-1 items-center gap-1.5">
+        <CareerCrest name={live.home_name} size={22} />
+        <span className="font-mono text-base font-bold text-ink-chalk">{live.hs}:{live.as}</span>
+        <CareerCrest name={live.away_name} size={22} />
+        <span className="min-w-0 truncate text-caption text-ink-mist">
+          {live.my_side === "a" ? live.away_name : live.home_name}
+        </span>
+      </span>
+      <span className="shrink-0 text-right">
+        <span className="block text-micro font-bold uppercase tracking-wider text-red-300">Перерыв · тур {live.round + 1}</span>
+        <span className="block font-mono text-micro text-ink-chalk">{left > 0 ? `2-й тайм ${mm}:${String(ss).padStart(2, "0")}` : "2-й тайм идёт"}</span>
+      </span>
+      <span className="shrink-0 text-lg text-ink-mist">›</span>
+    </button>
+  );
+}
+
 export function LiveMatchCenter({ live, catalog, seasonId, talks, onView, onError }: {
   live: CareerLive; catalog: TacticsCatalog | null;
   /** «Разговор в перерыве» options (team morale seasons). */
@@ -241,9 +269,9 @@ export function LiveMatchCenter({ live, catalog, seasonId, talks, onView, onErro
       {!withViewer && (
         <>
           <div className="flex items-center justify-center gap-3 text-center">
-            <p className="min-w-0 flex-1 truncate text-right text-sm font-semibold text-ink-chalk">{live.home_name}</p>
+            <p className="flex min-w-0 flex-1 items-center justify-end gap-1.5 text-right text-sm font-semibold text-ink-chalk"><span className="truncate">{live.home_name}</span><CareerCrest name={live.home_name} size={24} /></p>
             <p className="font-mono text-2xl font-bold text-ink-chalk">{live.hs}:{live.as}</p>
-            <p className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-ink-chalk">{live.away_name}</p>
+            <p className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-sm font-semibold text-ink-chalk"><CareerCrest name={live.away_name} size={24} /><span className="truncate">{live.away_name}</span></p>
           </div>
           <div className="grid grid-cols-3 gap-1 text-center text-caption text-ink-mist">
             <span className="font-mono text-ink-chalk">{stats[0].shots}</span><span>удары</span><span className="font-mono text-ink-chalk">{stats[1].shots}</span>

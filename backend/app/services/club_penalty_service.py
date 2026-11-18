@@ -160,7 +160,7 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> ClubPen
     if session.is_rewarded:
         raise ConflictError("Reward for this session has already been claimed")
     await _ensure_daily_reset(db, locked_user)
-    daily_cap_reached = locked_user.club_penalty_rewarded_attempts_today >= config.club_penalty_daily_reward_limit
+    daily_cap_reached = locked_user.club_penalty_rewarded_attempts_today >= config.club_penalty_daily_reward_limit + await _extra_attempts(db, locked_user.id, config, game="club_penalty", used=locked_user.club_penalty_rewarded_attempts_today, base=config.club_penalty_daily_reward_limit)
 
     reward = 0 if (locked_user.game_rewards_blocked or daily_cap_reached) else session.reward_coins
     session.is_rewarded = True
@@ -212,3 +212,10 @@ async def forfeit_session(db: AsyncSession, user: User, session_id: int) -> Club
     return ClubPenaltyForfeitOut(
         session_id=session.id, player_score=state["player_score"], bot_score=state["bot_score"], result="loss",
     )
+
+
+async def _extra_attempts(db, user_id: int, config, **kw) -> int:
+    """+N rewarded attempts a day: the club pass and «Жители города» (Матилде)."""
+    from app.services.club_pass_service import extra_rewarded_attempts
+
+    return await extra_rewarded_attempts(db, user_id, config, **kw)

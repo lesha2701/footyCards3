@@ -170,6 +170,17 @@ async def manager_sweep(db: AsyncSession = Depends(get_db)):
     return SimulateRoundResult(matches_simulated=await manager_service.resolve_all_due(db))
 
 
+@router.post("/prospect/sweep")
+async def prospect_sweep(db: AsyncSession = Depends(get_db)):
+    """Called by the bot every ten minutes: «Воспитанник Академии» — expired
+    friends' duels, last week's cohort prizes and the evening digest. Each is
+    once-only via prospect_ledger / the duel row lock, so a second replica or
+    the lazy settlement on reads never pays twice."""
+    from app.services import prospect_life
+
+    return await prospect_life.sweep(db)
+
+
 @router.post("/weekly-top/settle")
 async def weekly_top_settle(db: AsyncSession = Depends(get_db)):
     """Called by the bot every few minutes: pays the closed week's «Топ

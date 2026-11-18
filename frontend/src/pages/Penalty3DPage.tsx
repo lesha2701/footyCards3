@@ -6,6 +6,7 @@ import { fetchNewbie } from "@/api/newbie";
 import { fetchCollection } from "@/api/collection";
 import { claimPenaltyReward, forfeitPenalty, savePenalty3D, shootPenalty3D, startPenalty3D } from "@/api/games";
 import CardPickerModal from "@/components/cards/CardPickerModal";
+import { ProspectPickOption, ProspectXpNote } from "@/components/cards/ProspectPickOption";
 import ErrorBoundary from "@/components/common/ErrorBoundary";
 import GameHero from "@/components/common/GameHero";
 import { IconCoin } from "@/components/icons";
@@ -33,10 +34,12 @@ import {
 } from "@/lib/freeKick3d/trajectory";
 import { audio } from "@/lib/sound";
 import { haptic, hapticNotify, showConfirm } from "@/lib/telegram";
+import { prospectPrint, useProspectPick } from "@/lib/useProspectPick";
 import { useAuthStore } from "@/store/authStore";
 import type { Penalty3DKick, Penalty3DResult, Penalty3DStartResult, UserCard } from "@/types";
 
-type Series = Penalty3DStartResult & { card: UserCard };
+// card null = the «Воспитанник Академии» shoots (`print` on his back).
+type Series = Penalty3DStartResult & { card: UserCard | null; print: { name: string; number: number } };
 
 /** What the outcome means for the player, by who kicked. */
 const VERDICT: Record<Penalty3DKick["kicker"], Record<Penalty3DResult["outcome"], { label: string; good: boolean }>> = {
@@ -83,7 +86,12 @@ export default function Penalty3DPage() {
       : null;
 
   const start = useMutation({
-    mutationFn: (card: UserCard) => startPenalty3D(card.id).then((data) => ({ ...data, card })),
+    mutationFn: (card: UserCard | null) =>
+      startPenalty3D(card ? card.id : null).then((data) => ({
+        ...data,
+        card,
+        print: card ? shirtPrint(card.player) : prospectPrint(data.prospect_name, prospect),
+      })),
     onSuccess: (data) => {
       setSeries(data);
       setKick(data.kick);
@@ -100,8 +108,11 @@ export default function Penalty3DPage() {
     onSuccess: (data) => {
       updateBalance(data.new_balance);
       hapticNotify("success");
+      if (data.prospect_xp !== null && data.prospect_xp !== undefined) void queryClient.invalidateQueries({ queryKey: ["prospect"] });
     },
   });
+  // From the prospect's page (?prospect=1): straight to the spot with him.
+  const { prospect, holdPicker } = useProspectPick(series === null, () => start.mutate(null));
 
   if (!series || !kick) {
     return (
@@ -114,13 +125,14 @@ export default function Penalty3DPage() {
         </p>
         {errorMsg && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{errorMsg}</p>}
         <CardPickerModal
-          open={!start.isPending}
+          open={!start.isPending && !(holdPicker && !start.isError)}
           title="Кто бьёт?"
           cards={collection?.items ?? []}
           onSelect={(card) => start.mutate(card)}
           onClose={() => navigate("/play/penalty")}
           searchValue={cardSearch}
           onSearchChange={setCardSearch}
+          header={prospect && <ProspectPickOption prospect={prospect} onPick={() => start.mutate(null)} />}
         />
       </div>
     );
@@ -152,6 +164,7 @@ export default function Penalty3DPage() {
               Ты получил +{claim.data.reward_coins}
               <IconCoin size={16} />
             </p>
+            <ProspectXpNote xp={claim.data.prospect_xp} />
           </div>
         ) : claim.isError ? (
           <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">
@@ -449,7 +462,7 @@ function ShootoutKick({
           gear={{
             ball: series.ball,
             kickerBoots: keeping ? null : series.boots,
-            kickerPrint: keeping ? null : shirtPrint(series.card.player),
+            kickerPrint: keeping ? null : series.print,
             keeperGloves: keeping ? series.gloves : null,
           }}
           shotClockRef={shotClock}
@@ -516,7 +529,7 @@ function ShootoutKick({
         <div className="pointer-events-none absolute inset-x-0 top-28 px-6 text-center text-sm text-ink-chalk/90 drop-shadow">
           {keeping
             ? "Ты на воротах. Свайпни, куда прыгать: в момент удара — или заранее, угадав угол. Не трогаешь — стоишь в центре."
-            : `Твой удар (${series.card.player.display_name}). Свайпни от мяча к воротам: в угол — надёжнее, длиннее — выше.`}
+            : `Твой удар (${series.card ? series.card.player.display_name : series.print.name}). Свайпни от мяча к воротам: в угол — надёжнее, длиннее — выше.`}
           {errorMsg && <div className="mt-2 text-red-300">{errorMsg}</div>}
         </div>
       )}

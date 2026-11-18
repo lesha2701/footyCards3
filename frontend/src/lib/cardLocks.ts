@@ -1,6 +1,6 @@
 import type { UserCard } from "@/types";
 
-type LockFields = Pick<UserCard, "is_in_lineup" | "is_in_tactico_squad" | "is_user_locked" | "in_personal_squad">;
+type LockFields = Pick<UserCard, "is_in_lineup" | "is_in_tactico_squad" | "is_user_locked" | "in_personal_squad"> & Pick<UserCard, "is_main">;
 
 /** Stands in any squad (Card Arena, Тактико or a player-tournament squad). */
 export function inSquad(card: LockFields): boolean {
@@ -14,9 +14,10 @@ export function squadLabel(card: LockFields): string | null {
   return null;
 }
 
-/** Props for PlayerCard: the squad shade and the owner's lock mark. */
-export function cardLockProps(card: LockFields): { inSquad: boolean; userLocked: boolean } {
-  return { inSquad: inSquad(card), userLocked: !!card.is_user_locked };
+/** Props for PlayerCard: the squad shade, the owner's lock mark and the
+ * «основная копия» crown. */
+export function cardLockProps(card: LockFields): { inSquad: boolean; userLocked: boolean; mainCopy: boolean } {
+  return { inSquad: inSquad(card), userLocked: !!card.is_user_locked, mainCopy: !!card.is_main };
 }
 
 /** An exclusive keepsake bound to its owner for good (backend BOUND_FOREVER,

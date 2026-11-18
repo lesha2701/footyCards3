@@ -53,6 +53,7 @@ import TodayPanel, { Timeline } from "@/components/manager/TodayPanel";
 import Emblem, { KitShirt } from "@/components/manager/Emblem";
 import ManagerPitch from "@/components/manager/ManagerPitch";
 import PresidentTab from "@/components/manager/PresidentTab";
+import { ProspectClubSection, ProspectMeSection } from "@/components/manager/ProspectPanels";
 import DealCheck from "@/components/manager/DealCheck";
 import StaffTab, { StaffGarage } from "@/components/manager/StaffTab";
 import StyleTab from "@/components/manager/StyleTab";
@@ -504,6 +505,8 @@ function ClubTab({ view, club, onView, onError, onTab }: TabProps & { club: Mana
         </section>
       )}
 
+      <ProspectClubSection view={view} club={club} busy={patch.isPending} onStarts={(on) => patch.mutate({ prospect_starts: on })} />
+
       {(club.contracts.length > 0 || club.offers_sent.length > 0) && (
       <section className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4">
         <h2 className="font-display text-base font-bold text-ink-chalk">🤝 Игроки пользователей · {club.live_count}/{rules.max_live}</h2>
@@ -527,7 +530,7 @@ function ClubTab({ view, club, onView, onError, onTab }: TabProps & { club: Mana
               )}
             </div>
             {c.status === "active" && c.kind !== "loan" && (
-              club.offers_sent.some((o) => o.kind === "renew" && o.user_id === c.user_id) ? (
+              club.offers_sent.some((o) => o.kind === "renew" && o.user_id === c.user_id && (o.subject ?? "player") === (c.subject ?? "player")) ? (
                 <p className="text-micro text-ink-mist">✉️ Новый контракт предложен — ждём ответа игрока</p>
               ) : (
                 <button onClick={() => setRenewing(renewing === `c${c.id}` ? null : `c${c.id}`)}
@@ -658,7 +661,9 @@ function Bench({ squad }: { squad: ManagerClub["squad"] }) {
           {subs.map((p) => (
             <span key={p.key} className="flex items-center gap-1.5 rounded-lg bg-bg-raised px-2 py-1.5 text-micro text-ink-chalk">
               <span className="w-8 shrink-0 font-mono text-ink-mist">{p.position}</span>
-              <span className="min-w-0 flex-1 truncate">{p.name}</span>
+              <span className="min-w-0 flex-1 truncate">
+                {(p.kind === "prospect" || p.subject === "prospect") && "🧒 "}{(p.kind === "graduate" || p.subject === "graduate") && "🎓 "}{p.name}
+              </span>
               <b>{p.rating}</b>
             </span>
           ))}
@@ -823,7 +828,7 @@ function MarketRow({ p, children }: { p: ManagerMarketPlayer; children?: ReactNo
         <span className="min-w-0 flex-1">
           <NameLine name={p.player_name} position={p.position} />
           <span className="block text-micro text-ink-mist">
-            <span className="break-words">{p.owner_name}</span> · ур. {p.level}{p.is_friend && " · 🤝"}{" · "}
+            <span className="break-words">{p.owner_name}</span> · {p.subject === "prospect" ? `🧒 воспитанник, ${p.age} лет` : p.subject === "graduate" ? "🎓 выпускник Академии" : `ур. ${p.level}`}{p.is_friend && " · 🤝"}{" · "}
             {p.club ? `${p.club.on_loan ? "в аренде в " : ""}«${p.club.name}», ${p.club.seasons_left} сез.` : p.looking ? "ищет клуб" : "без клуба"}
           </span>
         </span>
@@ -837,10 +842,13 @@ function MarketRow({ p, children }: { p: ManagerMarketPlayer; children?: ReactNo
   );
 }
 
+/** A user has two market entries at most: his «Мой игрок» and his prospect. */
+const marketKey = (p: ManagerMarketPlayer) => `${p.user_id}:${p.subject ?? "player"}`;
+
 function UsersMarket({ view, club, onView, onError }: TabProps & { club: ManagerClub }) {
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["manager", "market"], queryFn: fetchManagerMarket });
-  const [open, setOpen] = useState<number | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
   if (isLoading || !data) return <ListSkeleton />;
   if (data.players.length === 0) {
     return <EmptyState icon={IconProfile} title="На рынке пока пусто" description="Позови друзей: их «Мои игроки» появятся здесь." />;
@@ -848,15 +856,15 @@ function UsersMarket({ view, club, onView, onError }: TabProps & { club: Manager
   return (
     <div className="flex flex-col gap-2">
       {data.players.map((p) => (
-        <MarketRow key={p.user_id} p={p}>
+        <MarketRow key={marketKey(p)} p={p}>
           {p.offered ? (
             <p className="text-micro text-ink-mist">Предложение отправлено</p>
           ) : !p.club?.on_loan && !club.trade_locked && (
-            <button onClick={() => setOpen(open === p.user_id ? null : p.user_id)} className="rounded-lg bg-bg-raised py-1.5 text-xs font-semibold text-ink-chalk">
+            <button onClick={() => setOpen(open === marketKey(p) ? null : marketKey(p))} className="rounded-lg bg-bg-raised py-1.5 text-xs font-semibold text-ink-chalk">
               {p.club ? "Купить или арендовать" : "Предложить контракт"}
             </button>
           )}
-          {open === p.user_id && (
+          {open === marketKey(p) && (
             <OfferForm player={p} view={view} club={club}
               onDone={(v) => { onView(v); setOpen(null); void queryClient.invalidateQueries({ queryKey: ["manager", "market"] }); }}
               onError={onError} />
@@ -876,11 +884,12 @@ function OfferForm({ player, view, club, onDone, onError }: {
   const high = kind === "transfer" ? player.value * 3 : kind === "loan" ? player.value : 0;
   const step = Math.max(1000, Math.round(player.value / 100 / 1000) * 1000);
   const [fee, setFee] = useState(kind === "sign" ? 0 : player.value);
-  const [wage, setWage] = useState(Math.round(view.rules.live_wage_max / 3 / 50) * 50);
+  const wageMax = (player.subject ?? "player") === "player" ? view.rules.live_wage_max : (view.youth_wage_max ?? view.rules.live_wage_max);
+  const [wage, setWage] = useState(Math.round(wageMax / 3 / 50) * 50);
   const [seasons, setSeasons] = useState(view.rules.contract_seasons[0]);
   useEffect(() => { setFee(kind === "transfer" ? player.value : kind === "loan" ? Math.floor(player.value / 5) : 0); }, [kind, player.value]);
   const offer = useMutation({
-    mutationFn: () => offerManagerContract({ user_id: player.user_id, wage, seasons: kind === "loan" ? 1 : seasons, fee, kind }),
+    mutationFn: () => offerManagerContract({ user_id: player.user_id, subject: player.subject ?? "player", wage, seasons: kind === "loan" ? 1 : seasons, fee, kind }),
     onSuccess: (v) => { hapticNotify("success"); onDone(v); },
     onError,
   });
@@ -907,7 +916,7 @@ function OfferForm({ player, view, club, onDone, onError }: {
       )}
       <label className="flex flex-col gap-1 text-xs text-ink-mist">
         <span className="flex justify-between">Зарплата игроку за сезон <b className="text-ink-chalk"><Coins n={wage} /></b></span>
-        <input type="range" min={0} max={view.rules.live_wage_max} step={50} value={wage} onChange={(e) => setWage(Number(e.target.value))} />
+        <input type="range" min={0} max={wageMax} step={50} value={wage} onChange={(e) => setWage(Number(e.target.value))} />
       </label>
       {kind !== "loan" && (
         <div className="flex gap-1.5">
@@ -938,7 +947,7 @@ function Scout({ club }: { club: ManagerClub }) {
   }
   if (isLoading || !data) return <ListSkeleton />;
   if (data.players.length === 0) return <EmptyState icon={IconSearch} title="Пока нет данных" description="Тренд стоимости появится после первого сезона." />;
-  return <div className="flex flex-col gap-2">{data.players.map((p) => <MarketRow key={p.user_id} p={p} />)}</div>;
+  return <div className="flex flex-col gap-2">{data.players.map((p) => <MarketRow key={marketKey(p)} p={p} />)}</div>;
 }
 
 const AFFORD: [ManagerCatalogFilter["afford"], string][] = [["loan", "💶 По карману: аренда"], ["buy", "💶 По карману: покупка"], [null, "Все цены"]];
@@ -1283,9 +1292,13 @@ function MeTab({ view, onView, onError }: TabProps) {
           </label>
         </section>
       )}
+      <ProspectMeSection view={view} onView={onView} onError={onError} />
+      <ProspectMeSection view={view} onView={onView} onError={onError} subject="graduate" />
       {view.offers.map((o, i) => (
         <section key={o.id} data-focus={i === 0 ? "offers" : undefined} className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-4 ring-1 ring-accent-lime/40">
           <p className="text-sm text-ink-chalk">
+            {o.subject === "prospect" && <>🧒 Воспитанник <b>{o.player_name}</b>: </>}
+            {o.subject === "graduate" && <>🎓 Выпускник <b>{o.player_name}</b>: </>}
             ✍️ <b>{o.club_name}</b> ({o.club_owner}) — {o.kind === "sign" ? "контракт" : o.kind === "renew" ? "новый контракт с твоим клубом" : o.kind === "loan" ? "аренда на сезон" : "переход"}
           </p>
           <p className="text-xs text-ink-mist">

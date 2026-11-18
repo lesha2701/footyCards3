@@ -134,6 +134,7 @@ class TransactionType(str, enum.Enum):
     weekly_top_reward = "weekly_top_reward"
     newbie_reward = "newbie_reward"
     blackjack_consolation = "blackjack_consolation"
+    lucky_board_reward = "lucky_board_reward"
     magnate_reward = "magnate_reward"
     card_star_upgrade = "card_star_upgrade"
     path_attempt_purchase = "path_attempt_purchase"
@@ -152,6 +153,7 @@ class TransactionType(str, enum.Enum):
     town_quest = "town_quest"
     town_gift = "town_gift"
     town_week = "town_week"
+    prospect_purchase = "prospect_purchase"
     town_villa = "town_villa"
     arena_division_reward = "arena_division_reward"
     arena_cup_reward = "arena_cup_reward"
@@ -508,6 +510,7 @@ class NotificationType(str, enum.Enum):
     auction_sold = "auction_sold"
     auction_expired = "auction_expired"
     auction_removed = "auction_removed"
+    prospect_event = "prospect_event"
 
 
 class TradeCardSide(str, enum.Enum):
@@ -552,3 +555,13 @@ class BingoGoalType(str, enum.Enum):
     penalty_matches_played = "penalty_matches_played"
     arena_matches_played = "arena_matches_played"
     trades_completed = "trades_completed"
+    # Counted live from the games' own rows over the week window
+    # (bingo_service.LIVE_GOALS), no hook in the game.
+    mini_games_played = "mini_games_played"
+    stratego_matches_played = "stratego_matches_played"
+    blackjack_hands = "blackjack_hands"
+    lucky_board_spins = "lucky_board_spins"
+    magic_runs = "magic_runs"
+    kontra_battles = "kontra_battles"
+    mordoboi_matches = "mordoboi_matches"
+    wheel_spins = "wheel_spins"

@@ -37,6 +37,7 @@ export const TX_TYPE_LABELS: Record<string, string> = {
   wheel_spin_cost: "Колесо: прокрутка",
   wheel_spin_reward: "Колесо: выигрыш",
   blackjack_consolation: "«21»: утешительный приз",
+  lucky_board_reward: "«Табло удачи»: приз",
   fut_draft_entry: "FUT Draft: вход",
   league_reward: "Награда лиги",
   gift_purchase_coins: "Покупка подарка",

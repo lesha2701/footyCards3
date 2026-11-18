@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 
 import { fetchCollection } from "@/api/collection";
 import { fetchFeatureFlags } from "@/api/featureFlags";
+import { fetchProspect } from "@/api/prospect";
 import { claimPenaltyReward, forfeitPenalty, kickPenalty, startPenalty } from "@/api/games";
 import CardPickerModal from "@/components/cards/CardPickerModal";
+import { ProspectPickOption, ProspectXpNote } from "@/components/cards/ProspectPickOption";
 import { IconCoin, IconFlagCheckered, IconPlay, IconTrophy, IconUsers } from "@/components/icons";
 import PenaltyGoalScene, { type PenaltyGoalKick } from "@/components/penalty/PenaltyGoalScene";
 import GameHero from "@/components/common/GameHero";
@@ -54,13 +56,17 @@ export default function PenaltyGamePage() {
   // From a «Путь дебютанта» task: straight into the bot game (the 3D
   // shootout) — no waiting for a live opponent who may never come.
   const fromNewbie = !!(useLocation().state as { fromNewbie?: boolean } | null)?.fromNewbie;
+  // From the prospect's page (?prospect=1): the bot shootout with him — the
+  // menu's bot game is the 3D one, which starts with him by itself.
+  const wantsProspect = useSearchParams()[0].get("prospect") === "1";
   useEffect(() => {
     if (fromNewbie) navigate("/play/penalty/3d", { replace: true });
-  }, [fromNewbie, navigate]);
+    else if (wantsProspect) navigate("/play/penalty/3d?prospect=1", { replace: true });
+  }, [fromNewbie, wantsProspect, navigate]);
   const [choosingBot, setChoosingBot] = useState(false);
   const [pickingForSearch, setPickingForSearch] = useState(false);
   const [lastKick, setLastKick] = useState<PenaltyKickResult | null>(null);
-  const [claimResult, setClaimResult] = useState<{ reward_coins: number } | null>(null);
+  const [claimResult, setClaimResult] = useState<{ reward_coins: number; prospect_xp?: number | null } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [settled, setSettled] = useState(true);
   const [pickedZone, setPickedZone] = useState<PenaltyDirection | null>(null);
@@ -74,8 +80,13 @@ export default function PenaltyGamePage() {
   // for already-open sessions without requiring a reload.
   const { data: flags } = useQuery({ queryKey: ["feature-flags"], queryFn: fetchFeatureFlags, refetchInterval: 30000 });
 
+  // The bot shootout's picker offers the «Воспитанник Академии» too.
+  const { data: prospectView } = useQuery({ queryKey: ["prospect"], queryFn: fetchProspect, enabled: choosingBot });
+  const prospect = prospectView?.enabled ? prospectView.prospect : null;
+
   const startMutation = useMutation({
-    mutationFn: startPenalty,
+    // null = the «Воспитанник Академии» shoots.
+    mutationFn: (userCardId: number | null) => startPenalty(userCardId),
     onSuccess: (data) => {
       setSessionId(data.session_id);
       setLastKick(null);
@@ -99,6 +110,7 @@ export default function PenaltyGamePage() {
       updateBalance(data.new_balance);
       hapticNotify("success");
       setClaimResult(data);
+      if (data.prospect_xp !== null && data.prospect_xp !== undefined) void queryClient.invalidateQueries({ queryKey: ["prospect"] });
     },
   });
 
@@ -231,6 +243,7 @@ export default function PenaltyGamePage() {
           onClose={() => { setChoosingBot(false); setCardSearch(""); }}
           searchValue={cardSearch}
           onSearchChange={setCardSearch}
+          header={prospect && <ProspectPickOption prospect={prospect} onPick={() => startMutation.mutate(null)} />}
         />
       </div>
     );
@@ -264,6 +277,7 @@ export default function PenaltyGamePage() {
               Ты получил +{claimResult.reward_coins}
               <IconCoin size={16} />
             </p>
+            <ProspectXpNote xp={claimResult.prospect_xp} />
           </div>
         ) : claimMutation.isError ? (
           <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">

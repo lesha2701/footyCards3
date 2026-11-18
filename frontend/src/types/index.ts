@@ -141,6 +141,9 @@ export interface UserCard {
   hidden_from_trade: boolean;
   /** The owner's own «замок»: can't be sold or burned as material. */
   is_user_locked?: boolean;
+  /** «Основная копия»: the copy of this player the owner plays and levels up
+   * (always under the «замок»; one per player). */
+  is_main?: boolean;
   /** «Путь дебютанта» gift: no trade, sale or burning until this moment. */
   bound_until?: string | null;
   /** Stands in a player-tournament squad (no flag of its own on the card). */
@@ -502,6 +505,74 @@ export interface BlackjackStatus {
   active_match: BlackjackMatch | null;
   golden_prizes: WheelPrize[];
   jackpot_prizes: WheelPrize[];
+}
+
+// «Табло удачи» (backend lucky_board_service.py)
+export type LuckyBoardSymbol = "ball" | "boot" | "glove" | "cup" | "flag" | "whistle";
+export type LuckyBoardOutcomeCode = "cup" | "ball" | "glove" | "boot" | "pair" | "miss";
+
+export interface LuckyBoardSide {
+  coins: number;
+  tokens: number;
+  shards: number;
+  cosmetic: boolean;
+}
+
+export interface LuckyBoardOutcome {
+  code: LuckyBoardOutcomeCode;
+  label: string;
+  symbol: LuckyBoardSymbol | null;
+  free_pct: number;
+  paid_pct: number;
+  free: LuckyBoardSide;
+  paid: LuckyBoardSide;
+}
+
+export interface LuckyBoardStatus {
+  enabled: boolean;
+  free_per_day: number;
+  free_remaining: number;
+  paid_spins: number;
+  paid_bought_today: number;
+  paid_daily_limit: number;
+  stars_cost: number;
+  hourly_limit: number;
+  hourly_remaining: number;
+  hour_resets_at: string | null;
+  shards: number;
+  shards_per_token: number;
+  next_reset_at: string;
+  symbols: LuckyBoardSymbol[];
+  outcomes: LuckyBoardOutcome[];
+  cosmetics_left: number;
+}
+
+export interface LuckyBoardToken {
+  skill_code: string;
+  skill_name: string;
+  skill_icon: string;
+  quantity: number;
+}
+
+export interface LuckyBoardPrize {
+  coins: number;
+  tokens: LuckyBoardToken[];
+  shards: number;
+  crafted_tokens: LuckyBoardToken[];
+  cosmetic: { id: number; name: string; kind: string } | null;
+  badge: Badge | null;
+  blocked: boolean;
+}
+
+export interface LuckyBoardSpin {
+  id: number;
+  source: "free" | "paid";
+  outcome: LuckyBoardOutcomeCode;
+  label: string;
+  reels: LuckyBoardSymbol[];
+  prize: LuckyBoardPrize;
+  new_balance: number;
+  status: LuckyBoardStatus;
 }
 
 export interface WheelSpinResult {
@@ -1704,6 +1775,8 @@ export interface PenaltyStartResult {
   session_id: number;
   player_rating: number;
   first_kicker: "player" | "bot";
+  /** Set when the «Воспитанник Академии» plays: his name. */
+  prospect_name?: string | null;
 }
 
 export interface PenaltyKickResult {
@@ -1724,6 +1797,8 @@ export interface PenaltyClaimResult {
   reward_coins: number;
   new_balance: number;
   result: string;
+  /** XP the «Воспитанник Академии» got, when he played. */
+  prospect_xp?: number | null;
 }
 
 export interface PenaltyForfeitResult {
@@ -1820,6 +1895,8 @@ export interface OneOnOneStartResult {
   rating: number;
   total_attacks: number;
   attack: OneOnOneAttack;
+  /** Set when the «Воспитанник Академии» plays: his name. */
+  prospect_name?: string | null;
   celebration?: string | null;
   ball?: string | null;
   boots?: string | null;
@@ -1845,6 +1922,8 @@ export interface OneOnOneResult {
 export interface OneOnOneClaimResult {
   reward_coins: number;
   new_balance: number;
+  /** XP the «Воспитанник Академии» got, when he played. */
+  prospect_xp?: number | null;
 }
 
 /** «Ответка»: the episodes a match is drawn from. */
@@ -1868,6 +1947,10 @@ export interface OtvetkaStartResult {
   win_coins: number;
   loss_coins: number;
   episode: OtvetkaEpisode;
+  /** Set when the «Воспитанник Академии» plays. */
+  prospect_name?: string | null;
+  /** A friends' duel of prospects this match is a side of. */
+  duel_id?: number | null;
   celebration?: string | null;
   ball?: string | null;
   boots?: string | null;
@@ -1895,6 +1978,8 @@ export interface FreeKick3DStartResult {
   rating: number;
   total_kicks: number;
   kick: FreeKick3DKick;
+  /** Set when the «Воспитанник Академии» plays: his name. */
+  prospect_name?: string | null;
   /** Goals in a row so far («Серия без промахов»), across series. */
   streak: number;
   /** «Мой игрок» gear worn in the scene (cosmetic codes; null = default). */
@@ -1988,6 +2073,8 @@ export interface Penalty3DStartResult {
   session_id: number;
   rating: number;
   kick: Penalty3DKick;
+  /** Set when the «Воспитанник Академии» plays: his name. */
+  prospect_name?: string | null;
   /** «Мой игрок» gear worn in the scene (cosmetic codes; null = default). */
   celebration?: string | null;
   ball?: string | null;
@@ -2010,6 +2097,8 @@ export interface Penalty3DResult {
 export interface FreeKickClaimResult {
   reward_coins: number;
   new_balance: number;
+  /** XP the «Воспитанник Академии» got, when he played. */
+  prospect_xp?: number | null;
 }
 
 export interface HangmanStartResult {
@@ -2865,7 +2954,15 @@ export type BingoGoalType =
   | "tactico_matches_played"
   | "penalty_matches_played"
   | "arena_matches_played"
-  | "trades_completed";
+  | "trades_completed"
+  | "mini_games_played"
+  | "stratego_matches_played"
+  | "blackjack_hands"
+  | "lucky_board_spins"
+  | "magic_runs"
+  | "kontra_battles"
+  | "mordoboi_matches"
+  | "wheel_spins";
 
 export interface BingoGoal {
   goal_type: BingoGoalType;
@@ -2886,6 +2983,38 @@ export interface BingoCurrent {
   reward_pack_name: string | null;
   reward_pack_image_path: string | null;
   has_claimed: boolean;
+  /** The player's own 3×3 card (null on an old backend). */
+  card?: BingoCard | null;
+}
+
+export interface BingoCardCell {
+  metric: string;
+  label: string;
+  /** Where to play it (a route of the app). */
+  path: string | null;
+  target: number;
+  value: number;
+  done: boolean;
+  /** The free centre. */
+  free: boolean;
+}
+
+export interface BingoCard {
+  /** Nine cells, row by row. */
+  cells: BingoCardCell[];
+  /** The eight lines as cell indices (rows, columns, diagonals). */
+  lines: number[][];
+  lines_done: number[];
+  lines_claimed: number[];
+  full_done: boolean;
+  full_claimed: boolean;
+  line_coins: number;
+  full_coins: number;
+  full_pack_name: string | null;
+  claimable_coins: number;
+  can_claim: boolean;
+  /** A closed line: the server's common reward is open to this player. */
+  community_eligible: boolean;
 }
 
 export interface BingoClaimResult {

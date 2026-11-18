@@ -203,7 +203,7 @@ RESIDENT_BONUSES: dict[str, str] = {
     # extra_rewarded_attempts) and the build time of «Клубная база» and the
     # «Академия» (club_base_service / academy_service start_upgrade).
     "xp_pct": "+{v}% к опыту игрока",
-    "game_attempts": "+{v} к попыткам игр",
+    "game_attempts": "+{v} попытка с наградой в день в одной мини-игре на выбор",
     "build_pct": "−{v}% времени стройки",
 }
 _PCT_BONUSES = ("rent_pct", "hotel_pct", "xp_pct", "build_pct")

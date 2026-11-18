@@ -30,6 +30,7 @@ vi.mock("@/api/kontra", () => ({
   fetchKontraHub: vi.fn(async () => ({ enabled: true, rating: 1040, active_battle_id: null })),
 }));
 vi.mock("@/api/blackjack", () => ({ fetchBlackjackStatus: vi.fn(async () => ({ enabled: false })) }));
+vi.mock("@/api/luckyBoard", () => ({ fetchLuckyBoardStatus: vi.fn(async () => ({ enabled: false })) }));
 vi.mock("@/api/personalTournament", () => ({ fetchPlayerTournamentCurrent: vi.fn(async () => ({ status: "not_queued" })) }));
 vi.mock("@/api/career", () => ({ fetchCareer: vi.fn(async () => ({ enabled: true, season: null, invite: null })) }));
 vi.mock("@/api/events", () => ({

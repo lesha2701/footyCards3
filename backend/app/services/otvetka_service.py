@@ -164,12 +164,27 @@ def _replay(episode: dict, rating: int, payload: OtvetkaEpisodeRequest) -> tuple
     return end.outcome, end.tick
 
 
-async def start(db: AsyncSession, user: User, user_card_id: int) -> OtvetkaStartOut:
+async def start(db: AsyncSession, user: User, user_card_id: int | None, prospect: bool = False,
+                duel_id: int | None = None) -> OtvetkaStartOut:
+    """A card of the collection plays, or — `prospect` — the «Воспитанник
+    Академии» himself, at his age-relative rating; he then gets XP at the
+    claim (prospect_service.award_otvetka). `duel_id`: his side of a
+    friends' duel (prospect_life) — the result goes there at the claim."""
+    from app.services import prospect_life, prospect_service
+
     config = await get_config(db)
     locked = await lock_user_for_update(db, user.id)
+    duel = await prospect_life.take_duel_side(db, locked.id, duel_id) if duel_id is not None else None
+    if prospect:
+        entry = await prospect_service.otvetka_entry(db, locked.id)
+        rating, prospect_name = entry.rating, entry.name
+    elif user_card_id is None:
+        raise ConflictError("Выбери карту")
     await _take_hourly_attempt(db, locked, config.hourly_game_limit)
     await _ensure_daily_reset(db, locked)
-    card = await _own_card(db, locked, user_card_id)
+    if not prospect:
+        card = await _own_card(db, locked, user_card_id)
+        rating, prospect_name = card.player.rating, None
 
     kinds = plan_kinds(_rnd)
     minutes = plan_minutes(_rnd)
@@ -178,16 +193,20 @@ async def start(db: AsyncSession, user: User, user_card_id: int) -> OtvetkaStart
     session = GameSession(
         user_id=locked.id, game_type=GameType.otvetka, status=GameSessionStatus.in_progress,
         server_state={
-            "player_rating": card.player.rating, "episodes": episodes, "current_index": 0,
+            "player_rating": rating, "prospect": prospect, "duel_id": duel_id, "episodes": episodes, "current_index": 0,
             "my_score": 0, "opponent_score": 0, "shootout_my": 0, "shootout_opponent": 0,
             "goals_coins": 0,
         },
     )
     db.add(session)
+    await db.flush()
+    if duel is not None:
+        prospect_life.set_duel_session(duel, locked.id, session.id)
+        db.add(duel)
     await db.commit()
     await db.refresh(session)
     return OtvetkaStartOut(
-        session_id=session.id, rating=card.player.rating, total_episodes=EPISODES, opponent="Бот",
+        session_id=session.id, rating=rating, total_episodes=EPISODES, opponent="Бот", prospect_name=prospect_name, duel_id=duel_id,
         goal_coins=config.otvetka_goal_coins, win_coins=config.otvetka_win_coins, loss_coins=config.otvetka_loss_coins,
         episode=_episode_out(0, episodes[0]), **await my_player_service.game_gear(db, locked.id),
     )
@@ -270,9 +289,7 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> Otvetka
     if session.is_rewarded:
         raise ConflictError("Reward for this session has already been claimed")
     await _ensure_daily_reset(db, locked)
-    daily_cap_reached = locked.otvetka_rewarded_attempts_today >= config.otvetka_daily_limit + await extra_rewarded_attempts(
-        db, locked.id, config
-    )
+    daily_cap_reached = locked.otvetka_rewarded_attempts_today >= config.otvetka_daily_limit + await extra_rewarded_attempts(db, locked.id, config, game="otvetka", used=locked.otvetka_rewarded_attempts_today, base=config.otvetka_daily_limit)
 
     reward = 0 if (locked.game_rewards_blocked or daily_cap_reached) else session.reward_coins
     session.is_rewarded = True
@@ -283,7 +300,23 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> Otvetka
             db, locked, reward, TransactionType.game_reward,
             "Награда за Ответку", related_object_type="game_session", related_object_id=session.id,
         )
+    prospect_xp = None
+    state = session.server_state or {}
+    if state.get("prospect"):
+        from app.services import prospect_service
+
+        goals = sum(1 for e in state.get("episodes", [])[:EPISODES] if e.get("outcome") == "goal")
+        prospect_xp = await prospect_service.award_otvetka(
+            db, locked.id, goals, session.status == GameSessionStatus.won,
+        ) if not locked.game_rewards_blocked else 0
+        if state.get("duel_id"):
+            from app.services import prospect_life
+
+            await prospect_life.record_duel(
+                db, locked.id, int(state["duel_id"]), session.id, int(state.get("my_score", 0)),
+                int(state.get("opponent_score", 0)), session.status == GameSessionStatus.won,
+            )
     db.add(session)
     await db.commit()
     await db.refresh(locked)
-    return OtvetkaClaimOut(reward_coins=reward, new_balance=locked.balance)
+    return OtvetkaClaimOut(reward_coins=reward, new_balance=locked.balance, prospect_xp=prospect_xp)

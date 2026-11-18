@@ -3,6 +3,7 @@ import { useEffect, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { fetchBlackjackStatus } from "@/api/blackjack";
+import { fetchLuckyBoardStatus } from "@/api/luckyBoard";
 import { fetchCareer } from "@/api/career";
 import { fetchMatchDay, fetchWeeklyCup } from "@/api/events";
 import { fetchGameLimits, fetchPenaltyStats } from "@/api/games";
@@ -117,6 +118,7 @@ export default function PlayPage() {
   const { data: penaltyStats } = useQuery({ queryKey: ["penalty-stats"], queryFn: fetchPenaltyStats });
   const { data: limits } = useQuery({ queryKey: ["game-limits"], queryFn: fetchGameLimits });
   const { data: blackjack } = useQuery({ queryKey: ["blackjack-status"], queryFn: fetchBlackjackStatus });
+  const { data: luckyBoard } = useQuery({ queryKey: ["lucky-board-status"], queryFn: fetchLuckyBoardStatus });
   const { data: mordoboi } = useQuery({ queryKey: ["mordoboi-info"], queryFn: fetchMordoboiInfo });
   const { data: kontra } = useQuery({ queryKey: ["kontra-hub"], queryFn: fetchKontraHub });
   const { data: magic } = useQuery({ queryKey: ["magic-hub"], queryFn: fetchMagicHub });
@@ -140,12 +142,12 @@ export default function PlayPage() {
   // Flag-gated tiles remember whether they were on last time, so the grid
   // doesn't jump when their (slower) status queries land.
   const [flags, setFlags] = usePersistentState<Record<string, boolean>>("play.flags", {});
-  const live = { blackjack: blackjack?.enabled, mordoboi: mordoboi?.enabled, kontra: kontra?.enabled, magic: magic?.enabled };
+  const live = { blackjack: blackjack?.enabled, luckyBoard: luckyBoard?.enabled, mordoboi: mordoboi?.enabled, kontra: kontra?.enabled, magic: magic?.enabled };
   const on = (k: keyof typeof live) => live[k] ?? !!flags[k];
   useEffect(() => {
     const known = Object.fromEntries(Object.entries(live).filter(([, v]) => v !== undefined)) as Record<string, boolean>;
     if (Object.entries(known).some(([k, v]) => flags[k] !== v)) setFlags({ ...flags, ...known });
-  }, [live.blackjack, live.mordoboi, live.kontra, live.magic]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [live.blackjack, live.luckyBoard, live.mordoboi, live.kontra, live.magic]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(preloadShotArt, []);
   const blackjackEntries = blackjack ? blackjack.free_remaining + blackjack.replay_entries + blackjack.paid_entries : 0;
   const games: GameDef[] = [
@@ -207,6 +209,15 @@ export default function PlayPage() {
         description: "Блэкджек против Тренера — победа крутит Золотое колесо",
         stat: blackjack?.active_match ? "Партия идёт" : `Попыток: ${blackjackEntries}`,
         rightLabel: !blackjack || blackjack.free_remaining > 0 ? "бесплатно сегодня" : `⭐ ${blackjack.stars_cost}`,
+      }]
+      : []),
+    ...(on("luckyBoard")
+      ? [{
+        path: "/play/lucky-board", art: artOf("lucky-board"), Icon: IconTrophy, tint: "bg-yellow-500", title: "Табло удачи",
+        group: "quick" as Group, time: "1 мин",
+        description: "Три одинаковых на табло — жетоны навыков, монеты, косметика",
+        stat: luckyBoard ? `Запусков: ${luckyBoard.free_remaining + luckyBoard.paid_spins}` : undefined,
+        rightLabel: !luckyBoard || luckyBoard.free_remaining > 0 ? "бесплатно сегодня" : `⭐ ${luckyBoard.stars_cost}`,
       }]
       : []),
     // 🧠 tactics

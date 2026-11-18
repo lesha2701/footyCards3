@@ -244,7 +244,7 @@ describe("ManagerPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Купить или арендовать" }));
     fireEvent.click(screen.getByRole("button", { name: "2 сезона" }));
     fireEvent.click(screen.getByRole("button", { name: "Отправить предложение" }));
-    await waitFor(() => expect(offerManagerContract).toHaveBeenCalledWith({ user_id: 9, wage: 1000, seasons: 2, fee: 16_000, kind: "transfer" }));
+    await waitFor(() => expect(offerManagerContract).toHaveBeenCalledWith({ user_id: 9, subject: "player", wage: 1000, seasons: 2, fee: 16_000, kind: "transfer" }));
   });
 
   it("loans a catalog footballer", async () => {

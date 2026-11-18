@@ -596,6 +596,18 @@ class GameConfigOut(BaseModel):
     # Effective «Кабинет президента» numbers: the stored overrides over manager_finance.DEFAULTS.
     manager_finance: dict = {}
 
+    # Effective «Воспитанник Академии» numbers: the stored overrides over prospect_service.DEFAULTS.
+    prospect: dict = {}
+
+    @field_validator("prospect", mode="after")
+    @classmethod
+    def _prospect_with_defaults(cls, value: dict) -> dict:
+        from types import SimpleNamespace
+
+        from app.services.prospect_service import cfg
+
+        return cfg(SimpleNamespace(prospect=value or {}))
+
     @field_validator("manager_finance", mode="after")
     @classmethod
     def _finance_with_defaults(cls, value: dict) -> dict:
@@ -717,6 +729,15 @@ class GameConfigOut(BaseModel):
     blackjack_stars_cost: int = 10
     blackjack_paid_daily_limit: int = 10
     blackjack_consolation_coins: int = 25
+    lucky_board_enabled: bool = True
+    lucky_board_free_per_day: int = 3
+    lucky_board_stars_cost: int = 1
+    lucky_board_paid_daily_limit: int = 25
+    lucky_board_hourly_limit: int = 0
+    lucky_board_shards_per_token: int = 5
+    lucky_board_outcomes: list[dict] = []
+    lucky_board_cosmetic_ids: list[int] = []
+    lucky_board_badge_id: Optional[int] = None
     mordoboi_enabled: bool = True
     mordoboi_rounds: int = 3
     mordoboi_exchanges_per_round: int = 4
@@ -803,6 +824,18 @@ class GameConfigOut(BaseModel):
     weekly_top_rewards: list = []
     weekly_top_metrics: list = []
     bingo_reward_coins: int
+    bingo_line_coins: int = 500
+    bingo_full_coins: int = 500
+    bingo_full_pack_id: Optional[int] = None
+    # Effective card pool: the stored one, or bingo_service.DEFAULT_POOL.
+    bingo_pool: list = []
+
+    @field_validator("bingo_pool", mode="after")
+    @classmethod
+    def _bingo_pool_or_default(cls, value: list) -> list:
+        from app.services.bingo_service import DEFAULT_POOL
+
+        return value or DEFAULT_POOL
     bingo_reward_pack_id: Optional[int] = None
     card_skills_enabled: bool = True
     card_skill_level_1_bonus_pp: int = 2
@@ -1522,6 +1555,7 @@ class GameConfigUpdate(BaseModel):
     manager_place_budget: Optional[list[int]] = Field(default=None, min_length=3, max_length=3)
     manager_slots: Optional[list[str]] = Field(default=None, min_length=1, max_length=8)
     manager_finance: Optional[dict] = None
+    prospect: Optional[dict] = None
     manager_cosmetics: Optional[list[dict]] = Field(default=None, max_length=200)
     manager_merch: Optional[list[dict]] = Field(default=None, max_length=20)
     player_career_objective_coins: Optional[int] = Field(default=None, ge=0)
@@ -1638,6 +1672,16 @@ class GameConfigUpdate(BaseModel):
     blackjack_stars_cost: Optional[int] = Field(default=None, ge=1, le=10000)
     blackjack_paid_daily_limit: Optional[int] = Field(default=None, ge=0, le=100)
     blackjack_consolation_coins: Optional[int] = Field(default=None, ge=0)
+    lucky_board_enabled: Optional[bool] = None
+    lucky_board_free_per_day: Optional[int] = Field(default=None, ge=0, le=50)
+    lucky_board_stars_cost: Optional[int] = Field(default=None, ge=1, le=10000)
+    lucky_board_paid_daily_limit: Optional[int] = Field(default=None, ge=0, le=500)
+    lucky_board_hourly_limit: Optional[int] = Field(default=None, ge=0, le=500)
+    lucky_board_shards_per_token: Optional[int] = Field(default=None, ge=1, le=1000)
+    # Validated by lucky_board_service.validate_outcomes in the router.
+    lucky_board_outcomes: Optional[list[dict]] = None
+    lucky_board_cosmetic_ids: Optional[list[Annotated[int, Field(ge=1)]]] = None
+    lucky_board_badge_id: Optional[int] = Field(default=None, ge=1)
     mordoboi_enabled: Optional[bool] = None
     mordoboi_rounds: Optional[int] = Field(default=None, ge=1, le=12)
     mordoboi_exchanges_per_round: Optional[int] = Field(default=None, ge=1, le=10)
@@ -1724,6 +1768,10 @@ class GameConfigUpdate(BaseModel):
     weekly_top_rewards: Optional[list[WeeklyTopRewardIn]] = Field(default=None, max_length=100)
     weekly_top_metrics: Optional[list[str]] = None
     bingo_reward_coins: Optional[int] = Field(default=None, ge=0)
+    bingo_line_coins: Optional[int] = Field(default=None, ge=0)
+    bingo_full_coins: Optional[int] = Field(default=None, ge=0)
+    bingo_full_pack_id: Optional[int] = None
+    bingo_pool: Optional[list] = None
     bingo_reward_pack_id: Optional[int] = Field(default=None)
     card_skills_enabled: Optional[bool] = None
     card_skill_level_1_bonus_pp: Optional[int] = Field(default=None, ge=0, le=20)

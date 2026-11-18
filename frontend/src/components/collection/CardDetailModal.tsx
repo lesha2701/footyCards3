@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { fetchCardStars, setCardsLocked } from "@/api/collection";
+import { fetchCardStars, fetchPlayerCopies, setCardsLocked, setMainCopy } from "@/api/collection";
 import { fetchActiveLineup, setActiveLineup } from "@/api/lineups";
 import { fetchPathState } from "@/api/path";
 import DiamondFeedModal from "@/components/cards/DiamondFeedModal";
@@ -35,6 +35,7 @@ export default function CardDetailModal({
   onToggleHidden,
   hiddenPending,
   onUpgrade,
+  onOpenCopy,
 }: {
   card: UserCard;
   onClose: () => void;
@@ -42,6 +43,8 @@ export default function CardDetailModal({
   onToggleHidden: (hidden: boolean) => void;
   hiddenPending: boolean;
   onUpgrade?: () => void;
+  /** «Копии»: open another copy of this player in the sheet. */
+  onOpenCopy?: (copy: UserCard) => void;
 }) {
   const player = card.player;
   const isDiamond = player.rarity === "diamond";
@@ -257,6 +260,13 @@ export default function CardDetailModal({
                     </p>
                   </section>
 
+                  {((card.duplicate_count ?? 1) > 1 || card.is_main) && (
+                    <CopiesSection
+                      card={card}
+                      onOpenCopy={onOpenCopy}
+                      onChanged={(text) => { setNotice(text); refreshLists(); }}
+                    />
+                  )}
                   <label className="flex min-h-[44px] items-center justify-between gap-3 rounded-xl bg-black/20 px-3 py-2">
                     <span className="flex flex-col">
                       <span className="flex items-center gap-1.5 text-xs font-semibold text-ink-chalk">
@@ -334,6 +344,96 @@ export default function CardDetailModal({
       </div>
       {feeding && <DiamondFeedModal card={card} onClose={() => { setFeeding(false); refreshLists(); }} />}
     </div>
+  );
+}
+
+/** «Копии»: every copy of this player by number, and the choice of the main
+ * one — the copy that plays and levels up (the list otherwise shows the
+ * newest plain copy, while the first numbers are the valuable ones). */
+function CopiesSection({
+  card, onOpenCopy, onChanged,
+}: {
+  card: UserCard;
+  onOpenCopy?: (copy: UserCard) => void;
+  onChanged: (notice: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const { data: copies } = useQuery({
+    queryKey: ["player-copies", card.player.id],
+    queryFn: () => fetchPlayerCopies(card.player.id),
+  });
+  const mainMutation = useMutation({
+    mutationFn: ({ id, main }: { id: number; main: boolean }) => setMainCopy(id, main),
+    onSuccess: (data) => {
+      haptic("medium");
+      queryClient.invalidateQueries({ queryKey: ["player-copies", card.player.id] });
+      const copy = copies?.find((c) => c.id === data.card_id);
+      onChanged(data.main
+        ? `👑 №${copy?.serial_number ?? ""} — основная копия: её качай и ставь в составы. Она под замком`
+        : "Метка «основная» снята, замок остался");
+      if (data.main && copy && copy.id !== card.id && onOpenCopy) {
+        onOpenCopy({ ...copy, is_main: true, is_user_locked: true });
+      }
+    },
+    onError: (err) => onChanged(formatGameError(err, "Не удалось выбрать основную копию")),
+  });
+
+  return (
+    <section className="flex flex-col gap-1.5 rounded-2xl bg-black/20 p-2.5" aria-label="Копии">
+      <p className="px-0.5 text-micro font-semibold uppercase tracking-wider text-ink-mist-dim">
+        Копии{copies ? ` · ${copies.length}` : ""}
+      </p>
+      {(copies ?? []).map((copy) => {
+        const current = copy.id === card.id;
+        const marks = [
+          copy.stars ? `★${copy.stars}` : "",
+          copy.skill_code ? "навык" : "",
+          copy.path_level ? `ур. ${copy.path_level}` : "",
+          squadLabel(copy) ? "в составе" : "",
+          copy.is_user_locked && !copy.is_main ? "🔒" : "",
+        ].filter(Boolean).join(" · ");
+        return (
+          <div
+            key={copy.id}
+            className={`flex min-h-[44px] items-center gap-2 rounded-xl px-2.5 py-1.5 ${current ? "bg-white/10" : "bg-white/5"}`}
+          >
+            <button
+              type="button"
+              disabled={current || !onOpenCopy}
+              onClick={() => onOpenCopy?.(copy)}
+              className="flex min-w-0 flex-1 flex-col items-start text-left"
+            >
+              <span className="text-sm font-bold text-ink-chalk">
+                № {copy.serial_number}{copy.is_main && " 👑"}{current && <span className="ml-1.5 text-micro font-normal text-ink-mist">открыта</span>}
+              </span>
+              {marks && <span className="text-micro text-ink-mist">{marks}</span>}
+            </button>
+            {copy.is_main ? (
+              <button
+                type="button"
+                onClick={() => mainMutation.mutate({ id: copy.id, main: false })}
+                disabled={mainMutation.isPending}
+                className="shrink-0 rounded-lg bg-amber-400/20 px-2 py-1 text-micro font-bold text-amber-300 disabled:opacity-40"
+              >
+                Основная
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => mainMutation.mutate({ id: copy.id, main: true })}
+                disabled={mainMutation.isPending || copy.is_locked_by_admin || copy.is_locked_in_trade}
+                className="shrink-0 rounded-lg bg-bg-raised px-2 py-1 text-micro font-bold text-accent-lime disabled:opacity-40"
+              >
+                Сделать основной
+              </button>
+            )}
+          </div>
+        );
+      })}
+      <p className="px-0.5 text-micro text-ink-mist-dim">
+        Основную копию качаешь и ставишь в составы, она под замком: её не продать и не сжечь в прокачке. Первые номера ценнее.
+      </p>
+    </section>
   );
 }
 

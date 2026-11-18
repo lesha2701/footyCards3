@@ -48,7 +48,7 @@ export default function FreeKickGamePage() {
   });
 
   const startMutation = useMutation({
-    mutationFn: startFreeKick,
+    mutationFn: (userCardId: number) => startFreeKick(userCardId),
     onSuccess: (data) => {
       setSessionId(data.session_id);
       setKick(data.kick);

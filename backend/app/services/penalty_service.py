@@ -27,7 +27,7 @@ from app.schemas.game import (
 from app.schemas.ranking import RankingMetric
 from app.services import anti_bot_service
 from app.services import free_kick_3d_engine as engine
-from app.services import league_service, my_player_service, ranking_service, task_service
+from app.services import league_service, my_player_service, prospect_games, ranking_service, task_service
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, lock_user_for_update
 from app.services.club_pass_service import extra_rewarded_attempts
@@ -83,9 +83,27 @@ async def _ensure_hourly_reset(db: AsyncSession, user: User) -> None:
         db.add(user)
 
 
-async def start_session(db: AsyncSession, user: User, user_card_id: int) -> PenaltyStartOut:
+async def _shooter(db: AsyncSession, user: User, user_card_id: int | None, prospect) -> tuple[int | None, int]:
+    """(selected card id, rating): the card's, or the prospect's (no card)."""
+    if prospect is not None:
+        return None, prospect.rating
+    card = (await db.execute(
+        select(UserCard).where(UserCard.id == user_card_id).options(joinedload(UserCard.player))
+    )).unique().scalar_one_or_none()
+    if not card:
+        raise NotFoundError("Card not found")
+    if card.owner_id != user.id:
+        raise ForbiddenError("You can only use your own cards")
+    return card.id, card.player.rating
+
+
+async def start_session(db: AsyncSession, user: User, user_card_id: int | None, prospect: bool = False) -> PenaltyStartOut:
+    """A card of the collection takes the shootout, or — `prospect` — the
+    «Воспитанник Академии» at his age-relative rating (prospect_games); he
+    then gets XP at the claim."""
     config = await get_config(db)
     locked_user = await lock_user_for_update(db, user.id)
+    entry = await prospect_games.entry(db, locked_user.id, user_card_id, prospect)
     await _ensure_hourly_reset(db, locked_user)
     if locked_user.penalty_hourly_attempts >= config.hourly_game_limit:
         remaining = timedelta(hours=1) - (datetime.now(timezone.utc) - ensure_aware(locked_user.penalty_hour_started_at))
@@ -100,27 +118,21 @@ async def start_session(db: AsyncSession, user: User, user_card_id: int) -> Pena
     db.add(locked_user)
 
     await _ensure_daily_reset(db, locked_user)
-
-    result = await db.execute(
-        select(UserCard).where(UserCard.id == user_card_id).options(joinedload(UserCard.player))
-    )
-    card = result.unique().scalar_one_or_none()
-    if not card:
-        raise NotFoundError("Card not found")
-    if card.owner_id != locked_user.id:
-        raise ForbiddenError("You can only use your own cards")
+    card_id, rating = await _shooter(db, locked_user, user_card_id, entry)
 
     session = GameSession(
         user_id=locked_user.id, game_type=GameType.penalty, status=GameSessionStatus.in_progress,
         server_state={
-            "selected_card_id": card.id, "player_rating": card.player.rating,
+            "selected_card_id": card_id, "player_rating": rating, "prospect": entry is not None,
             "rounds": [], "player_score": 0, "bot_score": 0, "kicks_taken": 0, "sudden_death": False,
         },
     )
     db.add(session)
     await db.commit()
     await db.refresh(session)
-    return PenaltyStartOut(session_id=session.id, player_rating=card.player.rating, first_kicker="player")
+    return PenaltyStartOut(
+        session_id=session.id, player_rating=rating, first_kicker="player", prospect_name=entry.name if entry else None,
+    )
 
 
 async def _get_session(db: AsyncSession, user_id: int, session_id: int) -> GameSession:
@@ -240,9 +252,7 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> Penalty
     if session.is_rewarded:
         raise ConflictError("Reward for this session has already been claimed")
     await _ensure_daily_reset(db, locked_user)
-    daily_cap_reached = locked_user.penalty_rewarded_attempts_today >= config.penalty_daily_limit + await extra_rewarded_attempts(
-        db, locked_user.id, config
-    )
+    daily_cap_reached = locked_user.penalty_rewarded_attempts_today >= config.penalty_daily_limit + await extra_rewarded_attempts(db, locked_user.id, config, game="penalty", used=locked_user.penalty_rewarded_attempts_today, base=config.penalty_daily_limit)
 
     reward = 0 if (locked_user.game_rewards_blocked or daily_cap_reached) else session.reward_coins
     session.is_rewarded = True
@@ -254,11 +264,18 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> Penalty
             db, locked_user, reward, TransactionType.game_reward,
             "Награда за Пенальти", related_object_type="game_session", related_object_id=session.id,
         )
+    # The prospect's XP: goals = his kicks scored, won = he beat the bot.
+    state = session.server_state or {}
+    prospect_xp = await prospect_games.award(
+        db, locked_user, state, int(state.get("player_score", 0)), state.get("result") == "win", "penalty",
+    )
     db.add(session)
     await db.commit()
     await db.refresh(locked_user)
 
-    return PenaltyClaimOut(reward_coins=reward, new_balance=locked_user.balance, result=session.server_state["result"])
+    return PenaltyClaimOut(
+        reward_coins=reward, new_balance=locked_user.balance, result=session.server_state["result"], prospect_xp=prospect_xp,
+    )
 
 
 async def forfeit_session(db: AsyncSession, user: User, session_id: int) -> PenaltyForfeitOut:
@@ -311,9 +328,11 @@ def _kick_out(index: int, kick: dict) -> Penalty3DKickOut:
     return Penalty3DKickOut(kick_index=index, kicker=kick["kicker"], seed=kick["seed"])
 
 
-async def start_3d(db: AsyncSession, user: User, user_card_id: int) -> Penalty3DStartOut:
+async def start_3d(db: AsyncSession, user: User, user_card_id: int | None, prospect: bool = False) -> Penalty3DStartOut:
+    """A card, or — `prospect` — the «Воспитанник Академии» (see start_session)."""
     config = await get_config(db)
     locked_user = await lock_user_for_update(db, user.id)
+    entry = await prospect_games.entry(db, locked_user.id, user_card_id, prospect)
     await _ensure_hourly_reset(db, locked_user)
     if locked_user.penalty_hourly_attempts >= config.hourly_game_limit:
         remaining = timedelta(hours=1) - (datetime.now(timezone.utc) - ensure_aware(locked_user.penalty_hour_started_at))
@@ -324,20 +343,13 @@ async def start_3d(db: AsyncSession, user: User, user_card_id: int) -> Penalty3D
     locked_user.penalty_hourly_attempts += 1
     db.add(locked_user)
     await _ensure_daily_reset(db, locked_user)
-
-    card = (await db.execute(
-        select(UserCard).where(UserCard.id == user_card_id).options(joinedload(UserCard.player))
-    )).unique().scalar_one_or_none()
-    if not card:
-        raise NotFoundError("Card not found")
-    if card.owner_id != locked_user.id:
-        raise ForbiddenError("You can only use your own cards")
+    card_id, rating = await _shooter(db, locked_user, user_card_id, entry)
 
     first = _new_3d_kick(0)
     session = GameSession(
         user_id=locked_user.id, game_type=GameType.penalty, status=GameSessionStatus.in_progress,
         server_state={
-            "mode": MODE_3D, "selected_card_id": card.id, "player_rating": card.player.rating,
+            "mode": MODE_3D, "selected_card_id": card_id, "player_rating": rating, "prospect": entry is not None,
             "kicks": [first], "rounds": [], "player_score": 0, "bot_score": 0, "kicks_taken": 0, "sudden_death": False,
         },
     )
@@ -345,7 +357,9 @@ async def start_3d(db: AsyncSession, user: User, user_card_id: int) -> Penalty3D
     await db.commit()
     await db.refresh(session)
     gear = await my_player_service.game_gear(db, locked_user.id)
-    return Penalty3DStartOut(session_id=session.id, rating=card.player.rating, kick=_kick_out(0, first), **gear)
+    return Penalty3DStartOut(
+        session_id=session.id, rating=rating, kick=_kick_out(0, first), prospect_name=entry.name if entry else None, **gear,
+    )
 
 
 async def _lock_3d_kick(db: AsyncSession, user: User, session_id: int, kicker: str) -> tuple[GameSession, dict, dict]:

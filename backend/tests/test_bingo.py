@@ -31,6 +31,16 @@ async def _register(client, db_session, telegram_id, bot_token):
     return await get_user_by_telegram_id(db_session, telegram_id)
 
 
+async def _close_a_line(db_session, user_id, week):
+    """Turns the top row of the player's card into free cells: a closed line."""
+    user = await db_session.get(User, user_id)
+    card = await bingo_service.ensure_card(db_session, user, week)
+    cells = list(card.cells)
+    cells[0:3] = [dict(bingo_service.FREE_CELL) for _ in range(3)]
+    card.cells = cells
+    await db_session.commit()
+
+
 async def _admin_auth(client, bot_token):
     admin_headers = telegram_headers(999000001, bot_token)
     session_resp = await client.post("/api/v1/auth/session", headers=admin_headers)
@@ -278,6 +288,11 @@ async def test_claim_credits_coins_and_pack_and_is_visible_as_reward_preview(cli
     goal_row.current_value = 1
     db_session.add(goal_row)
     await db_session.commit()
+
+    # The common goal is done, but this player hasn't played: no reward yet.
+    no_line = await client.post("/api/v1/bingo/claim", headers=headers)
+    assert no_line.status_code == 409
+    await _close_a_line(db_session, user_id, week)
 
     balance_before = (await db_session.get(User, user_id)).balance
 
@@ -587,3 +602,123 @@ async def test_stats_preview_packs_opened_counts_stadium_only_real_opens(client,
     assert stats.status_code == 200
     counts = {item["goal_type"]: item["trailing_7d_count"] for item in stats.json()}
     assert counts["packs_opened"] == 1  # the stadium-only real open is not silently dropped
+
+
+async def test_personal_card_counts_only_own_games_of_the_week_and_pays_lines_and_card(client, db_session, bot_token):
+    from app.models.bingo import BingoCard
+    from app.models.enums import GameSessionStatus, GameType
+    from app.models.game import GameSession
+
+    admin_headers = await _admin_auth(client, bot_token)
+    await client.put("/api/v1/admin/bingo/state", headers=admin_headers, json={"is_enabled": True})
+    resp = await client.put(
+        "/api/v1/admin/games/config", headers=admin_headers,
+        json={
+            "bingo_line_coins": 100, "bingo_full_coins": 500,
+            "bingo_pool": [{"metric": "game:penalty", "label": "Серии Пенальти", "min": 2, "max": 2}],
+        },
+    )
+    assert resp.status_code == 200
+    player = await _register(client, db_session, 960101, bot_token)
+    idle = await _register(client, db_session, 960102, bot_token)
+    player_id, idle_id = player.id, idle.id
+    headers = telegram_headers(960101, bot_token)
+
+    card = (await client.get("/api/v1/bingo/current", headers=headers)).json()["card"]
+    assert len(card["cells"]) == 9 and card["cells"][4]["free"] is True
+    assert all(c["metric"] == "game:penalty" and c["target"] == 2 for i, c in enumerate(card["cells"]) if i != 4)
+    assert card["lines_done"] == [] and card["can_claim"] is False
+    assert (await client.post("/api/v1/bingo/card/claim", headers=headers)).status_code == 409
+
+    # A game before the week started doesn't count; finished ones this week do.
+    week = await bingo_service.get_or_create_current_week(db_session)
+    db_session.add(GameSession(
+        user_id=player_id, game_type=GameType.penalty, status=GameSessionStatus.won,
+        created_at=week.starts_at - timedelta(hours=1),
+    ))
+    db_session.add(GameSession(user_id=player_id, game_type=GameType.penalty, status=GameSessionStatus.won))
+    db_session.add(GameSession(user_id=player_id, game_type=GameType.penalty, status=GameSessionStatus.in_progress))
+    await db_session.commit()
+    card = (await client.get("/api/v1/bingo/current", headers=headers)).json()["card"]
+    assert card["cells"][0]["value"] == 1 and card["lines_done"] == []
+
+    db_session.add(GameSession(user_id=player_id, game_type=GameType.penalty, status=GameSessionStatus.lost))
+    await db_session.commit()
+    card = (await client.get("/api/v1/bingo/current", headers=headers)).json()["card"]
+    assert card["lines_done"] == [0, 1, 2] and card["full_done"] is True
+    assert card["claimable_coins"] == 3 * 100 + 500 and card["community_eligible"] is True
+
+    balance_before = (await db_session.get(User, player_id)).balance
+    claim = await client.post("/api/v1/bingo/card/claim", headers=headers)
+    assert claim.status_code == 200 and claim.json()["coins_granted"] == 800
+    assert claim.json()["new_balance"] == balance_before + 800
+    assert (await client.post("/api/v1/bingo/card/claim", headers=headers)).status_code == 409
+    row = (await db_session.execute(select(BingoCard).where(BingoCard.user_id == player_id))).scalar_one()
+    assert row.full_claimed is True and row.lines_claimed == [0, 1, 2]
+
+    # Someone who didn't play: nothing to claim, the card is theirs alone.
+    idle_headers = telegram_headers(960102, bot_token)
+    idle_card = (await client.get("/api/v1/bingo/current", headers=idle_headers)).json()["card"]
+    assert idle_card["lines_done"] == [] and idle_card["community_eligible"] is False
+    assert (await client.post("/api/v1/bingo/card/claim", headers=idle_headers)).status_code == 409
+    assert idle_id != player_id
+
+
+def test_card_draw_is_seeded_with_a_free_centre_and_distinct_cells():
+    a = bingo_service.draw_cells(bingo_service.DEFAULT_POOL, "7:42")
+    b = bingo_service.draw_cells(bingo_service.DEFAULT_POOL, "7:42")
+    assert a == b and len(a) == 9 and a[4]["metric"] == bingo_service.FREE
+    metrics = [c["metric"] for i, c in enumerate(a) if i != 4]
+    assert len(set(metrics)) == 8
+    pool = {p["metric"]: p for p in bingo_service.DEFAULT_POOL}
+    assert all(pool[c["metric"]]["min"] <= c["target"] <= pool[c["metric"]]["max"] for i, c in enumerate(a) if i != 4)
+
+
+async def test_live_server_goal_counts_everyones_finished_games_of_the_week(client, db_session, bot_token):
+    from app.models.enums import GameSessionStatus, GameType
+    from app.models.game import GameSession
+
+    admin_headers = await _admin_auth(client, bot_token)
+    resp = await client.post(
+        "/api/v1/admin/bingo/goals", headers=admin_headers,
+        json={"goal_type": "mini_games_played", "target_value": 3, "is_active": True},
+    )
+    assert resp.status_code == 200
+    await client.put("/api/v1/admin/bingo/state", headers=admin_headers, json={"is_enabled": True})
+    a = await _register(client, db_session, 960201, bot_token)
+    b = await _register(client, db_session, 960202, bot_token)
+    a_id, b_id = a.id, b.id
+    headers = telegram_headers(960201, bot_token)
+
+    def goal(data):
+        return next(g for g in data["goals"] if g["goal_type"] == "mini_games_played")
+
+    data = (await client.get("/api/v1/bingo/current", headers=headers)).json()
+    assert goal(data)["current_value"] == 0 and goal(data)["target_value"] == 3
+
+    week = await bingo_service.get_or_create_current_week(db_session)
+    db_session.add_all([
+        GameSession(user_id=a_id, game_type=GameType.penalty, status=GameSessionStatus.won),
+        GameSession(user_id=b_id, game_type=GameType.free_kick, status=GameSessionStatus.lost),
+        GameSession(user_id=b_id, game_type=GameType.penalty, status=GameSessionStatus.in_progress),
+        GameSession(
+            user_id=b_id, game_type=GameType.penalty, status=GameSessionStatus.won,
+            created_at=week.starts_at - timedelta(hours=1),
+        ),
+    ])
+    await db_session.commit()
+    data = (await client.get("/api/v1/bingo/current", headers=headers)).json()
+    assert goal(data)["current_value"] == 2 and goal(data)["is_completed"] is False
+
+    db_session.add(GameSession(user_id=b_id, game_type=GameType.saboteur, status=GameSessionStatus.rewarded))
+    await db_session.commit()
+    data = (await client.get("/api/v1/bingo/current", headers=headers)).json()
+    assert goal(data)["current_value"] == 3 and goal(data)["is_completed"] is True
+    # The stored counter stays untouched: the value is the live count.
+    row = (await db_session.execute(
+        select(BingoWeekGoal).where(BingoWeekGoal.goal_type == BingoGoalType.mini_games_played)
+    )).scalar_one()
+    assert row.current_value == 0
+
+    preview = (await client.get("/api/v1/admin/bingo/stats-preview", headers=admin_headers)).json()
+    assert next(i for i in preview if i["goal_type"] == "mini_games_played")["trailing_7d_count"] == 4

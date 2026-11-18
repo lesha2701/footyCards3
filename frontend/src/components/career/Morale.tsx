@@ -189,6 +189,7 @@ function SpecArt({ code, icon, className }: { code: string; icon: string; classN
 export function CoachSpecCard({ coach, onView, onError }: { coach: CoachSpecs } & Handlers) {
   const [open, setOpen] = useState<string>(coach.spec ?? coach.specs[0]?.code ?? "");
   const [confirm, setConfirm] = useState(false);
+  const [allLevels, setAllLevels] = useState(false);
   const choose = useMutation({
     mutationFn: (code: string) => chooseCoachSpec(code),
     onSuccess: (v) => { haptic("medium"); onView(v); },
@@ -247,7 +248,24 @@ export function CoachSpecCard({ coach, onView, onError }: { coach: CoachSpecs } 
             </p>
           </div>
         )}
-        <ol className="flex flex-col gap-0.5">
+        <div className="grid grid-cols-2 gap-1.5">
+          {[
+            { title: "Сейчас", n: spec.level, text: spec.level ? spec.levels[spec.level - 1] : "не изучена" },
+            { title: "Следующий", n: spec.level + 1, text: spec.levels[spec.level] ?? "максимальный уровень" },
+          ].map((row) => (
+            <div key={row.title} className={`flex flex-col gap-0.5 rounded-xl px-2.5 py-2 ${row.title === "Сейчас" ? "bg-floodlight/10" : "bg-white/5"}`}>
+              <span className="text-micro font-semibold uppercase tracking-wide text-ink-mist">
+                {row.title}{row.n > 0 && row.n <= spec.levels.length ? ` · ур. ${row.n}` : ""}
+              </span>
+              <span className={`text-caption font-semibold leading-snug ${row.title === "Сейчас" ? "text-ink-chalk" : "text-accent-lime"}`}>{row.text}</span>
+            </div>
+          ))}
+        </div>
+        <button type="button" aria-expanded={allLevels} onClick={() => setAllLevels((v) => !v)}
+          className="self-start text-micro font-semibold text-ink-mist underline underline-offset-2">
+          {allLevels ? "Свернуть уровни" : `Все ${spec.levels.length} уровней`}
+        </button>
+        {allLevels && <ol className="flex flex-col gap-0.5">
           {spec.levels.map((text, i) => {
             const n = i + 1;
             const reached = n <= spec.level;
@@ -260,7 +278,7 @@ export function CoachSpecCard({ coach, onView, onError }: { coach: CoachSpecs } 
               </li>
             );
           })}
-        </ol>
+        </ol>}
         {!isMine && (
           <button type="button" onClick={pick} disabled={locked || choose.isPending}
             className="rounded-xl bg-floodlight px-3 py-2 text-caption font-bold text-bg-base disabled:opacity-40">

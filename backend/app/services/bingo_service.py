@@ -1,3 +1,4 @@
+import random
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -7,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.timeutil import ensure_aware
-from app.models.bingo import BingoGoalDefinition, BingoState, BingoWeek, BingoWeekGoal, BingoWeekReward
+from app.models.bingo import BingoCard, BingoGoalDefinition, BingoState, BingoWeek, BingoWeekGoal, BingoWeekReward
 from app.models.card import UserCard
 from app.models.enums import (
     BingoGoalType,
@@ -28,11 +29,222 @@ from app.models.trade import TradeOffer
 from app.models.user import User
 from app.models.user_coach_card import UserCoachCard
 from app.models.user_stadium_card import UserStadiumCard
-from app.schemas.bingo import BingoClaimResult, BingoCurrentOut, BingoGoalOut, BingoStatsPreviewItem
+from app.schemas.bingo import (
+    BingoCardCellOut, BingoCardOut, BingoClaimResult, BingoCurrentOut, BingoGoalOut, BingoStatsPreviewItem,
+)
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, lock_user_for_update
 
 WEEK_DURATION = timedelta(days=7)
+
+# ---------------------------------------------------------------------------
+# The player's own 3×3 card. Every cell is a «played:<mode>»-style metric
+# (newbie_service.games_played over the week) or "packs" (paid pack opens);
+# the centre is free. Targets are drawn per player and week from [min, max].
+# GameConfig.bingo_pool overrides this list.
+# ---------------------------------------------------------------------------
+
+FREE = "free"
+PACKS = "packs"
+DEFAULT_POOL: list[dict] = [
+    {"metric": "played:arena", "label": "Матчи Card Arena", "path": "/play/arena", "min": 3, "max": 6},
+    {"metric": "played:tactico", "label": "Матчи Тактико", "path": "/play/tactico", "min": 2, "max": 4},
+    {"metric": "played:stratego", "label": "Партии Стратего", "path": "/play/stratego", "min": 1, "max": 2},
+    {"metric": "played:penalty_pvp", "label": "Пенальти с соперником", "path": "/play/penalty/matches", "min": 1, "max": 3},
+    {"metric": "played:blackjack", "label": "Раздачи «21»", "path": "/play/blackjack", "min": 3, "max": 6},
+    {"metric": "played:lucky_board", "label": "Запуски «Табло удачи»", "path": "/play/lucky-board", "min": 5, "max": 10},
+    {"metric": "played:magic", "label": "Походы «Мяч и Магия»", "path": "/play/magic", "min": 1, "max": 2},
+    {"metric": "played:kontra", "label": "Бои «Контратаки»", "path": "/play/kontra", "min": 2, "max": 4},
+    {"metric": "played:mordoboi", "label": "Бои «Мордобоя»", "path": "/play/mordoboi", "min": 1, "max": 3},
+    {"metric": "played:wheel", "label": "Вращения колеса", "path": "/wheel", "min": 2, "max": 4},
+    {"metric": "game:penalty", "label": "Серии Пенальти", "path": "/play/penalty", "min": 3, "max": 6},
+    {"metric": "game:free_kick", "label": "Штрафные удары", "path": "/play/free-kick", "min": 3, "max": 6},
+    {"metric": "game:memory_sequence", "label": "Игры Memory", "path": "/play/memory", "min": 2, "max": 4},
+    {"metric": "game:football_hangman", "label": "Футбольные буквы", "path": "/play/hangman", "min": 2, "max": 4},
+    {"metric": "game:saboteur", "label": "Игры «Саботёр»", "path": "/play/saboteur", "min": 2, "max": 4},
+    {"metric": "game:one_on_one", "label": "Атаки 1 на 1", "path": "/play/one-on-one", "min": 2, "max": 4},
+    {"metric": "game:otvetka", "label": "Матчи «Ответки»", "path": "/play/otvetka", "min": 1, "max": 3},
+    {"metric": "game:fergie_time", "label": "Матчи «Ферги Тайм»", "path": "/play/fergie-time", "min": 1, "max": 2},
+    {"metric": PACKS, "label": "Открытые паки", "path": "/packs", "min": 2, "max": 4},
+]
+FREE_CELL = {"metric": FREE, "label": "Бесплатная клетка", "target": 1}
+CENTRE = 4
+# The card's lines are its three rows (cells numbered 0..8 row by row):
+# a closed row pays bingo_line_coins, all three = the whole card.
+LINES: tuple[tuple[int, int, int], ...] = ((0, 1, 2), (3, 4, 5), (6, 7, 8))
+
+# Server goals counted live from the games' own rows over the week window
+# (newbie_service.games_played_all) instead of a hook in each game; their
+# BingoWeekGoal.current_value stays 0 and is never read.
+LIVE_GOALS: dict[BingoGoalType, str] = {
+    BingoGoalType.mini_games_played: "game:",
+    BingoGoalType.stratego_matches_played: "stratego",
+    BingoGoalType.blackjack_hands: "blackjack",
+    BingoGoalType.lucky_board_spins: "lucky_board",
+    BingoGoalType.magic_runs: "magic",
+    BingoGoalType.kontra_battles: "kontra",
+    BingoGoalType.mordoboi_matches: "mordoboi",
+    BingoGoalType.wheel_spins: "wheel",
+}
+
+
+async def _goal_values(db: AsyncSession, week: BingoWeek, goals) -> dict[int, int]:
+    """Each week goal's current value: the hook counter, or the live count."""
+    from app.services.newbie_service import games_played_all
+
+    since, until = ensure_aware(week.starts_at), ensure_aware(week.ends_at)
+    values: dict[int, int] = {}
+    for g in goals:
+        mode = LIVE_GOALS.get(g.goal_type)
+        values[g.id] = g.current_value if mode is None else await games_played_all(db, mode, since, until)
+    return values
+
+
+def _all_done(goals, values: dict[int, int]) -> bool:
+    return len(goals) > 0 and all(values[g.id] >= g.target_value for g in goals)
+
+
+def _pool(config) -> list[dict]:
+    """The card pool without the modes an admin switched off."""
+    from app.services.task_service import MODE_SWITCHES
+
+    off = {f"played:{mode}" for mode, flag in MODE_SWITCHES.items() if not getattr(config, flag, True)}
+    return [c for c in (config.bingo_pool or DEFAULT_POOL) if c.get("metric") not in off]
+
+
+def draw_cells(pool: list[dict], seed: str) -> list[dict]:
+    """Nine cells for one card: eight distinct pool entries around a free
+    centre (repeats only when the pool is smaller than eight)."""
+    rng = random.Random(seed)
+    picks = rng.sample(pool, 8) if len(pool) >= 8 else [rng.choice(pool) for _ in range(8)]
+    cells = []
+    for entry in picks:
+        low = int(entry.get("min", 1))
+        high = int(entry.get("max", low))
+        cells.append({
+            "metric": entry["metric"], "label": entry.get("label", entry["metric"]), "path": entry.get("path"),
+            "target": max(1, rng.randint(min(low, high), max(low, high))),
+        })
+    cells.insert(CENTRE, dict(FREE_CELL))
+    return cells
+
+
+async def _cell_value(db: AsyncSession, user: User, metric: str, since: datetime, until: datetime) -> int:
+    if metric == FREE:
+        return 1
+    if metric == PACKS:
+        return int((await db.execute(select(func.count(PackOpening.id)).where(
+            PackOpening.user_id == user.id, PackOpening.price_paid > 0,
+            PackOpening.created_at >= since, PackOpening.created_at < until,
+        ))).scalar_one())
+    from app.services.newbie_service import games_played
+
+    mode = metric[len("played:"):] if metric.startswith("played:") else metric
+    return await games_played(db, user, mode, since=since, until=until)
+
+
+async def ensure_card(db: AsyncSession, user: User, week: BingoWeek) -> BingoCard:
+    """This week's card of the player, drawn on first sight (seeded by week
+    and player, so a racing request draws the very same one)."""
+    q = select(BingoCard).where(BingoCard.week_id == week.id, BingoCard.user_id == user.id)
+    card = (await db.execute(q)).scalar_one_or_none()
+    if card is not None:
+        return card
+    config = await get_config(db)
+    try:
+        async with db.begin_nested():
+            db.add(BingoCard(
+                week_id=week.id, user_id=user.id, cells=draw_cells(_pool(config), f"{week.id}:{user.id}"),
+                lines_claimed=[], full_claimed=False, created_at=datetime.now(timezone.utc),
+            ))
+            await db.flush()
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+    return (await db.execute(q)).scalar_one()
+
+
+async def _card_progress(
+    db: AsyncSession, user: User, week: BingoWeek, card: BingoCard,
+) -> tuple[list[int], list[int], bool]:
+    """(value per cell, indices of the closed lines, whole card closed)."""
+    since, until = ensure_aware(week.starts_at), ensure_aware(week.ends_at)
+    values = [await _cell_value(db, user, c["metric"], since, until) for c in card.cells]
+    done = [v >= c["target"] for v, c in zip(values, card.cells)]
+    lines = [i for i, line in enumerate(LINES) if all(done[j] for j in line)]
+    return values, lines, all(done)
+
+
+async def card_out(db: AsyncSession, user: User, week: BingoWeek, config) -> BingoCardOut:
+    card = await ensure_card(db, user, week)
+    values, lines, full = await _card_progress(db, user, week, card)
+    full_pack_name = None
+    if config.bingo_full_pack_id:
+        from app.models.pack import Pack
+
+        pack = await db.get(Pack, config.bingo_full_pack_id)
+        full_pack_name = pack.name if pack is not None else None
+    claimed = set(card.lines_claimed or [])
+    pay_full = full and not card.full_claimed
+    claimable = len([i for i in lines if i not in claimed]) * config.bingo_line_coins
+    if pay_full:
+        claimable += config.bingo_full_coins
+    return BingoCardOut(
+        cells=[
+            BingoCardCellOut(
+                metric=c["metric"], label=c["label"], path=c.get("path"), target=c["target"],
+                value=min(v, c["target"]), done=v >= c["target"], free=c["metric"] == FREE,
+            )
+            for c, v in zip(card.cells, values)
+        ],
+        lines=[list(line) for line in LINES], lines_done=lines, lines_claimed=sorted(claimed),
+        full_done=full, full_claimed=card.full_claimed,
+        line_coins=config.bingo_line_coins, full_coins=config.bingo_full_coins, full_pack_name=full_pack_name,
+        claimable_coins=claimable, can_claim=bool(set(lines) - claimed) or pay_full,
+        community_eligible=bool(lines),
+    )
+
+
+async def claim_card(db: AsyncSession, user: User) -> BingoClaimResult:
+    """Pays every closed line not paid yet and, once all nine cells are done,
+    the whole card. Only while the week runs, like the community reward.
+    Under the user and card row locks, so a double tap pays once."""
+    week = await get_or_create_current_week(db)
+    if week is None:
+        raise ConflictError("Бинго недели сейчас не идёт")
+    card = await ensure_card(db, user, week)
+    _, lines, full = await _card_progress(db, user, week, card)
+    config = await get_config(db)
+    locked_user = await lock_user_for_update(db, user.id)
+    card = (await db.execute(
+        select(BingoCard).where(BingoCard.id == card.id).with_for_update().execution_options(populate_existing=True)
+    )).scalar_one()
+    claimed = set(card.lines_claimed or [])
+    new_lines = [i for i in lines if i not in claimed]
+    pay_full = full and not card.full_claimed
+    if not new_lines and not pay_full:
+        raise ConflictError("Нечего забирать: закрой линию в своей карточке")
+    coins = len(new_lines) * config.bingo_line_coins + (config.bingo_full_coins if pay_full else 0)
+    granted_pack = None
+    if locked_user.game_rewards_blocked:
+        coins = 0
+    else:
+        if coins > 0:
+            await credit_coins(
+                db, locked_user, coins, TransactionType.bingo_reward, "Бинго недели: моя карточка", "bingo_card", card.id,
+            )
+        if pay_full and config.bingo_full_pack_id:
+            from app.services.pack_service import grant_bonus_pack_opening
+
+            granted_pack = await grant_bonus_pack_opening(
+                db, locked_user, config.bingo_full_pack_id, idempotency_prefix=f"bingo-card-{card.id}",
+            )
+    card.lines_claimed = sorted(claimed | set(new_lines))  # a new list: JSON columns don't track in-place edits
+    card.full_claimed = card.full_claimed or pay_full
+    card.coins_granted += coins
+    await db.commit()
+    await db.refresh(locked_user)
+    return BingoClaimResult(coins_granted=coins, granted_pack=granted_pack, new_balance=locked_user.balance)
 
 
 async def _get_or_create_state(db: AsyncSession) -> BingoState:
@@ -117,7 +329,7 @@ async def _resolve_week(db: AsyncSession, week: BingoWeek) -> None:
         return
 
     goals = (await db.execute(select(BingoWeekGoal).where(BingoWeekGoal.week_id == locked_week.id))).scalars().all()
-    all_completed = len(goals) > 0 and all(g.current_value >= g.target_value for g in goals)
+    all_completed = _all_done(goals, await _goal_values(db, locked_week, goals))
     locked_week.all_goals_completed = all_completed
     locked_week.reward_resolved = True
     db.add(locked_week)
@@ -130,8 +342,13 @@ async def claim_reward(db: AsyncSession, user: User) -> BingoClaimResult:
         raise ConflictError("Bingo недели сейчас не идёт")
 
     goals = (await db.execute(select(BingoWeekGoal).where(BingoWeekGoal.week_id == week.id))).scalars().all()
-    if not goals or not all(g.current_value >= g.target_value for g in goals):
+    if not _all_done(goals, await _goal_values(db, week, goals)):
         raise ConflictError("Не все цели недели ещё выполнены")
+    # The server's common goal pays only those who played the week
+    # themselves: at least one closed line on their own card.
+    card = await ensure_card(db, user, week)
+    if not (await _card_progress(db, user, week, card))[1]:
+        raise ConflictError("Общая награда — тем, кто закрыл хотя бы одну линию в своей карточке")
 
     config = await get_config(db)
     locked_user = await lock_user_for_update(db, user.id)
@@ -203,10 +420,11 @@ async def get_current_week_out(db: AsyncSession, user: User) -> BingoCurrentOut:
         return BingoCurrentOut(is_enabled=False)
 
     goals = (await db.execute(select(BingoWeekGoal).where(BingoWeekGoal.week_id == week.id))).scalars().all()
+    values = await _goal_values(db, week, goals)
     goal_outs = [
         BingoGoalOut(
-            goal_type=g.goal_type, target_value=g.target_value, current_value=g.current_value,
-            is_completed=g.current_value >= g.target_value,
+            goal_type=g.goal_type, target_value=g.target_value, current_value=values[g.id],
+            is_completed=values[g.id] >= g.target_value,
         )
         for g in goals
     ]
@@ -235,6 +453,7 @@ async def get_current_week_out(db: AsyncSession, user: User) -> BingoCurrentOut:
         reward_coins=config.bingo_reward_coins, reward_pack_id=config.bingo_reward_pack_id,
         reward_pack_name=reward_pack_name, reward_pack_image_path=reward_pack_image_path,
         has_claimed=has_claimed,
+        card=await card_out(db, user, week, config),
     )
 
 
@@ -424,4 +643,9 @@ async def get_stats_preview(db: AsyncSession) -> list[BingoStatsPreviewItem]:
         BingoGoalType.arena_matches_played: arena_matches,
         BingoGoalType.trades_completed: trades_completed,
     }
+    from app.services.newbie_service import games_played_all
+
+    now = datetime.now(timezone.utc)
+    for goal_type, mode in LIVE_GOALS.items():
+        counts[goal_type] = await games_played_all(db, mode, since, now)
     return [BingoStatsPreviewItem(goal_type=t, trailing_7d_count=c) for t, c in counts.items()]

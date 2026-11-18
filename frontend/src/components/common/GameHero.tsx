@@ -4,11 +4,21 @@ import { artOf } from "@/lib/gameArt";
 
 /** A game page header: the game's picture large, on a blurred copy of itself, with the
  * title (an <h1>) and an optional line under it; `children` go on the right. Falls back to
- * a plain title when the game has no picture. */
-export default function GameHero({ game, title, subtitle, children }: {
-  game: string; title: ReactNode; subtitle?: ReactNode; children?: ReactNode;
+ * a plain title when the game has no picture. `compact` = one slim row (small picture,
+ * no card) for a screen that is mostly the game itself. */
+export default function GameHero({ game, title, subtitle, children, compact = false }: {
+  game: string; title: ReactNode; subtitle?: ReactNode; children?: ReactNode; compact?: boolean;
 }) {
   const art = artOf(game);
+  if (compact) {
+    return (
+      <header className="flex items-center gap-2">
+        {art && <img src={art} alt="" className="h-8 w-8 shrink-0 rounded-xl object-cover ring-1 ring-white/15" />}
+        <h1 className="min-w-0 flex-1 truncate font-display text-base font-bold text-ink-chalk">{title}</h1>
+        {children}
+      </header>
+    );
+  }
   if (!art) {
     return (
       <div className="flex items-center gap-2">

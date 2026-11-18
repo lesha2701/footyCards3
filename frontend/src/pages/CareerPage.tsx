@@ -25,7 +25,7 @@ import { CoachProfileCard, ObjectiveCard, ProgramCard, TrainingCard } from "@/co
 import CupCard from "@/components/career/CupCard";
 import { FlankDuelsCard } from "@/components/career/FlankDuels";
 import { CoachSpecCard, MoraleCard } from "@/components/career/Morale";
-import { LiveMatchCenter } from "@/components/career/CareerLive";
+import { LiveBar, LiveMatchCenter } from "@/components/career/CareerLive";
 import { FansCard, HotSeatBanner, LegendsCard, MomentCard, NewsFeed } from "@/components/career/CareerClub";
 import { FoldCard } from "@/components/career/FoldCard";
 import { AwaySummaryCard, PostMatchCard, PreMatchCard, useAwaySummary } from "@/components/career/MatchScreens";
@@ -45,6 +45,8 @@ import { FORMATIONS, MENTALITIES, PLAYSTYLES } from "@/lib/clubTactics";
 import { formatGameError } from "@/lib/errors";
 import { CATEGORY_POSITIONS } from "@/lib/formation";
 import { haptic } from "@/lib/telegram";
+import { CareerCrest } from "@/components/career/CareerCrest";
+import { careerArt } from "@/lib/careerArt";
 
 type Tab = "prep" | "calendar" | "club" | "profile";
 type CalendarTab = "table" | "rounds" | "scorers" | "cup";
@@ -88,7 +90,7 @@ export default function CareerPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <GameHero game="career" title="Карьера тренера" />
+      <GameHero game="career" title="Карьера тренера" compact />
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
 
       {data.invite && <InviteCard view={data} onView={onView} onError={onError} />}
@@ -147,7 +149,10 @@ function NewSeason({ view, onView, onError }: { view: CareerView } & Handlers) {
   return (
     <section className="flex flex-col gap-4 rounded-3xl bg-bg-surface p-4">
       <div className="text-sm text-ink-mist">
-        <p className="font-display text-base font-bold text-ink-chalk">Сезон на неделю</p>
+        <div className="flex items-center gap-3">
+          {careerArt("scenes", "new_season") && <img src={careerArt("scenes", "new_season")} alt="" decoding="async" className="h-16 w-16 shrink-0 object-contain" />}
+          <p className="font-display text-base font-bold text-ink-chalk">Сезон на неделю</p>
+        </div>
         <p className="mt-1">
           8 команд, 14 туров — по два в день, в {localSlots(view).join(" и ")}. Играешь своими карточками: заявка из 22
           игроков, следи за усталостью и травмами. Вход бесплатный.
@@ -200,8 +205,13 @@ function NewSeason({ view, onView, onError }: { view: CareerView } & Handlers) {
 function DivisionCard({ division, divisions }: { division: CareerDivision; divisions: CareerDivision[] }) {
   return (
     <div className="rounded-2xl bg-bg-raised p-3">
-      <p className="text-micro uppercase tracking-wider text-ink-mist">Твой дивизион</p>
-      <p className="font-display text-base font-bold text-ink-chalk">{division.name}</p>
+      <div className="flex items-center gap-3">
+        <DivisionBadge division={division.division} size="h-14 w-14" />
+        <div className="min-w-0">
+          <p className="text-micro uppercase tracking-wider text-ink-mist">Твой дивизион</p>
+          <p className="font-display text-base font-bold text-ink-chalk">{division.name}</p>
+        </div>
+      </div>
       <p className="mt-1 text-caption text-ink-mist">
         Соперники: {division.bot_level_label} · награды ×{division.reward_pct / 100}.
         {division.promote > 0 && division.division > 1 && ` Места 1–${division.promote} — повышение.`}
@@ -209,14 +219,17 @@ function DivisionCard({ division, divisions }: { division: CareerDivision; divis
         {" "}Сложность растёт вместе с дивизионом.
       </p>
       {divisions.length > 1 && (
-        <div className="mt-2 flex gap-1" aria-label="Лестница дивизионов">
-          {[...divisions].reverse().map((d) => (
-            <span
-              key={d.division}
-              title={d.name}
-              className={`h-1.5 flex-1 rounded-full ${d.division === division.division ? "bg-accent-lime" : d.division > division.division ? "bg-white/25" : "bg-white/10"}`}
-            />
-          ))}
+        <div className="mt-2 flex items-end justify-between gap-1" aria-label="Лестница дивизионов">
+          {[...divisions].reverse().map((d) => {
+            const here = d.division === division.division;
+            return careerArt("divisions", d.division) ? (
+              <img key={d.division} src={careerArt("divisions", d.division)} alt={d.name} title={d.name} decoding="async"
+                className={`object-contain ${here ? "h-10 w-10" : d.division > division.division ? "h-7 w-7 opacity-60" : "h-7 w-7 opacity-30 grayscale"}`} />
+            ) : (
+              <span key={d.division} title={d.name}
+                className={`h-1.5 flex-1 rounded-full ${here ? "bg-accent-lime" : d.division > division.division ? "bg-white/25" : "bg-white/10"}`} />
+            );
+          })}
         </div>
       )}
     </div>
@@ -277,7 +290,11 @@ function FinishedCard({ season, catalog }: { season: CareerSeason; catalog: Tact
   return (
     <section className="flex flex-col gap-3 rounded-3xl bg-bg-surface p-4">
       <div className="flex items-center gap-3">
-        <IconTrophy size={28} className={season.final_place === 1 ? "text-rarity-legendary" : "text-ink-mist"} />
+        {season.final_place === 1 && careerArt("achievements", "title")
+          ? <img src={careerArt("achievements", "title")} alt="" decoding="async" className="h-14 w-14 shrink-0 object-contain" />
+          : careerArt("divisions", season.division?.division)
+            ? <DivisionBadge division={season.division?.division} size="h-12 w-12" />
+            : <IconTrophy size={28} className={season.final_place === 1 ? "text-rarity-legendary" : "text-ink-mist"} />}
         <div>
           <p className="font-display text-base font-bold text-ink-chalk">
             {season.final_place ? `Сезон завершён: ${season.final_place} место` : "Сезон завершён"}
@@ -301,7 +318,18 @@ function DivisionMove({ from, to }: { from: CareerDivision; to: CareerDivision }
   const text = up ? `Повышение! Следующий сезон — ${to.name}`
     : down ? `Вылет. Следующий сезон — ${to.name}`
       : `Остаёшься в дивизионе «${from.name}»`;
-  return <p className={`rounded-xl px-3 py-2 text-sm font-semibold ${tone}`}>{text}</p>;
+  return (
+    <p className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold ${tone}`}>
+      <DivisionBadge division={to.division} size="h-8 w-8" />
+      <span className="min-w-0">{text}</span>
+    </p>
+  );
+}
+
+/** The division's league badge (assets/career/divisions/<n>.webp); nothing without the art. */
+function DivisionBadge({ division, size }: { division: number | null | undefined; size: string }) {
+  const art = careerArt("divisions", division);
+  return art ? <img src={art} alt="" decoding="async" className={`${size} shrink-0 object-contain`} /> : null;
 }
 
 /** The season in three sections: «Подготовка» (tactic, squad, training),
@@ -314,6 +342,8 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
   const [tab, setTab] = useState<Tab>("prep");
   const [prep, setPrep] = useState<PrepTab>(season.scouting && hasTactics ? "tactic" : "squad");
   const [cal, setCal] = useState<CalendarTab>("table");
+  // Off «Подготовка» the match at the break is a one-row bar until opened.
+  const [liveOpen, setLiveOpen] = useState(false);
   const prepTabs = useRef<HTMLDivElement>(null);
   // The section opens below the tiles: bring it into view.
   const openPrep = (next: PrepTab) => {
@@ -340,8 +370,17 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
 
   return (
     <>
-      {season.live && <LiveMatchCenter live={season.live} catalog={catalog} seasonId={season.id} talks={season.morale?.talks}
-        onView={onView} onError={onError} />}
+      {season.live && (tab === "prep" || liveOpen ? (
+        <>
+          <LiveMatchCenter live={season.live} catalog={catalog} seasonId={season.id} talks={season.morale?.talks}
+            onView={onView} onError={onError} />
+          {tab !== "prep" && (
+            <button type="button" onClick={() => setLiveOpen(false)} className="-mt-1 self-center text-micro font-semibold text-ink-mist underline underline-offset-2">
+              Свернуть матч
+            </button>
+          )}
+        </>
+      ) : <LiveBar live={season.live} onOpen={() => setLiveOpen(true)} />)}
       {season.second_half && (
         <button
           type="button"
@@ -367,8 +406,9 @@ function ActiveSeason({ season, catalog, coach, onView, onError }: {
           {opponent && myMatch && (
             <>
               <p className="mt-3 text-micro uppercase tracking-wider text-ink-mist">Следующий матч · {formatWhen(nextRound.at)}</p>
-              <p className="break-words font-display text-base font-bold text-ink-chalk">
-                {myMatch.home === season.my_team_index ? "Дома" : "В гостях"}: {opponent.name}
+              <p className="flex items-center gap-2 break-words font-display text-base font-bold text-ink-chalk">
+                <CareerCrest name={opponent.name} size={28} />
+                <span className="min-w-0">{myMatch.home === season.my_team_index ? "Дома" : "В гостях"}: {opponent.name}</span>
               </p>
               <p className="text-xs text-ink-mist">
                 {opponent.is_bot ? `Сила соперника ~${opponent.strength ?? "?"}` : "Матч с другом"}
@@ -542,7 +582,7 @@ function StandingsTable({ season }: { season: CareerSeason }) {
           return (
             <tr key={row.team_index} className={me ? "font-bold text-accent-lime" : !team.is_bot ? "text-accent-cyan" : "text-ink-chalk"}>
               <td className={`py-1 pl-1 ${zone}`}>{i + 1}</td>
-              <td className="max-w-[10rem] truncate py-1">{team.name}</td>
+              <td className="max-w-[10rem] py-1"><span className="flex min-w-0 items-center gap-1.5"><CareerCrest name={team.name} size={18} /><span className="truncate">{team.name}</span></span></td>
               <td className="py-1 text-right font-mono">{row.played}</td>
               <td className="py-1 text-right font-mono">{row.gf - row.ga > 0 ? "+" : ""}{row.gf - row.ga}</td>
               <td className="py-1 text-right font-mono">{row.points}</td>
@@ -576,6 +616,7 @@ function Calendar({ season }: { season: CareerSeason }) {
             className="flex items-center gap-3 rounded-2xl bg-bg-surface px-3 py-2.5 text-left disabled:cursor-default"
           >
             <span className="w-10 shrink-0 font-mono text-caption text-ink-mist">Тур {round.index + 1}</span>
+            <CareerCrest name={opp.name} size={28} />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm text-ink-chalk">{home ? "vs" : "@"} {opp.name}</span>
               <span className="block text-micro text-ink-mist-dim">{formatWhen(round.at)}</span>

@@ -73,6 +73,7 @@ import type {
   SuspiciousMemorySession,
   TaskDefinition,
   RewardBundleInput,
+  LuckyBoardEstimate,
 } from "@/admin/types";
 
 /** «Ошибки сервера»: the last week's 500s, grouped, plus the latest with tracebacks. */
@@ -820,6 +821,11 @@ export async function fetchGameConfig(): Promise<GameConfig> {
 
 export async function fetchMagnateDefaults(): Promise<{ board: MagnateBoardConfig; cards: Record<string, unknown> }> {
   const { data } = await api.get<{ board: MagnateBoardConfig; cards: Record<string, unknown> }>("/admin/games/magnate-defaults");
+  return data;
+}
+
+export async function fetchLuckyBoardEstimate(): Promise<LuckyBoardEstimate> {
+  const { data } = await api.get<LuckyBoardEstimate>("/admin/games/lucky-board/estimate");
   return data;
 }
 

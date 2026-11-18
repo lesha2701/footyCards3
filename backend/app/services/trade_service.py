@@ -379,6 +379,7 @@ async def accept_offer(db: AsyncSession, user: User, offer_id: int) -> TradeAcce
         new_owner_id = offer.receiver_id if tc.side == TradeCardSide.offered else offer.sender_id
         card.owner_id = new_owner_id
         card.is_locked_in_trade = False
+        card.is_main = False  # «основная» is the old owner's choice
         db.add(card)
         await equipment_service.move_bound_with_card(db, card, new_owner_id)
         await trade_finder_service.notify_wanted_card(db, new_owner_id, card.player_id)

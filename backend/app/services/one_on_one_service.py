@@ -27,7 +27,7 @@ from app.schemas.game import (
     OneOnOneResultOut,
     OneOnOneStartOut,
 )
-from app.services import my_player_service
+from app.services import my_player_service, prospect_games
 from app.services import one_on_one_engine as engine
 from app.services.club_pass_service import extra_rewarded_attempts
 from app.services.free_kick_3d_engine import Swipe
@@ -118,19 +118,23 @@ def score_attack(config, result: engine.EpisodeEnd) -> tuple[int, list[str]]:
     return 0, []
 
 
-async def start(db: AsyncSession, user: User, user_card_id: int) -> OneOnOneStartOut:
+async def start(db: AsyncSession, user: User, user_card_id: int | None, prospect: bool = False) -> OneOnOneStartOut:
+    """A card of the collection, or — `prospect` — the «Воспитанник
+    Академии» at his age-relative rating (prospect_games); he then gets XP
+    at the claim."""
     config = await get_config(db)
     locked = await lock_user_for_update(db, user.id)
+    entry = await prospect_games.entry(db, locked.id, user_card_id, prospect)
     await _take_hourly_attempt(db, locked, config.hourly_game_limit)
     await _ensure_daily_reset(db, locked)
-    card = await _own_card(db, locked, user_card_id)
+    rating = entry.rating if entry is not None else (await _own_card(db, locked, user_card_id)).player.rating
 
     first = _new_attack()
     total = max(1, config.one_on_one_attacks)
     session = GameSession(
         user_id=locked.id, game_type=GameType.one_on_one, status=GameSessionStatus.in_progress,
         server_state={
-            "player_rating": card.player.rating, "total_attacks": total,
+            "player_rating": rating, "prospect": entry is not None, "total_attacks": total,
             "attacks": [first], "current_index": 0, "total_coins": 0,
         },
     )
@@ -138,7 +142,7 @@ async def start(db: AsyncSession, user: User, user_card_id: int) -> OneOnOneStar
     await db.commit()
     await db.refresh(session)
     return OneOnOneStartOut(
-        session_id=session.id, rating=card.player.rating, total_attacks=total,
+        session_id=session.id, rating=rating, total_attacks=total, prospect_name=entry.name if entry else None,
         attack=OneOnOneAttackOut(attack_index=0, seed=first["seed"]),
         **await my_player_service.game_gear(db, locked.id),
     )
@@ -207,9 +211,7 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> OneOnOn
     if session.is_rewarded:
         raise ConflictError("Reward for this session has already been claimed")
     await _ensure_daily_reset(db, locked)
-    daily_cap_reached = locked.one_on_one_rewarded_attempts_today >= config.one_on_one_daily_limit + await extra_rewarded_attempts(
-        db, locked.id, config
-    )
+    daily_cap_reached = locked.one_on_one_rewarded_attempts_today >= config.one_on_one_daily_limit + await extra_rewarded_attempts(db, locked.id, config, game="one_on_one", used=locked.one_on_one_rewarded_attempts_today, base=config.one_on_one_daily_limit)
 
     reward = 0 if (locked.game_rewards_blocked or daily_cap_reached) else session.reward_coins
     session.is_rewarded = True
@@ -220,7 +222,12 @@ async def claim_reward(db: AsyncSession, user: User, session_id: int) -> OneOnOn
             db, locked, reward, TransactionType.game_reward,
             "Награда за Атаку 1 на 1", related_object_type="game_session", related_object_id=session.id,
         )
+    # The prospect's XP: goals = attacks that went in; a series has no
+    # opponent to beat, so «won» = at least one goal.
+    state = session.server_state or {}
+    goals = sum(1 for a in state.get("attacks") or [] if a.get("outcome") == "goal")
+    prospect_xp = await prospect_games.award(db, locked, state, goals, goals > 0, "one_on_one")
     db.add(session)
     await db.commit()
     await db.refresh(locked)
-    return OneOnOneClaimOut(reward_coins=reward, new_balance=locked.balance)
+    return OneOnOneClaimOut(reward_coins=reward, new_balance=locked.balance, prospect_xp=prospect_xp)

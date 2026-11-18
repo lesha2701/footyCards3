@@ -26,10 +26,12 @@ interface Props {
   showSkills?: boolean;
   /** Extra per-card note under the card (e.g. "+2 хим." for this slot). */
   cardNote?: (card: UserCard) => ReactNode;
+  /** Extra content above the list (e.g. «play the prospect instead»). */
+  header?: ReactNode;
 }
 
 export default function CardPickerModal({
-  open, title, cards, disabledCardIds = [], onSelect, onClose, searchValue, onSearchChange, showSkills = false, cardNote,
+  open, title, cards, disabledCardIds = [], onSelect, onClose, searchValue, onSearchChange, showSkills = false, cardNote, header,
 }: Props) {
   return (
     <AnimatePresence>
@@ -53,6 +55,7 @@ export default function CardPickerModal({
               <p className="font-display text-lg font-bold text-slate-100">{title}</p>
               <button onClick={onClose} className="rounded-full bg-white/5 px-3 py-1.5 text-sm text-slate-300">Закрыть</button>
             </div>
+            {header}
             {onSearchChange && (
               <input
                 value={searchValue ?? ""}

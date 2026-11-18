@@ -13,6 +13,14 @@ Main features:
   matches along staged gates and carry a situational talent
   (`path_service.py` / `path_talent_effects.py` / `path_match_service.py`,
   see docs/path-cards.md);
+- «Воспитанник Академии» (`prospect_service.py`, docs/academy-prospect.md):
+  one own child footballer per user, 6 → 18 years by the calendar, stage
+  caps and a hidden potential; daily training, story forks, Stars extras
+  (key "prospect:<purchase>"); plays «Ответка» at an age-relative rating
+  and «Менеджер» (`ManagerContract.subject` = "prospect" / "graduate"), Пенальти /
+  Штрафной / «1 на 1»; talents, «Выпускной» + «Династия», a weekly cohort
+  tournament, friends' duels and gifts (`prospect_life.py`, bot sweep
+  `/internal/prospect/sweep`);
 - «Клубная база»: the player's own campus (stadium, HQ, medical, finance
   department, …) around the «Академия», one construction queue with it,
   career effects frozen per season (`club_base_service.py`, see

@@ -31,6 +31,7 @@ import {
 import { enterImmersive } from "@/lib/immersive";
 import { playSound } from "@/lib/sound";
 import { haptic, hapticNotify } from "@/lib/telegram";
+import { CareerCrest } from "@/components/career/CareerCrest";
 
 // three.js is a lazy chunk: it loads only when a 3D replay is opened.
 const GoalReplay3D = lazy(() => import("@/components/career/goal3d/GoalReplay3D"));
@@ -257,6 +258,7 @@ export function ReplayPlayer({ data, extraTabs, footer }: {
         <p className="flex min-w-0 flex-1 items-center justify-end gap-1.5 text-right text-sm font-semibold text-ink-chalk">
           <span className="truncate">{data.home_name}</span>
           <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: homeKit.fill }} />
+          <CareerCrest name={data.home_name} size={24} />
         </p>
         <div className="flex flex-col items-center">
           <p className="font-mono text-2xl font-bold leading-none text-ink-chalk" aria-label="Счёт">
@@ -273,6 +275,7 @@ export function ReplayPlayer({ data, extraTabs, footer }: {
           </p>
         </div>
         <p className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-sm font-semibold text-ink-chalk">
+          <CareerCrest name={data.away_name} size={24} />
           <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: awayKit.fill }} />
           <span className="truncate">{data.away_name}</span>
         </p>

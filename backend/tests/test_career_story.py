@@ -167,3 +167,15 @@ async def test_next_season_keeps_a_clubs_players_and_hot_seat_sets_the_task(clie
     await db_session.flush()
     with pytest.raises(career_service.ConflictError):
         await career_service.set_ambition(db_session, SimpleNamespace(id=user_id), "promote")
+
+
+def test_a_rounds_automatic_changes_are_one_news_line():
+    state: dict = {}
+    for text in ("Ланге → Вейра", "Феррейра → Кастро"):  # how older seasons stored them
+        story.add_news(state, 0, 3, "⇄", f"Автозамена в старте: {text}")
+    story.add_news(state, 0, 3, "🏟", "На трибунах 3 000 зрителей")
+    story.add_news(state, 0, 4, "⇄", "Автозамена в старте: Сантос → Иванов")
+    lines = [n["text"] for n in story.news_out(state, 0)]
+    assert lines == ["Автозамена в старте: Сантос → Иванов", "На трибунах 3 000 зрителей",
+                     "Автозамены в старте (2): Ланге → Вейра, Феррейра → Кастро"]
+    assert state["news"]["0"][0]["text"] == "Автозамена в старте: Ланге → Вейра"  # stored feed untouched

@@ -146,6 +146,7 @@ async def _delivered_result(db: AsyncSession, invoice: StarsInvoice) -> StarsInv
         )
     if invoice.academy_speedup:
         kind = ("town_" + invoice.academy_speedup.split(":", 1)[1] if invoice.academy_speedup.startswith("town:")
+                else "prospect" if invoice.academy_speedup.startswith("prospect:")
                 else "base_speedup" if invoice.academy_speedup.startswith("base:")
                 else "base_cosmetic" if invoice.academy_speedup.startswith("basecos:") else "academy_speedup")
         return StarsInvoiceStatusOut(status="completed", path_result={"kind": kind})
@@ -354,6 +355,10 @@ async def validate_pre_checkout(db: AsyncSession, payload_token: str, total_amou
             from app.services import town_service
 
             return await town_service.validate_stars_invoice(db, invoice)
+        if invoice.academy_speedup.startswith("prospect:"):
+            from app.services import prospect_service
+
+            return await prospect_service.validate_stars_invoice(db, invoice)
         if invoice.academy_speedup.startswith(COSMETIC_PREFIX):
             return await validate_cosmetic_invoice(db, invoice)
         if invoice.academy_speedup.startswith(SPEEDUP_PREFIX):

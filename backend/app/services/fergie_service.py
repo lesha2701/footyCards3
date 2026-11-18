@@ -98,7 +98,8 @@ async def finish(db: AsyncSession, user: User, session_id: int) -> FergieFinishO
         raise ConflictError("Матч ещё не мог закончиться")
 
     _ensure_daily_reset(db, locked)
-    cap = config.fergie_daily_limit + await extra_rewarded_attempts(db, locked.id, config)
+    cap = config.fergie_daily_limit + await extra_rewarded_attempts(
+        db, locked.id, config, game="fergie", used=locked.fergie_rewarded_attempts_today, base=config.fergie_daily_limit)
     capped = locked.fergie_rewarded_attempts_today >= cap
     reward = 0 if capped or locked.game_rewards_blocked else config.fergie_match_coins
     if not capped:

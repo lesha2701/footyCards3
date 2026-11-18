@@ -10,6 +10,7 @@ import type { CareerSeason, CareerSquadCard } from "@/api/career";
 import { EnergyBar } from "@/components/career/EnergyBar";
 import { IconCoin, IconShirt } from "@/components/icons";
 import { TIRED_AT } from "@/lib/careerSubs";
+import { CareerCrest } from "@/components/career/CareerCrest";
 
 const FORM: Record<string, { label: string; tone: string }> = {
   W: { label: "В", tone: "bg-accent-lime" },
@@ -76,11 +77,14 @@ export function PreMatchCard({ season, when, league, onSquad }: {
     <section className="flex flex-col gap-3 rounded-3xl bg-gradient-to-br from-bg-surface to-bg-raised p-4 ring-1 ring-white/5" aria-label="Следующий матч">
       <p className="text-micro uppercase tracking-wider text-ink-mist">{league}</p>
       <div className="-mt-2 flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="break-words font-display text-lg font-bold leading-tight text-ink-chalk">
-            {mine.home ? "Дома" : "В гостях"}: {scouting.opponent_name}
-          </p>
-          {when && <p className="text-caption text-ink-mist">{when}</p>}
+        <div className="flex min-w-0 items-center gap-2.5">
+          <CareerCrest name={scouting.opponent_name} size={40} />
+          <div className="min-w-0">
+            <p className="break-words font-display text-lg font-bold leading-tight text-ink-chalk">
+              {mine.home ? "Дома" : "В гостях"}: {scouting.opponent_name}
+            </p>
+            {when && <p className="text-caption text-ink-mist">{when}</p>}
+          </div>
         </div>
         {scouting.win_pct !== null && (
           <span className="shrink-0 rounded-xl bg-bg-base/60 px-2 py-1 text-center">
@@ -215,7 +219,7 @@ export function PostMatchCard({ season }: { season: CareerSeason }) {
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className={`font-display text-xl font-black leading-none ${result.tone}`}>{result.label}</p>
-          <p className="mt-1 truncate text-caption text-ink-mist">{mine.home ? "дома" : "в гостях"} · {mine.opponent?.name}</p>
+          <p className="mt-1 flex min-w-0 items-center gap-1.5 text-caption text-ink-mist"><CareerCrest name={mine.opponent?.name} size={16} /><span className="truncate">{mine.home ? "дома" : "в гостях"} · {mine.opponent?.name}</span></p>
         </div>
         <p className="shrink-0 font-mono text-3xl font-black text-ink-chalk">{own}:{opp}</p>
       </div>

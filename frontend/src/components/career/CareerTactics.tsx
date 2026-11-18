@@ -32,6 +32,7 @@ import {
 } from "@/lib/careerTactics";
 import { FORMATIONS, MENTALITIES } from "@/lib/clubTactics";
 import { haptic } from "@/lib/telegram";
+import { CareerCrest } from "@/components/career/CareerCrest";
 
 type Handlers = { onView: (v: CareerView) => void; onError: (e: unknown) => void };
 
@@ -81,9 +82,12 @@ export function ScoutingCard({ scouting, catalog, difficultyLabel }: {
   return (
     <Card>
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-micro uppercase tracking-wider text-ink-mist">Разведка · тур {scouting.round_index + 1}</p>
-          <p className="truncate font-display text-base font-bold text-ink-chalk">{scouting.opponent_name}</p>
+        <div className="flex min-w-0 items-center gap-2">
+          <CareerCrest name={scouting.opponent_name} size={32} />
+          <div className="min-w-0">
+            <p className="text-micro uppercase tracking-wider text-ink-mist">Разведка · тур {scouting.round_index + 1}</p>
+            <p className="truncate font-display text-base font-bold text-ink-chalk">{scouting.opponent_name}</p>
+          </div>
         </div>
         {scouting.strength !== null && (
           <span className="shrink-0 rounded-xl bg-bg-raised px-2 py-1 text-center">

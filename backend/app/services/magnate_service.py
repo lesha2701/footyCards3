@@ -276,7 +276,8 @@ async def _finish(db: AsyncSession, match: MagnateMatch, state: dict, config: Ga
             reward = 0
             from app.services.club_pass_service import extra_rewarded_attempts
 
-            limit = config.magnate_daily_limit + await extra_rewarded_attempts(db, user.id, config)
+            limit = config.magnate_daily_limit + await extra_rewarded_attempts(
+                db, user.id, config, game="magnate", used=user.magnate_rewarded_attempts_today, base=config.magnate_daily_limit)
             if not user.game_rewards_blocked and user.magnate_rewarded_attempts_today < limit:
                 user.magnate_rewarded_attempts_today += 1
                 reward = _place_reward(config, place, state.get("reward_pct", 100))
@@ -605,7 +606,7 @@ async def get_info(db: AsyncSession, user: User) -> MagnateInfoOut:
         turn_seconds=config.magnate_turn_seconds, max_missed_turns=config.magnate_max_missed_turns,
         lobby_wait_seconds=config.magnate_lobby_wait_seconds, room_wait_minutes=config.magnate_room_wait_minutes,
         place_rewards=list(config.magnate_place_rewards or []), bot_reward_pct=config.magnate_bot_reward_pct,
-        daily_limit=config.magnate_daily_limit,
+        daily_limit=config.magnate_daily_limit + await _extra_attempts(db, user.id, config, game="magnate"),
         rewarded_today=user.magnate_rewarded_attempts_today if reset_day == local_today() else 0,
         wins=user.magnate_wins, active_match_id=await _active_match_id(db, user.id),
     )
@@ -690,3 +691,10 @@ async def _hydrate(db: AsyncSession, match: MagnateMatch, viewer: User) -> Magna
         last_roll=MagnateRollOut(**last_roll) if last_roll else None,
         log=[MagnateLogOut(**e) for e in state["log"][-LOG_IN_RESPONSE:]],
     )
+
+
+async def _extra_attempts(db, user_id: int, config, **kw) -> int:
+    """+N rewarded attempts a day: the club pass and «Жители города» (Матилде)."""
+    from app.services.club_pass_service import extra_rewarded_attempts
+
+    return await extra_rewarded_attempts(db, user_id, config, **kw)

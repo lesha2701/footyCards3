@@ -74,13 +74,18 @@ class SaboteurClaimOut(BaseModel):
 # --- Penalty ---
 
 class PenaltyStartRequest(BaseModel):
-    user_card_id: int
+    """A card of the collection, or the «Воспитанник Академии» himself
+    (classic and 3D shootouts)."""
+    user_card_id: Optional[int] = None
+    prospect: bool = False
 
 
 class PenaltyStartOut(BaseModel):
     session_id: int
     player_rating: int
     first_kicker: str
+    # Set when the «Воспитанник Академии» plays: his name.
+    prospect_name: Optional[str] = None
 
 
 class PenaltyKickRequest(BaseModel):
@@ -105,6 +110,8 @@ class PenaltyClaimOut(BaseModel):
     reward_coins: int
     new_balance: int
     result: str
+    # XP the «Воспитанник Академии» got, when he took the shootout.
+    prospect_xp: Optional[int] = None
 
 
 class PenaltyForfeitOut(BaseModel):
@@ -135,6 +142,8 @@ class Penalty3DStartOut(BaseModel):
     session_id: int
     rating: int
     kick: Penalty3DKickOut
+    # Set when the «Воспитанник Академии» plays: his name.
+    prospect_name: Optional[str] = None
     # «Мой игрок» gear worn in the 3D scene (cosmetic codes; None = default).
     celebration: str | None = None
     ball: str | None = None
@@ -169,7 +178,10 @@ class Penalty3DResultOut(BaseModel):
 # --- Free Kick ---
 
 class FreeKickStartRequest(BaseModel):
-    user_card_id: int
+    """A card of the collection, or the «Воспитанник Академии» himself
+    (free kick classic / 3D, «Атака 1 на 1»)."""
+    user_card_id: Optional[int] = None
+    prospect: bool = False
 
 
 class FreeKickNextKickOut(BaseModel):
@@ -199,6 +211,8 @@ class FreeKickKickOut(BaseModel):
 class FreeKickClaimOut(BaseModel):
     reward_coins: int
     new_balance: int
+    # XP the «Воспитанник Академии» got, when he took the series.
+    prospect_xp: Optional[int] = None
 
 
 # --- Free Kick 3D (the free kick mode; the classic one above is kept, unlinked) ---
@@ -217,6 +231,8 @@ class FreeKick3DStartOut(BaseModel):
     kick: FreeKick3DKickOut
     # Goals in a row so far («Серия без промахов»), carried across series.
     streak: int = 0
+    # Set when the «Воспитанник Академии» plays: his name.
+    prospect_name: Optional[str] = None
     # «Мой игрок» gear worn in the 3D scene (cosmetic codes; None = default).
     celebration: Optional[str] = None
     ball: Optional[str] = None
@@ -373,6 +389,8 @@ class GameLimitsOut(BaseModel):
     one_on_one: int = 0
     otvetka: int = 0
     fergie_time: int = 0
+    lucky_board: int = 0
+    lucky_board_hourly_limit: int = 0
     # When a game's hourly cap is used up: the moment it frees up again
     # (key = the field name above). Games with plays left are absent.
     resets_at: dict[str, datetime] = {}
@@ -403,6 +421,8 @@ class OneOnOneStartOut(BaseModel):
     rating: int
     total_attacks: int
     attack: OneOnOneAttackOut
+    # Set when the «Воспитанник Академии» plays: his name.
+    prospect_name: Optional[str] = None
     # «Мой игрок» gear worn in the 3D scene (cosmetic codes; None = default).
     celebration: Optional[str] = None
     ball: Optional[str] = None
@@ -468,6 +488,8 @@ class OneOnOneResultOut(BaseModel):
 class OneOnOneClaimOut(BaseModel):
     reward_coins: int
     new_balance: int
+    # XP the «Воспитанник Академии» got, when he took the series.
+    prospect_xp: Optional[int] = None
 
 
 # --- «Ответка» ---
@@ -482,6 +504,14 @@ class OtvetkaEpisodeOut(BaseModel):
     seed: int
 
 
+class OtvetkaStartRequest(BaseModel):
+    """A card of the collection, or the «Воспитанник Академии» himself."""
+    user_card_id: Optional[int] = None
+    prospect: bool = False
+    # A friends' duel (prospect_life): the prospect plays his side of it.
+    duel_id: Optional[int] = None
+
+
 class OtvetkaStartOut(BaseModel):
     session_id: int
     rating: int
@@ -491,6 +521,9 @@ class OtvetkaStartOut(BaseModel):
     win_coins: int
     loss_coins: int
     episode: OtvetkaEpisodeOut
+    # Set when the «Воспитанник Академии» plays: his name.
+    prospect_name: Optional[str] = None
+    duel_id: Optional[int] = None
     celebration: Optional[str] = None
     ball: Optional[str] = None
     boots: Optional[str] = None
@@ -541,6 +574,8 @@ class OtvetkaResultOut(BaseModel):
 class OtvetkaClaimOut(BaseModel):
     reward_coins: int
     new_balance: int
+    # XP the «Воспитанник Академии» got, when he played the match.
+    prospect_xp: Optional[int] = None
 
 
 # --- «Ферги Тайм» ---
