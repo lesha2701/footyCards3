@@ -28,6 +28,14 @@ const GOAL_LABELS: Record<BingoGoalType, string> = {
   penalty_matches_played: "Сыграно матчей Пенальти",
   arena_matches_played: "Сыграно матчей Кард Арены",
   trades_completed: "Совершено обменов",
+  mini_games_played: "Сыграно мини-игр (live)",
+  stratego_matches_played: "Партий Стратего (live)",
+  blackjack_hands: "Раздач «21» (live)",
+  lucky_board_spins: "Запусков «Табло удачи» (live)",
+  magic_runs: "Походов «Мяч и Магия» (live)",
+  kontra_battles: "Боёв «Контратаки» (live)",
+  mordoboi_matches: "Боёв «Мордобоя» (live)",
+  wheel_spins: "Вращений колеса (live)",
 };
 
 const GOAL_TYPES = Object.keys(GOAL_LABELS) as BingoGoalType[];

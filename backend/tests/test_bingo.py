@@ -672,3 +672,53 @@ def test_card_draw_is_seeded_with_a_free_centre_and_distinct_cells():
     assert len(set(metrics)) == 8
     pool = {p["metric"]: p for p in bingo_service.DEFAULT_POOL}
     assert all(pool[c["metric"]]["min"] <= c["target"] <= pool[c["metric"]]["max"] for i, c in enumerate(a) if i != 4)
+
+
+async def test_live_server_goal_counts_everyones_finished_games_of_the_week(client, db_session, bot_token):
+    from app.models.enums import GameSessionStatus, GameType
+    from app.models.game import GameSession
+
+    admin_headers = await _admin_auth(client, bot_token)
+    resp = await client.post(
+        "/api/v1/admin/bingo/goals", headers=admin_headers,
+        json={"goal_type": "mini_games_played", "target_value": 3, "is_active": True},
+    )
+    assert resp.status_code == 200
+    await client.put("/api/v1/admin/bingo/state", headers=admin_headers, json={"is_enabled": True})
+    a = await _register(client, db_session, 960201, bot_token)
+    b = await _register(client, db_session, 960202, bot_token)
+    a_id, b_id = a.id, b.id
+    headers = telegram_headers(960201, bot_token)
+
+    def goal(data):
+        return next(g for g in data["goals"] if g["goal_type"] == "mini_games_played")
+
+    data = (await client.get("/api/v1/bingo/current", headers=headers)).json()
+    assert goal(data)["current_value"] == 0 and goal(data)["target_value"] == 3
+
+    week = await bingo_service.get_or_create_current_week(db_session)
+    db_session.add_all([
+        GameSession(user_id=a_id, game_type=GameType.penalty, status=GameSessionStatus.won),
+        GameSession(user_id=b_id, game_type=GameType.free_kick, status=GameSessionStatus.lost),
+        GameSession(user_id=b_id, game_type=GameType.penalty, status=GameSessionStatus.in_progress),
+        GameSession(
+            user_id=b_id, game_type=GameType.penalty, status=GameSessionStatus.won,
+            created_at=week.starts_at - timedelta(hours=1),
+        ),
+    ])
+    await db_session.commit()
+    data = (await client.get("/api/v1/bingo/current", headers=headers)).json()
+    assert goal(data)["current_value"] == 2 and goal(data)["is_completed"] is False
+
+    db_session.add(GameSession(user_id=b_id, game_type=GameType.saboteur, status=GameSessionStatus.rewarded))
+    await db_session.commit()
+    data = (await client.get("/api/v1/bingo/current", headers=headers)).json()
+    assert goal(data)["current_value"] == 3 and goal(data)["is_completed"] is True
+    # The stored counter stays untouched: the value is the live count.
+    row = (await db_session.execute(
+        select(BingoWeekGoal).where(BingoWeekGoal.goal_type == BingoGoalType.mini_games_played)
+    )).scalar_one()
+    assert row.current_value == 0
+
+    preview = (await client.get("/api/v1/admin/bingo/stats-preview", headers=admin_headers)).json()
+    assert next(i for i in preview if i["goal_type"] == "mini_games_played")["trailing_7d_count"] == 4

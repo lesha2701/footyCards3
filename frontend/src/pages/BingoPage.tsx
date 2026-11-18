@@ -25,6 +25,14 @@ const GOAL_LABELS: Record<BingoGoalType, string> = {
   penalty_matches_played: "Сыграть матчей в Пенальти",
   arena_matches_played: "Сыграть матчей в Кард Арене",
   trades_completed: "Совершить обменов",
+  mini_games_played: "Сыграть мини-игр",
+  stratego_matches_played: "Сыграть партий в Стратего",
+  blackjack_hands: "Сыграть раздач в «21»",
+  lucky_board_spins: "Запустить «Табло удачи»",
+  magic_runs: "Сходить в походы «Мяч и Магия»",
+  kontra_battles: "Провести боёв «Контратаки»",
+  mordoboi_matches: "Провести боёв «Мордобоя»",
+  wheel_spins: "Крутануть колесо фортуны",
 };
 
 function formatTimeRemaining(endsAt: string): string {

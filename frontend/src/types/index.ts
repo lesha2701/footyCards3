@@ -2954,7 +2954,15 @@ export type BingoGoalType =
   | "tactico_matches_played"
   | "penalty_matches_played"
   | "arena_matches_played"
-  | "trades_completed";
+  | "trades_completed"
+  | "mini_games_played"
+  | "stratego_matches_played"
+  | "blackjack_hands"
+  | "lucky_board_spins"
+  | "magic_runs"
+  | "kontra_battles"
+  | "mordoboi_matches"
+  | "wheel_spins";
 
 export interface BingoGoal {
   goal_type: BingoGoalType;

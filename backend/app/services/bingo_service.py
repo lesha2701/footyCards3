@@ -73,6 +73,36 @@ CENTRE = 4
 # a closed row pays bingo_line_coins, all three = the whole card.
 LINES: tuple[tuple[int, int, int], ...] = ((0, 1, 2), (3, 4, 5), (6, 7, 8))
 
+# Server goals counted live from the games' own rows over the week window
+# (newbie_service.games_played_all) instead of a hook in each game; their
+# BingoWeekGoal.current_value stays 0 and is never read.
+LIVE_GOALS: dict[BingoGoalType, str] = {
+    BingoGoalType.mini_games_played: "game:",
+    BingoGoalType.stratego_matches_played: "stratego",
+    BingoGoalType.blackjack_hands: "blackjack",
+    BingoGoalType.lucky_board_spins: "lucky_board",
+    BingoGoalType.magic_runs: "magic",
+    BingoGoalType.kontra_battles: "kontra",
+    BingoGoalType.mordoboi_matches: "mordoboi",
+    BingoGoalType.wheel_spins: "wheel",
+}
+
+
+async def _goal_values(db: AsyncSession, week: BingoWeek, goals) -> dict[int, int]:
+    """Each week goal's current value: the hook counter, or the live count."""
+    from app.services.newbie_service import games_played_all
+
+    since, until = ensure_aware(week.starts_at), ensure_aware(week.ends_at)
+    values: dict[int, int] = {}
+    for g in goals:
+        mode = LIVE_GOALS.get(g.goal_type)
+        values[g.id] = g.current_value if mode is None else await games_played_all(db, mode, since, until)
+    return values
+
+
+def _all_done(goals, values: dict[int, int]) -> bool:
+    return len(goals) > 0 and all(values[g.id] >= g.target_value for g in goals)
+
 
 def _pool(config) -> list[dict]:
     """The card pool without the modes an admin switched off."""
@@ -299,7 +329,7 @@ async def _resolve_week(db: AsyncSession, week: BingoWeek) -> None:
         return
 
     goals = (await db.execute(select(BingoWeekGoal).where(BingoWeekGoal.week_id == locked_week.id))).scalars().all()
-    all_completed = len(goals) > 0 and all(g.current_value >= g.target_value for g in goals)
+    all_completed = _all_done(goals, await _goal_values(db, locked_week, goals))
     locked_week.all_goals_completed = all_completed
     locked_week.reward_resolved = True
     db.add(locked_week)
@@ -312,7 +342,7 @@ async def claim_reward(db: AsyncSession, user: User) -> BingoClaimResult:
         raise ConflictError("Bingo недели сейчас не идёт")
 
     goals = (await db.execute(select(BingoWeekGoal).where(BingoWeekGoal.week_id == week.id))).scalars().all()
-    if not goals or not all(g.current_value >= g.target_value for g in goals):
+    if not _all_done(goals, await _goal_values(db, week, goals)):
         raise ConflictError("Не все цели недели ещё выполнены")
     # The server's common goal pays only those who played the week
     # themselves: at least one closed line on their own card.
@@ -390,10 +420,11 @@ async def get_current_week_out(db: AsyncSession, user: User) -> BingoCurrentOut:
         return BingoCurrentOut(is_enabled=False)
 
     goals = (await db.execute(select(BingoWeekGoal).where(BingoWeekGoal.week_id == week.id))).scalars().all()
+    values = await _goal_values(db, week, goals)
     goal_outs = [
         BingoGoalOut(
-            goal_type=g.goal_type, target_value=g.target_value, current_value=g.current_value,
-            is_completed=g.current_value >= g.target_value,
+            goal_type=g.goal_type, target_value=g.target_value, current_value=values[g.id],
+            is_completed=values[g.id] >= g.target_value,
         )
         for g in goals
     ]
@@ -612,4 +643,9 @@ async def get_stats_preview(db: AsyncSession) -> list[BingoStatsPreviewItem]:
         BingoGoalType.arena_matches_played: arena_matches,
         BingoGoalType.trades_completed: trades_completed,
     }
+    from app.services.newbie_service import games_played_all
+
+    now = datetime.now(timezone.utc)
+    for goal_type, mode in LIVE_GOALS.items():
+        counts[goal_type] = await games_played_all(db, mode, since, now)
     return [BingoStatsPreviewItem(goal_type=t, trailing_7d_count=c) for t, c in counts.items()]

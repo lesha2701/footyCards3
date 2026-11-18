@@ -149,6 +149,32 @@ async def games_played(
     return total
 
 
+async def games_played_all(db: AsyncSession, mode: str, since: datetime, until: datetime) -> int:
+    """Games of `mode` by everyone in [since, until): one row = one game
+    (a PvP match counts once). "game:" alone = every finished mini-game
+    session. What the live «Бинго недели» server goals count."""
+    if mode.startswith("game:"):
+        from app.models.enums import GameSessionStatus
+
+        q = select(func.count()).select_from(GameSession).where(
+            GameSession.created_at >= since, GameSession.created_at < until,
+            GameSession.status != GameSessionStatus.in_progress,
+        )
+        if mode[5:]:
+            q = q.where(GameSession.game_type == mode[5:])
+        return int((await db.execute(q)).scalar_one())
+    from app.services.admin_analytics_service import MODE_SOURCES
+
+    src = next((s for s in MODE_SOURCES if s.key == mode), None)
+    if src is None:
+        return 0
+    q = select(func.count()).select_from(src.model)
+    if src.join is not None:
+        q = q.join(*src.join)
+    q = q.where(src.ts >= since, src.ts < until)
+    return int((await db.execute(q)).scalar_one())
+
+
 async def _played(db: AsyncSession, user: User, mode: str) -> bool:
     """A finished game of `mode` since registration (the task popup shows
     when the game is over, not at its start)."""
