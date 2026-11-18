@@ -19,6 +19,7 @@ import { PlayerTile } from "@/components/career/PlayerTile";
 import { IconCard, IconCoin } from "@/components/icons";
 import { lineOf, playerInfo } from "@/lib/careerPlayer";
 import { haptic } from "@/lib/telegram";
+import { careerArt } from "@/lib/careerArt";
 
 type Handlers = { onView: (v: CareerView) => void; onError: (e: unknown) => void };
 
@@ -200,10 +201,15 @@ export function OffseasonPanel({ season, catalog, onView, onError }: {
 
   return (
     <section className="flex flex-col rounded-3xl bg-gradient-to-b from-bg-surface to-bg-raised p-4 ring-1 ring-accent-lime/20">
-      <p className="text-micro uppercase tracking-wider text-accent-lime">Предсезонка</p>
-      <p className="font-display text-lg font-bold text-ink-chalk">
-        {off.first_season ? "Первый сезон" : "Новый сезон"} — {formatWhen(off.starts_at)}
-      </p>
+      <div className="flex items-center gap-3">
+        {careerArt("scenes", "offseason") && <img src={careerArt("scenes", "offseason")} alt="" decoding="async" className="h-16 w-16 shrink-0 object-contain" />}
+        <div className="min-w-0">
+          <p className="text-micro uppercase tracking-wider text-accent-lime">Предсезонка</p>
+          <p className="font-display text-lg font-bold text-ink-chalk">
+            {off.first_season ? "Первый сезон" : "Новый сезон"} — {formatWhen(off.starts_at)}
+          </p>
+        </div>
+      </div>
       <p className="mb-4 text-caption text-ink-mist">Любой шаг можно пропустить: сезон начнётся сам с текущими настройками.</p>
       {off.friend_league && (
         <p className="-mt-2 mb-4 rounded-xl bg-accent-cyan/10 px-3 py-2 text-caption text-accent-cyan">
@@ -215,7 +221,8 @@ export function OffseasonPanel({ season, catalog, onView, onError }: {
         <div className="mb-2 flex flex-wrap items-center gap-2 text-caption">
           {off.prev_place && <span className="rounded-full bg-bg-base/60 px-2.5 py-1 font-semibold text-ink-chalk">{off.prev_place} место</span>}
           {moved !== 0 && (
-            <span className={`rounded-full px-2.5 py-1 font-semibold ${moved < 0 ? "bg-accent-lime/15 text-accent-lime" : "bg-red-500/15 text-red-300"}`}>
+            <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold ${moved < 0 ? "bg-accent-lime/15 text-accent-lime" : "bg-red-500/15 text-red-300"}`}>
+              {careerArt("divisions", season.division?.division) && <img src={careerArt("divisions", season.division?.division)} alt="" decoding="async" className="-my-1 h-6 w-6 object-contain" />}
               {moved < 0 ? "▲ Повышение" : "▼ Вылет"} · {season.division?.name}
             </span>
           )}
@@ -264,7 +271,9 @@ export function OffseasonPanel({ season, catalog, onView, onError }: {
               <button key={c.code} role="radio" aria-checked={on} disabled={camp.isPending} onClick={() => camp.mutate(on ? null : c.code)}
                 className={`flex flex-col items-center gap-1 rounded-2xl p-2.5 text-center ${on ? "bg-floodlight text-bg-base" : "bg-bg-base/50 text-ink-chalk"}`}
               >
-                <span className="text-lg">{CAMP_ICON[c.code] ?? "•"}</span>
+                {careerArt("camps", c.code)
+                  ? <img src={careerArt("camps", c.code)} alt="" decoding="async" className="h-14 w-14 object-contain" />
+                  : <span className="text-lg">{CAMP_ICON[c.code] ?? "•"}</span>}
                 <span className="text-caption font-bold">{c.label}</span>
               </button>
             );

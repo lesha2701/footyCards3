@@ -6,6 +6,7 @@ import EmptyState from "@/components/common/EmptyState";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { IconTrophy, IconUsers } from "@/components/icons";
 import titleCupArt from "@/assets/coach/title_cup.webp";
+import { careerArt } from "@/lib/careerArt";
 
 const TROPHY_ICON: Record<string, string> = { title: "🏆", cup: "🏅", promotion: "⬆️" };
 
@@ -23,6 +24,8 @@ export function AchievementsPanel({ data }: { data: CareerAchievements }) {
               <div key={i} className="flex w-24 shrink-0 flex-col items-center gap-1 rounded-2xl bg-bg-base/50 p-2 text-center">
                 {t.kind === "title" ? (
                   <img src={titleCupArt} alt="" decoding="async" className="h-10 w-10 rounded-lg object-cover" />
+                ) : careerArt("achievements", t.kind) ? (
+                  <img src={careerArt("achievements", t.kind)} alt="" decoding="async" className="h-10 w-10 object-contain" />
                 ) : (
                   <span className="text-2xl" aria-hidden>{TROPHY_ICON[t.kind] ?? "🏆"}</span>
                 )}
@@ -35,18 +38,23 @@ export function AchievementsPanel({ data }: { data: CareerAchievements }) {
       </div>
       <div>
         <p className="mb-1.5 text-caption font-semibold text-ink-mist">Достижения · {data.unlocked} из {data.total}</p>
-        <div className="grid grid-cols-4 gap-1.5">
-          {data.items.map((a) => (
-            <div
-              key={a.code}
-              title={a.text}
-              className={`flex flex-col items-center gap-0.5 rounded-xl p-1.5 text-center ${a.unlocked_at ? "bg-accent-lime/10" : "bg-bg-base/40 opacity-45 grayscale"}`}
-            >
-              <span className="text-lg" aria-hidden>{a.icon}</span>
-              <span className="text-micro font-semibold leading-tight text-ink-chalk">{a.title}</span>
-              <span className="text-micro leading-tight text-ink-mist-dim">{a.text}</span>
-            </div>
-          ))}
+        <div className="grid grid-cols-3 gap-1.5">
+          {data.items.map((a) => {
+            const art = careerArt("achievements", a.code);
+            return (
+              <div
+                key={a.code}
+                title={a.text}
+                className={`flex flex-col items-center gap-1 rounded-2xl p-2 text-center ${a.unlocked_at ? "bg-accent-lime/10 ring-1 ring-accent-lime/30" : "bg-bg-base/40"}`}
+              >
+                {art
+                  ? <img src={art} alt="" decoding="async" className={`h-14 w-14 object-contain ${a.unlocked_at ? "" : "opacity-35 grayscale"}`} />
+                  : <span className={`text-2xl ${a.unlocked_at ? "" : "opacity-40 grayscale"}`} aria-hidden>{a.icon}</span>}
+                <span className={`text-caption font-bold leading-tight ${a.unlocked_at ? "text-ink-chalk" : "text-ink-mist"}`}>{a.title}</span>
+                <span className="text-micro leading-tight text-ink-mist-dim">{a.text}</span>
+              </div>
+            );
+          })}
         </div>
         <p className="mt-1.5 text-micro text-ink-mist-dim">
           Серии: побед {data.run.wins} · без поражений {data.run.unbeaten} · сухих {data.run.clean}

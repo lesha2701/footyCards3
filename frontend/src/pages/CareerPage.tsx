@@ -46,6 +46,7 @@ import { formatGameError } from "@/lib/errors";
 import { CATEGORY_POSITIONS } from "@/lib/formation";
 import { haptic } from "@/lib/telegram";
 import { CareerCrest } from "@/components/career/CareerCrest";
+import { careerArt } from "@/lib/careerArt";
 
 type Tab = "prep" | "calendar" | "club" | "profile";
 type CalendarTab = "table" | "rounds" | "scorers" | "cup";
@@ -148,7 +149,10 @@ function NewSeason({ view, onView, onError }: { view: CareerView } & Handlers) {
   return (
     <section className="flex flex-col gap-4 rounded-3xl bg-bg-surface p-4">
       <div className="text-sm text-ink-mist">
-        <p className="font-display text-base font-bold text-ink-chalk">Сезон на неделю</p>
+        <div className="flex items-center gap-3">
+          {careerArt("scenes", "new_season") && <img src={careerArt("scenes", "new_season")} alt="" decoding="async" className="h-16 w-16 shrink-0 object-contain" />}
+          <p className="font-display text-base font-bold text-ink-chalk">Сезон на неделю</p>
+        </div>
         <p className="mt-1">
           8 команд, 14 туров — по два в день, в {localSlots(view).join(" и ")}. Играешь своими карточками: заявка из 22
           игроков, следи за усталостью и травмами. Вход бесплатный.
@@ -201,8 +205,13 @@ function NewSeason({ view, onView, onError }: { view: CareerView } & Handlers) {
 function DivisionCard({ division, divisions }: { division: CareerDivision; divisions: CareerDivision[] }) {
   return (
     <div className="rounded-2xl bg-bg-raised p-3">
-      <p className="text-micro uppercase tracking-wider text-ink-mist">Твой дивизион</p>
-      <p className="font-display text-base font-bold text-ink-chalk">{division.name}</p>
+      <div className="flex items-center gap-3">
+        <DivisionBadge division={division.division} size="h-14 w-14" />
+        <div className="min-w-0">
+          <p className="text-micro uppercase tracking-wider text-ink-mist">Твой дивизион</p>
+          <p className="font-display text-base font-bold text-ink-chalk">{division.name}</p>
+        </div>
+      </div>
       <p className="mt-1 text-caption text-ink-mist">
         Соперники: {division.bot_level_label} · награды ×{division.reward_pct / 100}.
         {division.promote > 0 && division.division > 1 && ` Места 1–${division.promote} — повышение.`}
@@ -210,14 +219,17 @@ function DivisionCard({ division, divisions }: { division: CareerDivision; divis
         {" "}Сложность растёт вместе с дивизионом.
       </p>
       {divisions.length > 1 && (
-        <div className="mt-2 flex gap-1" aria-label="Лестница дивизионов">
-          {[...divisions].reverse().map((d) => (
-            <span
-              key={d.division}
-              title={d.name}
-              className={`h-1.5 flex-1 rounded-full ${d.division === division.division ? "bg-accent-lime" : d.division > division.division ? "bg-white/25" : "bg-white/10"}`}
-            />
-          ))}
+        <div className="mt-2 flex items-end justify-between gap-1" aria-label="Лестница дивизионов">
+          {[...divisions].reverse().map((d) => {
+            const here = d.division === division.division;
+            return careerArt("divisions", d.division) ? (
+              <img key={d.division} src={careerArt("divisions", d.division)} alt={d.name} title={d.name} decoding="async"
+                className={`object-contain ${here ? "h-10 w-10" : d.division > division.division ? "h-7 w-7 opacity-60" : "h-7 w-7 opacity-30 grayscale"}`} />
+            ) : (
+              <span key={d.division} title={d.name}
+                className={`h-1.5 flex-1 rounded-full ${here ? "bg-accent-lime" : d.division > division.division ? "bg-white/25" : "bg-white/10"}`} />
+            );
+          })}
         </div>
       )}
     </div>
@@ -278,7 +290,11 @@ function FinishedCard({ season, catalog }: { season: CareerSeason; catalog: Tact
   return (
     <section className="flex flex-col gap-3 rounded-3xl bg-bg-surface p-4">
       <div className="flex items-center gap-3">
-        <IconTrophy size={28} className={season.final_place === 1 ? "text-rarity-legendary" : "text-ink-mist"} />
+        {season.final_place === 1 && careerArt("achievements", "title")
+          ? <img src={careerArt("achievements", "title")} alt="" decoding="async" className="h-14 w-14 shrink-0 object-contain" />
+          : careerArt("divisions", season.division?.division)
+            ? <DivisionBadge division={season.division?.division} size="h-12 w-12" />
+            : <IconTrophy size={28} className={season.final_place === 1 ? "text-rarity-legendary" : "text-ink-mist"} />}
         <div>
           <p className="font-display text-base font-bold text-ink-chalk">
             {season.final_place ? `Сезон завершён: ${season.final_place} место` : "Сезон завершён"}
@@ -302,7 +318,18 @@ function DivisionMove({ from, to }: { from: CareerDivision; to: CareerDivision }
   const text = up ? `Повышение! Следующий сезон — ${to.name}`
     : down ? `Вылет. Следующий сезон — ${to.name}`
       : `Остаёшься в дивизионе «${from.name}»`;
-  return <p className={`rounded-xl px-3 py-2 text-sm font-semibold ${tone}`}>{text}</p>;
+  return (
+    <p className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold ${tone}`}>
+      <DivisionBadge division={to.division} size="h-8 w-8" />
+      <span className="min-w-0">{text}</span>
+    </p>
+  );
+}
+
+/** The division's league badge (assets/career/divisions/<n>.webp); nothing without the art. */
+function DivisionBadge({ division, size }: { division: number | null | undefined; size: string }) {
+  const art = careerArt("divisions", division);
+  return art ? <img src={art} alt="" decoding="async" className={`${size} shrink-0 object-contain`} /> : null;
 }
 
 /** The season in three sections: «Подготовка» (tactic, squad, training),

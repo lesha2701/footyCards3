@@ -5,6 +5,7 @@ import { useMutation } from "@tanstack/react-query";
 
 import { answerCareerMoment, type CareerSeason, type CareerView } from "@/api/career";
 import { haptic } from "@/lib/telegram";
+import { careerArt } from "@/lib/careerArt";
 
 type Handlers = { onView: (v: CareerView) => void; onError: (e: unknown) => void };
 
@@ -23,9 +24,14 @@ export function MomentCard({ season, onView, onError }: { season: CareerSeason }
   if (!moment) return null;
   return (
     <section className="flex flex-col gap-3 rounded-3xl bg-bg-surface p-4 ring-1 ring-floodlight/30" aria-label="Слово тренера">
-      <div>
-        <p className="text-micro uppercase tracking-wider text-ink-mist">{moment.kind === "press" ? "🎙 Пресс-конференция" : "💬 Разговор в раздевалке"}</p>
-        <p className="mt-1 text-sm font-semibold text-ink-chalk">{moment.text}</p>
+      <div className="flex items-start gap-3">
+        {careerArt("scenes", moment.kind === "press" ? "press" : "locker") && (
+          <img src={careerArt("scenes", moment.kind === "press" ? "press" : "locker")} alt="" decoding="async" className="h-16 w-16 shrink-0 object-contain" />
+        )}
+        <div className="min-w-0">
+          <p className="text-micro uppercase tracking-wider text-ink-mist">{moment.kind === "press" ? "Пресс-конференция" : "Разговор в раздевалке"}</p>
+          <p className="mt-1 text-sm font-semibold text-ink-chalk">{moment.text}</p>
+        </div>
       </div>
       <div className="flex flex-col gap-1.5">
         {moment.answers.map((a) => (
@@ -123,9 +129,12 @@ export function HotSeatBanner({ season }: { season: CareerSeason }) {
   const seat = season.hot_seat;
   if (!seat) return null;
   return (
-    <section className="rounded-3xl bg-red-500/10 p-4 ring-1 ring-red-400/40" aria-label="Горячее кресло">
-      <p className="font-display text-base font-bold text-red-300">🔥 Горячее кресло{seat.level > 1 ? ` · уровень ${seat.level}` : ""}</p>
-      <p className="mt-1 text-caption text-ink-chalk">{seat.text}</p>
+    <section className="flex items-center gap-3 rounded-3xl bg-red-500/10 p-4 ring-1 ring-red-400/40" aria-label="Горячее кресло">
+      {careerArt("scenes", "hot_seat") && <img src={careerArt("scenes", "hot_seat")} alt="" decoding="async" className="h-16 w-16 shrink-0 object-contain" />}
+      <div className="min-w-0">
+        <p className="font-display text-base font-bold text-red-300">{careerArt("scenes", "hot_seat") ? "" : "🔥 "}Горячее кресло{seat.level > 1 ? ` · уровень ${seat.level}` : ""}</p>
+        <p className="mt-1 text-caption text-ink-chalk">{seat.text}</p>
+      </div>
     </section>
   );
 }
