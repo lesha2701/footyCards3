@@ -36,12 +36,12 @@ describe("Событие недели", () => {
     });
     const cardBase = {
       cells: [cell(true), cell(true), cell(true), cell(false), cell(true, true), cell(false), cell(false), cell(false), cell(false)],
-      lines: [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]],
+      lines: [[0, 1, 2], [3, 4, 5], [6, 7, 8]],
       lines_done: [0], lines_claimed: [], full_done: false, full_claimed: false, line_coins: 150, full_coins: 800,
       full_pack_name: null, claimable_coins: 150, can_claim: false, community_eligible: true,
     };
     const { unmount } = show(bingo({ card: cardBase }));
-    expect(screen.getByText("Линий: 1/8 · клеток 4/9")).toBeInTheDocument();
+    expect(screen.getByText("Рядов: 1/3 · клеток 4/9")).toBeInTheDocument();
     unmount();
     show(bingo({ card: { ...cardBase, can_claim: true } }));
     expect(screen.getByText("Награда готова — забрать")).toBeInTheDocument();

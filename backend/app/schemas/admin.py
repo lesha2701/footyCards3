@@ -824,8 +824,8 @@ class GameConfigOut(BaseModel):
     weekly_top_rewards: list = []
     weekly_top_metrics: list = []
     bingo_reward_coins: int
-    bingo_line_coins: int = 150
-    bingo_full_coins: int = 800
+    bingo_line_coins: int = 500
+    bingo_full_coins: int = 500
     bingo_full_pack_id: Optional[int] = None
     # Effective card pool: the stored one, or bingo_service.DEFAULT_POOL.
     bingo_pool: list = []

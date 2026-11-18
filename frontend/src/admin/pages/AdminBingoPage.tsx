@@ -99,8 +99,8 @@ export default function AdminBingoPage() {
         throw new Error("Пул клеток — не JSON");
       }
       return updateGameConfig({
-        bingo_line_coins: lineCoins ?? config?.bingo_line_coins ?? 150,
-        bingo_full_coins: fullCoins ?? config?.bingo_full_coins ?? 800,
+        bingo_line_coins: lineCoins ?? config?.bingo_line_coins ?? 500,
+        bingo_full_coins: fullCoins ?? config?.bingo_full_coins ?? 500,
         bingo_full_pack_id: fullPackId === "" ? null : fullPackId ?? config?.bingo_full_pack_id ?? null,
         ...(pool !== undefined ? { bingo_pool: pool } : {}),
       });
@@ -236,7 +236,7 @@ export default function AdminBingoPage() {
       </div>
 
       <div className="rounded-2xl border border-white/5 bg-bg-surface p-4">
-        <p className="mb-3 text-sm font-semibold">Общая награда сервера (только закрывшим линию)</p>
+        <p className="mb-3 text-sm font-semibold">Общая награда сервера (только закрывшим ряд)</p>
         <p className="mb-3 text-xs text-slate-400">
           Не начисляется автоматически — игрок сам забирает её на странице Бинго, пока идёт неделя с выполненными
           заданиями. Если не забрать до конца недели — награда сгорает.
@@ -277,21 +277,21 @@ export default function AdminBingoPage() {
         <p className="mb-3 text-xs text-slate-400">
           У каждого своя карточка на неделю: 8 клеток из пула ниже (цель — случайное число от min до max) и бесплатный
           центр. Считаются только игры самого игрока за эту неделю. Общую награду выше получают лишь те, кто закрыл
-          хотя бы одну линию. Изменения пула — для новых карточек (со следующей недели).
+          хотя бы один ряд. Изменения пула — для новых карточек (со следующей недели).
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <label className="flex items-center gap-2">
-            <span className="text-xs text-slate-400">За линию</span>
-            <NumberInput min={0} value={lineCoins ?? config?.bingo_line_coins ?? 150} onChange={setLineCoins}
+            <span className="text-xs text-slate-400">За ряд</span>
+            <NumberInput min={0} value={lineCoins ?? config?.bingo_line_coins ?? 500} onChange={setLineCoins}
               className="w-24 rounded-lg bg-bg-base px-3 py-1.5 text-sm outline-none" />
           </label>
           <label className="flex items-center gap-2">
-            <span className="text-xs text-slate-400">За всю карточку</span>
-            <NumberInput min={0} value={fullCoins ?? config?.bingo_full_coins ?? 800} onChange={setFullCoins}
+            <span className="text-xs text-slate-400">За все 3 ряда (доп.)</span>
+            <NumberInput min={0} value={fullCoins ?? config?.bingo_full_coins ?? 500} onChange={setFullCoins}
               className="w-24 rounded-lg bg-bg-base px-3 py-1.5 text-sm outline-none" />
           </label>
           <label className="flex items-center gap-2">
-            <span className="text-xs text-slate-400">Пак за карточку</span>
+            <span className="text-xs text-slate-400">Пак за все 3 ряда</span>
             <select
               value={fullPackId ?? config?.bingo_full_pack_id ?? ""}
               onChange={(e) => setFullPackId(e.target.value ? Number(e.target.value) : "")}

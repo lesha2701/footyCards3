@@ -645,16 +645,16 @@ async def test_personal_card_counts_only_own_games_of_the_week_and_pays_lines_an
     db_session.add(GameSession(user_id=player_id, game_type=GameType.penalty, status=GameSessionStatus.lost))
     await db_session.commit()
     card = (await client.get("/api/v1/bingo/current", headers=headers)).json()["card"]
-    assert len(card["lines_done"]) == 8 and card["full_done"] is True
-    assert card["claimable_coins"] == 8 * 100 + 500 and card["community_eligible"] is True
+    assert card["lines_done"] == [0, 1, 2] and card["full_done"] is True
+    assert card["claimable_coins"] == 3 * 100 + 500 and card["community_eligible"] is True
 
     balance_before = (await db_session.get(User, player_id)).balance
     claim = await client.post("/api/v1/bingo/card/claim", headers=headers)
-    assert claim.status_code == 200 and claim.json()["coins_granted"] == 1300
-    assert claim.json()["new_balance"] == balance_before + 1300
+    assert claim.status_code == 200 and claim.json()["coins_granted"] == 800
+    assert claim.json()["new_balance"] == balance_before + 800
     assert (await client.post("/api/v1/bingo/card/claim", headers=headers)).status_code == 409
     row = (await db_session.execute(select(BingoCard).where(BingoCard.user_id == player_id))).scalar_one()
-    assert row.full_claimed is True and len(row.lines_claimed) == 8
+    assert row.full_claimed is True and row.lines_claimed == [0, 1, 2]
 
     # Someone who didn't play: nothing to claim, the card is theirs alone.
     idle_headers = telegram_headers(960102, bot_token)

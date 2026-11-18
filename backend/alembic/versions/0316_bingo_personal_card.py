@@ -1,6 +1,6 @@
-"""«Бинго недели»: the player's own 3×3 card (bingo_cards) with coins for a
-line and for the whole card; the server's common goal now pays only those
-with a closed line. The «обмены» common goal, out of reach since the trade
+"""«Бинго недели»: the player's own 3×3 card (bingo_cards): 500 coins a
+closed row, +500 and the legendary coin pack for all three; the server's
+common goal (2000 coins) now pays only those with a closed row. The «обмены» common goal, out of reach since the trade
 limits, is switched off — for the running week too.
 
 Revision ID: 0316
@@ -34,12 +34,17 @@ def upgrade() -> None:
     op.create_index("ix_bingo_cards_week_id", "bingo_cards", ["week_id"])
     op.create_index("ix_bingo_cards_user_id", "bingo_cards", ["user_id"])
 
-    op.add_column("game_config", sa.Column("bingo_line_coins", sa.Integer(), nullable=False, server_default="150"))
-    op.add_column("game_config", sa.Column("bingo_full_coins", sa.Integer(), nullable=False, server_default="800"))
+    op.add_column("game_config", sa.Column("bingo_line_coins", sa.Integer(), nullable=False, server_default="500"))
+    op.add_column("game_config", sa.Column("bingo_full_coins", sa.Integer(), nullable=False, server_default="500"))
     op.add_column("game_config", sa.Column("bingo_full_pack_id", sa.Integer(), nullable=True))
     op.add_column("game_config", sa.Column("bingo_pool", sa.JSON(), nullable=False, server_default="[]"))
 
     bind = op.get_bind()
+    # The legendary coin pack — the one «Подарок за возвращение» resolved (0265).
+    bind.execute(sa.text(
+        "UPDATE game_config SET bingo_reward_coins = 2000, bingo_full_pack_id = "
+        "(SELECT p.id FROM packs p WHERE p.slug = game_config.comeback_gift_pack_slug ORDER BY p.id LIMIT 1)"
+    ))
     bind.execute(sa.text(
         "UPDATE bingo_goal_definitions SET is_active = false WHERE goal_type = 'trades_completed'"
     ))

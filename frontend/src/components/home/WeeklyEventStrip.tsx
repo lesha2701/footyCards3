@@ -32,7 +32,7 @@ export default function WeeklyEventStrip({ bingo }: { bingo?: BingoCurrent | nul
     : finished
       ? "Карточка закрыта, награда получена"
       : card
-        ? `Линий: ${card.lines_done.length}/${card.lines.length} · клеток ${done}/${total}`
+        ? `Рядов: ${card.lines_done.length}/${card.lines.length} · клеток ${done}/${total}`
         : `Целей: ${done}/${total}`;
 
   return (

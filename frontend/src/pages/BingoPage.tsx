@@ -86,7 +86,7 @@ export default function BingoPage() {
           </div>
           <div>
             <h1 className="font-display text-xl font-bold text-ink-chalk">Бинго недели · неделя {data.week_number}</h1>
-            <p className="text-xs text-ink-mist">Своя карточка 3×3: закрывай линии и всю карточку целиком.</p>
+            <p className="text-xs text-ink-mist">Своя карточка 3×3: закрывай ряды и всю карточку целиком.</p>
           </div>
         </div>
         {data.ends_at && (
@@ -117,7 +117,7 @@ export default function BingoPage() {
             </p>
             <p className="mt-1 text-xs leading-relaxed text-ink-mist">
               Все игроки копят общие счётчики. Если к концу недели цели выполнены, бонус забирают те, кто закрыл{" "}
-              <b className="text-ink-chalk">хотя бы одну линию</b> в своей карточке.
+              <b className="text-ink-chalk">хотя бы один ряд</b> в своей карточке.
             </p>
           </div>
           {hasCommunityReward && (
@@ -152,7 +152,7 @@ export default function BingoPage() {
           )}
           {data.all_goals_completed && !data.has_claimed && card && !card.community_eligible && (
             <p className="rounded-xl bg-white/5 px-3 py-2 text-xs text-ink-mist">
-              Общие цели выполнены. Закрой линию в своей карточке, чтобы забрать бонус.
+              Общие цели выполнены. Закрой ряд в своей карточке, чтобы забрать бонус.
             </p>
           )}
           {data.has_claimed && (
@@ -207,7 +207,7 @@ function CardSection({
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-xs font-semibold uppercase tracking-wider text-ink-mist">Моя карточка</p>
         <p className="font-mono text-xs text-ink-mist">
-          Линий <b className="text-ink-chalk">{card.lines_done.length}/{card.lines.length}</b>
+          Рядов <b className="text-ink-chalk">{card.lines_done.length}/{card.lines.length}</b>
         </p>
       </div>
       <div className="grid grid-cols-3 gap-2">
@@ -236,10 +236,10 @@ function CardSection({
         ))}
       </div>
       <p className="text-xs leading-relaxed text-ink-mist">
-        Считаются только твои игры этой недели. Линия (ряд, столбец или диагональ) —{" "}
-        <b className="text-accent-lime">+{card.line_coins}</b>, вся карточка —{" "}
+        Считаются только твои игры этой недели. Каждый закрытый ряд —{" "}
+        <b className="text-accent-lime">+{card.line_coins}</b>, все три ряда — ещё{" "}
         <b className="text-accent-lime">+{card.full_coins}</b>
-        {card.full_pack_name && <> и пак «{card.full_pack_name}»</>}. Нажми на клетку, чтобы перейти к игре.
+        {card.full_pack_name && <> и «{card.full_pack_name}»</>}. Нажми на клетку, чтобы перейти к игре.
       </p>
       {card.can_claim ? (
         <button

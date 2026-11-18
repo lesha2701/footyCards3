@@ -69,10 +69,9 @@ DEFAULT_POOL: list[dict] = [
 ]
 FREE_CELL = {"metric": FREE, "label": "Бесплатная клетка", "target": 1}
 CENTRE = 4
-# Rows, columns and the two diagonals of the 3×3 card, cells numbered 0..8 row by row.
-LINES: tuple[tuple[int, int, int], ...] = (
-    (0, 1, 2), (3, 4, 5), (6, 7, 8), (0, 3, 6), (1, 4, 7), (2, 5, 8), (0, 4, 8), (2, 4, 6),
-)
+# The card's lines are its three rows (cells numbered 0..8 row by row):
+# a closed row pays bingo_line_coins, all three = the whole card.
+LINES: tuple[tuple[int, int, int], ...] = ((0, 1, 2), (3, 4, 5), (6, 7, 8))
 
 
 def _pool(config) -> list[dict]:
