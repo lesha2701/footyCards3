@@ -5,7 +5,7 @@ from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.schemas.bingo import BingoClaimResult, BingoCurrentOut
-from app.services.bingo_service import claim_reward, get_current_week_out
+from app.services.bingo_service import claim_card, claim_reward, get_current_week_out
 
 router = APIRouter(prefix="/bingo", tags=["bingo"])
 
@@ -18,3 +18,9 @@ async def get_current_bingo(db: AsyncSession = Depends(get_db), user: User = Dep
 @router.post("/claim", response_model=BingoClaimResult)
 async def claim_current_bingo_reward(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await claim_reward(db, user)
+
+
+@router.post("/card/claim", response_model=BingoClaimResult)
+async def claim_bingo_card(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """The player's own card: every closed line not paid yet, and the whole card."""
+    return await claim_card(db, user)

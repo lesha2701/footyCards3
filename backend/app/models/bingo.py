@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Integer, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -90,3 +90,25 @@ class BingoWeekReward(Base):
     granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (UniqueConstraint("week_id", "user_id", name="uq_bingo_week_reward"),)
+
+
+class BingoCard(Base):
+    """A player's own 3×3 card for one week (bingo_service.ensure_card):
+    `cells` are nine {"metric", "label", "target"} drawn from the pool, the
+    centre one free. Progress is never stored — it is counted from the
+    games' own rows inside the week on every read, so only what the player
+    really played counts. `lines_claimed` are the indices of the lines
+    (bingo_service.LINES) already paid; `full_claimed` the whole card."""
+
+    __tablename__ = "bingo_cards"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    week_id: Mapped[int] = mapped_column(ForeignKey("bingo_weeks.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    cells: Mapped[list] = mapped_column(JSON, nullable=False)
+    lines_claimed: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    full_claimed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    coins_granted: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (UniqueConstraint("week_id", "user_id", name="uq_bingo_card_week_user"),)

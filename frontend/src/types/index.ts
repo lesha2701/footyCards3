@@ -2975,6 +2975,38 @@ export interface BingoCurrent {
   reward_pack_name: string | null;
   reward_pack_image_path: string | null;
   has_claimed: boolean;
+  /** The player's own 3×3 card (null on an old backend). */
+  card?: BingoCard | null;
+}
+
+export interface BingoCardCell {
+  metric: string;
+  label: string;
+  /** Where to play it (a route of the app). */
+  path: string | null;
+  target: number;
+  value: number;
+  done: boolean;
+  /** The free centre. */
+  free: boolean;
+}
+
+export interface BingoCard {
+  /** Nine cells, row by row. */
+  cells: BingoCardCell[];
+  /** The eight lines as cell indices (rows, columns, diagonals). */
+  lines: number[][];
+  lines_done: number[];
+  lines_claimed: number[];
+  full_done: boolean;
+  full_claimed: boolean;
+  line_coins: number;
+  full_coins: number;
+  full_pack_name: string | null;
+  claimable_coins: number;
+  can_claim: boolean;
+  /** A closed line: the server's common reward is open to this player. */
+  community_eligible: boolean;
 }
 
 export interface BingoClaimResult {

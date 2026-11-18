@@ -824,6 +824,18 @@ class GameConfigOut(BaseModel):
     weekly_top_rewards: list = []
     weekly_top_metrics: list = []
     bingo_reward_coins: int
+    bingo_line_coins: int = 150
+    bingo_full_coins: int = 800
+    bingo_full_pack_id: Optional[int] = None
+    # Effective card pool: the stored one, or bingo_service.DEFAULT_POOL.
+    bingo_pool: list = []
+
+    @field_validator("bingo_pool", mode="after")
+    @classmethod
+    def _bingo_pool_or_default(cls, value: list) -> list:
+        from app.services.bingo_service import DEFAULT_POOL
+
+        return value or DEFAULT_POOL
     bingo_reward_pack_id: Optional[int] = None
     card_skills_enabled: bool = True
     card_skill_level_1_bonus_pp: int = 2
@@ -1756,6 +1768,10 @@ class GameConfigUpdate(BaseModel):
     weekly_top_rewards: Optional[list[WeeklyTopRewardIn]] = Field(default=None, max_length=100)
     weekly_top_metrics: Optional[list[str]] = None
     bingo_reward_coins: Optional[int] = Field(default=None, ge=0)
+    bingo_line_coins: Optional[int] = Field(default=None, ge=0)
+    bingo_full_coins: Optional[int] = Field(default=None, ge=0)
+    bingo_full_pack_id: Optional[int] = None
+    bingo_pool: Optional[list] = None
     bingo_reward_pack_id: Optional[int] = Field(default=None)
     card_skills_enabled: Optional[bool] = None
     card_skill_level_1_bonus_pp: Optional[int] = Field(default=None, ge=0, le=20)

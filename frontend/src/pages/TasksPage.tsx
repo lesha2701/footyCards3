@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { fetchCurrentBingo } from "@/api/bingo";
+import { bingoReady } from "@/lib/bingo";
 import { claimTask, claimTaskChest, fetchTasks, rerollTask } from "@/api/tasks";
 import EmptyState from "@/components/common/EmptyState";
 import RewardModal, { RewardCoins } from "@/components/common/RewardModal";
@@ -99,7 +100,7 @@ export default function TasksPage() {
   const requiredLeft = premium.filter((t) => t.is_required && !t.is_claimed);
   const readyOf = (list: Task[]) => list.filter((t) => t.is_completed && !t.is_claimed);
   const chestsReady = (track?: TaskTrack | null) => (track?.chests ?? []).filter((c) => c.is_available).length;
-  const bingoReady = !!bingo?.all_goals_completed && !bingo.has_claimed;
+  const bingoIsReady = bingoReady(bingo);
 
   const period: Period = tab === "weekly" ? "weekly" : "daily";
   const tasks = period === "daily" ? daily : weekly;
@@ -168,7 +169,7 @@ export default function TasksPage() {
         <TabPill
           active={tab === "weekly"}
           label="Неделя"
-          count={readyOf(weekly).length + chestsReady(taskList?.weekly_track) + (bingoReady ? 1 : 0)}
+          count={readyOf(weekly).length + chestsReady(taskList?.weekly_track) + (bingoIsReady ? 1 : 0)}
           onClick={() => setTab("weekly")}
         />
         <TabPill active={tab === "subs"} label="Подписки" count={readyOf(premium).length} gold onClick={() => setTab("subs")} />

@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 
 import { IconChevronRight, IconClock, IconTarget } from "@/components/icons";
+import { bingoReady } from "@/lib/bingo";
 import type { BingoCurrent } from "@/types";
 
 /** Time left until `endsAt`, short: «2 дн. 5 ч», «3 ч 10 мин», «12 мин». */
@@ -14,20 +15,25 @@ function formatTimeLeft(endsAt: string): string {
   return hours > 0 ? `${hours} ч ${minutes} мин` : `${minutes} мин`;
 }
 
-/** «Событие недели»: a slim full-width strip for the weekly bingo with
- * goals done, a progress bar and the time left. Hidden while it's off. */
+/** «Событие недели»: a slim full-width strip for the weekly bingo with the
+ * player's own card (lines closed, cells done) — or, on an old backend, the
+ * common goals — and the time left. Hidden while it's off. */
 export default function WeeklyEventStrip({ bingo }: { bingo?: BingoCurrent | null }) {
   const navigate = useNavigate();
   if (!bingo?.is_enabled) return null;
 
-  const total = bingo.goals.length;
-  const done = bingo.goals.filter((g) => g.is_completed).length;
-  const rewardReady = bingo.all_goals_completed && !bingo.has_claimed;
+  const card = bingo.card;
+  const total = card ? card.cells.length : bingo.goals.length;
+  const done = card ? card.cells.filter((c) => c.done).length : bingo.goals.filter((g) => g.is_completed).length;
+  const rewardReady = bingoReady(bingo);
+  const finished = card ? card.full_claimed : bingo.has_claimed;
   const status = rewardReady
     ? "Награда готова — забрать"
-    : bingo.has_claimed
-      ? "Пройдено, награда получена"
-      : `Целей: ${done}/${total}`;
+    : finished
+      ? "Карточка закрыта, награда получена"
+      : card
+        ? `Линий: ${card.lines_done.length}/${card.lines.length} · клеток ${done}/${total}`
+        : `Целей: ${done}/${total}`;
 
   return (
     <button
@@ -46,7 +52,7 @@ export default function WeeklyEventStrip({ bingo }: { bingo?: BingoCurrent | nul
       <span className="min-w-0 flex-1">
         <span className="flex items-center justify-between gap-2">
           <span className="truncate font-display text-sm font-bold text-ink-chalk">Бинго недели</span>
-          {bingo.ends_at && !bingo.has_claimed && (
+          {bingo.ends_at && !finished && (
             <span className="flex shrink-0 items-center gap-1 font-mono text-micro text-ink-mist">
               <IconClock size={11} />
               {formatTimeLeft(bingo.ends_at)}
@@ -56,7 +62,7 @@ export default function WeeklyEventStrip({ bingo }: { bingo?: BingoCurrent | nul
         <span className={`block truncate text-xs ${rewardReady ? "font-semibold text-accent-lime" : "text-ink-mist"}`}>
           {status}
         </span>
-        {total > 0 && !bingo.has_claimed && (
+        {total > 0 && !finished && (
           <span className="mt-1.5 block h-1 overflow-hidden rounded-full bg-white/10">
             <span
               className={`block h-full rounded-full ${rewardReady ? "bg-accent-lime" : "bg-fuchsia-400"}`}

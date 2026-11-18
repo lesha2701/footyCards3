@@ -45,6 +45,10 @@ export default function AdminBingoPage() {
   const [newTarget, setNewTarget] = useState(1000);
   const [rewardCoins, setRewardCoins] = useState<number | null>(null);
   const [rewardPackId, setRewardPackId] = useState<number | "" | null>(null);
+  const [lineCoins, setLineCoins] = useState<number | null>(null);
+  const [fullCoins, setFullCoins] = useState<number | null>(null);
+  const [fullPackId, setFullPackId] = useState<number | "" | null>(null);
+  const [poolText, setPoolText] = useState<string | null>(null);
   const [statsPreview, setStatsPreview] = useState<BingoStatsPreviewItem[] | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
 
@@ -84,6 +88,25 @@ export default function AdminBingoPage() {
       }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["admin-game-config"] }); setError(null); },
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Не удалось сохранить награду"),
+  });
+
+  const saveCardMutation = useMutation({
+    mutationFn: () => {
+      let pool;
+      try {
+        pool = poolText === null ? undefined : JSON.parse(poolText);
+      } catch {
+        throw new Error("Пул клеток — не JSON");
+      }
+      return updateGameConfig({
+        bingo_line_coins: lineCoins ?? config?.bingo_line_coins ?? 150,
+        bingo_full_coins: fullCoins ?? config?.bingo_full_coins ?? 800,
+        bingo_full_pack_id: fullPackId === "" ? null : fullPackId ?? config?.bingo_full_pack_id ?? null,
+        ...(pool !== undefined ? { bingo_pool: pool } : {}),
+      });
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["admin-game-config"] }); setPoolText(null); setError(null); },
+    onError: (err) => setError(err instanceof Error ? err.message : "Не удалось сохранить карточку"),
   });
 
   const activeGoalTypes = new Set((goals ?? []).filter((g) => g.is_active).map((g) => g.goal_type));
@@ -213,7 +236,7 @@ export default function AdminBingoPage() {
       </div>
 
       <div className="rounded-2xl border border-white/5 bg-bg-surface p-4">
-        <p className="mb-3 text-sm font-semibold">Награда за выполненную неделю</p>
+        <p className="mb-3 text-sm font-semibold">Общая награда сервера (только закрывшим линию)</p>
         <p className="mb-3 text-xs text-slate-400">
           Не начисляется автоматически — игрок сам забирает её на странице Бинго, пока идёт неделя с выполненными
           заданиями. Если не забрать до конца недели — награда сгорает.
@@ -247,6 +270,56 @@ export default function AdminBingoPage() {
             Сохранить
           </button>
         </div>
+      </div>
+
+      <div className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+        <p className="mb-1 text-sm font-semibold">Личная карточка игрока 3×3</p>
+        <p className="mb-3 text-xs text-slate-400">
+          У каждого своя карточка на неделю: 8 клеток из пула ниже (цель — случайное число от min до max) и бесплатный
+          центр. Считаются только игры самого игрока за эту неделю. Общую награду выше получают лишь те, кто закрыл
+          хотя бы одну линию. Изменения пула — для новых карточек (со следующей недели).
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2">
+            <span className="text-xs text-slate-400">За линию</span>
+            <NumberInput min={0} value={lineCoins ?? config?.bingo_line_coins ?? 150} onChange={setLineCoins}
+              className="w-24 rounded-lg bg-bg-base px-3 py-1.5 text-sm outline-none" />
+          </label>
+          <label className="flex items-center gap-2">
+            <span className="text-xs text-slate-400">За всю карточку</span>
+            <NumberInput min={0} value={fullCoins ?? config?.bingo_full_coins ?? 800} onChange={setFullCoins}
+              className="w-24 rounded-lg bg-bg-base px-3 py-1.5 text-sm outline-none" />
+          </label>
+          <label className="flex items-center gap-2">
+            <span className="text-xs text-slate-400">Пак за карточку</span>
+            <select
+              value={fullPackId ?? config?.bingo_full_pack_id ?? ""}
+              onChange={(e) => setFullPackId(e.target.value ? Number(e.target.value) : "")}
+              className="rounded-lg bg-bg-base px-3 py-1.5 text-sm outline-none"
+            >
+              <option value="">Нет</option>
+              {packs?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </label>
+        </div>
+        <label className="mt-3 block">
+          <span className="text-xs text-slate-400">
+            Пул клеток (JSON: metric — played:&lt;режим&gt;, game:&lt;игра&gt; или packs; label; path; min; max). Пустой список — пул по умолчанию.
+          </span>
+          <textarea
+            value={poolText ?? JSON.stringify(config?.bingo_pool ?? [], null, 1)}
+            onChange={(e) => setPoolText(e.target.value)}
+            rows={8}
+            className="mt-1 w-full rounded-lg bg-bg-base px-3 py-2 font-mono text-[11px] outline-none"
+          />
+        </label>
+        <button
+          onClick={() => saveCardMutation.mutate()}
+          disabled={saveCardMutation.isPending}
+          className="mt-2 rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-bg-base disabled:opacity-40"
+        >
+          Сохранить карточку
+        </button>
       </div>
 
       <div className="flex items-center justify-between rounded-2xl border border-white/5 bg-bg-surface p-4">

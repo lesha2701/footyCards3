@@ -815,6 +815,11 @@ export interface GameConfig {
   weekly_top_metrics: string[];
   bingo_reward_coins: number;
   bingo_reward_pack_id: number | null;
+  /** «Бинго недели»: the player's own card — a line, the whole card, its pack, the cell pool. */
+  bingo_line_coins: number;
+  bingo_full_coins: number;
+  bingo_full_pack_id: number | null;
+  bingo_pool: { metric: string; label: string; path?: string | null; min: number; max: number }[];
   card_skills_enabled: boolean;
   card_skill_level_1_bonus_pp: number;
   card_skill_level_2_bonus_pp: number;

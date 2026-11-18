@@ -14,6 +14,34 @@ class BingoGoalOut(BaseModel):
     is_completed: bool
 
 
+class BingoCardCellOut(BaseModel):
+    metric: str
+    label: str
+    path: Optional[str] = None
+    target: int
+    value: int
+    done: bool
+    free: bool = False
+
+
+class BingoCardOut(BaseModel):
+    """The player's own 3×3 card (cells row by row, the centre free)."""
+    cells: list[BingoCardCellOut]
+    lines: list[list[int]]
+    lines_done: list[int]
+    lines_claimed: list[int]
+    full_done: bool
+    full_claimed: bool
+    line_coins: int
+    full_coins: int
+    full_pack_name: Optional[str] = None
+    # Coins waiting in POST /bingo/card/claim right now.
+    claimable_coins: int = 0
+    can_claim: bool = False
+    # A closed line: the community reward is open to this player.
+    community_eligible: bool = False
+
+
 class BingoCurrentOut(BaseModel):
     is_enabled: bool
     week_number: Optional[int] = None
@@ -30,6 +58,7 @@ class BingoCurrentOut(BaseModel):
     # Whether the requesting user has already claimed this week's reward —
     # claiming is manual (POST /bingo/claim), never automatic.
     has_claimed: bool = False
+    card: Optional[BingoCardOut] = None
 
 
 class BingoClaimResult(BaseModel):
