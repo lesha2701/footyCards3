@@ -373,6 +373,8 @@ class GameLimitsOut(BaseModel):
     one_on_one: int = 0
     otvetka: int = 0
     fergie_time: int = 0
+    lucky_board: int = 0
+    lucky_board_hourly_limit: int = 0
     # When a game's hourly cap is used up: the moment it frees up again
     # (key = the field name above). Games with plays left are absent.
     resets_at: dict[str, datetime] = {}

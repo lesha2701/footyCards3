@@ -14,7 +14,7 @@ from app.models.game import GameSession
 from app.models.match import Match
 from app.models.user import User
 from app.schemas.admin import GameConfigOut, GameConfigUpdate, SuspiciousMatchOut, SuspiciousMemorySessionOut
-from app.services import club_base_service, magnate_engine, town_service, town_social_service, town_villa_service
+from app.services import club_base_service, lucky_board_service, magnate_engine, town_service, town_social_service, town_villa_service
 from app.services.admin_log_service import log_action
 from app.services.game_config_service import get_config
 
@@ -38,6 +38,11 @@ async def update_config(payload: GameConfigUpdate, request: Request, db: AsyncSe
             updates["magnate_cards"] = magnate_engine.validate_cards(updates["magnate_cards"])
     except magnate_engine.EngineError as exc:
         raise ConflictError(f"Футбольный магнат: {exc}")
+    if updates.get("lucky_board_outcomes") is not None:
+        try:
+            updates["lucky_board_outcomes"] = lucky_board_service.validate_outcomes(updates["lucky_board_outcomes"])
+        except (ValueError, TypeError) as exc:
+            raise ConflictError(f"Табло удачи: {exc}")
     if updates.get("club_base_buildings") is not None:
         try:
             updates["club_base_buildings"] = club_base_service.validate_buildings(updates["club_base_buildings"])
@@ -272,3 +277,9 @@ async def suspicious_matches(db: AsyncSession = Depends(get_db)):
         if abs(m.user_score - m.opponent_score) >= config.suspicious_score_margin
     ]
     return suspicious[:100]
+
+
+@router.get("/lucky-board/estimate")
+async def lucky_board_estimate(db: AsyncSession = Depends(get_db)):
+    """«Табло удачи»: what one spin pays on average, per side (free / paid)."""
+    return lucky_board_service.expected_value(await get_config(db))

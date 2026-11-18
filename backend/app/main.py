@@ -66,6 +66,7 @@ from app.routers import (
     auth,
     bingo,
     blackjack,
+    lucky_board,
     broadcasts,
     card_collections,
     card_skills,
@@ -229,6 +230,7 @@ app.include_router(auction.router, prefix=API_PREFIX)
 app.include_router(daily_rewards.router, prefix=API_PREFIX)
 app.include_router(wheel.router, prefix=API_PREFIX)
 app.include_router(blackjack.router, prefix=API_PREFIX)
+app.include_router(lucky_board.router, prefix=API_PREFIX)
 app.include_router(profile.router, prefix=API_PREFIX)
 app.include_router(share.router, prefix=API_PREFIX)
 app.include_router(users.router, prefix=API_PREFIX)

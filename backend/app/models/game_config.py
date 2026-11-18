@@ -19,6 +19,31 @@ NEWBIE_DEFAULT_TASKS = [
     {"code": "fergie_time", "label": "Вырви победу в «Ферги Тайм»", "mode": "game:fergie_time", "path": "/play/fergie-time", "coins": 1000},
 ]
 
+# «Табло удачи» default table (lucky_board_service.py; the 0306 migration
+# writes the same). Weights are per mille. Each side's prize: coins (free side
+# only), tokens (skill tokens of one random skill), shards (N → 1 token),
+# cosmetic (paid «Бутса»: a pool cosmetic or badge, else the shards).
+LUCKY_BOARD_DEFAULT_OUTCOMES = [
+    {"code": "cup", "label": "Кубок", "free_weight": 10, "paid_weight": 10,
+     "free": {"coins": 1000, "tokens": 1, "shards": 0, "cosmetic": False},
+     "paid": {"coins": 0, "tokens": 3, "shards": 0, "cosmetic": False}},
+    {"code": "ball", "label": "Хет-трик", "free_weight": 30, "paid_weight": 30,
+     "free": {"coins": 0, "tokens": 1, "shards": 0, "cosmetic": False},
+     "paid": {"coins": 0, "tokens": 2, "shards": 0, "cosmetic": False}},
+    {"code": "glove", "label": "Сухарь", "free_weight": 80, "paid_weight": 80,
+     "free": {"coins": 300, "tokens": 0, "shards": 0, "cosmetic": False},
+     "paid": {"coins": 0, "tokens": 1, "shards": 0, "cosmetic": False}},
+    {"code": "boot", "label": "Бутса", "free_weight": 80, "paid_weight": 30,
+     "free": {"coins": 150, "tokens": 0, "shards": 0, "cosmetic": False},
+     "paid": {"coins": 0, "tokens": 0, "shards": 3, "cosmetic": True}},
+    {"code": "pair", "label": "Дубль", "free_weight": 300, "paid_weight": 350,
+     "free": {"coins": 0, "tokens": 0, "shards": 1, "cosmetic": False},
+     "paid": {"coins": 0, "tokens": 0, "shards": 2, "cosmetic": False}},
+    {"code": "miss", "label": "Мимо ворот", "free_weight": 500, "paid_weight": 500,
+     "free": {"coins": 25, "tokens": 0, "shards": 0, "cosmetic": False},
+     "paid": {"coins": 0, "tokens": 0, "shards": 1, "cosmetic": False}},
+]
+
 # «Клубная база» defaults (GameConfig.club_base_buildings / club_base_caps;
 # the 0180 migration writes the same values). Lists are per level.
 # 25 levels like the whole «Академия»: costs and build hours grow smoothly,
@@ -1003,6 +1028,26 @@ class GameConfig(TimestampMixin, Base):
     blackjack_stars_cost: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     blackjack_paid_daily_limit: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     blackjack_consolation_coins: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
+
+    # «Табло удачи» (lucky_board_service.py): a three-window football
+    # scoreboard. Fixed price per spin, no stakes. lucky_board_outcomes is the
+    # weight + prize table (shape: LUCKY_BOARD_DEFAULT_OUTCOMES) — the server
+    # rolls on it and the game shows the same odds. Paid-spin prizes are
+    # account-bound only (skill tokens, shards, cosmetics, a badge — never
+    # coins or cards); admin validation enforces it.
+    lucky_board_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    lucky_board_free_per_day: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    lucky_board_stars_cost: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    lucky_board_paid_daily_limit: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    lucky_board_hourly_limit: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    lucky_board_shards_per_token: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    lucky_board_outcomes: Mapped[list] = mapped_column(
+        JSON, default=lambda: [dict(o) for o in LUCKY_BOARD_DEFAULT_OUTCOMES], nullable=False,
+    )
+    # Exclusive cosmetics / a badge a paid «Бутса» can give (one not yet
+    # owned, at random); none left → that outcome's fallback shards.
+    lucky_board_cosmetic_ids: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    lucky_board_badge_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # «Мордобой» (mordoboi_service.py): boxing on one card. Off by default.
     mordoboi_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
