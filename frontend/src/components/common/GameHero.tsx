@@ -5,8 +5,9 @@ import { artOf } from "@/lib/gameArt";
 /** A game page header: the game's picture large, on a blurred copy of itself, with the
  * title (an <h1>) and an optional line under it; `children` go on the right. Falls back to
  * a plain title when the game has no picture. `compact` = one slim row (small picture,
- * no card) for a screen that is mostly the game itself. */
-export default function GameHero({ game, title, subtitle, children, compact = false }: {
+ * no card) — the default for game modes; `compact={false}` keeps the big card
+ * (the club base and the town). */
+export default function GameHero({ game, title, subtitle, children, compact = true }: {
   game: string; title: ReactNode; subtitle?: ReactNode; children?: ReactNode; compact?: boolean;
 }) {
   const art = artOf(game);

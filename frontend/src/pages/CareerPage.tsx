@@ -90,7 +90,7 @@ export default function CareerPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <GameHero game="career" title="Карьера тренера" compact />
+      <GameHero game="career" title="Карьера тренера" />
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
 
       {data.invite && <InviteCard view={data} onView={onView} onError={onError} />}
