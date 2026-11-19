@@ -11,6 +11,8 @@ import {
   priceManagerAlumnus,
   releaseManagerAlumnus,
   sellManagerAlumnus,
+  setManagerFilialName,
+  setManagerFilialSkin,
   type ManagerAlumnus,
   type ManagerFilialView,
 } from "@/api/manager";
@@ -18,9 +20,11 @@ import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { MIcon } from "@/lib/managerIcons";
 import { eur } from "@/lib/managerMoney";
+import { payMyPlayerWithStars } from "@/lib/myPlayerStars";
 import { hapticNotify } from "@/lib/telegram";
 
-// The region's header picture: assets/manager/filial/<region>.webp (none → a gradient only).
+// assets/manager/filial/: <region>.webp — the header of a region, world_map.webp — the map to
+// choose one, skin_<code>.webp — a Stars header skin (a missing picture → a gradient only).
 const REGION_ART = Object.fromEntries(
   Object.entries(import.meta.glob("../../assets/manager/filial/*.webp", { eager: true, import: "default" }) as Record<string, string>)
     .map(([path, url]) => [path.slice(path.lastIndexOf("/") + 1, -".webp".length), url]),
@@ -60,6 +64,8 @@ export default function FilialPanel({ onError }: { onError: (e: unknown) => void
           <Release view={data} busy={act.isPending} confirm={confirm} run={(f) => act.mutate(f)} />
           <Alumni view={data} busy={act.isPending} confirm={confirm} run={(f) => act.mutate(f)} />
           <Buildings view={data} busy={act.isPending} confirm={confirm} run={(f) => act.mutate(f)} />
+          <FilialStars view={data} busy={act.isPending} onError={onError} run={(f) => act.mutate(f)} />
+          <Hall view={data} />
           <button onClick={() => setMarket((m) => !m)} className="rounded-xl bg-bg-surface px-3 py-2 text-caption font-bold text-ink-chalk">
             🛒 Рынок выпускников {market ? "▴" : "▾"}
           </button>
@@ -86,7 +92,7 @@ export default function FilialPanel({ onError }: { onError: (e: unknown) => void
 function OpenFilial({ view, busy, confirm, open }: {
   view: ManagerFilialView; busy: boolean; confirm: (a: Ask) => void; open: (region: string, country: string) => void;
 }) {
-  const [region, setRegion] = useState(view.regions[0]?.code ?? "");
+  const [region, setRegion] = useState("");
   const r = view.regions.find((x) => x.code === region);
   const [country, setCountry] = useState("");
   const chosen = r?.countries.find((c) => c.name === country) ?? r?.countries[0];
@@ -98,15 +104,17 @@ function OpenFilial({ view, busy, confirm, open }: {
         Раз в несколько сезонов филиал выпускает молодых футболистов из стран региона. Они растут, выходят на пик,
         стареют и уходят на пенсию: 1 сезон = 1 год. Регион выбирается один раз.
       </p>
-      <div className="grid grid-cols-2 gap-1.5">
-        {view.regions.map((x) => (
-          <button key={x.code} onClick={() => { setRegion(x.code); setCountry(""); }}
-            className={`rounded-xl px-2 py-2 text-caption font-bold ${x.code === region ? "bg-amber-400 text-bg-base" : "bg-bg-raised text-ink-chalk"}`}>
-            {x.emoji} {x.name}
-          </button>
-        ))}
-      </div>
-      {art && <img src={art} alt="" className="aspect-video w-full rounded-xl object-cover" />}
+      {!region ? (
+        <WorldMap view={view} onPick={(code) => { setRegion(code); setCountry(""); }} />
+      ) : (
+        <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-teal-900/70 to-bg-raised" data-testid="filial-region">
+          {art ? <img src={art} alt="" className="aspect-video w-full object-cover" /> : <div className="aspect-video w-full" />}
+          <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-2 bg-gradient-to-b from-black/70 to-transparent p-2">
+            <span className="text-caption font-bold text-ink-chalk [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">{r?.emoji} {r?.name}</span>
+            <button onClick={() => setRegion("")} className="rounded-lg bg-black/50 px-2 py-1 text-micro font-bold text-ink-chalk">🗺 Карта</button>
+          </div>
+        </div>
+      )}
       {r && (
         <div className="flex flex-wrap gap-1">
           {r.countries.map((c) => (
@@ -117,7 +125,7 @@ function OpenFilial({ view, busy, confirm, open }: {
           ))}
         </div>
       )}
-      <p className="text-micro text-ink-mist">Страна — где стоит филиал; выпускники будут из всего региона.</p>
+      {r && <p className="text-micro text-ink-mist">Страна — где стоит филиал; выпускники будут из всего региона.</p>}
       <FilialPromise view={view} />
       <button disabled={busy || !chosen || view.balance < view.open_coins}
         onClick={() => chosen && confirm({ title: `Открыть филиал: ${chosen.flag} ${chosen.name}?`, label: "Открыть",
@@ -125,6 +133,37 @@ function OpenFilial({ view, busy, confirm, open }: {
         className="rounded-xl bg-gradient-to-b from-amber-300 to-amber-500 px-3 py-2.5 text-caption font-bold text-bg-base disabled:opacity-50">
         Открыть за {coins(view.open_coins)}
       </button>
+    </div>
+  );
+}
+
+// Where each region's pin stands on the world map (% of its width / height).
+const PINS: Record<string, { x: number; y: number }> = {
+  north_america: { x: 21, y: 34 }, south_america: { x: 31, y: 70 }, europe: { x: 51, y: 27 },
+  africa: { x: 52, y: 58 }, asia: { x: 75, y: 37 },
+};
+
+/** The world map with a pin per region: a tap opens the region. */
+function WorldMap({ view, onPick }: { view: ManagerFilialView; onPick: (code: string) => void }) {
+  const map = REGION_ART.world_map;
+  return (
+    <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl bg-gradient-to-br from-sky-900 via-teal-900 to-indigo-950 ring-1 ring-white/10"
+      data-testid="filial-map">
+      {map && <img src={map} alt="" className="absolute inset-0 h-full w-full object-cover" />}
+      {!map && <p className="absolute inset-x-0 bottom-1 text-center text-[10px] text-white/40">выбери регион на карте</p>}
+      {view.regions.map((x) => {
+        const pin = PINS[x.code] ?? { x: 50, y: 50 };
+        return (
+          <button key={x.code} onClick={() => onPick(x.code)} aria-label={x.name}
+            style={{ left: `${pin.x}%`, top: `${pin.y}%` }}
+            className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5 transition active:scale-95">
+            <span className="grid h-11 w-11 place-items-center rounded-full bg-black/35 ring-2 ring-amber-300/80 shadow-[0_0_18px_rgba(251,191,36,0.55)]">
+              <MIcon code={`filial_pin_${x.code}`} emoji={x.emoji} className="h-10 w-10" emojiClass="text-2xl" />
+            </span>
+            <span className="max-w-[6.5rem] rounded-md bg-black/60 px-1.5 py-0.5 text-center text-[9px] font-bold leading-tight text-white">{x.name}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -155,12 +194,12 @@ function FilialPromise({ view }: { view: ManagerFilialView }) {
 
 function FilialHero({ view }: { view: ManagerFilialView }) {
   const f = view.filial!;
-  const art = REGION_ART[f.region];
+  const art = (f.skin && REGION_ART[`skin_${f.skin}`]) || REGION_ART[f.region];
   return (
     <section className="relative min-h-[8rem] overflow-hidden rounded-2xl bg-gradient-to-br from-teal-900/70 to-bg-surface p-3 ring-1 ring-teal-300/30">
       {art && <img src={art} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />}
       <div className="relative flex flex-col gap-1 [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">
-        <p className="text-body font-bold text-ink-chalk">{f.flag} Филиал · {f.country}</p>
+        <p className="text-body font-bold text-ink-chalk">{f.flag} {f.name ? `Академия «${f.name}»` : "Филиал"} · {f.country}</p>
         <p className="text-micro text-ink-mist">{f.region_name}</p>
         <div className="mt-1 flex flex-wrap gap-1.5 text-micro">
           <span className="rounded-lg bg-black/40 px-2 py-1 text-ink-chalk">📝 Контракты {f.used}/{f.contracts}</span>
@@ -189,6 +228,7 @@ function Release({ view, busy, confirm, run }: Part) {
           <div className="min-w-0 flex-1">
             <p className="truncate text-caption font-bold text-ink-chalk">{c.name} · {c.position}</p>
             <p className="text-micro text-ink-mist">рейтинг {c.rating} · потенциал <span className="text-amber-300">{starsOf(c.stars)}</span> · пик к {c.peak_age}</p>
+            {c.peak != null && <p className="text-micro font-bold text-emerald-300">📋 пик {c.peak} в {c.peak_age} лет</p>}
           </div>
           <button disabled={busy} onClick={() => confirm({ title: `Подписать ${c.name}?`, label: "Подписать",
             text: "Остальные кандидаты уйдут. Зарплата — в начале каждого сезона, как у всех.", run: () => run(() => pickManagerFilial(i)) })}
@@ -317,6 +357,109 @@ function AlumniMarket({ onError, confirm }: { onError: (e: unknown) => void; con
             onClick={() => confirm({ title: `Купить ${l.name}?`, label: "Купить", text: `${eur(l.price ?? 0)} из бюджета клуба.`, run: () => buy.mutate(l.id) })}
             className="rounded-lg bg-teal-300 px-2 py-1.5 text-micro font-bold text-bg-base disabled:opacity-50">{eur(l.price ?? 0)}</button>
         </div>
+      ))}
+    </div>
+  );
+}
+
+/** «⭐ За звёзды»: convenience and style only — never the strength. */
+function FilialStars({ view, busy, onError, run }: {
+  view: ManagerFilialView; busy: boolean; onError: (e: unknown) => void; run: (f: () => Promise<ManagerFilialView>) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [paying, setPaying] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const f = view.filial!;
+  const st = view.stars;
+  const pay = async (code: string) => {
+    setPaying(code);
+    try {
+      if ((await payMyPlayerWithStars({ purchase: "manager", code })) === "paid") {
+        hapticNotify("success");
+        await queryClient.invalidateQueries({ queryKey: ["manager", "filial"] });
+      }
+    } catch (err) {
+      onError(err);
+    } finally {
+      setPaying(null);
+    }
+  };
+  const pending = f.pending.length > 0;
+  const full = f.used >= f.contracts;
+  const why: Record<string, string | null> = {
+    rush: pending ? "выпуск уже ждёт" : full ? "нет свободного контракта" : f.rush_in > 0 ? `через ${seasons(f.rush_in)}` : null,
+    reroll: !pending ? "нет выпуска" : f.rerolled ? "уже было" : null,
+    report: !pending ? "нет выпуска" : f.revealed ? "уже открыт" : null,
+    name: null,
+  };
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl bg-gradient-to-b from-amber-400/10 to-bg-surface p-3 ring-1 ring-amber-300/20" data-testid="filial-stars">
+      <p className="text-micro font-bold uppercase tracking-wide text-amber-200">⭐ За звёзды</p>
+      {(["rush", "reroll", "report", "name"] as const).map((k) => {
+        const item = st[k];
+        const credit = f.credits[k] ?? 0;
+        return (
+          <div key={k} className="flex items-center gap-2 rounded-xl bg-bg-raised px-2.5 py-2">
+            <MIcon code={`filial_${k}`} emoji={item.emoji} className="h-9 w-9" emojiClass="text-xl" />
+            <div className="min-w-0 flex-1">
+              <p className="text-caption font-bold text-ink-chalk">{item.name}</p>
+              <p className="text-micro leading-tight text-ink-mist">{item.about}</p>
+            </div>
+            {credit > 0 && k !== "name" ? (
+              <span className="text-micro font-bold text-emerald-300">оплачено</span>
+            ) : credit > 0 ? null : (
+              <button disabled={busy || !!paying || !!why[k]} onClick={() => void pay(`filial:${k}`)}
+                className="shrink-0 rounded-lg bg-amber-400 px-2 py-1.5 text-micro font-bold text-bg-base disabled:bg-bg-surface disabled:text-ink-mist">
+                {why[k] ?? `${item.stars} ⭐`}
+              </button>
+            )}
+          </div>
+        );
+      })}
+      {(f.credits.name ?? 0) > 0 && (
+        <div className="flex gap-1.5">
+          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={24} placeholder="Название академии"
+            className="min-w-0 flex-1 rounded-lg bg-bg-raised px-2 py-1.5 text-caption text-ink-chalk" />
+          <button disabled={busy || name.trim().length < 2} onClick={() => run(() => setManagerFilialName(name.trim()))}
+            className="rounded-lg bg-amber-400 px-2.5 py-1.5 text-micro font-bold text-bg-base disabled:opacity-50">Назвать</button>
+        </div>
+      )}
+      <p className="pt-1 text-micro font-bold text-ink-mist">🎨 Оформление филиала</p>
+      <div className="grid grid-cols-3 gap-1.5">
+        {st.skins.map((sk) => {
+          const owned = f.skins.includes(sk.code);
+          const on = f.skin === sk.code;
+          const art = REGION_ART[`skin_${sk.code}`];
+          return (
+            <button key={sk.code} disabled={busy || !!paying}
+              onClick={() => (owned ? run(() => setManagerFilialSkin(on ? null : sk.code)) : void pay(`filial:skin:${sk.code}`))}
+              className={`flex flex-col items-center gap-1 rounded-xl p-1.5 text-[10px] font-bold ${on ? "bg-amber-400 text-bg-base" : "bg-bg-raised text-ink-chalk"}`}>
+              {art ? <img src={art} alt="" className="aspect-video w-full rounded-lg object-cover" /> : <span className="text-2xl">{sk.emoji}</span>}
+              <span className="leading-tight">{sk.name}</span>
+              <span className={on ? "" : "text-ink-mist"}>{on ? "надето" : owned ? "надеть" : `${sk.stars} ⭐`}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** «🏛 Зал выпускников»: the best of the filial ever, by the peak. */
+function Hall({ view }: { view: ManagerFilialView }) {
+  if (view.hall.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-1 rounded-2xl bg-bg-surface p-3" data-testid="filial-hall">
+      <div className="flex items-center gap-1.5">
+        <MIcon code="filial_hall" emoji="🏛" className="h-7 w-7" emojiClass="text-lg" />
+        <p className="text-micro font-bold uppercase tracking-wide text-ink-mist">Зал выпускников</p>
+      </div>
+      {view.hall.map((h, i) => (
+        <p key={i} className="flex items-center gap-1.5 text-micro text-ink-chalk">
+          <b className="w-4 text-amber-300">{i + 1}</b>
+          <span className="min-w-0 flex-1 truncate">{h.flag} {h.name} · {h.position}</span>
+          <span className="text-ink-mist">пик <b className="text-ink-chalk">{h.peak}</b>{h.goals > 0 && ` · ⚽ ${h.goals}`} · {STATUS[h.status] ?? h.status}</span>
+        </p>
       ))}
     </div>
   );

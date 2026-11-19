@@ -1445,9 +1445,13 @@ export async function claimManagerAchievement(code: string): Promise<ManagerDeci
 
 // --- «Филиал академии» ---------------------------------------------------------------------------
 
+export interface ManagerFilialStarItem { code: string; name: string; emoji: string; about?: string; stars: number }
+
 export interface ManagerFilialCandidate {
   name: string; country: string; flag: string; position: string; rating: number; stars: number;
   peak_age: number; retire_age: number;
+  /** Shown after «Скаутский отчёт» only. */
+  peak: number | null;
 }
 
 export interface ManagerAlumnus {
@@ -1468,7 +1472,17 @@ export interface ManagerFilialView {
   filial: null | {
     region: string; region_name: string; country: string; flag: string; contracts: number; used: number; every: number;
     next_in: number | null; sold_this_season: boolean; pending: ManagerFilialCandidate[];
+    /** Stars: «Скаутский отчёт» shows the peaks, «Переброс» was used on this release. */
+    revealed: boolean; rerolled: boolean;
+    name: string | null; skin: string | null; skins: string[];
+    /** Paid and not used yet: {rush, reroll, report, name}. */
+    credits: Record<string, number>;
+    /** Seasons until «Срочный выпуск» can be bought again. */
+    rush_in: number;
   };
+  stars: Record<"rush" | "reroll" | "report" | "name", ManagerFilialStarItem> & { skins: ManagerFilialStarItem[] };
+  /** «Зал выпускников»: the best alumni of the filial ever. */
+  hall: { name: string; flag: string; position: string; peak: number; goals: number; status: string; age: number }[];
   buildings: ManagerFilialBuilding[];
   alumni: ManagerAlumnus[];
   history: { name: string; flag: string; position: string; status: string; age: number }[];
@@ -1522,5 +1536,17 @@ export async function fetchManagerAlumniMarket(): Promise<{ lots: ManagerAlumnus
 
 export async function buyManagerAlumnus(id: number): Promise<{ lots: ManagerAlumnusLot[] }> {
   const { data } = await api.post<{ lots: ManagerAlumnusLot[] }>(`/manager/filial/market/${id}/buy`);
+  return data;
+}
+
+/** Uses the paid «Имя академии». */
+export async function setManagerFilialName(name: string): Promise<ManagerFilialView> {
+  const { data } = await api.post<ManagerFilialView>("/manager/filial/name", { name });
+  return data;
+}
+
+/** Wears a bought header skin (null = the region's own picture). */
+export async function setManagerFilialSkin(code: string | null): Promise<ManagerFilialView> {
+  const { data } = await api.post<ManagerFilialView>("/manager/filial/skin", { code });
   return data;
 }

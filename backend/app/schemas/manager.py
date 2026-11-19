@@ -180,3 +180,11 @@ class ManagerFilialPickIn(BaseModel):
 class ManagerAlumnusPriceIn(BaseModel):
     """null takes him off the presidents' market."""
     price: Optional[int] = Field(default=None, ge=0)
+
+
+class ManagerFilialNameIn(BaseModel):
+    name: str = Field(min_length=2, max_length=24)
+
+
+class ManagerFilialSkinIn(BaseModel):
+    code: Optional[str] = Field(default=None, max_length=16)

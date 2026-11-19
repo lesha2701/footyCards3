@@ -28,16 +28,24 @@ const base: ManagerFilialView = {
   filial: null,
   buildings: [{ code: "internat", name: "Интернат", emoji: "🏠", about: "+1 контракт", level: 0, max: 2, price: 6000 }],
   alumni: [], history: [], window_open: true, squad_max: 23,
+  stars: {
+    rush: { code: "rush", name: "Срочный выпуск", emoji: "⚡", about: "сейчас", stars: 75 },
+    reroll: { code: "reroll", name: "Переброс выпуска", emoji: "🎲", about: "новые", stars: 25 },
+    report: { code: "report", name: "Скаутский отчёт", emoji: "📋", about: "пик", stars: 15 },
+    name: { code: "name", name: "Имя академии", emoji: "🏷️", about: "имя", stars: 99 },
+    skins: [{ code: "night", name: "Ночной кампус", emoji: "🌙", stars: 49 }],
+  },
+  hall: [],
 };
 
 const opened: ManagerFilialView = {
   ...base,
   filial: {
     region: "europe", region_name: "Европа", country: "Украина", flag: "🇺🇦", contracts: 1, used: 0, every: 4, next_in: null,
-    sold_this_season: false,
+    sold_this_season: false, revealed: false, rerolled: false, name: null, skin: null, skins: [], credits: {}, rush_in: 0,
     pending: [
-      { name: "Олег Бондаренко", country: "Украина", flag: "🇺🇦", position: "ST", rating: 50, stars: 3, peak_age: 26, retire_age: 35 },
-      { name: "Ян Новак", country: "Чехия", flag: "🇨🇿", position: "CB", rating: 48, stars: 2, peak_age: 27, retire_age: 34 },
+      { name: "Олег Бондаренко", country: "Украина", flag: "🇺🇦", position: "ST", rating: 50, stars: 3, peak_age: 26, retire_age: 35, peak: null },
+      { name: "Ян Новак", country: "Чехия", flag: "🇨🇿", position: "CB", rating: 48, stars: 2, peak_age: 27, retire_age: 34, peak: null },
     ],
   },
 };
@@ -63,7 +71,8 @@ describe("FilialPanel", () => {
     fetchManagerFilial.mockResolvedValue(base);
     openManagerFilial.mockResolvedValue(opened);
     wrap(<FilialPanel onError={() => {}} />);
-    fireEvent.click(await screen.findByRole("button", { name: "🇺🇦 Украина" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Европа" }));
+    fireEvent.click(screen.getByRole("button", { name: "🇺🇦 Украина" }));
     expect(screen.getByTestId("filial-promise")).toHaveTextContent("1 на старте, до 3 с «Интернатом»");
     fireEvent.click(screen.getByRole("button", { name: /Открыть за 8/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Открыть" }));
@@ -94,5 +103,27 @@ describe("FilialPanel", () => {
     expect(slider.max).toBe("360000");
     fireEvent.click(screen.getByRole("button", { name: "Выставить" }));
     await waitFor(() => expect(priceManagerAlumnus).toHaveBeenCalledWith(7, 110_000));
+  });
+});
+
+describe("FilialPanel · Stars", () => {
+  it("prices the Stars items and greys out what can't be used now", async () => {
+    fetchManagerFilial.mockResolvedValue(withAlumnus);
+    wrap(<FilialPanel onError={() => {}} />);
+    const box = await screen.findByTestId("filial-stars");
+    // A full contract: no «Срочный выпуск»; no release: no redraw or report.
+    expect(box).toHaveTextContent("нет свободного контракта");
+    expect(box).toHaveTextContent("нет выпуска");
+    expect(screen.getByRole("button", { name: "99 ⭐" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /49 ⭐/ })).toBeEnabled();
+  });
+
+  it("shows the peaks after the scout report", async () => {
+    fetchManagerFilial.mockResolvedValue({
+      ...opened,
+      filial: { ...opened.filial!, revealed: true, pending: opened.filial!.pending.map((c) => ({ ...c, peak: 66 })) },
+    });
+    wrap(<FilialPanel onError={() => {}} />);
+    expect(await screen.findAllByText("📋 пик 66 в 26 лет")).toHaveLength(1);
   });
 });

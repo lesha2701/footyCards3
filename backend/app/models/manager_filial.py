@@ -26,6 +26,8 @@ class ManagerFilial(Base):
     last_release_key: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     pending: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     sold_key: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    # The Stars side: {"credits": {kind: n}, "rush_key", "name", "skin", "skins": [...]}.
+    extras: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 

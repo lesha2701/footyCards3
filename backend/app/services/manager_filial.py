@@ -87,10 +87,14 @@ _EU = {
                ["Смирнов", "Иванов", "Кузнецов", "Соколов", "Попов", "Волков", "Морозов"]),
     "Украина": ("🇺🇦", 7, ["Андрей", "Богдан", "Тарас", "Олег", "Назар", "Виталий"],
                 ["Шевченко", "Бондаренко", "Коваленко", "Ткаченко", "Мельник", "Кравченко"]),
-    "Польша": ("🇵🇱", 5, ["Якуб", "Кацпер", "Шимон", "Мацей", "Бартош"], ["Новак", "Ковальски", "Вишневски", "Зелински", "Левандовски"]),
+    "Польша": ("🇵🇱", 2.5, ["Якуб", "Кацпер", "Шимон", "Мацей", "Бартош"], ["Новак", "Ковальски", "Вишневски", "Зелински", "Левандовски"]),
     "Сербия": ("🇷🇸", 4, ["Душан", "Лазар", "Никола", "Сергей", "Марко"], ["Йованович", "Петрович", "Николич", "Милинкович", "Влахович"]),
     "Хорватия": ("🇭🇷", 4, ["Лука", "Иван", "Марио", "Йосип", "Анте"], ["Модрич", "Перишич", "Ковачич", "Шимунович", "Бротович"]),
-    "Чехия": ("🇨🇿", 3, ["Томаш", "Павел", "Адам", "Ян"], ["Новотны", "Свобода", "Дворжак", "Чех"]),
+    "Чехия": ("🇨🇿", 1.5, ["Томаш", "Павел", "Адам", "Ян"], ["Новотны", "Свобода", "Дворжак", "Чех"]),
+    "Бельгия": ("🇧🇪", 5, ["Ромелу", "Кевин", "Юри", "Лоис", "Арно", "Жереми"],
+                ["Де Брёйне", "Лукаку", "Тилеманс", "Опенда", "Онана", "Доку"]),
+    "Норвегия": ("🇳🇴", 4, ["Эрлинг", "Мартин", "Сандер", "Йорген", "Кристиан", "Оскар"],
+                 ["Холанн", "Эдегор", "Берге", "Сёрлот", "Нюсет", "Бобб"]),
 }
 _AF = {
     "Нигерия": ("🇳🇬", 25, ["Виктор", "Самуэль", "Эммануэль", "Чиди", "Олу", "Тайво"],
@@ -187,11 +191,11 @@ def _weighted(rng: random.Random, items: dict) -> str:
     return next(iter(items))
 
 
-def candidates(f: ManagerFilial, base_rating: int, key: str, config) -> list[dict]:
+def candidates(f: ManagerFilial, base_rating: int, key: str, config, salt: str = "") -> list[dict]:
     """The release of season `key` (seeded: the same filial and season give
     the same footballers)."""
     c = _cfg(config)
-    rng = random.Random(f"filial:{f.id}:{key}")
+    rng = random.Random(f"filial:{f.id}:{key}{salt}")
     region = REGIONS.get(f.region) or REGIONS["europe"]
     scout = _level(f, "scout")
     count = int(c["filial_candidates"]) + (1 if scout >= 1 else 0)
@@ -299,10 +303,15 @@ async def _refresh(db: AsyncSession, f: ManagerFilial, club: ManagerClub, key: s
         return
     if await used_contracts(db, f, key) >= contracts_of(f, config):
         return
-    if f.last_release_key and seasons_between(f.last_release_key, key) < every_of(f, config):
+    rush = _credits(f).get("rush", 0) > 0
+    if not rush and f.last_release_key and seasons_between(f.last_release_key, key) < every_of(f, config):
         return
     f.pending = {"key": key, "candidates": candidates(f, ms._division_rating(club.division, config), key, config)}
     f.last_release_key = key
+    if rush:
+        _spend(f, "rush")
+        f.extras = {**(f.extras or {}), "rush_key": key}
+    _apply_credits(f, club, key, config)
 
 
 async def view(db: AsyncSession, user: User, now: Optional[datetime] = None) -> dict:
@@ -348,10 +357,17 @@ async def view(db: AsyncSession, user: User, now: Optional[datetime] = None) -> 
             "region": f.region, "region_name": REGIONS.get(f.region, {}).get("name", f.region), "country": f.country,
             "flag": _flag(f.country), "contracts": contracts_of(f, config), "used": used, "every": every_of(f, config),
             "next_in": next_in, "sold_this_season": f.sold_key == key,
-            "pending": [{**cand, "stars": stars(cand["potential"], config), "peak": None, "potential": None}
+            "pending": [{**cand, "stars": stars(cand["potential"], config),
+                         "peak": cand["peak"] if (f.pending or {}).get("revealed") else None, "potential": None}
                         for cand in (f.pending or {}).get("candidates", [])],
+            "revealed": bool((f.pending or {}).get("revealed")), "rerolled": bool((f.pending or {}).get("rerolled")),
+            "name": (f.extras or {}).get("name"), "skin": (f.extras or {}).get("skin"),
+            "skins": list((f.extras or {}).get("skins") or []), "credits": _credits(f),
+            "rush_in": _rush_in(f, key, config),
         },
         "buildings": buildings,
+        "stars": stars_offers(config),
+        "hall": await hall(db, f, key) if f else [],
         "alumni": [_al_out(al, key, config) for al in alumni],
         "history": [{"name": al.name, "flag": _flag(al.country), "position": al.position, "status": al.status,
                      "age": age_at(al, key)} for al in history],
@@ -630,3 +646,192 @@ async def wage_total(db: AsyncSession, club: ManagerClub, key: str, snap: dict, 
 async def count(db: AsyncSession, club_id: int, key: str) -> int:
     return len(await club_alumni(db, club_id, key))
 
+
+
+# --- Telegram Stars: convenience and style only, never the strength --------------------------------
+#
+# Bought through manager_shop's "manager:filial:<what>" flow. A purchase is a
+# credit in `extras["credits"]`, applied at once when it can be (one that
+# can't be used right now waits for the next release) — delivery never
+# refuses. «Срочный выпуск» brings the release now (a free contract, once
+# per the release interval), «Переброс» redraws the candidates once a
+# release, «Скаутский отчёт» shows their exact peak, the skins dress the
+# filial's header, the name is the academy's own name.
+
+SKINS: dict[str, dict] = {
+    "night": {"name": "Ночной кампус", "emoji": "🌙"},
+    "snow": {"name": "Зимний кампус", "emoji": "❄️"},
+    "festive": {"name": "Праздничная иллюминация", "emoji": "🎆"},
+}
+STAR_ITEMS = {
+    "rush": {"name": "Срочный выпуск", "emoji": "⚡", "about": "выпуск придёт сейчас, без ожидания (нужен свободный контракт)"},
+    "reroll": {"name": "Переброс выпуска", "emoji": "🎲", "about": "новые кандидаты вместо этих — один раз на выпуск"},
+    "report": {"name": "Скаутский отчёт", "emoji": "📋", "about": "точный пик каждого кандидата до подписания"},
+    "name": {"name": "Имя академии", "emoji": "🏷️", "about": "своё название филиала"},
+}
+
+
+def _credits(f: ManagerFilial) -> dict:
+    return {k: int(v) for k, v in ((f.extras or {}).get("credits") or {}).items() if int(v) > 0}
+
+
+def _spend(f: ManagerFilial, kind: str) -> None:
+    credits = _credits(f)
+    credits[kind] = max(0, credits.get(kind, 0) - 1)
+    f.extras = {**(f.extras or {}), "credits": {k: v for k, v in credits.items() if v > 0}}
+
+
+def _rush_in(f: ManagerFilial, key: str, config) -> int:
+    """Seasons until «Срочный выпуск» can be bought again (0 = now)."""
+    last = (f.extras or {}).get("rush_key")
+    return 0 if not last else max(0, every_of(f, config) - seasons_between(last, key))
+
+
+def stars_offers(config) -> dict:
+    c = _cfg(config)
+    out = {code: {**item, "code": code, "stars": int(c[f"filial_{code}_stars"])} for code, item in STAR_ITEMS.items()}
+    out["skins"] = [{**item, "code": code, "stars": int(c["filial_skin_stars"])} for code, item in SKINS.items()]
+    return out
+
+
+def _apply_credits(f: ManagerFilial, club: ManagerClub, key: str, config) -> None:
+    """A paid redraw / report goes to the release waiting now."""
+    from app.services import manager_service as ms
+
+    pending = f.pending
+    if not pending:
+        return
+    credits = _credits(f)
+    if credits.get("reroll") and not pending.get("rerolled"):
+        _spend(f, "reroll")
+        rel = pending.get("key") or key
+        f.pending = {**pending, "rerolled": True,
+                     "candidates": candidates(f, ms._division_rating(club.division, config), rel, config, salt=":reroll")}
+        pending = f.pending
+    if credits.get("report") and not pending.get("revealed"):
+        _spend(f, "report")
+        f.pending = {**pending, "revealed": True}
+
+
+async def hall(db: AsyncSession, f: ManagerFilial, key: str) -> list[dict]:
+    """«Зал выпускников»: the best alumni of the filial ever, by the peak."""
+    rows = (await db.execute(
+        select(ManagerAlumnus).where(ManagerAlumnus.filial_id == f.id)
+        .order_by(ManagerAlumnus.peak.desc(), ManagerAlumnus.goals.desc()).limit(10)
+    )).scalars().all()
+    return [{"name": al.name, "flag": _flag(al.country), "position": al.position, "peak": al.peak, "goals": al.goals,
+             "status": al.status, "age": min(age_at(al, key), al.retire_age)} for al in rows]
+
+
+def _parse(code: str) -> tuple[str, Optional[str]]:
+    """"filial:rush" → ("rush", None), "filial:skin:night" → ("skin", "night")."""
+    parts = code.split(":")
+    return (parts[1] if len(parts) > 1 else ""), (parts[2] if len(parts) > 2 else None)
+
+
+def _key_now() -> str:
+    from app.services import manager_service as ms
+
+    return ms.season_key(datetime.now(timezone.utc))
+
+
+async def _stars_check(db: AsyncSession, club: ManagerClub, code: str, config) -> tuple[str, str, int]:
+    """(name, about, stars) of a filial Stars purchase, or ConflictError why not now."""
+    c = _cfg(config)
+    kind, arg = _parse(code)
+    f = await filial_of(db, club.id)
+    if f is None:
+        raise ConflictError("Сначала построй филиал")
+    key = _key_now()
+    if kind == "skin":
+        skin = SKINS.get(arg or "")
+        if skin is None:
+            raise NotFoundError("Такого оформления нет")
+        if arg in ((f.extras or {}).get("skins") or []):
+            raise ConflictError("Уже куплено")
+        return f"Филиал: {skin['name']}", f"Оформление филиала «{club.name}»", int(c["filial_skin_stars"])
+    item = STAR_ITEMS.get(kind)
+    if item is None:
+        raise NotFoundError("Такой покупки нет")
+    if _credits(f).get(kind):
+        raise ConflictError("Уже оплачено — сначала используй")
+    if kind == "rush":
+        if f.pending:
+            raise ConflictError("Выпуск уже ждёт выбора")
+        if await used_contracts(db, f, key) >= contracts_of(f, config):
+            raise ConflictError("Все контракты заняты — освободи место")
+        if _rush_in(f, key, config):
+            raise ConflictError(f"Срочный выпуск — не чаще раза в {every_of(f, config)} сезона")
+    if kind in ("reroll", "report"):
+        if not f.pending:
+            raise ConflictError("Выпуска сейчас нет")
+        if f.pending.get("rerolled" if kind == "reroll" else "revealed"):
+            raise ConflictError("Для этого выпуска уже сделано")
+    return f"Филиал: {item['name']}", f"«{club.name}»: {item['about']}", int(c[f"filial_{kind}_stars"])
+
+
+async def stars_order(db: AsyncSession, club: ManagerClub, code: str, config) -> tuple[str, str, str, int]:
+    name, about, price = await _stars_check(db, club, code, config)
+    if price <= 0:
+        raise ConflictError("Сейчас не продаётся")
+    return f"manager:{code}", name, about, price
+
+
+async def validate_stars(db: AsyncSession, club: ManagerClub, code: str, amount: int, config) -> tuple[bool, str]:
+    try:
+        _name, _about, price = await _stars_check(db, club, code, config)
+    except (ConflictError, NotFoundError) as exc:
+        return False, exc.message
+    return (price > 0 and price == amount, "Цена изменилась — открой покупку заново")
+
+
+async def deliver_stars(db: AsyncSession, club: ManagerClub, code: str, config) -> dict:
+    """Paid already — never refuses: a credit that can't be used now waits."""
+    kind, arg = _parse(code)
+    f = await filial_of(db, club.id, lock=True)
+    if f is None:  # can't happen after the pre-checkout check
+        return {"kind": "manager_filial", "name": "Филиал: покупка сохранена"}
+    extras = dict(f.extras or {})
+    if kind == "skin":
+        extras["skins"] = sorted(set((extras.get("skins") or []) + [arg]))
+        extras["skin"] = arg
+        f.extras = extras
+        return {"kind": "manager_filial", "name": SKINS.get(arg or "", {}).get("name", "Оформление")}
+    credits = _credits(f)
+    credits[kind] = credits.get(kind, 0) + 1
+    f.extras = {**extras, "credits": credits}
+    key = _key_now()
+    if kind == "rush":
+        await _refresh(db, f, club, key, config)
+    else:
+        _apply_credits(f, club, key, config)
+    return {"kind": "manager_filial", "name": STAR_ITEMS.get(kind, {}).get("name", "Филиал")}
+
+
+async def set_name(db: AsyncSession, user: User, raw: str) -> dict:
+    """Uses the paid «Имя академии»."""
+    from app.services.town_service import clean_name
+
+    club = await _club(db, user)
+    f = await filial_of(db, club.id, lock=True)
+    if f is None:
+        raise ConflictError("Сначала построй филиал")
+    if not _credits(f).get("name"):
+        raise ConflictError("Сначала оплати «Имя академии»")
+    name = clean_name(raw)
+    _spend(f, "name")
+    f.extras = {**(f.extras or {}), "name": name}
+    await db.commit()
+    return await view(db, user)
+
+
+async def set_skin(db: AsyncSession, user: User, code: Optional[str]) -> dict:
+    club = await _club(db, user)
+    f = await filial_of(db, club.id, lock=True)
+    if f is None:
+        raise ConflictError("Сначала построй филиал")
+    if code is not None and code not in ((f.extras or {}).get("skins") or []):
+        raise ConflictError("Это оформление не куплено")
+    f.extras = {**(f.extras or {}), "skin": code}
+    await db.commit()
+    return await view(db, user)

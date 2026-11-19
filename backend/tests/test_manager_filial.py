@@ -159,3 +159,68 @@ async def test_presidents_market_no_dumping_and_pair_cooldown(client, db_session
     await client.post(f"{API}/manager/filial/alumni/{al['id']}/price", headers=b_headers, json={"price": lo})
     back = await client.post(f"{API}/manager/filial/market/{al['id']}/buy", headers=a_headers)
     assert back.status_code == 409 and "через" in back.json()["error"]["message"]
+
+
+# --- Stars: convenience and style only --------------------------------------------------------------
+
+async def _stars(db_session, uid: int, code: str, amount: int):
+    """The invoice flow without Telegram: pre-checkout validation, then delivery."""
+    from types import SimpleNamespace
+
+    from app.models.manager_club import ManagerClub
+    from sqlalchemy import select
+
+    config = await get_config(db_session)
+    club = (await db_session.execute(select(ManagerClub).where(ManagerClub.owner_id == uid))).scalar_one()
+    ok, why = await manager_filial.validate_stars(db_session, club, code, amount, config)
+    if not ok:
+        return why
+    await manager_filial.deliver_stars(db_session, club, code, config)
+    await db_session.commit()
+    return None
+
+
+async def test_stars_report_reroll_and_rush(client, db_session, bot_token):
+    uid, headers, view = await _filial_club(client, db_session, bot_token, 897041)
+    offers = view["stars"]
+    first = view["filial"]["pending"]
+    # «Скаутский отчёт» shows the exact peak of this release, once.
+    assert await _stars(db_session, uid, "filial:report", offers["report"]["stars"]) is None
+    view = (await client.get(f"{API}/manager/filial", headers=headers)).json()
+    assert view["filial"]["revealed"] and all(c["peak"] is not None for c in view["filial"]["pending"])
+    assert await _stars(db_session, uid, "filial:report", offers["report"]["stars"]) == "Для этого выпуска уже сделано"
+    # «Переброс» draws other candidates once a release; a wrong price is refused.
+    assert await _stars(db_session, uid, "filial:reroll", 1) is not None
+    assert await _stars(db_session, uid, "filial:reroll", offers["reroll"]["stars"]) is None
+    view = (await client.get(f"{API}/manager/filial", headers=headers)).json()
+    assert view["filial"]["rerolled"] and [c["name"] for c in view["filial"]["pending"]] != [c["name"] for c in first]
+    # «Срочный выпуск»: not while a release waits; after the pick the contract is full.
+    assert await _stars(db_session, uid, "filial:rush", offers["rush"]["stars"]) == "Выпуск уже ждёт выбора"
+    await client.post(f"{API}/manager/filial/build", headers=headers, json={"code": "internat"})
+    await client.post(f"{API}/manager/filial/pick", headers=headers, json={"index": 0})
+    assert await _stars(db_session, uid, "filial:rush", offers["rush"]["stars"]) is None
+    view = (await client.get(f"{API}/manager/filial", headers=headers)).json()
+    assert len(view["filial"]["pending"]) >= FC["filial_candidates"] and view["filial"]["rush_in"] > 0
+    assert view["filial"]["credits"] == {}
+
+
+async def test_stars_name_skin_and_hall(client, db_session, bot_token):
+    uid, headers, view = await _filial_club(client, db_session, bot_token, 897051)
+    assert (await client.post(f"{API}/manager/filial/name", headers=headers, json={"name": "Совята"})).status_code == 409
+    assert await _stars(db_session, uid, "filial:name", view["stars"]["name"]["stars"]) is None
+    view = (await client.post(f"{API}/manager/filial/name", headers=headers, json={"name": "Совята"})).json()
+    assert view["filial"]["name"] == "Совята" and view["filial"]["credits"] == {}
+    assert (await client.post(f"{API}/manager/filial/skin", headers=headers, json={"code": "night"})).status_code == 409
+    assert await _stars(db_session, uid, "filial:skin:night", view["stars"]["skins"][0]["stars"]) is None
+    view = (await client.get(f"{API}/manager/filial", headers=headers)).json()
+    assert view["filial"]["skin"] == "night" and view["filial"]["skins"] == ["night"]
+    view = (await client.post(f"{API}/manager/filial/skin", headers=headers, json={"code": None})).json()
+    assert view["filial"]["skin"] is None
+    view = (await client.post(f"{API}/manager/filial/pick", headers=headers, json={"index": 0})).json()
+    assert view["hall"][0]["name"] == view["alumni"][0]["name"]
+
+
+def test_europe_has_belgium_and_norway_and_less_czech_poland():
+    eu = manager_filial.REGIONS["europe"]["countries"]
+    assert "Бельгия" in eu and "Норвегия" in eu
+    assert eu["Чехия"][1] == 1.5 and eu["Польша"][1] == 2.5

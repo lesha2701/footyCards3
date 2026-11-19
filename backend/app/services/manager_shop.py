@@ -362,6 +362,10 @@ async def stars_order(db: AsyncSession, user_id: int, code: str, config) -> tupl
         target = await manager_perks.gift_check(db, user_id, gift[0], item)
         return f"manager:{code}", f"Подарок: {item['name']}", f"Стиль для клуба «{target.name}»: {item['name']}", item["stars"]
     club = await _owned_club(db, user_id)
+    if code.startswith("filial:"):  # «Филиал академии»
+        from app.services import manager_filial
+
+        return await manager_filial.stars_order(db, club, code, config)
     if manager_perks.is_pass(code):
         return manager_perks.pass_order(club, code, config)
     if code == "pro":
@@ -393,6 +397,10 @@ async def validate_stars(db: AsyncSession, invoice, config) -> tuple[bool, str]:
     club = (await db.execute(select(ManagerClub).where(ManagerClub.owner_id == invoice.user_id))).scalar_one_or_none()
     if club is None:
         return False, "Клуб не найден"
+    if code.startswith("filial:"):
+        from app.services import manager_filial
+
+        return await manager_filial.validate_stars(db, club, code, invoice.stars_amount, config)
     if manager_perks.is_pass(code):
         stars, _days = manager_perks._price(code, config)
         return (stars > 0 and stars == invoice.stars_amount, "Цена изменилась — открой покупку заново")
@@ -423,6 +431,10 @@ async def deliver_stars(db: AsyncSession, user: User, invoice, config) -> dict:
     )).scalar_one_or_none()
     if club is None:
         return {"kind": "manager", "name": "Клуб не найден"}
+    if code.startswith("filial:"):
+        from app.services import manager_filial
+
+        return await manager_filial.deliver_stars(db, club, code, config)
     if manager_perks.is_pass(code):
         return manager_perks.deliver_pass(club, code, config)
     if code == "pro":

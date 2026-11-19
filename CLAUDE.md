@@ -188,7 +188,10 @@ Main features:
   kind "alum"), the peak relative to the division, a career curve
   (1 season = 1 year) to retirement; the market buys back once a season,
   other presidents only within `filial_min/max_price_pct` of the value, a
-  burnt fee and a pair cooldown (anti-dump). A second filial is a future
+  burnt fee and a pair cooldown (anti-dump); Stars (`manager:filial:<what>`,
+  credits in `manager_filials.extras`): «Срочный выпуск», «Переброс»,
+  «Скаутский отчёт», the academy name and header skins — never strength;
+  «Зал выпускников». A second filial is a future
   idea, not built. Numbers: GameConfig.manager_finance
   over `manager_finance.DEFAULTS`;
 - «Мой игрок» extras (`my_player_extras.py`): a weekly «Спонсор» (one of

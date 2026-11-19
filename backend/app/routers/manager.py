@@ -36,6 +36,8 @@ from app.schemas.manager import (
     ManagerStadiumNameIn,
     ManagerAlumnusPriceIn,
     ManagerFilialBuildIn,
+    ManagerFilialNameIn,
+    ManagerFilialSkinIn,
     ManagerFilialOpenIn,
     ManagerFilialPickIn,
 )
@@ -544,6 +546,18 @@ async def price_alumnus(alumnus_id: int, payload: ManagerAlumnusPriceIn, db: Asy
                         user: User = Depends(get_current_user)):
     await check_rate_limit(f"manager_filial:{user.id}", max_calls=30, window_seconds=60)
     return await manager_filial.list_for_sale(db, user, alumnus_id, payload.price)
+
+
+@router.post("/filial/name")
+async def filial_name(payload: ManagerFilialNameIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_filial:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_filial.set_name(db, user, payload.name)
+
+
+@router.post("/filial/skin")
+async def filial_skin(payload: ManagerFilialSkinIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_filial:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_filial.set_skin(db, user, payload.code)
 
 
 @router.get("/filial/market")
