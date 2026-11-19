@@ -118,12 +118,37 @@ function OpenFilial({ view, busy, confirm, open }: {
         </div>
       )}
       <p className="text-micro text-ink-mist">Страна — где стоит филиал; выпускники будут из всего региона.</p>
+      <FilialPromise view={view} />
       <button disabled={busy || !chosen || view.balance < view.open_coins}
         onClick={() => chosen && confirm({ title: `Открыть филиал: ${chosen.flag} ${chosen.name}?`, label: "Открыть",
           text: `${coins(view.open_coins)}. Регион потом не меняется.`, run: () => open(region, chosen.name) })}
         className="rounded-xl bg-gradient-to-b from-amber-300 to-amber-500 px-3 py-2.5 text-caption font-bold text-bg-base disabled:opacity-50">
         Открыть за {coins(view.open_coins)}
       </button>
+    </div>
+  );
+}
+
+/** What the 8 000 coins buy: contracts, the release schedule and the buildings. */
+function FilialPromise({ view }: { view: ManagerFilialView }) {
+  const st = view.start;
+  return (
+    <div className="flex flex-col gap-1.5 rounded-xl bg-bg-raised p-2.5" data-testid="filial-promise">
+      <p className="text-micro font-bold uppercase tracking-wide text-amber-200">Что даёт филиал</p>
+      <p className="text-micro text-ink-chalk">📝 Контракты выпускников: {st.contracts} на старте, до {st.contracts_max} с «Интернатом»</p>
+      <p className="text-micro text-ink-chalk">🎓 Выпуск раз в {seasons(st.every)} (с «Интернатом» — раз в {seasons(st.every_min)}), кандидатов на выбор: {st.candidates}, им по {st.start_age} лет</p>
+      <p className="text-micro text-ink-chalk">📈 Выпускник растёт к пику, играет за клуб, его можно продать рынку или другому президенту</p>
+      <div className="mt-0.5 grid grid-cols-2 gap-1">
+        {view.buildings.map((b) => (
+          <div key={b.code} className="flex items-center gap-1.5 rounded-lg bg-bg-surface px-1.5 py-1">
+            <MIcon code={`filial_${b.code}`} emoji={b.emoji} className="h-7 w-7" emojiClass="text-base" />
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold leading-tight text-ink-chalk">{b.name}</p>
+              <p className="text-[9px] leading-tight text-ink-mist">{b.about}</p>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

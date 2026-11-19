@@ -77,7 +77,7 @@ _EU = {
                  ["Мюллер", "Шмидт", "Шнайдер", "Фишер", "Вебер", "Вагнер"]),
     "Италия": ("🇮🇹", 10, ["Лоренцо", "Франческо", "Маттео", "Алессандро", "Федерико", "Никколо"],
                ["Росси", "Руссо", "Феррари", "Бьянки", "Риччи", "Коломбо"]),
-    "Англия": ("🏴", 10, ["Джек", "Гарри", "Оливер", "Чарли", "Джордж", "Мейсон"],
+    "Англия": ("🇬🇧", 10, ["Джек", "Гарри", "Оливер", "Чарли", "Джордж", "Мейсон"],
                ["Смит", "Джонс", "Тейлор", "Браун", "Уокер", "Райт"]),
     "Португалия": ("🇵🇹", 8, ["Жуан", "Диогу", "Гонсалу", "Руй", "Нуну", "Бернарду"],
                    ["Феррейра", "Кошта", "Мендеш", "Нунеш", "Сильва", "Пинту"]),
@@ -338,6 +338,10 @@ async def view(db: AsyncSession, user: User, now: Optional[datetime] = None) -> 
     used = await used_contracts(db, f, key) if f else 0
     return {
         "enabled": bool(c["filial_enabled"]), "open_coins": int(c["filial_open_coins"]), "balance": user.balance,
+        # What a filial gives, for the screen before it is opened.
+        "start": {"contracts": int(c["filial_contracts"]), "contracts_max": int(c["filial_contracts"]) + len(_prices(config, "internat")),
+                  "every": int(c["filial_every"]), "every_min": int(c["filial_every_min"]), "candidates": int(c["filial_candidates"]),
+                  "start_age": int(c["filial_start_age"])},
         "regions": [{"code": k, "name": r["name"], "emoji": r["emoji"],
                      "countries": [{"name": n, "flag": v[0]} for n, v in r["countries"].items()]} for k, r in REGIONS.items()],
         "filial": None if f is None else {

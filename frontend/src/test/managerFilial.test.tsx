@@ -20,6 +20,7 @@ vi.mock("@/api/manager", async (orig) => ({
 
 const base: ManagerFilialView = {
   enabled: true, open_coins: 8000, balance: 20_000,
+  start: { contracts: 1, contracts_max: 3, every: 4, every_min: 3, candidates: 2, start_age: 17 },
   regions: [
     { code: "europe", name: "Европа", emoji: "🌍", countries: [{ name: "Россия", flag: "🇷🇺" }, { name: "Украина", flag: "🇺🇦" }] },
     { code: "africa", name: "Африка", emoji: "🌍", countries: [{ name: "Гана", flag: "🇬🇭" }] },
@@ -63,6 +64,7 @@ describe("FilialPanel", () => {
     openManagerFilial.mockResolvedValue(opened);
     wrap(<FilialPanel onError={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: "🇺🇦 Украина" }));
+    expect(screen.getByTestId("filial-promise")).toHaveTextContent("1 на старте, до 3 с «Интернатом»");
     fireEvent.click(screen.getByRole("button", { name: /Открыть за 8/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Открыть" }));
     await waitFor(() => expect(openManagerFilial).toHaveBeenCalledWith("europe", "Украина"));

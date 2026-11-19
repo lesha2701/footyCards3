@@ -79,8 +79,8 @@ DEFAULTS: dict = {
     # filial_fee_pct of it is burnt, and one pair of clubs trades again only
     # after filial_pair_cooldown_seasons.
     "filial_enabled": True, "filial_open_coins": 8000,
-    "filial_fields_coins": [3000, 6000, 12000], "filial_internat_coins": [6000, 15000],
-    "filial_scout_coins": [4000, 10000], "filial_gym_coins": [4000, 10000],
+    "filial_fields_coins": [5000, 10000, 15000], "filial_internat_coins": [5000, 15000],
+    "filial_scout_coins": [5000, 15000], "filial_gym_coins": [5000, 15000],
     "filial_every": 4, "filial_every_min": 3, "filial_contracts": 1, "filial_candidates": 2,
     "filial_start_age": 17, "filial_potential_max": 6, "filial_grow_gap": 12,
     "filial_peak_age": [25, 28], "filial_decline_age": 30, "filial_decline": 1.5, "filial_retire_age": [33, 37],

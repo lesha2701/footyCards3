@@ -1462,6 +1462,8 @@ export interface ManagerFilialBuilding {
 
 export interface ManagerFilialView {
   enabled: boolean; open_coins: number; balance: number;
+  /** What a filial gives (the screen before it is opened). */
+  start: { contracts: number; contracts_max: number; every: number; every_min: number; candidates: number; start_age: number };
   regions: { code: string; name: string; emoji: string; countries: { name: string; flag: string }[] }[];
   filial: null | {
     region: string; region_name: string; country: string; flag: string; contracts: number; used: number; every: number;
