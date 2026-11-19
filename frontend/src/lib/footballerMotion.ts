@@ -53,7 +53,7 @@ export interface ClipTiming {
   victoryFrom: number;
 }
 
-/** Mixamo soccer clips of public/career-3d/footballer.glb (30 fps). */
+/** Mixamo soccer clips of src/assets/3d/footballer.glb (30 fps). */
 export const DEFAULT_TIMING: ClipTiming = {
   kickContact: 22 / 30, kickDuration: 1.53, jumpApex: 0.9, jumpDuration: 1.93,
   diveStart: 0.5, diveReach: 1.2, diveDuration: 3.3, catchDuration: 1,

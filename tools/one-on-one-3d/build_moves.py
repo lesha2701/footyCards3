@@ -3,7 +3,7 @@
     python build_moves.py
 
 Mounts: the Mixamo "Soccer" pack at /pack (its Ch38_nonPBR.fbx is the rig
-of public/career-3d/footballer.glb, so its clips need no retargeting), this
+of frontend/src/assets/3d/footballer.glb, so its clips need no retargeting), this
 folder at /work, and Anderson Rohr's «Free mocap pack 05: Soccer»
 (mocap/Rokoko_Default) at /mocap: its strikes, celebrations and the
 keeper's set stance are real mocap, retargeted by retarget_rokoko.py (a
@@ -17,7 +17,7 @@ paste, frame by frame). Then, with Node (gltf-transform 4.1.1):
 tools/career-replay-3d/strip_moves.mjs drops fingers, scale channels and the
 rig's empty take, and `gltf-transform optimize ... --compress meshopt
 --simplify false --join false --flatten false` gives
-public/one-on-one-3d/moves.glb. inspect_pack.py prints what each clip of the
+frontend/src/assets/3d/one-on-one-moves.glb. inspect_pack.py prints what each clip of the
 pack does (foot, contact frame, travel).
 """
 import math

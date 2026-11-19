@@ -97,7 +97,7 @@ export default function TacticoMatchesPage() {
   return (
     <div className="flex flex-col gap-4">
       <GameHero game="tactico" title="Тактико">
-        <div className="flex flex-col items-end gap-1.5">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => setRulesOpen(true)}
             aria-label="Правила"

@@ -326,7 +326,7 @@ export default function ClubBasePage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <GameHero game="home-base" title="Клубная база" subtitle="Стадион, корпуса и Академия">
+      <GameHero game="home-base" compact={false} title="Клубная база" subtitle="Стадион, корпуса и Академия">
         <div className="shrink-0 rounded-2xl bg-black/35 px-2.5 py-1 text-right">
           <p className="font-display text-xl font-bold leading-tight text-path">{state.total_level}</p>
           <p className="text-micro uppercase tracking-wider text-ink-chalk/70">из {state.max_level + state.academy_max_level}</p>

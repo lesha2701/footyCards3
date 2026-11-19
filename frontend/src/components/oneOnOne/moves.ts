@@ -1,5 +1,5 @@
 /** The extra moves of «Атака 1 на 1» on the career footballer's rig
- * (public/one-on-one-3d/moves.glb, tools/one-on-one-3d/build_moves.py):
+ * (src/assets/3d/one-on-one-moves.glb, tools/one-on-one-3d/build_moves.py):
  * strikes with either foot, a chip, sidesteps for the feint, goal
  * celebrations, and the keeper's set stance, scoop, catches, body blocks,
  * beaten and getting-up (the power strikes, the side-foot, the
@@ -13,7 +13,9 @@ import { HIPS, bonesOf, inPlace, setClip, upAxis, type SkinnedPlayer } from "@/c
 import type { ClipName } from "@/lib/footballerMotion";
 import type { Foot, ShotKind } from "@/lib/oneOnOne/technique";
 
-export const ONE_ON_ONE_MOVES_URL = "/one-on-one-3d/moves.glb";
+import oneOnOneMovesUrl from "@/assets/3d/one-on-one-moves.glb?url";
+
+export const ONE_ON_ONE_MOVES_URL = oneOnOneMovesUrl;
 
 const STRIKES = ["shot_r", "shot_l", "power_r", "power_l", "pass_r", "pass_l", "chip_r", "chip_l"] as const;
 const OTHERS = [

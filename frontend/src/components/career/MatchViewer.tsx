@@ -29,12 +29,15 @@ import {
   type Point,
 } from "@/lib/matchReplay";
 import { enterImmersive } from "@/lib/immersive";
+import { prefetch3D } from "@/lib/prefetch3d";
 import { playSound } from "@/lib/sound";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { CareerCrest } from "@/components/career/CareerCrest";
 
-// three.js is a lazy chunk: it loads only when a 3D replay is opened.
-const GoalReplay3D = lazy(() => import("@/components/career/goal3d/GoalReplay3D"));
+// three.js is a lazy chunk: it loads when a 3D replay is opened, or ahead of
+// it on a good connection (prefetch3D below).
+const loadGoalReplay3D = () => import("@/components/career/goal3d/GoalReplay3D");
+const GoalReplay3D = lazy(loadGoalReplay3D);
 const SPEEDS = ["1", "2", "4"];
 const MOMENT_STYLE: Record<Moment["kind"], string> = {
   goal: "⚽", yellow: "🟨", red: "🟥", sub: "🔁", chance: "",
@@ -78,6 +81,9 @@ export function ReplayPlayer({ data, extraTabs, footer }: {
   const replay3dRef = useRef(false);
   replay3dRef.current = replay3d !== null;
   const leaveImmersive = useRef<(() => void) | null>(null);
+  // Goals to replay: get the 3D replay (engine + footballer) ready meanwhile.
+  const hasGoals = episodes.length > 0;
+  useEffect(() => { if (hasGoals) prefetch3D("goal-replay", loadGoalReplay3D); }, [hasGoals]);
 
   // A second half on air (the server keeps it so for ON_AIR_MS after its
   // kick-off): opened then, it starts at its kick-off for this viewer and

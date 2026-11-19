@@ -4,7 +4,7 @@
 
 Follows tools/one-on-one-3d/build_moves.py (copied, not imported: that tool
 has its own clip list). Mounts: the Mixamo "Soccer" pack at /pack (its
-Ch38_nonPBR.fbx is the rig of public/career-3d/footballer.glb), the Rokoko
+Ch38_nonPBR.fbx is the rig of frontend/src/assets/3d/footballer.glb), the Rokoko
 takes of «Free mocap pack 05: Soccer» at /mocap, this folder at /work. See
 README.md for the commands and what each clip is.
 

@@ -1,6 +1,6 @@
 # Free kick 3D — footballer models
 
-The game's footballers are `frontend/public/free-kick-3d/blond.glb` and
+The game's footballers are `frontend/src/assets/3d/blond.glb` and
 `brown.glb` (see `frontend/src/components/freeKick3d/characters.ts`):
 generated characters in a plain white kit, auto-rigged in Mixamo
 (downloaded as "T-Pose", FBX Binary, With Skin), with the Mixamo "Soccer"
@@ -15,7 +15,9 @@ python build_character.py <T-Pose.fbx> <name>   # -> out/<name>.glb
 It keeps the base colour (1024 px), retargets the clips, and prints the
 kit's height bands (the game tints shirt / shorts / socks by them — copy
 them into `characters.ts`) and the kick's contact frame and toe. Then
-compress it as in step 2 below.
+compress it as in step 2 below, and finally shrink it with
+`node tools/3d-optimize/optimize.mjs <in.glb> frontend/src/assets/3d/<name>.glb`
+(frozen fingers, resampled clips — about half the size).
 
 The old single model, `build_footballer.py` (character `Ch38_nonPBR.fbx`
 from the pack, separate kit meshes), is kept for reference:

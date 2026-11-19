@@ -6,7 +6,7 @@ out/rokoko-moves.glb, to look them over (and pick the parts):
     python retarget_rokoko.py [-- clip ...]
 
 Mounts: the Mixamo "Soccer" pack at /pack (Ch38_nonPBR.fbx is the rig of
-public/career-3d/footballer.glb), the pack's mocap/Rokoko_Default folder at
+frontend/src/assets/3d/footballer.glb), the pack's mocap/Rokoko_Default folder at
 /mocap, this folder at /work.
 
 Both rigs rest in a T-pose, so each mapped bone takes the source bone's

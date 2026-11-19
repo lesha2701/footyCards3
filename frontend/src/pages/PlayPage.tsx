@@ -40,6 +40,7 @@ import {
 import { Skeleton } from "@/components/common/Skeleton";
 import TransferLight, { windowOpen } from "@/components/manager/TransferLight";
 import { preloadShotArt } from "@/components/penalty/preloadShotArt";
+import { prefetch3D } from "@/lib/prefetch3d";
 import { hapticSelection } from "@/lib/telegram";
 import { artOf } from "@/lib/gameArt";
 import { formatClock } from "@/lib/today";
@@ -149,6 +150,9 @@ export default function PlayPage() {
     if (Object.entries(known).some(([k, v]) => flags[k] !== v)) setFlags({ ...flags, ...known });
   }, [live.blackjack, live.luckyBoard, live.mordoboi, live.kontra, live.magic]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(preloadShotArt, []);
+  // Free kick, 1-on-1, «Матч 3D» and the career replay all run on three.js
+  // and the same footballer: warm them while the player picks a game.
+  useEffect(() => prefetch3D("engine", () => Promise.all([import("three"), import("@react-three/fiber")])), []);
   const blackjackEntries = blackjack ? blackjack.free_remaining + blackjack.replay_entries + blackjack.paid_entries : 0;
   const games: GameDef[] = [
     // ⚡ quick

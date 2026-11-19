@@ -19,6 +19,13 @@ export default defineConfig({
           react: ["react", "react-dom", "react-router-dom"],
           query: ["@tanstack/react-query", "axios", "zustand"],
           motion: ["framer-motion"],
+          // The 3D engine (~180 KB gzip) and its React renderer: loaded only
+          // by the lazy 3D screens, never by the entry. Without their own
+          // chunks Rollup folds them into a chunk named after (and hashed
+          // with) app code — "textures-*.js" — so any edit to a 3D scene
+          // made every player download three.js again.
+          three: ["three"],
+          r3f: ["@react-three/fiber"],
         },
       },
     },
