@@ -82,7 +82,7 @@ DEFAULTS: dict = {
     "filial_fields_coins": [5000, 10000, 15000], "filial_internat_coins": [5000, 15000],
     "filial_scout_coins": [5000, 15000], "filial_gym_coins": [5000, 15000],
     # Stars (convenience and style only): «Срочный выпуск», «Переброс», «Скаутский отчёт», name, a header skin.
-    "filial_rush_stars": 75, "filial_reroll_stars": 25, "filial_report_stars": 15, "filial_name_stars": 99, "filial_skin_stars": 49,
+    "filial_rush_stars": 75, "filial_reroll_stars": 75, "filial_report_stars": 50, "filial_name_stars": 99, "filial_skin_stars": 49,
     "filial_every": 4, "filial_every_min": 3, "filial_contracts": 1, "filial_candidates": 2,
     "filial_start_age": 17, "filial_potential_max": 6, "filial_grow_gap": 12,
     "filial_peak_age": [25, 28], "filial_decline_age": 30, "filial_decline": 1.5, "filial_retire_age": [33, 37],
