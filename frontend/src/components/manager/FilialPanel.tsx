@@ -138,16 +138,19 @@ function OpenFilial({ view, busy, confirm, open }: {
 }
 
 // Where each region's pin stands on the world map (% of its width / height).
+// The calm middle of each continent on assets/manager/filial/world_map.webp (1568×1003).
 const PINS: Record<string, { x: number; y: number }> = {
-  north_america: { x: 21, y: 34 }, south_america: { x: 31, y: 70 }, europe: { x: 51, y: 27 },
-  africa: { x: 52, y: 58 }, asia: { x: 75, y: 37 },
+  north_america: { x: 17, y: 27 }, south_america: { x: 23, y: 62 }, europe: { x: 50, y: 20 },
+  africa: { x: 46, y: 56 }, asia: { x: 75, y: 30 },
 };
+// The map has little room: the long region names get a short label there.
+const PIN_LABEL: Record<string, string> = { north_america: "Сев. и Центр. Америка", south_america: "Юж. Америка" };
 
 /** The world map with a pin per region: a tap opens the region. */
 function WorldMap({ view, onPick }: { view: ManagerFilialView; onPick: (code: string) => void }) {
   const map = REGION_ART.world_map;
   return (
-    <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl bg-gradient-to-br from-sky-900 via-teal-900 to-indigo-950 ring-1 ring-white/10"
+    <div className="relative aspect-[1568/1003] w-full overflow-hidden rounded-xl bg-gradient-to-br from-sky-900 via-teal-900 to-indigo-950 ring-1 ring-white/10"
       data-testid="filial-map">
       {map && <img src={map} alt="" className="absolute inset-0 h-full w-full object-cover" />}
       {!map && <p className="absolute inset-x-0 bottom-1 text-center text-[10px] text-white/40">выбери регион на карте</p>}
@@ -157,10 +160,10 @@ function WorldMap({ view, onPick }: { view: ManagerFilialView; onPick: (code: st
           <button key={x.code} onClick={() => onPick(x.code)} aria-label={x.name}
             style={{ left: `${pin.x}%`, top: `${pin.y}%` }}
             className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5 transition active:scale-95">
-            <span className="grid h-11 w-11 place-items-center rounded-full bg-black/35 ring-2 ring-amber-300/80 shadow-[0_0_18px_rgba(251,191,36,0.55)]">
-              <MIcon code={`filial_pin_${x.code}`} emoji={x.emoji} className="h-10 w-10" emojiClass="text-2xl" />
+            <span className="grid h-12 w-12 place-items-center rounded-full bg-amber-300/10 shadow-[0_0_20px_rgba(251,191,36,0.6)]">
+              <MIcon code={`filial_pin_${x.code}`} emoji={x.emoji} className="h-12 w-12" emojiClass="text-2xl" />
             </span>
-            <span className="max-w-[6.5rem] rounded-md bg-black/60 px-1.5 py-0.5 text-center text-[9px] font-bold leading-tight text-white">{x.name}</span>
+            <span className="max-w-[5.5rem] rounded-md bg-black/65 px-1.5 py-0.5 text-center text-[9px] font-bold leading-tight text-white">{PIN_LABEL[x.code] ?? x.name}</span>
           </button>
         );
       })}
