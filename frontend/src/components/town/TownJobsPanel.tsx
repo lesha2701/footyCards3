@@ -1,6 +1,12 @@
 import type { TownJobs } from "@/api/town";
 import { IconCoin } from "@/components/icons";
 
+// The employers' pictures: assets/town/jobs/<code>.webp (none → the emoji).
+const ART = Object.fromEntries(
+  Object.entries(import.meta.glob("../../assets/town/jobs/*.webp", { eager: true, import: "default" }) as Record<string, string>)
+    .map(([path, url]) => [path.slice(path.lastIndexOf("/") + 1, -".webp".length), url]),
+);
+
 const fmt = (n: number) => n.toLocaleString("ru-RU");
 
 /**
@@ -28,7 +34,9 @@ export default function TownJobsPanel({ jobs, balance, busy, onBuy }: {
         const label = b.level > 0 ? `${b.name}: уровень ${b.level + 1}` : `${b.name}: купить`;
         return (
           <div key={b.code} className="flex items-center gap-2">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/5 text-lg" aria-hidden>{b.emoji}</span>
+            {ART[b.code]
+              ? <img src={ART[b.code]} alt="" aria-hidden className="h-11 w-11 shrink-0 object-contain drop-shadow" />
+              : <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/5 text-lg" aria-hidden>{b.emoji}</span>}
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-semibold text-ink-chalk">
                 {b.name}{b.level > 0 && <span className="text-ink-mist"> · ур. {b.level}/{b.max_level}</span>}

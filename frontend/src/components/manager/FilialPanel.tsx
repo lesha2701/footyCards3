@@ -16,9 +16,15 @@ import {
 } from "@/api/manager";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
-import { managerIcon, MIcon } from "@/lib/managerIcons";
+import { MIcon } from "@/lib/managerIcons";
 import { eur } from "@/lib/managerMoney";
 import { hapticNotify } from "@/lib/telegram";
+
+// The region's header picture: assets/manager/filial/<region>.webp (none → a gradient only).
+const REGION_ART = Object.fromEntries(
+  Object.entries(import.meta.glob("../../assets/manager/filial/*.webp", { eager: true, import: "default" }) as Record<string, string>)
+    .map(([path, url]) => [path.slice(path.lastIndexOf("/") + 1, -".webp".length), url]),
+);
 
 const coins = (n: number) => `${n.toLocaleString("ru-RU")} 🪙`;
 const starsOf = (n: number) => "★".repeat(n) + "☆".repeat(Math.max(0, 5 - n));
@@ -84,7 +90,7 @@ function OpenFilial({ view, busy, confirm, open }: {
   const r = view.regions.find((x) => x.code === region);
   const [country, setCountry] = useState("");
   const chosen = r?.countries.find((c) => c.name === country) ?? r?.countries[0];
-  const art = managerIcon(`filial_region_${region}`);
+  const art = REGION_ART[region];
   return (
     <div className="flex flex-col gap-3 rounded-2xl bg-bg-surface p-3" data-testid="filial-open">
       <p className="text-body font-bold text-ink-chalk">🌍 Открой филиал академии</p>
@@ -100,7 +106,7 @@ function OpenFilial({ view, busy, confirm, open }: {
           </button>
         ))}
       </div>
-      {art && <img src={art} alt="" className="h-28 w-full rounded-xl object-cover" />}
+      {art && <img src={art} alt="" className="aspect-video w-full rounded-xl object-cover" />}
       {r && (
         <div className="flex flex-wrap gap-1">
           {r.countries.map((c) => (
@@ -124,11 +130,11 @@ function OpenFilial({ view, busy, confirm, open }: {
 
 function FilialHero({ view }: { view: ManagerFilialView }) {
   const f = view.filial!;
-  const art = managerIcon(`filial_region_${f.region}`);
+  const art = REGION_ART[f.region];
   return (
-    <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-900/70 to-bg-surface p-3 ring-1 ring-teal-300/30">
-      {art && <img src={art} alt="" className="absolute inset-0 h-full w-full object-cover opacity-40" />}
-      <div className="relative flex flex-col gap-1">
+    <section className="relative min-h-[8rem] overflow-hidden rounded-2xl bg-gradient-to-br from-teal-900/70 to-bg-surface p-3 ring-1 ring-teal-300/30">
+      {art && <img src={art} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />}
+      <div className="relative flex flex-col gap-1 [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">
         <p className="text-body font-bold text-ink-chalk">{f.flag} Филиал · {f.country}</p>
         <p className="text-micro text-ink-mist">{f.region_name}</p>
         <div className="mt-1 flex flex-wrap gap-1.5 text-micro">
