@@ -926,6 +926,10 @@ class GameConfigOut(BaseModel):
     town_resident_bonus_max_pct: int = 100
     town_resident_max_daily_coins: int = 200
     town_decor: dict = {}
+    town_jobs: dict = {}
+    town_job_tax_pct: int = 50
+    town_fans_k: int = 30
+    town_fans_cap: int = 1500
     town_mood: dict = {}
     town_social: dict = {}
     town_villa: dict = {}
@@ -1861,6 +1865,10 @@ class GameConfigUpdate(BaseModel):
     town_resident_bonus_max_pct: Optional[int] = Field(default=None, ge=0, le=1000)
     town_resident_max_daily_coins: Optional[int] = Field(default=None, ge=0, le=1_000_000)
     town_decor: Optional[dict[str, dict[str, int]]] = None
+    town_jobs: Optional[dict[str, dict[str, int]]] = None
+    town_job_tax_pct: Optional[int] = Field(default=None, ge=0, le=1000)
+    town_fans_k: Optional[int] = Field(default=None, ge=0, le=10_000)
+    town_fans_cap: Optional[int] = Field(default=None, ge=0, le=10_000_000)
     town_mood: Optional[dict[str, int]] = None
     town_social: Optional[dict[str, int]] = None
     town_villa: Optional[dict[str, int]] = None

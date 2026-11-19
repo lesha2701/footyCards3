@@ -34,8 +34,12 @@ from app.schemas.manager import (
     ManagerSharesIn,
     ManagerTicketsIn,
     ManagerStadiumNameIn,
+    ManagerAlumnusPriceIn,
+    ManagerFilialBuildIn,
+    ManagerFilialOpenIn,
+    ManagerFilialPickIn,
 )
-from app.services import manager_assistant, manager_budget, manager_staff
+from app.services import manager_assistant, manager_budget, manager_filial, manager_staff
 from app.services import manager_cup, manager_events, manager_exchange, manager_finance, manager_news, manager_perks, manager_service, manager_shop, manager_today
 
 router = APIRouter(prefix="/manager", tags=["manager"])
@@ -496,3 +500,58 @@ async def president_budget(payload: ManagerBudgetIn, db: AsyncSession = Depends(
 async def president_achievement(code: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     await check_rate_limit(f"manager_budget:{user.id}", max_calls=30, window_seconds=60)
     return await manager_budget.claim(db, user, code[:32])
+
+
+# --- «Филиал академии» (manager_filial) ---------------------------------------------------------
+
+@router.get("/filial")
+async def get_filial(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await manager_filial.view(db, user)
+
+
+@router.post("/filial")
+async def open_filial(payload: ManagerFilialOpenIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_filial:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_filial.open_filial(db, user, payload.region, payload.country)
+
+
+@router.post("/filial/build")
+async def build_filial(payload: ManagerFilialBuildIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_filial:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_filial.build(db, user, payload.code)
+
+
+@router.post("/filial/pick")
+async def pick_filial(payload: ManagerFilialPickIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_filial:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_filial.pick(db, user, payload.index)
+
+
+@router.post("/filial/alumni/{alumnus_id}/sell-market")
+async def sell_alumnus(alumnus_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_filial:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_filial.sell_market(db, user, alumnus_id)
+
+
+@router.post("/filial/alumni/{alumnus_id}/release")
+async def release_alumnus(alumnus_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_filial:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_filial.release(db, user, alumnus_id)
+
+
+@router.post("/filial/alumni/{alumnus_id}/price")
+async def price_alumnus(alumnus_id: int, payload: ManagerAlumnusPriceIn, db: AsyncSession = Depends(get_db),
+                        user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_filial:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_filial.list_for_sale(db, user, alumnus_id, payload.price)
+
+
+@router.get("/filial/market")
+async def filial_market(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await manager_filial.market(db, user)
+
+
+@router.post("/filial/market/{alumnus_id}/buy")
+async def buy_alumnus(alumnus_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"manager_filial:{user.id}", max_calls=30, window_seconds=60)
+    return await manager_filial.buy(db, user, alumnus_id)

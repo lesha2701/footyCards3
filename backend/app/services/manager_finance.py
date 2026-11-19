@@ -64,6 +64,27 @@ DEFAULTS: dict = {
     # it closes at instead of Monday + manager_preseason_hours (never earlier).
     # 2026-W47: the update came on Tuesday — open till an hour before round 1.
     "window_until": {"2026-W47": "2026-11-18T12:00"},
+    # «Филиал академии» (manager_filial): opened and built for coins; a
+    # «выпуск» every filial_every seasons (filial_every_min with the
+    # «Интернат» at its top level) while a contract is free (filial_contracts,
+    # +1 per «Интернат» level); a pick of filial_candidates (+1 with the
+    # «Скаут-офис»). An alumnus comes at filial_start_age, 1 season = 1 year:
+    # peak = the club's division rating + potential 0..filial_potential_max
+    # + «Поля» (+1 a level) at an age in filial_peak_age, filial_grow_gap
+    # under the peak at the start, a decline of filial_decline per season
+    # from filial_decline_age (+1 season per «Спортзал» level), retirement at
+    # an age in filial_retire_age. The market buys him back at
+    # manager_sell_back_pct once a season; other presidents pay
+    # filial_min_price_pct..filial_max_price_pct of his value (no dumping),
+    # filial_fee_pct of it is burnt, and one pair of clubs trades again only
+    # after filial_pair_cooldown_seasons.
+    "filial_enabled": True, "filial_open_coins": 8000,
+    "filial_fields_coins": [3000, 6000, 12000], "filial_internat_coins": [6000, 15000],
+    "filial_scout_coins": [4000, 10000], "filial_gym_coins": [4000, 10000],
+    "filial_every": 4, "filial_every_min": 3, "filial_contracts": 1, "filial_candidates": 2,
+    "filial_start_age": 17, "filial_potential_max": 6, "filial_grow_gap": 12,
+    "filial_peak_age": [25, 28], "filial_decline_age": 30, "filial_decline": 1.5, "filial_retire_age": [33, 37],
+    "filial_min_price_pct": 90, "filial_max_price_pct": 300, "filial_fee_pct": 5, "filial_pair_cooldown_seasons": 4,
     # Sponsors: % of G. place_pct = by place (index 0 = champion); rest_pct =
     # any other place that is not relegated; relegated_pct = relegated.
     "sponsors": [
@@ -466,7 +487,8 @@ def validate(raw: dict) -> dict:
             if not isinstance(value, list) or not value or not all(isinstance(x, dict) and x.get("code") for x in value):
                 raise ValueError(f"{key}: нужен список объектов с code")
             out[key] = value
-        elif key in ("cup_round_hours", "cup_prizes_pct", "sub_minutes", "tired_pct"):
+        elif key in ("cup_round_hours", "cup_prizes_pct", "sub_minutes", "tired_pct", "filial_fields_coins",
+                     "filial_internat_coins", "filial_scout_coins", "filial_gym_coins", "filial_peak_age", "filial_retire_age"):
             if not isinstance(value, list) or not value or not all(isinstance(x, (int, float)) and x >= 0 for x in value):
                 raise ValueError(f"{key}: нужен список неотрицательных чисел")
             out[key] = value
@@ -652,7 +674,11 @@ async def fans_of(db: AsyncSession, club: ManagerClub) -> int:
     buyers = (await db.execute(
         select(func.count(func.distinct(ManagerMerch.user_id))).where(ManagerMerch.club_id == club.id)
     )).scalar_one()
-    return int(buyers) + int(club.fans_bonus or 0)
+    # The town's population cheers for its owner's club (town_service.town_fans);
+    # imported here — town_service reads the manager tables.
+    from app.services import town_service
+
+    return int(buyers) + int(club.fans_bonus or 0) + await town_service.town_fans(db, club.owner_id, await get_config(db))
 
 
 async def open_loan(db: AsyncSession, club_id: int, lock: bool = False) -> Optional[ManagerLoan]:

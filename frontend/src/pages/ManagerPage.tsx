@@ -662,7 +662,7 @@ function Bench({ squad }: { squad: ManagerClub["squad"] }) {
             <span key={p.key} className="flex items-center gap-1.5 rounded-lg bg-bg-raised px-2 py-1.5 text-micro text-ink-chalk">
               <span className="w-8 shrink-0 font-mono text-ink-mist">{p.position}</span>
               <span className="min-w-0 flex-1 truncate">
-                {(p.kind === "prospect" || p.subject === "prospect") && "🧒 "}{(p.kind === "graduate" || p.subject === "graduate") && "🎓 "}{p.name}
+                {(p.kind === "prospect" || p.subject === "prospect") && "🧒 "}{(p.kind === "graduate" || p.subject === "graduate") && "🎓 "}{p.kind === "alum" && `${p.flag ?? "🌍"} `}{p.name}
               </span>
               <b>{p.rating}</b>
             </span>

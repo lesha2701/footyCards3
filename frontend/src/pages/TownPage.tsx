@@ -5,12 +5,13 @@ import { createPortal } from "react-dom";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
-  buyTownDecor, buyTownHotel, buyTownHouse, claimTownIncome, createTownRenameInvoice, fetchTown, fetchTownInvoiceStatus,
+  buyTownDecor, buyTownHotel, buyTownHouse, buyTownJob, claimTownIncome, createTownRenameInvoice, fetchTown, fetchTownInvoiceStatus,
   claimTownQuest, createTownSeasonInvoice, fetchTownQuests, fetchTownResidents, fetchTownSeason, settleTownResident, unlockTown,
   type TownDistrictState, type TownState,
 } from "@/api/town";
 import GameHero from "@/components/common/GameHero";
 import { IconClose, IconCoin } from "@/components/icons";
+import TownJobsPanel from "@/components/town/TownJobsPanel";
 import TownScene from "@/components/town/TownScene";
 import VillaCarDrive from "@/components/town/VillaCarDrive";
 import hotelArt from "@/assets/town/hotel.webp";
@@ -114,6 +115,17 @@ export default function TownPage() {
     },
     onError: fail,
   });
+  const job = useMutation({
+    mutationFn: (c: string) => buyTownJob(c, crypto.randomUUID()),
+    onSuccess: (data, c) => {
+      apply(data);
+      const b = data.jobs?.buildings.find((x) => x.code === c);
+      setNotice(b && b.level > 1
+        ? `${b.name}: уровень ${b.level} — ${fmt(b.jobs)} рабочих мест 🏭`
+        : `${b?.name ?? "Здание"} построено — жители выходят на работу 🏭`);
+    },
+    onError: fail,
+  });
   const unlock = useMutation({
     mutationFn: () => unlockTown(crypto.randomUUID()),
     onSuccess: (data) => { apply(data); setNotice("Город твой! Покупай первые дома 🏙️"); },
@@ -158,6 +170,8 @@ export default function TownPage() {
       onRename={(name) => rename.mutateAsync(name)}
       decorBusy={decor.isPending}
       onDecor={(code) => decor.mutateAsync(code)}
+      jobBusy={job.isPending}
+      onJob={(c) => job.mutate(c)}
     />
   );
 }
@@ -377,13 +391,15 @@ function QuestsPanel() {
 }
 
 function TownMap({
-  state, messages, claimBusy, onClaim, hotelBusy, onHotel, renameBusy, onRename, decorBusy, onDecor,
+  state, messages, claimBusy, onClaim, hotelBusy, onHotel, renameBusy, onRename, decorBusy, onDecor, jobBusy, onJob,
 }: {
   state?: TownState; messages: ReactNode; claimBusy: boolean; onClaim: () => void; hotelBusy: boolean; onHotel: () => void;
   renameBusy: boolean; onRename: (name: string) => Promise<unknown>;
   decorBusy: boolean; onDecor: (code: string) => Promise<unknown>;
+  jobBusy: boolean; onJob: (code: string) => void;
 }) {
   const navigate = useNavigate();
+  const balance = useAuthStore((s) => s.user?.balance ?? 0);
   const [renaming, setRenaming] = useState(false);
   const [place, setPlace] = useState<DecorZone | null>(null);
   const decorOf = (code: string) => state?.decor.find((d) => d.code === code);
@@ -408,6 +424,9 @@ function TownMap({
       )}
       {state?.enabled && state.unlocked && <QuestsPanel />}
       {state?.enabled && state.unlocked && <SeasonPanel />}
+      {state?.enabled && state.unlocked && state.jobs && (
+        <TownJobsPanel jobs={state.jobs} balance={balance} busy={jobBusy} onBuy={onJob} />
+      )}
       {state?.enabled && state.unlocked && (
         <Link
           to="/town/villa"

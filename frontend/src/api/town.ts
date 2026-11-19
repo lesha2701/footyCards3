@@ -66,6 +66,37 @@ export interface TownDecor {
   owned: boolean;
 }
 
+/** «Рабочие места»: an employer building, bought and levelled for coins. */
+export interface TownJobBuilding {
+  code: string;
+  name: string;
+  emoji: string;
+  /** 0 — not bought yet. */
+  level: number;
+  max_level: number;
+  jobs_per_level: number;
+  jobs: number;
+  /** The price of the next level (of buying it at level 0); null — the last level. */
+  next_price: number | null;
+  next_payback_days: number | null;
+}
+
+export interface TownJobs {
+  buildings: TownJobBuilding[];
+  jobs: number;
+  /** Residents working here: min(free residents, jobs). */
+  employed: number;
+  /** Residents not on the «Менеджер» club staff. */
+  free_residents: number;
+  staff: number;
+  population: number;
+  tax_pct: number;
+  /** Extra coins a day the workers pay, inside income.rate_per_day. */
+  tax_per_day: number;
+  /** Fans the population brings to the player's «Менеджер» club. */
+  club_fans: number;
+}
+
 export interface TownState {
   enabled: boolean;
   /** Opened for coins (or open to everyone when unlock_coins is 0). */
@@ -83,6 +114,8 @@ export interface TownState {
   decor: TownDecor[];
   /** +% to the houses' rent from the places bought. */
   decor_pct: number;
+  /** «Рабочие места» (absent on an older backend). */
+  jobs?: TownJobs;
   houses: { district: string; code: string }[];
   owned_total: number;
   total_houses: number;
@@ -115,6 +148,11 @@ export async function claimTownIncome(idempotencyKey: string): Promise<TownState
 
 export async function buyTownHotel(idempotencyKey: string): Promise<TownState> {
   const { data } = await api.post<TownState>("/town/hotel/buy", { idempotency_key: idempotencyKey });
+  return data;
+}
+
+export async function buyTownJob(code: string, idempotencyKey: string): Promise<TownState> {
+  const { data } = await api.post<TownState>(`/town/jobs/${code}/buy`, { idempotency_key: idempotencyKey });
   return data;
 }
 

@@ -16,6 +16,7 @@ import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { ListSkeleton } from "@/components/common/Skeleton";
 import { KitShirt } from "@/components/manager/Emblem";
 import ExchangePanel from "@/components/manager/ExchangePanel";
+import FilialPanel from "@/components/manager/FilialPanel";
 import MatchdayPanel from "@/components/manager/MatchdayPanel";
 import { AwayReport, DeskOverlay, Diary } from "@/components/manager/OfficeDesk";
 import { useOfficeStaff } from "@/components/manager/useOfficeStaff";
@@ -27,7 +28,7 @@ import { MIcon } from "@/lib/managerIcons";
 import { eur } from "@/lib/managerMoney";
 import { hapticNotify } from "@/lib/telegram";
 
-type Section = "report" | "budget" | "awards" | "sponsor" | "bank" | "deals" | "matchday" | "exchange" | "rating";
+type Section = "report" | "budget" | "awards" | "sponsor" | "bank" | "deals" | "matchday" | "exchange" | "rating" | "filial";
 
 /** Where a «Сегодня в клубе» target lives. */
 const FOCUS: Record<string, Section> = {
@@ -68,14 +69,14 @@ export default function PresidentTab({ onError, onTab = () => {} }: { onError: (
   const ask = (title: string, text: string, run: () => void) => setConfirm({ title, text, run });
   // Three groups instead of nine equal buttons: money, the stadium, prestige.
   const groups: { title: string; cols: string; items: [Section, string, string][] }[] = [
-    { title: "Финансы", cols: "col-span-4 grid-cols-5", items: [["report", "📊", "Отчёт"], ["budget", "📒", "Бюджет"], ["bank", "🏦", "Банк"], ["deals", "💼", "Сделки"], ["sponsor", "🤝", "Спонсор"]] },
-    { title: "Матчдей", cols: "col-span-1 grid-cols-1", items: [["matchday", "🏟️", "Стадион"]] },
+    { title: "Финансы", cols: "col-span-5 grid-cols-5", items: [["report", "📊", "Отчёт"], ["budget", "📒", "Бюджет"], ["bank", "🏦", "Банк"], ["deals", "💼", "Сделки"], ["sponsor", "🤝", "Спонсор"]] },
+    { title: "Клуб", cols: "col-span-2 grid-cols-2", items: [["matchday", "🏟️", "Стадион"], ["filial", "🌍", "Филиал"]] },
     { title: "Престиж", cols: "col-span-3 grid-cols-3", items: [["awards", "🏅", "Награды"], ["rating", "🏆", "Рейтинг"], ["exchange", "📈", "Биржа"]] },
   ];
   return (
     <div className="flex flex-col gap-4" data-testid="president-tab">
       <OfficeHero office={data} onTab={onTab} />
-      <div className="grid grid-cols-4 gap-x-1.5 gap-y-2" data-testid="office-sections">
+      <div className="grid grid-cols-5 gap-x-1.5 gap-y-2" data-testid="office-sections">
         {groups.map((g) => (
           <div key={g.title} className={`flex flex-col gap-1 ${g.cols.split(" ")[0]}`}>
             <p className="px-1 text-[10px] font-bold uppercase tracking-wide text-ink-mist">{g.title}</p>
@@ -92,7 +93,7 @@ export default function PresidentTab({ onError, onTab = () => {} }: { onError: (
           </div>
         ))}
       </div>
-      {!data.window_open && !["report", "budget", "awards", "exchange", "rating"].includes(section) && (
+      {!data.window_open && !["report", "budget", "awards", "exchange", "rating", "filial"].includes(section) && (
         <p className="rounded-xl bg-amber-400/10 px-3 py-2 text-caption text-amber-200">
           ⏳ Идёт сезон. Новые сделки и кредит — в межсезонье, на следующий сезон. Погасить кредит можно в любой момент.
         </p>
@@ -108,6 +109,7 @@ export default function PresidentTab({ onError, onTab = () => {} }: { onError: (
         onInsure={() => ask("Застраховать игроков?", `${eur(data.offers.insurance.premium)} за сезон — страховка оплатит ${pct(data.offers.insurance.cover_pct)} лечения травм.`,
           () => deal.mutate({ kind: "insurance" }))} />}
       {section === "rating" && <PresidentRating />}
+      {section === "filial" && <FilialPanel onError={onError} />}
       {section === "deals" && <div data-focus="deals"><Deals office={data} busy={deal.isPending} ask={ask} sign={(kind, body) => deal.mutate({ kind, ...body })} /></div>}
       <AwayReport onTab={onTab} />
       <Diary onTab={onTab} />

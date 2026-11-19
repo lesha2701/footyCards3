@@ -41,7 +41,8 @@ type Form = Pick<GameConfig, "club_base_enabled" | "club_base_buildings" | "club
   | "club_base_income_max_days" | "club_base_cosmetics"
   | "town_enabled" | "town_districts" | "town_price_growth_pct" | "town_income_max_hours"
   | "town_unlock_coins" | "town_rename_stars" | "town_hotel_price" | "town_hotel_rent_per_100_cards"
-  | "town_hotel_max_cards" | "town_decor" | "town_mood" | "town_social" | "town_villa">;
+  | "town_hotel_max_cards" | "town_decor" | "town_mood" | "town_social" | "town_villa"
+  | "town_jobs" | "town_job_tax_pct" | "town_fans_k" | "town_fans_cap">;
 
 // [GameConfig.town_mood key, label, default (town_service.MOOD_DEFAULTS)]
 const TOWN_MOOD: [string, string, number][] = [
@@ -217,6 +218,14 @@ const TOWN_VILLA: [string, string, number][] = [
   ["supply_flamingo_pond", "🦩 Пруд с фламинго: копий (0 = без лимита)", 0],
 ];
 
+// «Рабочие места»: codes of town_service.JOBS.
+const TOWN_JOBS: Record<string, string> = {
+  factory: "🏭 Фабрика", plant: "⚙️ Завод", port: "⚓ Порт", office: "🏢 Бизнес-центр", mall: "🛍️ Торговый центр",
+};
+const JOB_FIELDS: [("price" | "jobs" | "levels" | "growth_pct"), string][] = [
+  ["price", "Цена 1-го уровня"], ["jobs", "Мест за уровень"], ["levels", "Уровней"], ["growth_pct", "Рост цены за уровень, %"],
+];
+
 const TOWN_DECOR: Record<string, string> = {
   park: "⛲ Парк с фонтаном", pier: "🎡 Пирс с колесом обозрения", island: "🏆 Остров легенды",
 };
@@ -271,6 +280,10 @@ export default function AdminClubBasePage() {
       town_mood: config.town_mood ?? {},
       town_social: config.town_social ?? {},
       town_villa: config.town_villa ?? {},
+      town_jobs: config.town_jobs ?? {},
+      town_job_tax_pct: config.town_job_tax_pct ?? 50,
+      town_fans_k: config.town_fans_k ?? 30,
+      town_fans_cap: config.town_fans_cap ?? 1500,
     });
   }, [config]);
 
@@ -462,6 +475,43 @@ export default function AdminClubBasePage() {
                   <input type="number" min={0} value={row.rent_pct} onChange={(e) => set("rent_pct", Number(e.target.value))}
                          className="w-24 rounded bg-bg-base px-2 py-1 outline-none" />
                 </label>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-3 text-xs text-slate-400">
+          Рабочие места: здания покупаются и улучшаются за монеты, каждый уровень даёт места. Свободные жители
+          (не в штабе «Менеджера») работают сами и платят налог сверх ренты. Окупаемость уровня должна быть
+          не меньше 60 дней: цена ≥ 60 × места × рента жителя × налог %. Население даёт болельщиков клубу:
+          k × √население, не больше потолка.
+        </p>
+        <div className="mt-2 flex flex-wrap gap-3">
+          {([["town_job_tax_pct", "Налог работника, % ренты"], ["town_fans_k", "Болельщики: k"],
+             ["town_fans_cap", "Болельщики: потолок"]] as const).map(([key, label]) => (
+            <label key={key} className="flex flex-col gap-1">
+              <span className="text-xs text-slate-400">{label}</span>
+              <input type="number" min={0} value={form[key]}
+                     onChange={(e) => setForm({ ...form, [key]: Number(e.target.value) })}
+                     className="w-32 rounded-lg bg-bg-base px-3 py-2 outline-none" />
+            </label>
+          ))}
+        </div>
+        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {Object.entries(TOWN_JOBS).map(([code, name]) => {
+            const row = form.town_jobs[code] ?? { price: 0, jobs: 0, levels: 1, growth_pct: 0 };
+            const set = (key: (typeof JOB_FIELDS)[number][0], value: number) =>
+              setForm({ ...form, town_jobs: { ...form.town_jobs, [code]: { ...row, [key]: value } } });
+            return (
+              <div key={code} className="rounded-lg bg-white/5 p-2 text-xs">
+                <p className="mb-1 font-semibold">{name}</p>
+                {JOB_FIELDS.map(([key, label]) => (
+                  <label key={key} className="mb-1 flex items-center justify-between gap-2">
+                    <span className="text-slate-400">{label}</span>
+                    <input type="number" min={key === "levels" ? 1 : 0} value={row[key]}
+                           onChange={(e) => set(key, Number(e.target.value))}
+                           className="w-24 rounded bg-bg-base px-2 py-1 outline-none" />
+                  </label>
+                ))}
               </div>
             );
           })}

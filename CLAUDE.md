@@ -25,6 +25,14 @@ Main features:
   department, …) around the «Академия», one construction queue with it,
   career effects frozen per season (`club_base_service.py`, see
   docs/club-base.md);
+- «Город» (`town_service.py`, module doc): houses in districts, the hotel, map places and
+  «Жители города» (pack cards, one copy = one inhabitant paying rent), all in one capped rent
+  clock; «🏭 Рабочие места» (`JOBS`, table `user_town_jobs`, GameConfig `town_jobs` /
+  `town_job_tax_pct`): employers bought and levelled for coins, free residents (not on the
+  «Менеджер» staff) fill the jobs and pay a tax on top of the rent; every default level pays
+  back in ≥ `PAYBACK_MIN_DAYS` (a test checks it); the population brings `town_fans`
+  (k × √population, capped) to the owner's «Менеджер» club via `manager_finance.fans_of` —
+  club euros never flow back into coins;
 - «Моя вилла» in the town (`town_villa_service.py`): an isometric plot laid
   out by the player (villa / garage levels, cars, yard and Stars things on a
   grid checked by `check_layout` and its TS twin `lib/villa.ts`; the grid lies
@@ -172,7 +180,16 @@ Main features:
   see docs/president-office.md; «Сегодня в клубе» tips carry a `target`
   (`lib/managerFocus.ts`). «Штат» is a round table of ten departments
   (`manager_staff.ROLES`) with a sheet per seat, «поручения» `staff_orders` and
-  the transport department's fleet (`fleet`). Numbers: GameConfig.manager_finance
+  the transport department's fleet (`fleet`). «🌍 Филиал академии»
+  (`manager_filial.py`, tables `manager_filials` / `manager_alumni` /
+  `manager_alumni_trades`): one filial per club in a region (`REGIONS`,
+  names and flags by country), buildings for coins; a seeded release of
+  candidates every `filial_every` seasons while a contract is free (squad
+  kind "alum"), the peak relative to the division, a career curve
+  (1 season = 1 year) to retirement; the market buys back once a season,
+  other presidents only within `filial_min/max_price_pct` of the value, a
+  burnt fee and a pair cooldown (anti-dump). A second filial is a future
+  idea, not built. Numbers: GameConfig.manager_finance
   over `manager_finance.DEFAULTS`;
 - «Мой игрок» extras (`my_player_extras.py`): a weekly «Спонсор» (one of
   three brands of `my_player_sponsors`, goals counted by hooks in the

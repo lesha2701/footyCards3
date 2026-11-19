@@ -5,14 +5,15 @@ import { pitchRows, inRow } from "@/lib/formationLayout";
 import { eur } from "@/lib/managerMoney";
 
 const KIND_LABEL: Record<ManagerSquadPlayer["kind"], string> = {
-  own: "Мой игрок", academy: "Академия", live: "Игрок", npc: "Футболист", kid: "Воспитанник", prospect: "Юниор", graduate: "Выпускник",
+  own: "Мой игрок", academy: "Академия", live: "Игрок", npc: "Футболист", kid: "Воспитанник", prospect: "Юниор", graduate: "Выпускник", alum: "Филиал",
 };
 const KIND_RING: Record<ManagerSquadPlayer["kind"], string> = {
-  own: "ring-accent-lime", live: "ring-accent-cyan", academy: "ring-violet-400", npc: "ring-white/80", kid: "ring-white/20", prospect: "ring-emerald-300", graduate: "ring-amber-300",
+  own: "ring-accent-lime", live: "ring-accent-cyan", academy: "ring-violet-400", npc: "ring-white/80", kid: "ring-white/20", prospect: "ring-emerald-300", graduate: "ring-amber-300", alum: "ring-teal-300",
 };
 const KIND_BADGE: Record<ManagerSquadPlayer["kind"], string> = {
   own: "bg-accent-lime text-bg-base", live: "bg-accent-cyan text-bg-base", academy: "bg-violet-400 text-bg-base",
   npc: "bg-white text-bg-base", kid: "bg-bg-base text-ink-mist", prospect: "bg-emerald-300 text-bg-base", graduate: "bg-amber-300 text-bg-base",
+  alum: "bg-teal-300 text-bg-base",
 };
 
 function Face({ p }: { p: ManagerSquadPlayer }) {

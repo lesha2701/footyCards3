@@ -63,6 +63,7 @@ from app.models.card import UserCard
 from app.models.card_path import UserAcademy
 from app.models.club_base import UserClubBase
 from app.models.enums import NotificationType, Position, Rarity, TransactionType
+from app.models.manager_filial import ManagerAlumnus
 from app.models.manager_club import (
     ManagerClub,
     ManagerContract,
@@ -82,6 +83,7 @@ from app.services import manager_staff as staff
 from app.services import manager_assistant as assistant, manager_conflicts as conflicts, manager_press as press
 from app.services import manager_budget
 from app.services import manager_coach as coach
+from app.services import manager_filial as filial
 from app.services import manager_cup as cup, manager_events as events, manager_perks as perks, manager_exchange as exchange, manager_finance as finance, manager_tactics as tactics, trade_guard_service, wallet_service
 from app.services.manager_tactics import DEFAULT_FORMATION
 from app.services.career_service import standings
@@ -608,6 +610,9 @@ async def build_pool(db: AsyncSession, club: ManagerClub, config) -> tuple[list[
         entries.append({"key": f"npc:{n.id}", "kind": "npc", "ref": n.id, "player_id": p.id, "name": p.display_name,
                         "position": p.position.value, "rating": p.rating, "loan": n.kind == "loan", "auto": n.auto,
                         "photo": p.image_path})
+    # «Филиал академии»: the alumni at their age's rating this season.
+    for al in await filial.club_alumni(db, club.id, season_key(datetime.now(timezone.utc))):
+        entries.append(filial.entry(al, season_key(datetime.now(timezone.utc)), config))
     return entries, cards
 
 
@@ -908,7 +913,8 @@ async def _live_count(db: AsyncSession, club_id: int, owner_id: int) -> int:
 
 
 async def _squad_size(db: AsyncSession, club: ManagerClub) -> int:
-    return await _live_count(db, club.id, club.owner_id) + len(await _npcs(db, club.id))
+    alumni = await filial.count(db, club.id, season_key(datetime.now(timezone.utc)))  # «Филиал академии»
+    return await _live_count(db, club.id, club.owner_id) + len(await _npcs(db, club.id)) + alumni
 
 
 async def make_offer(
@@ -1433,7 +1439,8 @@ async def wage_bill(db: AsyncSession, club: ManagerClub, config, snap: Optional[
     wage_pct = _pct(config.manager_division_wage_pct, club.division)
     npcs = sum(n.wage * wage_pct // 100 * (100 - snap["discount_pct"]) // 100
                for n in await _npcs(db, club.id) if n.seasons_left > 0)
-    return live + npcs + await staff.wages(db, club.id)
+    alumni = await filial.wage_total(db, club, season_key(datetime.now(timezone.utc)), snap, config)
+    return live + npcs + alumni + await staff.wages(db, club.id)
 
 
 async def start_bill(db: AsyncSession, club: ManagerClub, config, snap: Optional[dict] = None) -> int:
@@ -1778,6 +1785,7 @@ async def _prepare_club(db: AsyncSession, club: ManagerClub, key: str, now: date
             continue
         await finance.book(db, club, "wages", -pay, key)
         n.seasons_left -= 1
+    notes += await filial.pay_wages(db, club, key, snap, config, now)  # «Филиал академии»
     notes += await staff.pay(db, club, key, config)  # «Штаб президента»
     target = _division_rating(club.division, config)
     # A farm club's kids are stronger (up to the division's own rating).
@@ -2088,7 +2096,7 @@ async def _play_round(db: AsyncSession, league: ManagerLeague, round_index: int,
         await _daily_digest(db, league, today)
 
 
-INJURABLE = ("live", "npc", "academy")
+INJURABLE = ("live", "npc", "academy", "alum")
 
 
 async def _injury(db, club: ManagerClub, team: dict, xi: list[dict], league: ManagerLeague, round_index: int, state: dict,
@@ -2157,6 +2165,10 @@ async def _settle_match(db, club, team, lineup, match, side, home, division, at,
             npc = await db.get(ManagerNpc, p["ref"])
             if npc is not None:
                 npc.goals += goals
+        if p["kind"] == "alum" and goals:
+            alum = await db.get(ManagerAlumnus, p["ref"])
+            if alum is not None:
+                alum.goals += goals
         if p["kind"] not in ("own", "live", "prospect", "graduate"):
             continue
         uid = p["user_id"]

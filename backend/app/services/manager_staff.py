@@ -216,6 +216,16 @@ async def _club(db: AsyncSession, user: User, lock: bool = False) -> ManagerClub
     return club
 
 
+async def _settle_town(db: AsyncSession, user_id: int, config) -> None:
+    """A resident on the staff leaves the town's «Рабочие места» (and a fired
+    one comes back): the town's rent so far is settled at the old rate first."""
+    from app.services import town_service
+    from app.services.wallet_service import lock_user_for_update
+
+    await lock_user_for_update(db, user_id)
+    await town_service._settle_before_population_change(db, config, user_id)
+
+
 async def hire(db: AsyncSession, user: User, resident_id: int, role: str) -> dict:
     from app.services import manager_service as ms
 
@@ -238,6 +248,7 @@ async def hire(db: AsyncSession, user: User, resident_id: int, role: str) -> dic
     reserved = await ms.start_bill(db, club, config)
     if wage > club.budget - reserved:
         raise ConflictError(ms._short_of(wage, club.budget, reserved))
+    await _settle_town(db, user.id, config)
     try:
         async with db.begin_nested():
             db.add(ManagerStaff(club_id=club.id, role=role, resident_id=resident_id, rarity=resident.rarity, wage=wage,
@@ -259,6 +270,7 @@ async def fire(db: AsyncSession, user: User, staff_id: int) -> dict:
     row = await db.get(ManagerStaff, staff_id)
     if row is None or row.club_id != club.id:
         raise NotFoundError("Такого сотрудника нет")
+    await _settle_town(db, user.id, await get_config(db))
     if row.role == "coach":
         data = office(club)
         data.pop("coach", None)

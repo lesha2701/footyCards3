@@ -195,3 +195,12 @@ deposits). `staff_slots` by division limits the taken seats. The old
 - Art drops into `frontend/src/assets/manager/staff/<code>.webp`:
   `council_table`, `seat_empty` and the fleet codes (`minibus`, `coach_bus`,
   `liner`, `charter`, `jet`); without a file the UI draws its own.
+
+## «🌍 Филиал академии» (`manager_filial.py`)
+
+- Один филиал на клуб: регион (`REGIONS`: Европа с Восточной Европой, Украиной и Россией, Южная Америка, Африка, Азия, Северная и Центральная Америка) и страна (только вид). Открытие и постройки — за монеты (`filial_open_coins`, `filial_*_coins`).
+- Постройки: «Тренировочные поля» (+1 к пику за уровень), «Интернат» (+1 контракт за уровень, до 3; на последнем уровне выпуск раз в `filial_every_min` сезонов), «Скаут-офис» (+1 кандидат, затем выше потенциал), «Спортзал» (спад на сезон позже за уровень).
+- Выпуск раз в `filial_every` сезонов, только пока есть свободный контракт: `filial_candidates` кандидатов (seeded по филиалу и сезону), пик скрыт, виден потенциал звёздами. Пик = рейтинг дивизиона + потенциал + поля.
+- Карьера: 1 сезон = 1 год; с `filial_start_age` рост до пика к `peak_age`, держится до `decline_age`, затем −`filial_decline` за сезон; пенсия в `retire_age`. Зарплата — в начале сезона как у всех (`wage_bill`); не оплатил — рынок выкупает.
+- Продажа: рынку по `manager_sell_back_pct` один раз в сезон на клуб; другим президентам — только в пределах `filial_min_price_pct`..`filial_max_price_pct` стоимости, комиссия `filial_fee_pct` сгорает, одна и та же пара клубов торгует снова через `filial_pair_cooldown_seasons` (защита от слива своим/второму аккаунту).
+- Второй филиал — идея на будущее, не реализован.

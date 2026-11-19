@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  buyTownDecor, buyTownHotel, buyTownHouse, claimTownIncome, claimTownQuest, fetchTown, fetchTownResidents, giftTown, likeTown, sellTownResidentSpare, settleTownResident, unlockTown, type TownQuests, type TownResident, type TownResidentsAlbum, type TownState, type TownVisitView,
+  buyTownDecor, buyTownHotel, buyTownHouse, buyTownJob, claimTownIncome, claimTownQuest, fetchTown, fetchTownResidents, giftTown, likeTown, sellTownResidentSpare, settleTownResident, unlockTown, type TownQuests, type TownResident, type TownResidentsAlbum, type TownState, type TownVisitView,
 } from "@/api/town";
 import { useAuthStore } from "@/store/authStore";
 import { DISTRICTS, MAP_ZONES, SCENE_H, SCENE_W, SPRITES, moverAt, seasonAt, skyAt, type Mover } from "@/lib/town";
@@ -71,6 +71,17 @@ const town = (over: Partial<TownState> = {}): TownState => ({
     { code: "island", name: "Остров легенды", price: 75000, rent_pct: 12, owned: true },
   ],
   decor_pct: 12,
+  jobs: {
+    buildings: [
+      { code: "factory", name: "Фабрика", emoji: "🏭", level: 1, max_level: 5, jobs_per_level: 10, jobs: 10,
+        next_price: 460, next_payback_days: 92 },
+      { code: "mall", name: "Торговый центр", emoji: "🛍️", level: 0, max_level: 5, jobs_per_level: 100, jobs: 0,
+        next_price: 37500, next_payback_days: 75 },
+      { code: "port", name: "Порт", emoji: "⚓", level: 5, max_level: 5, jobs_per_level: 40, jobs: 200,
+        next_price: null, next_payback_days: null },
+    ],
+    jobs: 210, employed: 6, free_residents: 6, staff: 1, population: 7, tax_pct: 50, tax_per_day: 3, club_fans: 79,
+  },
   residents: { enabled: true, population: 7, rent_per_resident: 1, rent: 7, rent_pct: 20, hotel_pct: 0, daily_coins: 0 },
   houses: [{ district: "beach", code: "surf" }],
   owned_total: 1,
@@ -116,6 +127,14 @@ vi.mock("@/api/town", () => ({
     ...town({ decor: town().decor.map((d) => ({ ...d, owned: true })) }), new_balance: 2000,
   })),
   unlockTown: vi.fn(async () => ({ ...town(), new_balance: 1000 })),
+  buyTownJob: vi.fn(async () => {
+    const t = town();
+    const jobs = t.jobs!;
+    return {
+      ...t, new_balance: 4540,
+      jobs: { ...jobs, buildings: jobs.buildings.map((b) => (b.code === "factory" ? { ...b, level: 2, jobs: 20 } : b)) },
+    };
+  }),
   fetchTownResidents: vi.fn(async () => album()),
   sellTownResidentSpare: vi.fn(async () => ({ ...album(), sold_coins: 10, new_balance: 5010 })),
   settleTownResident: vi.fn(async () => town()),
@@ -253,6 +272,21 @@ describe("TownPage", () => {
     await waitFor(() => expect(unlockTown).toHaveBeenCalled());
     await waitFor(() => expect(useAuthStore.getState().user?.balance).toBe(1000));
     expect(await screen.findByText(/Город твой/)).toBeInTheDocument();
+  });
+
+  it("shows the town's employers and levels one up", async () => {
+    at("/town");
+    const panel = await screen.findByTestId("town-jobs");
+    expect(screen.getByTestId("town-jobs-summary")).toHaveTextContent(
+      /Работают 6 из 7 жителей · налог \+3 🪙\/день · болельщики клуба \+79/,
+    );
+    expect(panel).toHaveTextContent(/В штабе клуба: 1/);
+    expect(panel).toHaveTextContent(/макс\./);
+    expect(screen.getByRole("button", { name: /Торговый центр: купить за 37\s500 монет/ })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /Фабрика: уровень 2 за 460 монет/ }));
+    await waitFor(() => expect(buyTownJob).toHaveBeenCalledWith("factory", expect.any(String)));
+    expect(await screen.findByText(/Фабрика: уровень 2 — 20 рабочих мест/)).toBeInTheDocument();
+    await waitFor(() => expect(useAuthStore.getState().user?.balance).toBe(4540));
   });
 
   it("opens a closed place on the map, and fireworks go up once all are open", async () => {

@@ -12,7 +12,11 @@ export interface ManagerSquadPlayer {
   key?: string;
   /** own = my «Мой игрок», academy = my academy card (both always start),
    * live = another user's «Мой игрок», npc = a catalog footballer, kid = an academy kid in an empty slot. */
-  kind: "own" | "academy" | "live" | "npc" | "kid" | "prospect" | "graduate";
+  kind: "own" | "academy" | "live" | "npc" | "kid" | "prospect" | "graduate" | "alum";
+  /** An alumnus of the «Филиал академии» (kind "alum"): his country and flag. */
+  country?: string;
+  flag?: string;
+  age?: number;
   name: string;
   position: string;
   rating: number;
@@ -1436,5 +1440,85 @@ export async function setManagerBudget(alloc: Record<string, number>): Promise<M
 
 export async function claimManagerAchievement(code: string): Promise<ManagerDecisions> {
   const { data } = await api.post<ManagerDecisions>(`/manager/achievements/${code}/claim`);
+  return data;
+}
+
+// --- «Филиал академии» ---------------------------------------------------------------------------
+
+export interface ManagerFilialCandidate {
+  name: string; country: string; flag: string; position: string; rating: number; stars: number;
+  peak_age: number; retire_age: number;
+}
+
+export interface ManagerAlumnus {
+  id: number; name: string; country: string; flag: string; position: string; age: number; rating: number; value: number;
+  stars: number; status: string; peak_age: number; retire_in: number; phase: string; price: number | null; goals: number;
+  sell_back: number | null; price_min: number; price_max: number;
+}
+
+export interface ManagerFilialBuilding {
+  code: string; name: string; emoji: string; about: string; level: number; max: number; price: number | null;
+}
+
+export interface ManagerFilialView {
+  enabled: boolean; open_coins: number; balance: number;
+  regions: { code: string; name: string; emoji: string; countries: { name: string; flag: string }[] }[];
+  filial: null | {
+    region: string; region_name: string; country: string; flag: string; contracts: number; used: number; every: number;
+    next_in: number | null; sold_this_season: boolean; pending: ManagerFilialCandidate[];
+  };
+  buildings: ManagerFilialBuilding[];
+  alumni: ManagerAlumnus[];
+  history: { name: string; flag: string; position: string; status: string; age: number }[];
+  window_open: boolean;
+  squad_max: number;
+}
+
+export interface ManagerAlumnusLot extends ManagerAlumnus { club: string; valid: boolean }
+
+export async function fetchManagerFilial(): Promise<ManagerFilialView> {
+  const { data } = await api.get<ManagerFilialView>("/manager/filial");
+  return data;
+}
+
+export async function openManagerFilial(region: string, country: string): Promise<ManagerFilialView> {
+  const { data } = await api.post<ManagerFilialView>("/manager/filial", { region, country });
+  return data;
+}
+
+export async function buildManagerFilial(code: string): Promise<ManagerFilialView> {
+  const { data } = await api.post<ManagerFilialView>("/manager/filial/build", { code });
+  return data;
+}
+
+/** index = the candidate to sign; null = let the whole release go. */
+export async function pickManagerFilial(index: number | null): Promise<ManagerFilialView> {
+  const { data } = await api.post<ManagerFilialView>("/manager/filial/pick", { index });
+  return data;
+}
+
+export async function sellManagerAlumnus(id: number): Promise<ManagerFilialView> {
+  const { data } = await api.post<ManagerFilialView>(`/manager/filial/alumni/${id}/sell-market`);
+  return data;
+}
+
+export async function releaseManagerAlumnus(id: number): Promise<ManagerFilialView> {
+  const { data } = await api.post<ManagerFilialView>(`/manager/filial/alumni/${id}/release`);
+  return data;
+}
+
+/** price = list him for other presidents; null = take him off the market. */
+export async function priceManagerAlumnus(id: number, price: number | null): Promise<ManagerFilialView> {
+  const { data } = await api.post<ManagerFilialView>(`/manager/filial/alumni/${id}/price`, { price });
+  return data;
+}
+
+export async function fetchManagerAlumniMarket(): Promise<{ lots: ManagerAlumnusLot[] }> {
+  const { data } = await api.get<{ lots: ManagerAlumnusLot[] }>("/manager/filial/market");
+  return data;
+}
+
+export async function buyManagerAlumnus(id: number): Promise<{ lots: ManagerAlumnusLot[] }> {
+  const { data } = await api.post<{ lots: ManagerAlumnusLot[] }>(`/manager/filial/market/${id}/buy`);
   return data;
 }

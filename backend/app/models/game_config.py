@@ -132,6 +132,20 @@ DEFAULT_TOWN_DECOR: dict = {
     "island": {"price": 110000, "rent_pct": 12},
 }
 
+# «Город», «Рабочие места» (town_service.JOBS): employer buildings bought and
+# levelled for coins. Level L costs price × (100 + growth_pct × (L − 1)) / 100
+# (rounded to 10) and adds `jobs` jobs; a worker pays town_job_tax_pct % on top
+# of town_resident_rent. With rent 1 and 50% a job brings 0.5 coin a day, so
+# the first level pays back in ~75 days and the next ones later (≥ 60 always —
+# tests/test_town_jobs.py checks it).
+DEFAULT_TOWN_JOBS: dict = {
+    "factory": {"price": 380, "jobs": 10, "levels": 5, "growth_pct": 20},
+    "plant": {"price": 750, "jobs": 20, "levels": 5, "growth_pct": 20},
+    "port": {"price": 1500, "jobs": 40, "levels": 5, "growth_pct": 20},
+    "office": {"price": 2250, "jobs": 60, "levels": 5, "growth_pct": 20},
+    "mall": {"price": 3750, "jobs": 100, "levels": 5, "growth_pct": 20},
+}
+
 # «Жители города»: coins for one spare copy of a resident, by rarity.
 DEFAULT_TOWN_RESIDENT_SPARE_COINS: dict = {"common": 10, "rare": 30, "epic": 100, "legendary": 300}
 
@@ -1559,6 +1573,17 @@ class GameConfig(TimestampMixin, Base):
     town_decor: Mapped[dict] = mapped_column(
         JSON, nullable=False, default=lambda: {k: dict(v) for k, v in DEFAULT_TOWN_DECOR.items()},
     )
+    # «Рабочие места» (town_service.JOBS): {code: {price, jobs, levels,
+    # growth_pct}} over DEFAULT_TOWN_JOBS; an employed resident pays
+    # town_job_tax_pct % on top of his rent. The town's population brings
+    # floor(town_fans_k × √population) fans (≤ town_fans_cap) to the owner's
+    # «Менеджер» club (manager_finance.fans_of).
+    town_jobs: Mapped[dict] = mapped_column(
+        JSON, nullable=False, default=lambda: {k: dict(v) for k, v in DEFAULT_TOWN_JOBS.items()},
+    )
+    town_job_tax_pct: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    town_fans_k: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    town_fans_cap: Mapped[int] = mapped_column(Integer, default=1500, nullable=False)
 
     # --- Monetization (models/monetization.py) ---------------------------
     # Monthly login calendar: catching up a missed day of the current month.

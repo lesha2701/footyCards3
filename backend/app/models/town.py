@@ -50,6 +50,24 @@ class UserTownHouse(Base):
     __table_args__ = (UniqueConstraint("user_id", "district", "building_code", name="uq_user_town_houses_building"),)
 
 
+class UserTownJob(Base):
+    """An employer building of the town («Рабочие места», town_service.JOBS)
+    the user bought, at its level; every level adds GameConfig.town_jobs jobs.
+    Unique per (user, building) — a retried purchase never charges twice."""
+
+    __tablename__ = "user_town_jobs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(16), nullable=False)
+    level: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    coins_paid: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    bought_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    __table_args__ = (UniqueConstraint("user_id", "code", name="uq_user_town_jobs_code"),)
+
+
 class TownLedger(Base):
     """Every town operation (a house bought, rent collected).
     `(user_id, idempotency_key)` unique — a retried request is replayed,

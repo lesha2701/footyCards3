@@ -52,7 +52,23 @@ legend's island) stay dimmed until bought once for coins
 up on the map and adds its rent_pct % to the houses' rent. It is kept as
 a user_town_houses row of the pseudo-district "decor", so the same
 unique key guards it; it never counts as a house.
+
+«Рабочие места» (JOBS: Фабрика, Завод, Порт, Бизнес-центр, Торговый центр)
+are employers, not homes: the population still grows only from packs. A
+building is bought for coins and levelled (user_town_jobs, one row per
+building; GameConfig.town_jobs {code: {price, jobs, levels, growth_pct}}),
+every level adds `jobs` jobs. Workers are assigned by themselves: employed =
+min(free residents, jobs), free = resident copies held − residents on the
+«Менеджер» club staff (a resident works in one place). An employed resident
+pays town_job_tax_pct % of town_resident_rent on top of his rent, inside the
+same rate (so it accrues, caps and is collected like the rent). Every level
+must pay back in at least PAYBACK_MIN_DAYS days of that tax.
+
+The population also brings fans to the owner's «Менеджер» club:
+floor(town_fans_k × √population), at most town_fans_cap (town_fans, added in
+manager_finance.fans_of). Nothing of the club's euros ever comes back here.
 """
+import math
 import random
 import re
 from datetime import datetime, timedelta, timezone
@@ -65,8 +81,11 @@ from app.core.exceptions import ConflictError, NotFoundError
 from app.core.timeutil import ensure_aware
 from app.models.card import UserCard
 from app.models.enums import Rarity, TransactionType
-from app.models.game_config import DEFAULT_TOWN_DECOR, DEFAULT_TOWN_DISTRICTS, DEFAULT_TOWN_RESIDENT_SPARE_COINS
-from app.models.town import TownLedger, TownResident, UserTown, UserTownHouse, UserTownResident
+from app.models.game_config import (
+    DEFAULT_TOWN_DECOR, DEFAULT_TOWN_DISTRICTS, DEFAULT_TOWN_JOBS, DEFAULT_TOWN_RESIDENT_SPARE_COINS,
+)
+from app.models.manager_club import ManagerClub, ManagerStaff
+from app.models.town import TownLedger, TownResident, UserTown, UserTownHouse, UserTownJob, UserTownResident
 from app.models.user import User
 from app.services.game_config_service import get_config
 from app.services.wallet_service import credit_coins, debit_coins, lock_user_for_update
@@ -177,6 +196,18 @@ DECOR_DISTRICTS: dict[str, tuple[str, ...]] = {
     "pier": ("beach", "island"), "park": ("center", "favela", "residential"), "island": (),
 }
 
+# «Рабочие места»: employer buildings (frontend components/town/TownJobsPanel — same codes).
+JOBS: dict[str, dict[str, str]] = {
+    "factory": {"name": "Фабрика", "emoji": "🏭"},
+    "plant": {"name": "Завод", "emoji": "⚙️"},
+    "port": {"name": "Порт", "emoji": "⚓"},
+    "office": {"name": "Бизнес-центр", "emoji": "🏢"},
+    "mall": {"name": "Торговый центр", "emoji": "🛍️"},
+}
+_JOB_KEYS = ("price", "jobs", "levels", "growth_pct")
+# The least number of days of the workers' tax a level may pay back in.
+PAYBACK_MIN_DAYS = 60
+
 MOOD_DEFAULTS: dict[str, int] = {
     "min_pct": 70, "max_pct": 120,                    # houses' rent at mood 0 / 100
     "care": 40, "care_full_hours": 12, "care_zero_hours": 48,
@@ -271,6 +302,70 @@ def validate_decor(raw: dict) -> dict:
             row[key] = value
         out[code] = row
     return out
+
+
+def jobs_config(config) -> dict[str, dict[str, int]]:
+    """{building: {"price", "jobs", "levels", "growth_pct"}} — the admin values over the defaults."""
+    raw = getattr(config, "town_jobs", None) or {}
+    out = {}
+    for code, default in DEFAULT_TOWN_JOBS.items():
+        values = {**default, **(raw.get(code) or {})}
+        out[code] = {k: max(0, int(values[k])) for k in _JOB_KEYS}
+        out[code]["levels"] = max(1, out[code]["levels"])
+    return out
+
+
+def validate_jobs(raw: dict) -> dict:
+    """Admin input for GameConfig.town_jobs: known buildings, integers ≥ 0 (levels ≥ 1)."""
+    out: dict = {}
+    for code, values in (raw or {}).items():
+        if code not in JOBS:
+            raise ValueError(f"неизвестное здание «{code}»")
+        if not isinstance(values, dict):
+            raise ValueError(f"{code}: ожидаются цена, места, уровни и рост цены")
+        row = {}
+        for key in _JOB_KEYS:
+            low = 1 if key == "levels" else 0
+            value = values.get(key, DEFAULT_TOWN_JOBS[code][key])
+            if isinstance(value, bool) or not isinstance(value, int) or value < low:
+                raise ValueError(f"{code}.{key}: нужно целое число ≥ {low}")
+            row[key] = value
+        out[code] = row
+    return out
+
+
+def job_price(config, code: str, level: int) -> int:
+    """The price of level `level` (1 = buying the building), rounded to 10 coins."""
+    v = jobs_config(config)[code]
+    return int(round(v["price"] * (100 + v["growth_pct"] * (max(1, level) - 1)) / 100 / 10)) * 10
+
+
+def job_tax_per_worker(config) -> float:
+    """Coins a day an employed resident pays on top of his rent."""
+    return max(0, int(config.town_resident_rent)) * max(0, int(config.town_job_tax_pct)) / 100
+
+
+def payback_days(config, code: str, level: int) -> Optional[float]:
+    """Days of the workers' tax the level pays back in (None — it brings nothing)."""
+    per_day = jobs_config(config)[code]["jobs"] * job_tax_per_worker(config)
+    return job_price(config, code, level) / per_day if per_day > 0 else None
+
+
+def employment(config, population: int, staff: int, levels: dict[str, int]) -> dict:
+    """Jobs of the owned buildings, residents free to work (not on the club
+    staff) and those employed, with the extra tax a day they pay."""
+    cfg = jobs_config(config)
+    jobs = sum(cfg[c]["jobs"] * min(lvl, cfg[c]["levels"]) for c, lvl in levels.items() if c in cfg)
+    free = max(0, population - staff)
+    employed = min(free, jobs)
+    tax = employed * max(0, int(config.town_resident_rent)) * max(0, int(config.town_job_tax_pct)) // 100
+    return {"jobs": jobs, "free": free, "staff": min(staff, population), "employed": employed, "tax": tax}
+
+
+def fans_for(config, population: int) -> int:
+    """Club fans the town brings: floor(k × √population), capped."""
+    k = max(0, int(config.town_fans_k))
+    return min(max(0, int(config.town_fans_cap)), math.isqrt(k * k * max(0, population)))
 
 
 def mood_config(config) -> dict[str, int]:
@@ -484,15 +579,49 @@ def build_hours(hours, build_pct: int):
     return round(hours * 60 * (100 - build_pct) / 100) / 60
 
 
+async def _jobs_owned(db: AsyncSession, user_id: int) -> dict[str, int]:
+    """{building: level} of the owned employer buildings."""
+    return dict((await db.execute(
+        select(UserTownJob.code, UserTownJob.level).where(UserTownJob.user_id == user_id)
+    )).all())
+
+
+async def _staff_count(db: AsyncSession, user_id: int, owned: list[UserTownResident]) -> int:
+    """Residents the user holds that work on his «Менеджер» club staff."""
+    held = {r.resident_id for r in owned if r.copies > 0 and r.resident.is_active}
+    if not held:
+        return 0
+    ids = (await db.execute(
+        select(ManagerStaff.resident_id).join(ManagerClub, ManagerClub.id == ManagerStaff.club_id)
+        .where(ManagerClub.owner_id == user_id)
+    )).scalars().all()
+    return sum(1 for i in ids if i in held)
+
+
+async def _employment(db: AsyncSession, config, user_id: int, owned: list[UserTownResident], population: int) -> dict:
+    return employment(config, population, await _staff_count(db, user_id, owned), await _jobs_owned(db, user_id))
+
+
+async def town_fans(db: AsyncSession, user_id: int, config=None) -> int:
+    """Fans the town's population brings to the user's «Менеджер» club
+    (an opened town with residents on only)."""
+    config = config or await get_config(db)
+    if not config.town_enabled or not config.town_residents_enabled:
+        return 0
+    if not is_unlocked(config, await db.get(UserTown, user_id)):
+        return 0
+    return fans_for(config, resident_effects(config, await _owned_residents(db, user_id))["population"])
+
+
 async def _income_parts(db: AsyncSession, config, user_id: int, town: Optional[UserTown], houses) -> dict:
     """Coins a day by source: houses (with the residents' and the places' +%),
-    hotel, residents (with their bonuses)."""
-    effects = resident_effects(config, await _owned_residents(db, user_id)) if config.town_residents_enabled else \
-        dict(_NO_EFFECTS)
+    hotel, residents (with their bonuses), the workers' extra tax."""
+    owned_residents = await _owned_residents(db, user_id) if config.town_residents_enabled else []
+    effects = resident_effects(config, owned_residents) if config.town_residents_enabled else dict(_NO_EFFECTS)
     cards = await _card_count(db, user_id)
     hotel_owned = town is not None and town.hotel_bought_at is not None
     places = await _decor_owned(db, user_id)
-    owned_residents = await _owned_residents(db, user_id) if config.town_residents_enabled else []
+    work = await _employment(db, config, user_id, owned_residents, effects["population"])
     sets = await _resident_sets(db, config, owned_residents)
     places_pct = decor_pct(config, places)
     set_pct = sets_pct(config, sets)
@@ -509,8 +638,8 @@ async def _income_parts(db: AsyncSession, config, user_id: int, town: Optional[U
         "houses": houses_rent, "hotel": hotel if hotel_owned else 0, "hotel_if_owned": hotel,
         "residents": residents, "cards": cards, "hotel_owned": hotel_owned, "effects": effects,
         "places": places, "places_pct": places_pct, "moods": moods, "sets": sets, "sets_pct": set_pct,
-        "prestige": prestige, "villa_pct": villa_pct,
-        "total": houses_rent + (hotel if hotel_owned else 0) + residents,
+        "prestige": prestige, "villa_pct": villa_pct, "work": work, "jobs_tax": work["tax"],
+        "total": houses_rent + (hotel if hotel_owned else 0) + residents + work["tax"],
     }
 
 
@@ -623,6 +752,7 @@ async def get_state(db: AsyncSession, user: User) -> dict:
             for code, v in decor_config(config).items()
         ],
         "decor_pct": parts["places_pct"],
+        "jobs": await _jobs_state(db, config, user.id, parts["work"], effects["population"]),
         "sets_pct": parts["sets_pct"],
         "villa": {"prestige": parts["prestige"], "rent_pct": parts["villa_pct"],
                   **(await _villa_summary(db, config, user.id) or {})},
@@ -656,6 +786,30 @@ async def get_state(db: AsyncSession, user: User) -> dict:
             "cap": _income_cap(rate, config),
             "max_hours": int(config.town_income_max_hours),
         },
+    }
+
+
+async def _jobs_state(db: AsyncSession, config, user_id: int, work: dict, population: int) -> dict:
+    """«Рабочие места» in the town view."""
+    levels = await _jobs_owned(db, user_id)
+    cfg = jobs_config(config)
+    buildings = []
+    for code, meta in JOBS.items():
+        v = cfg[code]
+        level = min(levels.get(code, 0), v["levels"])
+        nxt = level + 1 if level < v["levels"] else None
+        days = payback_days(config, code, nxt) if nxt else None
+        buildings.append({
+            "code": code, "name": meta["name"], "emoji": meta["emoji"],
+            "level": level, "max_level": v["levels"], "jobs_per_level": v["jobs"], "jobs": v["jobs"] * level,
+            "next_price": job_price(config, code, nxt) if nxt else None,
+            "next_payback_days": round(days) if days else None,
+        })
+    return {
+        "buildings": buildings,
+        "jobs": work["jobs"], "employed": work["employed"], "free_residents": work["free"], "staff": work["staff"],
+        "population": population, "tax_pct": max(0, int(config.town_job_tax_pct)), "tax_per_day": work["tax"],
+        "club_fans": await town_fans(db, user_id, config),
     }
 
 
@@ -756,6 +910,45 @@ async def buy_decor(db: AsyncSession, user: User, code: str, idempotency_key: Op
         UserTownHouse(user_id=user.id, district=DECOR_DISTRICT, building_code=code, price_paid=price),
         TownLedger(user_id=user.id, kind="decor", district=DECOR_DISTRICT, building_code=code, coins_spent=price,
                    result={}, idempotency_key=idempotency_key),
+    ])
+    await db.commit()
+    return {**await get_state(db, user), "new_balance": locked_user.balance}
+
+
+async def buy_job(db: AsyncSession, user: User, code: str, idempotency_key: Optional[str]) -> dict:
+    """Buys an employer building (level 1) or its next level for coins. The
+    rent so far is settled at the old rate, so the new jobs pay from now on."""
+    config = await get_config(db)
+    _require_enabled(config)
+    if code not in JOBS:
+        raise NotFoundError("Такого здания в городе нет")
+    locked_user = await lock_user_for_update(db, user.id)
+    if await _replay(db, user.id, idempotency_key):
+        return {**await get_state(db, user), "new_balance": locked_user.balance}
+    town = await _get_town(db, user.id)
+    _require_open(config, town)
+    row = (await db.execute(
+        select(UserTownJob).where(UserTownJob.user_id == user.id, UserTownJob.code == code)
+        .with_for_update().execution_options(populate_existing=True)
+    )).scalar_one_or_none()
+    level = (row.level if row is not None else 0) + 1
+    if level > jobs_config(config)[code]["levels"]:
+        raise ConflictError("Здание уже на последнем уровне")
+    _settle_income(town, await _rate(db, config, user.id, town, await _houses(db, user.id)), config, _now())
+    price = job_price(config, code, level)
+    name = JOBS[code]["name"]
+    if price:
+        await debit_coins(db, locked_user, price, TransactionType.town_house,
+                          f"Город: {name}" + (f", уровень {level}" if level > 1 else ""))
+    if row is None:
+        row = UserTownJob(user_id=user.id, code=code, level=1, coins_paid=price)
+    else:
+        row.level = level
+        row.coins_paid = int(row.coins_paid or 0) + price
+    db.add_all([
+        town, row,
+        TownLedger(user_id=user.id, kind="job", district="jobs", building_code=code, coins_spent=price,
+                   result={"level": level}, idempotency_key=idempotency_key),
     ])
     await db.commit()
     return {**await get_state(db, user), "new_balance": locked_user.balance}

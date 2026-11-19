@@ -166,6 +166,7 @@ class TransactionType(str, enum.Enum):
     manager_reward = "manager_reward"
     manager_cosmetic = "manager_cosmetic"
     manager_merch = "manager_merch"
+    manager_filial = "manager_filial"
     lifestyle_income = "lifestyle_income"
     calendar_catchup = "calendar_catchup"
     cosmetic_purchase = "cosmetic_purchase"

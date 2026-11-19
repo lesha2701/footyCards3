@@ -930,6 +930,11 @@ export interface GameConfig {
   town_resident_bonus_max_pct: number;
   town_resident_max_daily_coins: number;
   town_decor: Record<string, { price: number; rent_pct: number }>;
+  /** «Рабочие места» (town_service.JOBS): level L costs price × (100 + growth_pct × (L − 1)) %. */
+  town_jobs: Record<string, { price: number; jobs: number; levels: number; growth_pct: number }>;
+  town_job_tax_pct: number;
+  town_fans_k: number;
+  town_fans_cap: number;
   town_mood: Record<string, number>;
   town_social: Record<string, number>;
   town_villa: Record<string, number>;

@@ -161,3 +161,22 @@ class ManagerDealCheckIn(BaseModel):
     target_id: int
     fee: int = Field(default=0, ge=0)
     wage: int = Field(default=0, ge=0)
+
+
+class ManagerFilialOpenIn(BaseModel):
+    region: str = Field(min_length=2, max_length=24)
+    country: str = Field(min_length=2, max_length=32)
+
+
+class ManagerFilialBuildIn(BaseModel):
+    code: str = Field(min_length=2, max_length=16)
+
+
+class ManagerFilialPickIn(BaseModel):
+    """index of the candidate, or null to let the whole release go."""
+    index: Optional[int] = Field(default=None, ge=0, le=9)
+
+
+class ManagerAlumnusPriceIn(BaseModel):
+    """null takes him off the presidents' market."""
+    price: Optional[int] = Field(default=None, ge=0)

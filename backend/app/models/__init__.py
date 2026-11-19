@@ -10,7 +10,7 @@ from app.models.card_skill import CardSkill, CardSkillLedger, UserSkillToken
 from app.models.career import CareerClub, CareerParticipant, CareerProfile, CareerSeason, Friendship
 from app.models.lifestyle import LifestyleItem, UserLifestyleItem
 from app.models.club_base import ClubBaseLedger, UserBaseCosmetic, UserClubBase
-from app.models.town import TownLedger, TownResident, TownVisit, TownWeek, TownWeekResult, UserTownSeasonItem, UserTownVilla, UserTownVillaItem, UserTown, UserTownHouse, UserTownQuest, UserTownResident
+from app.models.town import TownLedger, TownResident, TownVisit, TownWeek, TownWeekResult, UserTownSeasonItem, UserTownVilla, UserTownVillaItem, UserTown, UserTownHouse, UserTownJob, UserTownQuest, UserTownResident
 from app.models.manager_club import (
     ManagerClub,
     ManagerContract,
@@ -33,6 +33,7 @@ from app.models.manager_club import (
     ManagerSeason,
     ManagerValueHistory,
 )
+from app.models.manager_filial import ManagerAlumniTrade, ManagerAlumnus, ManagerFilial
 from app.models.my_player import MyPlayer, MyPlayerDuel
 from app.models.academy_prospect import AcademyProspect, ProspectDuel, ProspectLedger
 from app.models.my_player_extras import MyPlayerEdition, MyPlayerGift, MyPlayerSponsorContract
@@ -158,6 +159,9 @@ __all__ = [
     "ManagerContract",
     "ManagerLeague",
     "ManagerNpc",
+    "ManagerFilial",
+    "ManagerAlumnus",
+    "ManagerAlumniTrade",
     "ManagerSeason",
     "ManagerCosmetic",
     "ManagerCup",
@@ -201,6 +205,7 @@ __all__ = [
     "UserClubBase",
     "UserTown",
     "UserTownHouse",
+    "UserTownJob",
     "TownResident",
     "UserTownResident",
     "UserTownQuest",

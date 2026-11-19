@@ -56,6 +56,13 @@ async def buy_decor(code: str, payload: KeyRequest, db: AsyncSession = Depends(g
     return await town_service.buy_decor(db, user, code, payload.idempotency_key)
 
 
+@router.post("/jobs/{code}/buy")
+async def buy_job(code: str, payload: KeyRequest, db: AsyncSession = Depends(get_db),
+                  user: User = Depends(get_current_user)):
+    """«Рабочие места»: buys an employer building or its next level."""
+    return await town_service.buy_job(db, user, code, payload.idempotency_key)
+
+
 @router.post("/unlock")
 async def unlock(payload: KeyRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return await town_service.unlock(db, user, payload.idempotency_key)
