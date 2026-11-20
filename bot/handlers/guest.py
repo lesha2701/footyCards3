@@ -76,8 +76,7 @@ def _article(title: str, text: str, keyboard: InlineKeyboardMarkup, image_path: 
     )
 
 
-def help_text() -> str:
-    name = settings.telegram_bot_username
+def help_text(name: str) -> str:
     return (
         "⚽ <b>VICTOR FC</b> — карточки футболистов, паки и мини-игры прямо в Telegram.\n\n"
         f"Напиши в любом чате:\n"
@@ -154,7 +153,7 @@ async def build_result(message: Message, bot_username: str) -> InlineQueryResult
     if key in CHALLENGE_WORDS:
         return challenge_result(message)
     if key in HELP_WORDS:
-        return _article("VICTOR FC", help_text(), _button("⚽ Открыть VICTOR FC", "chatpack"))
+        return _article("VICTOR FC", help_text(bot_username), _button("⚽ Открыть VICTOR FC", "chatpack"))
     return await player_result(query)
 
 
