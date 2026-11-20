@@ -187,6 +187,16 @@ class User(TimestampMixin, Base):
     fergie_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     fergie_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     fergie_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # «Замес» (zames_service)
+    zames_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    zames_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    zames_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    zames_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    zames_best_knockouts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Hero skin (cosmetics kind "zames_hero") — visual only.
+    equipped_zames_hero_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("cosmetics.id", ondelete="SET NULL"), nullable=True
+    )
     # «Ответка» (otvetka_service)
     otvetka_rewarded_attempts_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     otvetka_attempts_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

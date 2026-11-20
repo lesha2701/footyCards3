@@ -1277,6 +1277,18 @@ export default function AdminGamesPage() {
               {field("fergie_daily_limit", "Наградных матчей в день")}
             </div>
           </AdminSection>
+          <AdminSection title="Замес" group="Игры и режимы">
+            <p className="mb-3 text-xs text-slate-500">
+              Драка идёт на телефоне. Платим базу плюс монеты за каждую зачищенную волну; волн засчитываем не больше,
+              чем позволяет время боя, и не больше потолка.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {field("zames_base_coins", "Монет за доигранный замес")}
+              {field("zames_wave_coins", "Монет за волну")}
+              {field("zames_max_waves", "Потолок оплачиваемых волн")}
+              {field("zames_daily_limit", "Наградных замесов в день")}
+            </div>
+          </AdminSection>
           <AdminSection title="Футбольное Стратего" group="Игры и режимы">
             <p className="mb-3 text-xs text-slate-500">
               Фишки: Кубок + стенки + Звезда + Провокатор + подкатчики + скорости + обычные игроки — все должны помещаться в

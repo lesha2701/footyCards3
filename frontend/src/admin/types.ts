@@ -630,6 +630,10 @@ export interface GameConfig {
   otvetka_bot_penalty_pct: number;
   fergie_match_coins: number;
   fergie_daily_limit: number;
+  zames_base_coins: number;
+  zames_wave_coins: number;
+  zames_max_waves: number;
+  zames_daily_limit: number;
   pairs_daily_limit: number;
   pairs_reward_perfect: number;
   pairs_reward_min: number;

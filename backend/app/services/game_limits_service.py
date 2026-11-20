@@ -19,6 +19,7 @@ _COLUMNS = {
     "stratego": "stratego", "magnate": "magnate", "mordoboi": "mordoboi", "kontra": "kontra",
     "magic": "magic",
     "one_on_one": "one_on_one", "otvetka": "otvetka", "fergie_time": "fergie",
+    "zames": "zames",
 }
 
 
@@ -76,6 +77,7 @@ def get_remaining_plays(user: User, config: GameConfig) -> GameLimitsOut:
         one_on_one=_remaining(user.one_on_one_hourly_attempts, user.one_on_one_hour_started_at, limit),
         otvetka=_remaining(user.otvetka_hourly_attempts, user.otvetka_hour_started_at, limit),
         fergie_time=_remaining(user.fergie_hourly_attempts, user.fergie_hour_started_at, limit),
+        zames=_remaining(user.zames_hourly_attempts, user.zames_hour_started_at, limit),
         lucky_board=_remaining(
             user.lucky_board_hourly_attempts, user.lucky_board_hour_started_at, config.lucky_board_hourly_limit,
         ),

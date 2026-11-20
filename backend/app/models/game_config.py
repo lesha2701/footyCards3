@@ -416,6 +416,12 @@ class GameConfig(TimestampMixin, Base):
     # whatever the score (the server can't see it), up to the daily cap.
     fergie_match_coins: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
     fergie_daily_limit: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    # «Замес» (zames_service): the brawl runs on the phone; a finished run pays
+    # a base fee plus a fee per cleared wave (waves capped by zames_max_waves).
+    zames_base_coins: Mapped[int] = mapped_column(Integer, default=40, nullable=False)
+    zames_wave_coins: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    zames_max_waves: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
+    zames_daily_limit: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
 
     pairs_daily_limit: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
     pairs_reward_perfect: Mapped[int] = mapped_column(Integer, default=40, nullable=False)

@@ -653,6 +653,10 @@ class GameConfigOut(BaseModel):
     otvetka_bot_penalty_pct: int = 70
     fergie_match_coins: int = 150
     fergie_daily_limit: int = 5
+    zames_base_coins: int = 40
+    zames_wave_coins: int = 20
+    zames_max_waves: int = 6
+    zames_daily_limit: int = 5
     pairs_daily_limit: int
     pairs_reward_perfect: int
     pairs_reward_min: int
@@ -1600,6 +1604,10 @@ class GameConfigUpdate(BaseModel):
     otvetka_bot_penalty_pct: Optional[int] = Field(default=None, ge=0, le=100)
     fergie_match_coins: Optional[int] = Field(default=None, ge=0)
     fergie_daily_limit: Optional[int] = Field(default=None, ge=0)
+    zames_base_coins: Optional[int] = Field(default=None, ge=0)
+    zames_wave_coins: Optional[int] = Field(default=None, ge=0)
+    zames_max_waves: Optional[int] = Field(default=None, ge=1, le=50)
+    zames_daily_limit: Optional[int] = Field(default=None, ge=0)
     pairs_daily_limit: Optional[int] = Field(default=None, ge=0)
     pairs_reward_perfect: Optional[int] = Field(default=None, ge=0)
     pairs_reward_min: Optional[int] = Field(default=None, ge=0)

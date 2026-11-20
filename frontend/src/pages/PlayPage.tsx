@@ -186,6 +186,11 @@ export default function PlayPage() {
       description: "Матч 11 на 11 в 3D: концовка при 0:0, вырви победу в добавленное время", limitKey: "fergie_time",
     },
     {
+      path: "/play/zames", art: artOf("zames"), Icon: IconBall, tint: "bg-orange-600", title: "Замес", group: "quick", time: "3 мин", bot: true,
+      description: "Толпа на одного: кулаки, ноги, вертуха — раскидай фанатов соперника",
+      limitKey: "zames",
+    },
+    {
       path: "/play/free-kick/challenge", art: artOf("free-kick"), Icon: IconTarget, tint: "bg-sky-500", title: "Испытание дня", group: "quick", time: "2 мин",
       description: "5 штрафных по мишеням — одна попытка, таблица лидеров дня", noLimit: true,
     },

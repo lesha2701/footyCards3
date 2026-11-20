@@ -9,6 +9,7 @@ from app.schemas.card import UserCardOut
 CosmeticKind = Literal[
     "profile_frame", "profile_background", "card_skin", "brutality",
     "ring_gloves", "ring_shorts", "ring_entrance", "helmet", "magic_hero", "magic_castle",
+    "zames_hero",
 ]
 RarityName = Literal["common", "rare", "epic", "legendary", "diamond"]
 

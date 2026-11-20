@@ -33,6 +33,8 @@ SLOT_BY_KIND = {
     # «Мяч и Магия» — the hero on the map and the home castle.
     "magic_hero": "equipped_magic_hero_id",
     "magic_castle": "equipped_magic_castle_id",
+    # «Замес» — the hero's look in the brawl.
+    "zames_hero": "equipped_zames_hero_id",
 }
 
 

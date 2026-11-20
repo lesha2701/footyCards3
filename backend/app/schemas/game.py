@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -389,6 +389,7 @@ class GameLimitsOut(BaseModel):
     one_on_one: int = 0
     otvetka: int = 0
     fergie_time: int = 0
+    zames: int = 0
     lucky_board: int = 0
     lucky_board_hourly_limit: int = 0
     # When a game's hourly cap is used up: the moment it frees up again
@@ -588,6 +589,45 @@ class FergieFinishOut(BaseModel):
     reward_coins: int
     new_balance: int
     daily_cap_reached: bool
+
+
+# --- «Замес» ---
+
+class ZamesInfoOut(BaseModel):
+    base_coins: int
+    wave_coins: int
+    max_waves: int
+    daily_limit: int
+    rewarded_left: int
+    best_knockouts: int
+    # The equipped hero skin (cosmetics kind "zames_hero", style key) — the look only.
+    skin: Optional[str] = None
+
+
+class ZamesStartIn(BaseModel):
+    mode: Literal["derby", "endless"] = "derby"
+
+
+class ZamesStartOut(BaseModel):
+    session_id: int
+    seed: int
+    rewarded_left: int
+
+
+class ZamesFinishIn(BaseModel):
+    waves: int = Field(ge=0, le=1000)
+    knockouts: int = Field(ge=0, le=100000)
+    best_combo: int = Field(default=0, ge=0, le=100000)
+    won: bool = False
+
+
+class ZamesFinishOut(BaseModel):
+    reward_coins: int
+    new_balance: int
+    daily_cap_reached: bool
+    waves_paid: int
+    best_knockouts: int
+    new_record: bool
 
 
 # --- Найди пару (card pairs memory match) ---

@@ -335,6 +335,7 @@ class GameType(str, enum.Enum):
     one_on_one = "one_on_one"
     otvetka = "otvetka"
     fergie_time = "fergie_time"
+    zames = "zames"
 
 
 class GameSessionStatus(str, enum.Enum):

@@ -1083,6 +1083,7 @@ export interface GameLimits {
   one_on_one?: number;
   otvetka?: number;
   fergie_time?: number;
+  zames?: number;
   /** Exhausted games only: when the hourly cap frees up again. */
   resets_at?: Partial<Record<string, string>>;
   /** Anti-bot «усталость»: games don't pay coins / rating until then. */
@@ -1267,7 +1268,8 @@ export type CosmeticKind =
   | "ring_entrance"
   | "helmet"
   | "magic_hero"
-  | "magic_castle";
+  | "magic_castle"
+  | "zames_hero";
 
 export interface Cosmetic {
   id: number;

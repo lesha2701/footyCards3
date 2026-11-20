@@ -42,6 +42,11 @@ from app.schemas.game import (
     OtvetkaStartOut,
     FergieFinishOut,
     FergieStartOut,
+    ZamesFinishIn,
+    ZamesFinishOut,
+    ZamesInfoOut,
+    ZamesStartIn,
+    ZamesStartOut,
     PairsClaimOut,
     PairsFlipOut,
     PairsFlipRequest,
@@ -85,6 +90,7 @@ from app.services import (
     memory_game_service,
     one_on_one_service,
     fergie_service,
+    zames_service,
     otvetka_service,
     pairs_service,
     penalty_service,
@@ -354,6 +360,29 @@ async def fergie_finish(session_id: int, db: AsyncSession = Depends(get_db), use
     await check_rate_limit(f"fergie_finish:{user.id}", max_calls=20, window_seconds=60)
     return await fergie_service.finish(db, user, session_id)
 
+
+
+# --- «Замес» ---
+
+@router.get("/zames/info", response_model=ZamesInfoOut)
+async def zames_info(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await zames_service.info(db, user)
+
+
+@router.post("/zames/start", response_model=ZamesStartOut)
+async def zames_start(
+    payload: ZamesStartIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    await check_rate_limit(f"zames_start:{user.id}", max_calls=20, window_seconds=60)
+    return await zames_service.start(db, user, payload.mode)
+
+
+@router.post("/zames/{session_id}/finish", response_model=ZamesFinishOut)
+async def zames_finish(
+    session_id: int, payload: ZamesFinishIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    await check_rate_limit(f"zames_finish:{user.id}", max_calls=20, window_seconds=60)
+    return await zames_service.finish(db, user, session_id, payload)
 
 # --- Найди пару (card pairs memory match) ---
 

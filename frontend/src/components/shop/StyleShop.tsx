@@ -31,6 +31,7 @@ const SHORT_LABELS: Record<CosmeticKind, string> = {
   helmet: "Каска",
   magic_hero: "Герой",
   magic_castle: "Замок",
+  zames_hero: "Замес",
 };
 
 /** Owned first-to-buy order: what you can buy now, then the rest, then

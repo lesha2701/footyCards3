@@ -59,6 +59,7 @@ GAME_TYPE_LABELS: dict[str, str] = {
     "one_on_one": "Атака 1 на 1",
     "otvetka": "Ответка",
     "fergie_time": "Ферги Тайм",
+    "zames": "Замес",
     "club_sequence": "Клубные мини-игры",
     "club_missing_item": "Клубные мини-игры",
     "club_penalty": "Клубные мини-игры",

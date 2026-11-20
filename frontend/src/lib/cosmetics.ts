@@ -105,6 +105,7 @@ export const STYLE_OPTIONS: Record<CosmeticKind, string[]> = {
   helmet: ["helmet"],
   magic_hero: ["magic_hero_gold", "magic_hero_shadow", "magic_hero_frost", "magic_hero_ember", "magic_hero_grove", "magic_hero_night"],
   magic_castle: ["magic_castle_stadium", "magic_castle_ice", "magic_castle_volcano", "magic_castle_cup"],
+  zames_hero: ["ultras", "ded", "mascot", "viking", "gold"],
 };
 
 export const KIND_LABELS: Record<CosmeticKind, string> = {
@@ -118,6 +119,7 @@ export const KIND_LABELS: Record<CosmeticKind, string> = {
   helmet: "Каска",
   magic_hero: "Герой «Мяч и Магия»",
   magic_castle: "Замок «Мяч и Магия»",
+  zames_hero: "Герой «Замеса»",
 };
 
 export function frameClass(styleKey: string | null | undefined): string | null {

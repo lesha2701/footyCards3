@@ -297,6 +297,45 @@ export async function finishFergieTime(sessionId: number): Promise<FergieFinish>
   return data;
 }
 
+// --- «Замес» ---
+
+export type ZamesInfo = {
+  base_coins: number;
+  wave_coins: number;
+  max_waves: number;
+  daily_limit: number;
+  rewarded_left: number;
+  best_knockouts: number;
+  /** Style key of the worn hero skin (cosmetics kind "zames_hero"), null = the plain hero. */
+  skin?: string | null;
+};
+
+export async function fetchZamesInfo(): Promise<ZamesInfo> {
+  const { data } = await api.get<ZamesInfo>("/games/zames/info");
+  return data;
+}
+
+export async function startZames(mode: "derby" | "endless"): Promise<{ session_id: number; seed: number; rewarded_left: number }> {
+  const { data } = await api.post<{ session_id: number; seed: number; rewarded_left: number }>("/games/zames/start", { mode });
+  return data;
+}
+
+export type ZamesFinish = {
+  reward_coins: number;
+  new_balance: number;
+  daily_cap_reached: boolean;
+  waves_paid: number;
+  best_knockouts: number;
+  new_record: boolean;
+};
+
+export async function finishZames(
+  sessionId: number, body: { waves: number; knockouts: number; best_combo: number; won: boolean },
+): Promise<ZamesFinish> {
+  const { data } = await api.post<ZamesFinish>(`/games/zames/${sessionId}/finish`, body);
+  return data;
+}
+
 // --- Football Hangman ---
 
 export async function startHangman(museDate = false): Promise<HangmanStartResult> {
