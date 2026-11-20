@@ -78,7 +78,7 @@ class AcademyProspect(Base):
     # «Личный тренер» (Stars) active until.
     coach_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     # A «Академия» path card of the owner as mentor (+XP while still owned).
-    mentor_card_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user_cards.id", ondelete="SET NULL"), nullable=True)
+    mentor_card_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user_cards.id", ondelete="SET NULL"), nullable=True, index=True)
     # {"owned": [codes], "background": code | None, "accessory": code | None}
     cosmetics: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     # [{"day": "YYYY-MM-DD", "code", "text"}] — the album of growing up.

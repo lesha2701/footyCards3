@@ -84,7 +84,7 @@ class CardOfferPurchase(Base):
     offer_id: Mapped[int] = mapped_column(ForeignKey("card_offers.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     invoice_id: Mapped[int] = mapped_column(ForeignKey("stars_invoices.id", ondelete="CASCADE"), nullable=False)
-    user_card_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user_cards.id", ondelete="SET NULL"), nullable=True)
+    user_card_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user_cards.id", ondelete="SET NULL"), nullable=True, index=True)
     stars_amount: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 

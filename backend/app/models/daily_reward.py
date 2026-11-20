@@ -22,7 +22,7 @@ class DailyReward(Base):
     claim_method: Mapped[str] = mapped_column(String(8), default="login", server_default="login", nullable=False)
     coins_awarded: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     free_pack_id: Mapped[Optional[int]] = mapped_column(ForeignKey("packs.id"), nullable=True)
-    random_card_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user_cards.id"), nullable=True)
+    random_card_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user_cards.id"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     __table_args__ = (UniqueConstraint("user_id", "reward_date", name="uq_daily_reward_user_date"),)

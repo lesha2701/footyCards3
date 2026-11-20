@@ -28,10 +28,10 @@ class PenaltyMatch(Base):
         default=PenaltyOpponentType.friend, nullable=False,
     )
     user_card_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("user_cards.id", ondelete="SET NULL"), nullable=True
+        ForeignKey("user_cards.id", ondelete="SET NULL"), nullable=True, index=True
     )
     opponent_card_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("user_cards.id", ondelete="SET NULL"), nullable=True
+        ForeignKey("user_cards.id", ondelete="SET NULL"), nullable=True, index=True
     )
     status: Mapped[PenaltyMatchStatus] = mapped_column(
         Enum(PenaltyMatchStatus, name="penalty_match_status_enum"),
@@ -62,7 +62,7 @@ class PenaltyQueueEntry(Base):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True
     )
-    user_card_id: Mapped[int] = mapped_column(ForeignKey("user_cards.id", ondelete="CASCADE"), nullable=False)
+    user_card_id: Mapped[int] = mapped_column(ForeignKey("user_cards.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     matched_match_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("penalty_matches.id", ondelete="SET NULL"), nullable=True

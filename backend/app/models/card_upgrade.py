@@ -55,7 +55,7 @@ class CardUpgradeAttempt(Base):
     coin_cost: Mapped[int] = mapped_column(Integer, nullable=False)
     success: Mapped[bool] = mapped_column(Boolean, nullable=False)
     result_card_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("user_cards.id", ondelete="SET NULL"), nullable=True
+        ForeignKey("user_cards.id", ondelete="SET NULL"), nullable=True, index=True
     )
     idempotency_key: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

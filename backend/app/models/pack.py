@@ -225,7 +225,7 @@ class StarsInvoice(TimestampMixin, Base):
     # «Академия»: one extra Card Arena attempt for this path card (never
     # with the fields above) — path_service.deliver_stars_attempt.
     path_user_card_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("user_cards.id", ondelete="SET NULL"), nullable=True
+        ForeignKey("user_cards.id", ondelete="SET NULL"), nullable=True, index=True
     )
     # «Академия» building speed-up (never with the fields above): finishes
     # the construction of this wing/level — academy_service.deliver_speedup.

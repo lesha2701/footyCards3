@@ -123,3 +123,28 @@ async def test_collection_list_exposes_tactico_squad_lock(client, db_session, bo
     assert resp.status_code == 200
     body = resp.json()
     assert body["items"][0]["is_in_tactico_squad"] is True
+
+
+async def test_sell_duplicates_sells_a_big_batch_in_one_go_and_keeps_one_copy(client, db_session, bot_token):
+    from sqlalchemy import func, select
+
+    from app.models.card import UserCard
+
+    headers = telegram_headers(720090, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 720090)
+    user_id = user.id
+    players = [await create_player(db_session, rarity=Rarity.common, quick_sell_price=10) for _ in range(5)]
+    for p in players:
+        for _ in range(8):
+            await create_user_card(db_session, user_id, p.id, CardSource.seed)
+    await db_session.commit()
+
+    resp = await client.post("/api/v1/collection/cards/sell-duplicates", headers=headers, json={"preview": False})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["sold_count"] == 35 and body["coins_earned"] == 350
+    left = (await db_session.execute(
+        select(UserCard.player_id, func.count(UserCard.id)).where(UserCard.owner_id == user_id).group_by(UserCard.player_id)
+    )).all()
+    assert sorted(n for _, n in left) == [1, 1, 1, 1, 1]

@@ -28,7 +28,7 @@ class ManagerClub(Base):
     style: Mapped[str] = mapped_column(String(16), nullable=False, default="possession")
     budget: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     division: Mapped[int] = mapped_column(Integer, nullable=False, default=1, index=True)
-    academy_card_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user_cards.id", ondelete="SET NULL"), nullable=True)
+    academy_card_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user_cards.id", ondelete="SET NULL"), nullable=True, index=True)
     # The owner's «Воспитанник Академии» always starts (otherwise he competes
     # for a place by rating like everybody else).
     prospect_starts: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

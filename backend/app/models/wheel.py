@@ -63,7 +63,7 @@ class WheelSpin(Base):
     source: Mapped[WheelSpinSource] = mapped_column(SAEnum(WheelSpinSource, name="wheel_spin_source_enum"), nullable=False)
 
     pack_opening_id: Mapped[Optional[int]] = mapped_column(ForeignKey("pack_openings.id", ondelete="SET NULL"), nullable=True)
-    user_card_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user_cards.id", ondelete="SET NULL"), nullable=True)
+    user_card_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user_cards.id", ondelete="SET NULL"), nullable=True, index=True)
     badge_granted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     duplicate_badge_coins: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     coins_amount: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

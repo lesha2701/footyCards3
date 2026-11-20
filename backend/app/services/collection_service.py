@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 from typing import Iterable, List, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import delete as sa_delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -252,7 +252,9 @@ async def collection_stats(db: AsyncSession, user_id: int) -> dict:
     return {"unique_players": unique, "total_cards": total, "by_rarity": by_rarity}
 
 
-async def _assert_sellable(db: AsyncSession, user_id: int, card: UserCard, confirm_last_copy: bool) -> None:
+async def _assert_sellable(
+    db: AsyncSession, user_id: int, card: UserCard, confirm_last_copy: bool, remaining: Optional[int] = None,
+) -> None:
     if card is None:
         raise NotFoundError("Card not found")
     if card.owner_id != user_id:
@@ -270,13 +272,14 @@ async def _assert_sellable(db: AsyncSession, user_id: int, card: UserCard, confi
             f"«{card.player.display_name}» под замком — сними замок, чтобы продать", details={"reason": "user_locked"},
         )
 
-    remaining = (
-        await db.execute(
-            select(func.count(UserCard.id)).where(
-                UserCard.owner_id == user_id, UserCard.player_id == card.player_id
+    if remaining is None:
+        remaining = (
+            await db.execute(
+                select(func.count(UserCard.id)).where(
+                    UserCard.owner_id == user_id, UserCard.player_id == card.player_id
+                )
             )
-        )
-    ).scalar_one()
+        ).scalar_one()
     if remaining <= 1 and not confirm_last_copy:
         raise ConflictError(
             "This is your last copy of this player. Pass confirm_last_copy=true to sell it anyway.",
@@ -308,16 +311,26 @@ async def sell_cards(
     from app.services.path_prestige_service import sell_price
 
     config = await get_config(db)
+    # Copies owned per player — one query for the whole batch, not one per card.
+    copies = dict((await db.execute(
+        select(UserCard.player_id, func.count(UserCard.id))
+        .where(UserCard.owner_id == user.id, UserCard.player_id.in_({c.player_id for c in cards}))
+        .group_by(UserCard.player_id)
+    )).all())
     total_value = 0
     for card in cards:
-        await _assert_sellable(db, user.id, card, confirm_last_copy)
+        await _assert_sellable(db, user.id, card, confirm_last_copy, remaining=copies.get(card.player_id, 0))
         # «Академия» prestige raises a copy's quick-sell price.
         total_value += sell_price(card, config)
     require_skill_loss_confirmation(list(cards), confirm_skill_loss, "продажа")
     total_value = await _with_shop_bonus(db, user.id, total_value, config)
 
+    # One DELETE for the batch (ON DELETE rules on the referencing tables do
+    # the rest, as they did for the per-card deletes).
+    ids = [c.id for c in cards]
     for card in cards:
-        await db.delete(card)
+        db.expunge(card)
+    await db.execute(sa_delete(UserCard).where(UserCard.id.in_(ids)).execution_options(synchronize_session=False))
 
     await credit_coins(
         db,
