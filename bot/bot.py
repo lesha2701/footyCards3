@@ -10,6 +10,7 @@ import db
 from config import get_bot_settings
 from handlers import admin as admin_handlers
 from handlers import chat_pack as chat_pack_handlers
+from handlers import guest as guest_handlers
 from handlers import payments as payments_handlers
 from handlers import support as support_handlers
 from handlers import user as user_handlers
@@ -56,6 +57,7 @@ def build_dispatcher() -> Dispatcher:
     dp.include_router(payments_handlers.router)
     dp.include_router(support_handlers.router)
     dp.include_router(chat_pack_handlers.router)
+    dp.include_router(guest_handlers.router)
     dp.include_router(user_handlers.router)
     return dp
 
@@ -148,7 +150,12 @@ async def run_webhook() -> None:
     asyncio.create_task(run_newbie_reminder_loop(bot))
     asyncio.create_task(run_card_offer_reminder_loop())
 
-    await bot.set_webhook(settings.bot_webhook_url, secret_token=settings.bot_webhook_secret, drop_pending_updates=True)
+    # Explicit list: a webhook keeps the allowed_updates of its last
+    # set_webhook, so a new update type (guest_message) must be named here.
+    await bot.set_webhook(
+        settings.bot_webhook_url, secret_token=settings.bot_webhook_secret, drop_pending_updates=True,
+        allowed_updates=dp.resolve_used_update_types(),
+    )
 
     app = web.Application()
     SimpleRequestHandler(dispatcher=dp, bot=bot, secret_token=settings.bot_webhook_secret).register(app, path="/bot/webhook")

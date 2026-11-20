@@ -464,3 +464,21 @@ async def fetch_newbie_gift_recipients(today, midnight, limit: int = 2000) -> li
 async def mark_newbie_reminded(user_id: int, day: int) -> None:
     pool = await get_pool()
     await pool.execute("UPDATE newbie_progress SET reminded_day = $2 WHERE user_id = $1", user_id, day)
+
+
+async def find_players(query: str, limit: int = 3) -> list[asyncpg.Record]:
+    """Active players whose name contains `query` (case-insensitive): an exact
+    name first, then the highest rated — the guest-mode «@бот <игрок>» card."""
+    pattern = "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    pool = await get_pool()
+    return await pool.fetch(
+        """
+        SELECT display_name, rating, attack_rating, defense_rating, rarity::text AS rarity,
+               position::text AS position, club, country, image_path
+        FROM players
+        WHERE is_active AND display_name ILIKE $1
+        ORDER BY lower(display_name) = lower($2) DESC, rating DESC, id
+        LIMIT $3
+        """,
+        pattern, query, limit,
+    )

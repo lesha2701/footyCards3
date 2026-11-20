@@ -32,7 +32,7 @@ POSITION_LABELS = {
 }
 
 
-def _static_url(image_path: str) -> str:
+def static_url(image_path: str) -> str:
     # /static/ is proxied on the same public host as mini_app_url (see
     # nginx/nginx.conf), so Telegram's servers can fetch it from there.
     return f"{settings.mini_app_url.rstrip('/')}/static/{image_path}"
@@ -47,7 +47,7 @@ def _open_bot_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⚽ Перейти в VICTOR FC", url=url)]])
 
 
-def _format_card(item: dict) -> str:
+def format_card(item: dict) -> str:
     card = item["card"]
     player = card["player"]
     rarity = player["rarity"]
@@ -59,7 +59,7 @@ def _format_card(item: dict) -> str:
     )
 
 
-def _format_cooldown_left(available_at_iso: str) -> str:
+def format_cooldown_left(available_at_iso: str) -> str:
     available_at = datetime.fromisoformat(available_at_iso)
     if available_at.tzinfo is None:
         available_at = available_at.replace(tzinfo=timezone.utc)
@@ -72,23 +72,40 @@ def _format_cooldown_left(available_at_iso: str) -> str:
     return f"{minutes} мин"
 
 
+async def request_chat_pack(user) -> tuple[int, dict]:
+    """POST /internal/chat-pack/open for this Telegram user: (status, body).
+    Shared by the group-chat «вкарта» and the guest-mode «@бот вкарта»."""
+    async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
+        async with session.post(
+            f"{settings.internal_backend_url}/internal/chat-pack/open",
+            json={
+                "telegram_user_id": user.id,
+                "username": user.username,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+            },
+            headers=_HEADERS,
+        ) as resp:
+            return resp.status, await resp.json()
+
+
 async def _send_result(message: Message, first_name: str, cards: list[dict]) -> None:
     intro = f"🎉 {first_name} открыл карту в VICTOR FC!"
     outro = "Заходи попозже за новой картой!"
-    cards_text = "\n\n".join(_format_card(item) for item in cards)
+    cards_text = "\n\n".join(format_card(item) for item in cards)
     image_paths = [item["card"]["player"].get("image_path") for item in cards]
 
     try:
         if len(cards) == 1 and image_paths[0]:
             await message.reply_photo(
-                photo=_static_url(image_paths[0]),
+                photo=static_url(image_paths[0]),
                 caption=f"{intro}\n\n{cards_text}\n\n{outro}",
                 reply_markup=_open_bot_keyboard(),
             )
             return
         if all(image_paths):
             media = [
-                InputMediaPhoto(media=_static_url(path), caption=_format_card(item), parse_mode="HTML")
+                InputMediaPhoto(media=static_url(path), caption=format_card(item), parse_mode="HTML")
                 for item, path in zip(cards, image_paths)
             ]
             await message.reply_media_group(media=media)
@@ -107,19 +124,7 @@ async def _send_result(message: Message, first_name: str, cards: list[dict]) -> 
 async def cmd_chat_pack(message: Message) -> None:
     user = message.from_user
     try:
-        async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
-            async with session.post(
-                f"{settings.internal_backend_url}/internal/chat-pack/open",
-                json={
-                    "telegram_user_id": user.id,
-                    "username": user.username,
-                    "first_name": user.first_name,
-                    "last_name": user.last_name,
-                },
-                headers=_HEADERS,
-            ) as resp:
-                status = resp.status
-                data = await resp.json()
+        status, data = await request_chat_pack(user)
     except Exception:
         logger.exception("chat-pack open call failed")
         await message.reply("Что-то пошло не так, попробуй ещё раз чуть позже.")
@@ -133,7 +138,7 @@ async def cmd_chat_pack(message: Message) -> None:
 
     if status == 429:
         available_at = (error.get("details") or {}).get("available_at")
-        left = _format_cooldown_left(available_at) if available_at else "позже"
+        left = format_cooldown_left(available_at) if available_at else "позже"
         await message.reply(f"{user.first_name}, следующая карта будет доступна через {left}.")
         return
 
