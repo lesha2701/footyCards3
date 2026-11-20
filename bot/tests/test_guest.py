@@ -22,7 +22,7 @@ def test_query_strips_the_mention_in_any_case_and_extra_spaces():
 async def test_empty_mention_answers_with_help():
     result = await guest.build_result(_message("@VictorFCBot"), "VictorFCBot")
     assert "@VictorFCBot вкарта" in result.input_message_content.message_text
-    assert result.reply_markup.inline_keyboard[0][0].url.endswith("?start=chatpack")
+    assert result.reply_markup.inline_keyboard[0][0].url.endswith("?start=guest")
 
 
 @pytest.mark.asyncio

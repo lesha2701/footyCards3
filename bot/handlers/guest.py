@@ -78,11 +78,15 @@ def _article(title: str, text: str, keyboard: InlineKeyboardMarkup, image_path: 
 
 def help_text(name: str) -> str:
     return (
-        "⚽ <b>VICTOR FC</b> — карточки футболистов, паки и мини-игры прямо в Telegram.\n\n"
-        f"Напиши в любом чате:\n"
-        f"• <code>@{name} вкарта</code> — открыть карту\n"
-        f"• <code>@{name} Месси</code> — показать карточку игрока\n"
-        f"• <code>@{name} вызов</code> — бросить вызов друзьям"
+        "⚽ <b>VICTOR FC</b> — собирай карточки футболистов прямо в Telegram\n\n"
+        "🃏 Открывай паки и лови легенд: Месси, Роналду, Холанд\n"
+        "🎮 15+ мини-игр: пенальти, арена, менеджер клуба\n"
+        "🔄 Меняйся картами с друзьями\n\n"
+        "Попробуй прямо здесь:\n"
+        f"• <code>@{name} вкарта</code> — открыть бесплатную карту\n"
+        f"• <code>@{name} Месси</code> — найти карточку любого игрока\n"
+        f"• <code>@{name} вызов</code> — позвать друзей в игру\n\n"
+        "👇 Жми кнопку — первый пак в подарок"
     )
 
 
@@ -126,7 +130,7 @@ async def player_result(query: str) -> InlineQueryResultArticle:
         return _article(
             "Не найдено",
             f"🔎 Игрока «{query}» в VICTOR FC нет. Попробуй другое имя, например <code>Месси</code>.",
-            _button("⚽ Открыть VICTOR FC", "chatpack"),
+            _button("⚽ Открыть VICTOR FC", "guest"),
         )
     best = players[0]
     rarity = best["rarity"]
@@ -142,7 +146,7 @@ async def player_result(query: str) -> InlineQueryResultArticle:
     lines.append(f"\nСобери {best['display_name']} в свою коллекцию 👇")
     title = f"{best['display_name']} · {RARITY_LABELS.get(rarity, rarity)} · "
     title += POSITION_LABELS.get(best["position"], best["position"])
-    return _article(title, "\n".join(lines), _button("🃏 Собрать в VICTOR FC", "chatpack"), best["image_path"])
+    return _article(title, "\n".join(lines), _button("🃏 Собрать в VICTOR FC", "guest"), best["image_path"])
 
 
 async def build_result(message: Message, bot_username: str) -> InlineQueryResultArticle:
@@ -153,7 +157,7 @@ async def build_result(message: Message, bot_username: str) -> InlineQueryResult
     if key in CHALLENGE_WORDS:
         return challenge_result(message)
     if key in HELP_WORDS:
-        return _article("VICTOR FC", help_text(bot_username), _button("⚽ Открыть VICTOR FC", "chatpack"))
+        return _article("VICTOR FC", help_text(bot_username), _button("⚽ Открыть VICTOR FC", "guest"))
     return await player_result(query)
 
 
