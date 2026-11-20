@@ -52,7 +52,15 @@ services:
       DEV_MODE: "false"
       DATABASE_URL: postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-1234}@postgres:5432/${DB_NAME:-footycards}
       RATE_LIMIT_REDIS_URL: ${RATE_LIMIT_REDIS_URL:-redis://redis:6379/0}
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "${UVICORN_WORKERS:-4}"]
+    # gunicorn + uvicorn workers: each worker is replaced after ~4000
+    # requests (jittered, so they don't all restart at once) — a long-lived
+    # worker grew from ~0.5 to ~1 GB and pushed the server into swap.
+    command: [
+      "gunicorn", "app.main:app", "-k", "uvicorn_worker.UvicornWorker",
+      "--bind", "0.0.0.0:8000", "--workers", "${UVICORN_WORKERS:-6}",
+      "--max-requests", "4000", "--max-requests-jitter", "800",
+      "--timeout", "120", "--graceful-timeout", "30", "--keep-alive", "5",
+    ]
     volumes:
       - ./backend/static:/app/static
     depends_on:

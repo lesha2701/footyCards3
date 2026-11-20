@@ -28,14 +28,14 @@ class Settings(BaseSettings):
     # (e.g. right after a push notification to thousands of users) blew
     # through that and every further request queued for a connection until
     # it hit pool_timeout and 500'd with "QueuePool limit ... reached".
-    # Sized for a 4-worker prod deployment on a 4+ CPU / 8+ GB RAM server:
-    # 4*(25+50)=300 from the backend, plus the bot's own asyncpg pool
+    # Sized for a 6-worker prod deployment (docker-compose.prod.yml):
+    # 6*(25+30)=330 from the backend, plus the bot's own asyncpg pool
     # (max_size=10, see bot/db.py) and headroom for direct/admin
     # connections, all under Postgres's max_connections (see
     # docker-compose.prod.yml's POSTGRES_MAX_CONNECTIONS, default 400 —
     # bump both together, never raise this past what that's set to).
     db_pool_size: int = 25
-    db_max_overflow: int = 50
+    db_max_overflow: int = 30
     db_pool_timeout: int = 30
     # Recycle connections periodically so a connection that's sat idle
     # longer than typical firewall/proxy/Postgres idle-timeout windows
