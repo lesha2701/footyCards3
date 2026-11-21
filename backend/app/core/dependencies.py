@@ -1,17 +1,17 @@
 import secrets
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 
 from fastapi import Depends, Header, Request
-from sqlalchemy import select
+from sqlalchemy import or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.exceptions import ForbiddenError, UnauthorizedError
 from app.core.security import TelegramAuthError, TelegramUser, decode_admin_token, validate_init_data
-from app.core.timeutil import local_today
+from app.core.timeutil import app_timezone, ensure_aware, local_today
 from app.database import get_db
 from app.models.enums import TransactionType
 from app.models.user import User
@@ -19,6 +19,8 @@ from app.services.activity_service import record_daily_activity
 from app.services.wallet_service import credit_coins
 
 settings = get_settings()
+
+LAST_SEEN_EVERY = timedelta(minutes=1)
 
 
 _SOURCE = re.compile(r"[A-Za-z0-9_-]{1,64}")
@@ -105,6 +107,22 @@ async def _get_or_create_user(
             await db.refresh(user)
             return user
 
+    # Daily login streak: driven by simply being active each calendar day
+    # (any authenticated request), not by any specific in-app action. The
+    # Mini App opens with ~25 parallel requests, and each used to see «a new
+    # day» and run the whole daily branch below, queueing on the user row (a
+    # wave of new players stalled the server for seconds). Now one request
+    # claims the day (_claim_day) and runs it; the rest skip it, not waiting.
+    now = datetime.now(timezone.utc)
+    today = local_today()
+    previous_seen_at = user.last_seen_at
+    previous_day = local_today(previous_seen_at) if previous_seen_at else None
+    day_pending = previous_day != today
+    new_day = day_pending and await _claim_day(db, user, now, today)
+    # Another request is moving the day right now: it writes last_seen_at
+    # (and the streak) — this one must not, or the day would pass unseen.
+    keep_seen = day_pending and not new_day
+
     changed = False
     if user.username != tg_user.username:
         user.username = tg_user.username
@@ -122,13 +140,7 @@ async def _get_or_create_user(
         user.is_admin = is_admin_now
         changed = True
 
-    # Daily login streak: driven by simply being active each calendar day
-    # (any authenticated request), not by any specific in-app action, so it
-    # only changes once per day regardless of how many requests come in.
-    today = local_today()
-    previous_seen_at = user.last_seen_at
-    previous_day = local_today(previous_seen_at) if previous_seen_at else None
-    if previous_day != today:
+    if new_day:
         old_streak = user.daily_login_streak
         user.daily_login_streak = user.daily_login_streak + 1 if previous_day == today - timedelta(days=1) else 1
         # «Страховка серии»: one missed day of a long streak can be bought back.
@@ -139,43 +151,51 @@ async def _get_or_create_user(
         await record_daily_activity(db, user.id, today)
         changed = True
 
-    user.last_seen_at = datetime.now(timezone.utc)
-    if changed:
-        await db.commit()
-        await db.refresh(user)
-    if previous_day != today:
-        # The streak just moved: a «N дней подряд» keepsake may be due.
-        from app.services.streak_reward_service import check as check_streak
+    # Everything reading last_seen_at works in days, so it is written at most
+    # once a minute, not on every request (each write locks the user row).
+    # (user.last_seen_at, not previous_seen_at: a request that lost the day to
+    # another one sees the time that one has just written.)
+    seen = user.last_seen_at
+    fresh = seen is not None and now - ensure_aware(seen) < LAST_SEEN_EVERY
+    if not changed and (keep_seen or fresh):
+        return user
+    if not keep_seen:
+        user.last_seen_at = now
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    if not new_day:
+        return user
 
-        await check_streak(db, user)
-        await db.refresh(user)
-        # «Старожил», «Основатель», the «Центурион» card owed from before it existed.
-        from app.services.loyalty_service import check as check_loyalty
+    # The streak just moved: a «N дней подряд» keepsake may be due.
+    from app.services.streak_reward_service import check as check_streak
 
-        await check_loyalty(db, user)
-        await db.refresh(user)
-        # Back after a long absence: a welcome gift may be due.
-        from app.services.comeback_gift_service import check as check_comeback
+    await check_streak(db, user)
+    await db.refresh(user)
+    # «Старожил», «Основатель», the «Центурион» card owed from before it existed.
+    from app.services.loyalty_service import check as check_loyalty
 
-        await check_comeback(db, user, previous_seen_at)
-        await db.refresh(user)
-        # Thanks to Stars buyers: settles last week's «Покровитель недели»
-        # once, and a «Преторианец» who reached the bar before it existed.
-        from app.services import stars_patron_service
+    await check_loyalty(db, user)
+    await db.refresh(user)
+    # Back after a long absence: a welcome gift may be due.
+    from app.services.comeback_gift_service import check as check_comeback
 
-        await stars_patron_service.run_daily(db, user)
-        await db.refresh(user)
-    if previous_day != today and user.referred_by_id is not None and not user.referral_reward_granted:
+    await check_comeback(db, user, previous_seen_at)
+    await db.refresh(user)
+    # Thanks to Stars buyers: settles last week's «Покровитель недели»
+    # once, and a «Преторианец» who reached the bar before it existed.
+    from app.services import stars_patron_service
+
+    await stars_patron_service.run_daily(db, user)
+    await db.commit()
+    await db.refresh(user)
+    if user.referred_by_id is not None and not user.referral_reward_granted:
         # A new active day may make him a counted friend (referral_service).
         from app.services.referral_service import check_friend
 
         await check_friend(db, user)
         await db.refresh(user)
-    else:
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
-    if previous_day != today and user.referred_by_id is not None and user.referral_reward_granted:
+    if user.referred_by_id is not None and user.referral_reward_granted:
         # A counted friend's new day feeds the referrer's «Друг в игре» task.
         from app.services import task_service
 
@@ -187,6 +207,26 @@ async def _get_or_create_user(
             await db.commit()
             await db.refresh(user)
     return user
+
+
+async def _claim_day(db: AsyncSession, user: User, now: datetime, today: date) -> bool:
+    """True for the one request that moves last_seen_at into `today`. The
+    others don't wait for it: a row locked by another transaction is skipped
+    (SKIP LOCKED) and they get False — the claim is retried by the next
+    request until one gets it. Either way the user is reloaded as the
+    database has it now."""
+    day_start = datetime.combine(today, time.min, tzinfo=app_timezone()).astimezone(timezone.utc)
+    free = (
+        select(User.id)
+        .where(User.id == user.id, or_(User.last_seen_at.is_(None), User.last_seen_at < day_start))
+        .with_for_update(skip_locked=True)
+        .scalar_subquery()
+    )
+    result = await db.execute(
+        update(User).where(User.id == free).values(last_seen_at=now).execution_options(synchronize_session=False)
+    )
+    await db.refresh(user)
+    return result.rowcount == 1
 
 
 async def get_current_user(

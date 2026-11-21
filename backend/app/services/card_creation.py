@@ -1,6 +1,11 @@
+import asyncio
+import logging
 from typing import Optional
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text, update
+from sqlalchemy.exc import DBAPIError
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.core.exceptions import ConflictError
 from app.models.card import UserCard
@@ -11,15 +16,68 @@ from app.models.stadium import Stadium
 from app.models.user_coach_card import UserCoachCard
 from app.models.user_stadium_card import UserStadiumCard
 
+logger = logging.getLogger(__name__)
+
+# Serial numbers of unlimited cards come from a short transaction of their
+# own: in the caller's transaction the Player row stayed locked until the
+# whole pack opening committed, and newcomers' packs draw from one small pool
+# — a wave of them queued for seconds on the same rows. A rolled-back
+# opening leaves a gap in the numbers, which is fine for an unlimited card;
+# a numbered edition (edition_size) keeps the old locked path, its numbers
+# are a promise. Own small pool per database, so it never waits on the
+# request pool it is called from.
+_serial_engines: dict[str, AsyncEngine] = {}
+
+
+def _serial_engine(db: AsyncSession) -> Optional[AsyncEngine]:
+    bind = db.bind
+    if not isinstance(bind, AsyncEngine) or bind.dialect.name != "postgresql":
+        return None
+    # Per event loop too: asyncpg connections can't cross loops (tests run one each).
+    key = f"{id(asyncio.get_running_loop())}:{bind.url.render_as_string(hide_password=False)}"
+    if key not in _serial_engines:
+        _serial_engines[key] = create_async_engine(
+            bind.url, pool_size=2, max_overflow=3, pool_timeout=5, pool_pre_ping=True,
+        )
+    return _serial_engines[key]
+
+
+async def _take_serial_now(db: AsyncSession, player_id: int) -> Optional[int]:
+    """The next serial of `player_id`, committed at once — or None when it
+    can't be had quickly (the caller's own transaction may hold the row:
+    waiting would hang it), and the caller takes it the locked way."""
+    engine = _serial_engine(db)
+    if engine is None:
+        return None
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("SET LOCAL lock_timeout = '2s'"))
+            return await conn.scalar(
+                update(Player).where(Player.id == player_id)
+                .values(next_serial_number=Player.next_serial_number + 1)
+                .returning(Player.next_serial_number - 1)
+            )
+    except (DBAPIError, TimeoutError, OSError):
+        logger.warning("quick serial for player %s failed, taking it under the row lock", player_id, exc_info=True)
+        return None
+
 
 async def create_user_card(
     db: AsyncSession, owner_id: int, player_id: int, source: CardSource, source_ref_id: Optional[int] = None
 ) -> UserCard:
     """Creates a card instance with a per-player serial number: the first
     ever copy of a given Player gets #1, the second gets #2, etc.,
-    independently of other players. The Player row is locked for the
-    duration to atomically read-and-increment its counter."""
+    independently of other players. An unlimited card takes its number in a
+    short transaction of its own (_take_serial_now); a numbered edition —
+    or when that fails — locks the Player row for the caller's transaction
+    to read-and-increment its counter."""
     player = await db.get(Player, player_id)
+    if player.edition_size is None:
+        serial_number = await _take_serial_now(db, player_id)
+        if serial_number is not None:
+            # In step with the row, without making the player dirty here.
+            set_committed_value(player, "next_serial_number", serial_number + 1)
+            return await _new_card(db, owner_id, player_id, source, source_ref_id, serial_number)
     # Refresh only next_serial_number under a row lock. Callers (e.g.
     # pack_service.pick_random_player) typically already loaded this same
     # Player earlier in the request, so without a forced refresh the
@@ -40,7 +98,12 @@ async def create_user_card(
         raise ConflictError(f"Тираж карты {player.display_name} закончился")
     player.next_serial_number += 1
     db.add(player)
+    return await _new_card(db, owner_id, player_id, source, source_ref_id, serial_number)
 
+
+async def _new_card(
+    db: AsyncSession, owner_id: int, player_id: int, source: CardSource, source_ref_id: Optional[int], serial_number: int,
+) -> UserCard:
     from app.services.card_value_service import bound_at_creation
 
     card = UserCard(

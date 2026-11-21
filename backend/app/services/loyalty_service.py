@@ -130,7 +130,10 @@ async def _due(db: AsyncSession, user: User, s: dict, have: set[str]) -> list[tu
     if user.is_banned:
         return due
     if PIONEER not in have and (s["pioneer_badge_id"] or s["pioneer_cosmetic_id"]):
-        number = (await db.execute(select(func.count(User.id)).where(User.id <= user.id))).scalar_one()
+        # Counted only up to the limit: the full count is a scan of the whole
+        # users table, run on every player's first visit of the day.
+        first = select(User.id).where(User.id <= user.id).limit(s["pioneer_limit"] + 1).subquery()
+        number = (await db.execute(select(func.count()).select_from(first))).scalar_one()
         if number <= s["pioneer_limit"]:
             due.append((PIONEER, Bundle(badge_id=s["pioneer_badge_id"], cosmetic_id=s["pioneer_cosmetic_id"])))
     created = _aware(user.created_at)

@@ -15,6 +15,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.core.exceptions import register_exception_handlers
 from app.core.slow_log import SlowRequestMiddleware, StallSampler, watch_event_loop
+from app.services.game_config_service import ConfigCacheMiddleware
 from app.routers import (
     presence,
     admin_badges,
@@ -176,6 +177,7 @@ app.add_middleware(
 )
 
 app.add_middleware(SlowRequestMiddleware)
+app.add_middleware(ConfigCacheMiddleware)
 
 # Slim images ship without /etc/mime.types, and Python 3.12 does not know .webp:
 # served as text/plain, an emblem symbol never draws inside an SVG <image>.

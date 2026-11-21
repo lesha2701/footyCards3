@@ -1,3 +1,5 @@
+import time
+
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,20 +47,34 @@ async def _collection_summary(db: AsyncSession, user_id: int) -> tuple[int, int,
     return total, unique, rarest
 
 
+# (kind, rating) -> (expires at, players above). A rank is a count over the
+# whole users table (a seq scan); every newcomer has the same rating 0, so a
+# wave of them would run the same scan thousands of times. Kept per process
+# for RANK_TTL seconds — a profile's place may lag that long.
+RANK_TTL = 30.0
+_rank_cache: dict[tuple[str, int], tuple[float, int]] = {}
+
+
+async def _players_above(db: AsyncSession, kind: str, rating: int, expr) -> int:
+    now = time.monotonic()
+    hit = _rank_cache.get((kind, rating))
+    if hit and hit[0] > now:
+        return hit[1]
+    higher = (await db.execute(select(func.count(User.id)).where(expr > rating))).scalar_one()
+    if len(_rank_cache) > 5000:
+        _rank_cache.clear()
+    _rank_cache[(kind, rating)] = (now + RANK_TTL, higher)
+    return higher
+
+
 async def _arena_rank(db: AsyncSession, user: User) -> int:
-    higher = (
-        await db.execute(select(func.count(User.id)).where(User.arena_rating > user.arena_rating))
-    ).scalar_one()
-    return higher + 1
+    return await _players_above(db, "arena", user.arena_rating, User.arena_rating) + 1
 
 
 async def _league_rank(db: AsyncSession, user: User) -> int:
     from app.services.league_service import total_rating, total_rating_expr
 
-    higher = (
-        await db.execute(select(func.count(User.id)).where(total_rating_expr() > total_rating(user)))
-    ).scalar_one()
-    return higher + 1
+    return await _players_above(db, "league", total_rating(user), total_rating_expr()) + 1
 
 
 async def _tactico_record(db: AsyncSession, user_id: int) -> tuple[int, int, int]:

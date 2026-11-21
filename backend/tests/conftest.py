@@ -45,6 +45,14 @@ async def _fresh_schema():
 
     # In-process caches must not carry one test's data into the next.
     club_league_service._table_cache.clear()
+    from app.services import profile_service
+
+    profile_service._rank_cache.clear()
+    # The GameConfig copy for GETs: tests change the row and read it back at once.
+    from app.services import game_config_service
+
+    game_config_service.CACHE_SECONDS = 0
+    game_config_service._cache.clear()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield

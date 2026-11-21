@@ -221,3 +221,31 @@ async def test_unknown_referrer_is_a_no_op(client, db_session, bot_token):
 
     user = await get_user_by_telegram_id(db_session, 555013)
     assert user.referred_by_id is None
+
+
+async def test_last_seen_is_written_at_most_once_a_minute(client, db_session, bot_token):
+    from datetime import datetime, timedelta, timezone
+
+    from app.core.timeutil import ensure_aware
+    from tests.factories import get_user_by_telegram_id
+
+    headers = telegram_headers(555011, bot_token, username="seen")
+    await client.post("/api/v1/auth/session", headers=headers)
+    await client.get("/api/v1/profile/me", headers=headers)  # the day's first request
+    user = await get_user_by_telegram_id(db_session, 555011)
+    # Half a minute ago — still fresh: the request reads the user, writes nothing.
+    half_minute_ago = datetime.now(timezone.utc) - timedelta(seconds=30)
+    user.last_seen_at = half_minute_ago
+    await db_session.commit()
+    await client.get("/api/v1/profile/me", headers=headers)
+    await db_session.refresh(user)
+    assert abs(ensure_aware(user.last_seen_at) - half_minute_ago) < timedelta(seconds=1)
+
+    # Two minutes ago (and still today) — written again, the streak untouched.
+    streak = user.daily_login_streak
+    user.last_seen_at = datetime.now(timezone.utc) - timedelta(minutes=2)
+    await db_session.commit()
+    await client.get("/api/v1/profile/me", headers=headers)
+    await db_session.refresh(user)
+    assert datetime.now(timezone.utc) - ensure_aware(user.last_seen_at) < timedelta(seconds=30)
+    assert user.daily_login_streak == streak
