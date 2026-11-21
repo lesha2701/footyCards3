@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
@@ -20,6 +21,7 @@ import { useUiStore } from "@/store/uiStore";
 import { startLink, takeStartPath } from "@/lib/startLink";
 import { getTelegramWebApp, initTelegramApp } from "@/lib/telegram";
 import { ApiRequestError } from "@/lib/api";
+import { prefetchHome } from "@/lib/homeBundle";
 import { hasSeenOnboarding, markOnboardingSeen } from "@/lib/onboarding";
 import { startSession } from "@/lib/startSession";
 import { useTelegramBackButton } from "@/lib/useTelegramBackButton";
@@ -211,6 +213,7 @@ export default function App() {
   // Bumped by «Повторить» on the error screen: starts the session again.
   const [attempt, setAttempt] = useState(0);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     initTelegramApp();
@@ -226,11 +229,16 @@ export default function App() {
     const referralCode = new URLSearchParams(window.location.search).get("ref") ?? undefined;
     setError(null);
     startSession((timeoutMs) => createSession(referralCode, timeoutMs, startLink().source))
-      .then((res) => {
+      .then(async (res) => {
+        if (cancelled) return;
+        const seen = hasSeenOnboarding(res.user.id);
+        // The first screen in one request (lib/homeBundle) before it mounts.
+        // A newcomer sees «Пак дебютанта» first: his home comes after it.
+        if (seen && !window.location.pathname.startsWith("/admin")) await prefetchHome(queryClient);
         if (cancelled) return;
         setUser(res.user);
         setAdminToken(res.admin_token);
-        setOnboardingSeen(hasSeenOnboarding(res.user.id));
+        setOnboardingSeen(seen);
         setReady(true);
       })
       .catch((err: unknown) => {
@@ -241,7 +249,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [setUser, setAdminToken, setReady, attempt]);
+  }, [setUser, setAdminToken, setReady, attempt, queryClient]);
 
   useEffect(() => {
     if (!isReady || !user) return;
@@ -271,8 +279,9 @@ export default function App() {
   if (user && !onboardingSeen) {
     return (
       <NewbieWelcome
-        onFinish={() => {
+        onFinish={async () => {
           markOnboardingSeen(user.id);
+          await prefetchHome(queryClient, 4000);
           setOnboardingSeen(true);
         }}
       />

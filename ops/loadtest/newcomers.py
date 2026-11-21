@@ -2,8 +2,9 @@
 
 Each virtual player gets a fresh Telegram id, signs its initData with the
 backend's bot token (the same HMAC Telegram uses), then does what the app
-does on a first open: POST /auth/session, the home screen's GETs in parallel,
-the «Пак дебютанта», and a few more home refreshes.
+does on a first open: POST /auth/session, the first screen (the ~38 GETs
+the app used to send in parallel, or with --bundle the one GET /home), the
+«Пак дебютанта», and a few polls of the home screen.
 
 Run it only against an isolated stand (never prod: real ids, real stats):
 
@@ -25,16 +26,21 @@ from urllib.parse import urlencode
 
 import aiohttp
 
-# What the home screen asks for on the first open (captured from the app).
+# What the app asked for on its first screen before `GET /home` (captured
+# in a browser): layout, home, popups. --bundle sends /home instead.
 HOME_GETS = [
     "/profile/me", "/feature-flags", "/announcement", "/maintenance", "/updates/status",
-    "/my-player", "/leagues/status", "/wheel/status", "/newbie", "/starter-offer",
-    "/presence",
-    # ModesGrid tiles and the shop showcase
-    "/academy", "/matches/stats", "/career", "/club-base", "/clubs/me", "/clubs/tournament/next-opponent",
-    "/player-tournaments/current", "/clubs/tournament/current", "/town", "/artifacts", "/cosmetics",
-    "/packs/daily-offer", "/packs",
+    "/my-player", "/leagues/status", "/wheel/status", "/newbie", "/starter-offer", "/presence",
+    "/academy", "/matches/stats", "/career", "/club-base", "/clubs/me", "/player-tournaments/current",
+    "/town", "/artifacts", "/cosmetics", "/packs/daily-offer", "/packs",
+    "/streak-rewards/unseen", "/loyalty/unseen", "/comeback-gifts/unseen", "/stars-patron/letters",
+    "/muses", "/halloween", "/fans", "/anniversary", "/loyalty/status", "/daily-rewards/calendar", "/tasks",
+    "/free-pack/status", "/manager/summary", "/prospect", "/profile/me/attention", "/weekly-top/awards",
 ]
+# With the bundle: /home, plus what it leaves to the app (404 «не в клубе»).
+BUNDLE_GETS = ["/home", "/clubs/me"]
+# What keeps polling on the home screen afterwards.
+POLL_GETS = ["/feature-flags", "/announcement", "/maintenance", "/updates/status"]
 
 
 def init_data(telegram_id: int, token: str) -> str:
@@ -67,17 +73,17 @@ class Stats:
         return code
 
 
-async def newcomer(client, stats, telegram_id, token, delay, home_rounds):
+async def newcomer(client, stats, telegram_id, token, delay, home_rounds, first_screen):
     await asyncio.sleep(delay)
     start = time.perf_counter()
     headers = {"X-Telegram-Init-Data": init_data(telegram_id, token)}
     ok = await stats.call(client, "POST", "/auth/session", headers) == 200
     if ok:
-        await asyncio.gather(*(stats.call(client, "GET", p, headers) for p in HOME_GETS))
+        await asyncio.gather(*(stats.call(client, "GET", p, headers) for p in first_screen))
         await stats.call(client, "POST", "/newbie/first-pack", headers)
         for _ in range(home_rounds):
             await asyncio.sleep(random.uniform(1, 4))
-            await asyncio.gather(*(stats.call(client, "GET", p, headers) for p in HOME_GETS[:4]))
+            await asyncio.gather(*(stats.call(client, "GET", p, headers) for p in POLL_GETS))
     stats.journeys.append((ok, time.perf_counter() - start))
 
 
@@ -108,6 +114,7 @@ async def main():
     ap.add_argument("--ramp", type=float, default=10)
     ap.add_argument("--home-rounds", type=int, default=3)
     ap.add_argument("--id-base", type=int, default=None)
+    ap.add_argument("--bundle", action="store_true", help="the first screen as one GET /home")
     args = ap.parse_args()
 
     id_base = args.id_base or 9_000_000_000 + int(time.time()) % 1_000_000 * 1000
@@ -117,7 +124,8 @@ async def main():
     async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=0, force_close=True), timeout=timeout) as client:
         t = time.perf_counter()
         await asyncio.gather(*(
-            newcomer(client, stats, id_base + i, args.token, random.uniform(0, args.ramp), args.home_rounds)
+            newcomer(client, stats, id_base + i, args.token, random.uniform(0, args.ramp), args.home_rounds,
+                     BUNDLE_GETS if args.bundle else HOME_GETS)
             for i in range(args.users)
         ))
         report(stats, time.perf_counter() - t)

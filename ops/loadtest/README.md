@@ -52,3 +52,17 @@ refreshes, 2–8 s of which are pauses the script makes on purpose.
 | 100 | p95 ответа 6–12 с, путь новичка 23 с | p95 0.5 с, путь 5.6 с |
 | 200 | p95 до 22 с, путь 37 с, ошибки 500 | p95 1–3 с, путь 7.7 с, без ошибок |
 | 300 | — | пул БД исчерпан, 500-е: это предел стенда (~170 запросов/с) |
+
+## `GET /home` (the same day)
+
+The first screen used to be ~39 parallel requests: layout, home and
+popups, captured in a browser. Now it is one `GET /home` (backend
+`routers/home.py`, frontend `lib/homeBundle.ts`), plus `/clubs/me` for a
+player without a club (its 404). Compare the two with `--bundle`.
+
+| per newcomer | ~39 requests | `/home` |
+|---|---|---|
+| backend CPU | 1.3–1.6 s | 0.41–0.50 s |
+| Postgres CPU | 0.65 s | 0.15 s |
+| 300 за 30 с | path 55 s | path 8 s, no errors |
+| limit of the stand | ~200 за 30 с | ~400 за 30 с |
