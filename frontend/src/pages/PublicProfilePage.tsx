@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 
-import LoadingScreen from "@/components/common/LoadingScreen";
+import { Skeleton } from "@/components/common/Skeleton";
 import { UserBadge } from "@/components/common/UserBadge";
 import { PublicMyPlayer } from "@/components/myPlayer/MyPlayerEntry";
 import FriendButton from "@/components/profile/FriendButton";
@@ -21,7 +21,7 @@ export default function PublicProfilePage() {
     queryFn: () => fetchPublicProfile(Number(userId)),
   });
 
-  if (isLoading) return <LoadingScreen />;
+  if (isLoading) return <ProfileSkeleton />;
   if (!profile) return null;
 
   return (
@@ -98,6 +98,32 @@ function Stat({ label, value, accentClass }: { label: string; value: string | nu
     <div>
       <p className={`font-mono text-2xl font-bold ${accentClass ?? "text-ink-chalk"}`}>{value}</p>
       <p className="mt-0.5 text-caption text-ink-mist">{label}</p>
+    </div>
+  );
+}
+
+/** The page's own shape while it loads: the header with the avatar, the
+ * stats grid and a card row — not a full-screen splash over the app. */
+function ProfileSkeleton() {
+  return (
+    <div className="flex flex-col gap-5" aria-busy="true" aria-label="Загрузка профиля">
+      <Skeleton className="h-5 w-16" />
+      <section className="flex flex-col items-center gap-2 rounded-3xl bg-bg-surface p-5">
+        <Skeleton className="h-20 w-20 !rounded-full" />
+        <Skeleton className="mt-1 h-6 w-40" />
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-3 w-32" />
+        <Skeleton className="mt-2 h-8 w-44 !rounded-full" />
+      </section>
+      <section className="grid grid-cols-2 gap-x-4 gap-y-4 rounded-2xl bg-bg-surface p-4">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="flex flex-col gap-1.5">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-6 w-14" />
+          </div>
+        ))}
+      </section>
+      <Skeleton className="h-40 rounded-2xl" />
     </div>
   );
 }
