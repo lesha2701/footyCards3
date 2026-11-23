@@ -9,7 +9,7 @@ import {
   STADIUM_STAGES,
   STADIUM_STAGE_DURATION_MS,
   STAGES,
-  STAGE_DURATION_MS,
+  playerStageDuration,
   TOKEN_STAGES,
   TOKEN_STAGE_DURATION_MS,
 } from "@/components/cards/revealStages";
@@ -53,7 +53,7 @@ function bulkStagesFor(entry: BulkRevealItem) {
   if (entry.kind === "token" || entry.kind === "muse") return { stages: TOKEN_STAGES as readonly string[], duration: TOKEN_STAGE_DURATION_MS };
   if (entry.kind === "coach") return { stages: COACH_STAGES as readonly string[], duration: COACH_STAGE_DURATION_MS };
   if (entry.kind === "stadium") return { stages: STADIUM_STAGES as readonly string[], duration: STADIUM_STAGE_DURATION_MS };
-  return { stages: STAGES as readonly string[], duration: STAGE_DURATION_MS };
+  return { stages: STAGES as readonly string[], duration: playerStageDuration(entry.item.card.player) };
 }
 
 export default function PackOpenPage() {
@@ -338,8 +338,8 @@ function SinglePackOpenView() {
   }, [phase, museIndex, museRevealed]);
 
   useEffect(() => {
-    if (phase !== "revealing" || stageIndex >= STAGES.length - 1) return;
-    timerRef.current = setTimeout(advance, STAGE_DURATION_MS);
+    if (phase !== "revealing" || !result || stageIndex >= STAGES.length - 1) return;
+    timerRef.current = setTimeout(advance, playerStageDuration(result.cards[cardIndex].card.player));
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };

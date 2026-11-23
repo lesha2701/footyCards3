@@ -9,6 +9,7 @@ import {
   STADIUM_STAGE_DURATION_MS,
   STAGES,
   STAGE_DURATION_MS,
+  playerStageDuration,
 } from "@/components/cards/revealStages";
 import { RevealStage } from "@/components/cards/CardRevealStage";
 import { CoachRevealStage } from "@/components/cards/CoachRevealStage";
@@ -25,7 +26,7 @@ import type { ClubPackOpenResult, OpenedClubPackItem } from "@/types";
 function stagesFor(item: OpenedClubPackItem) {
   if (item.kind === "coach") return { stages: COACH_STAGES as readonly string[], duration: COACH_STAGE_DURATION_MS };
   if (item.kind === "stadium") return { stages: STADIUM_STAGES as readonly string[], duration: STADIUM_STAGE_DURATION_MS };
-  return { stages: STAGES as readonly string[], duration: STAGE_DURATION_MS };
+  return { stages: STAGES as readonly string[], duration: item.card ? playerStageDuration(item.card.player) : STAGE_DURATION_MS };
 }
 
 export default function ClubPackOpenPage() {

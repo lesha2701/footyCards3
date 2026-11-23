@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { STAGES, STAGE_DURATION_MS } from "@/components/cards/revealStages";
+import { playerStageDuration, STAGES } from "@/components/cards/revealStages";
 import { RevealStage } from "@/components/cards/CardRevealStage";
 import { UserBadge } from "@/components/common/UserBadge";
 import { IconTag } from "@/components/icons";
@@ -36,7 +36,10 @@ export function WheelPrizeResult({ result, onClose }: { result: WheelSpinResult;
   // cards get, just without the "next card" progression (there's only one).
   useEffect(() => {
     if (!result.card_result || cardStageIndex >= STAGES.length - 1) return;
-    cardTimerRef.current = setTimeout(() => setCardStageIndex((i) => i + 1), STAGE_DURATION_MS);
+    cardTimerRef.current = setTimeout(
+      () => setCardStageIndex((i) => i + 1),
+      playerStageDuration(result.card_result.card.player),
+    );
     return () => {
       if (cardTimerRef.current) clearTimeout(cardTimerRef.current);
     };

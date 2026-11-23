@@ -2,13 +2,14 @@ import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useMemo } from "react";
 
 import HoloTilt from "@/components/cards/HoloTilt";
+import LegendWalkout, { WalkoutBackdrop } from "@/components/cards/LegendWalkout";
 import { IconGlobe, IconHelp, IconStadium, IconTag } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
 import { pathFrameClass, talentByCode, usePathCatalog } from "@/lib/pathCards";
 import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
 import { playSound } from "@/lib/sound";
 import type { Player } from "@/types";
-import { STAGES, type Stage } from "@/components/cards/revealStages";
+import { isWalkout, STAGES, type Stage } from "@/components/cards/revealStages";
 export type { Stage } from "@/components/cards/revealStages";
 
 
@@ -45,14 +46,25 @@ export function RevealStage({
   useEffect(() => {
     if (revealed) playSound(player.rarity === "legendary" || player.rarity === "diamond" ? "rare" : "reveal");
   }, [revealed, player.rarity]);
+  // Legendary/diamond: a «выход» scene per stage instead of the card filling in.
+  const walkout = isWalkout(player);
+
+  if (walkout && !revealed) {
+    return (
+      <div onClick={onTap} role="button" tabIndex={0} className="flex flex-1 cursor-pointer flex-col">
+        <LegendWalkout player={player} stage={stage} />
+      </div>
+    );
+  }
 
   return (
     <div
       onClick={onTap}
       role="button"
       tabIndex={0}
-      className="flex flex-1 cursor-pointer flex-col items-center justify-center gap-5 px-6 text-center"
+      className="relative flex flex-1 cursor-pointer flex-col items-center justify-center gap-5 px-6 text-center"
     >
+      {walkout && <WalkoutBackdrop rarity={player.rarity} />}
       {total > 1 && <p className="font-mono text-xs text-ink-mist-dim">Карточка {index + 1} / {total}</p>}
 
       <div className="relative">
