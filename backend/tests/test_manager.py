@@ -806,3 +806,23 @@ async def test_catalog_contract_and_loan_extend(client, db_session, bot_token):
     assert kept["seasons_left"] == 1 and not kept["auto"]
     log = (await client.get(f"{API}/manager/moves", headers=a_headers)).json()
     assert [m["kind"] for m in log["moves"][:2]] == ["extend", "extend"] and log["came"] == 2
+
+
+async def test_academy_options_keep_a_low_base_rating_card(client, db_session, bot_token):
+    """More than a screenful of «Академия» cards: the youngest (lowest base
+    rating) one is still on the list — and in the squad once chosen."""
+    a_id, a_headers = await _player(client, db_session, bot_token, 894029, "ST")
+    for i in range(35):
+        p = await create_player(db_session, rarity=Rarity.diamond, rating=70 + i % 10, position=Position.CM,
+                                path_talent_code="fighter", display_name=f"Академист {i}")
+        await create_user_card(db_session, a_id, p.id, CardSource.seed)
+    young = await create_player(db_session, rarity=Rarity.diamond, rating=40, position=Position.CB,
+                                path_talent_code="fighter", display_name="Паоло Мальдини")
+    card = await create_user_card(db_session, a_id, young.id, CardSource.seed)
+    await db_session.commit()
+    view = await _club(client, a_headers)
+    assert card.id in [o["card_id"] for o in view["club"]["academy_options"]]
+    view = (await client.patch(f"{API}/manager/club", headers=a_headers, json={"academy_card_id": card.id, "academy_slot": 2})).json()
+    assert view["club"]["academy_card_ids"][1] == card.id
+    squad = view["club"]["squad"]
+    assert any(p["kind"] == "academy" and p["ref"] == card.id for p in (*squad["xi"], *squad["bench"]))

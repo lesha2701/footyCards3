@@ -521,11 +521,17 @@ async def _academy_cards(db: AsyncSession, club: ManagerClub, config) -> list[Us
             if c is not None and c.owner_id == club.owner_id and c.player is not None and c.player.path_talent_code is not None]
 
 
+ACADEMY_OPTIONS_MAX = 500
+
+
 async def academy_options(db: AsyncSession, owner_id: int) -> list[UserCard]:
+    """Every «Академия» card of the owner (the picker searches them). No short
+    cut by the base rating: a levelled-up youngster has a low one and would
+    drop out of the list — even when he is the one already chosen."""
     return list((await db.execute(
         select(UserCard).join(Player, Player.id == UserCard.player_id).options(selectinload(UserCard.player))
         .where(UserCard.owner_id == owner_id, Player.path_talent_code.is_not(None))
-        .order_by(Player.rating.desc(), UserCard.id).limit(30)
+        .order_by(Player.rating.desc(), UserCard.id).limit(ACADEMY_OPTIONS_MAX)
     )).scalars().all())
 
 
