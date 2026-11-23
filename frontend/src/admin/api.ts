@@ -150,6 +150,7 @@ export interface AnalyticsReport {
     min_donors: number;
     rows: SuspiciousTradeRow[];
   };
+  section_time: { section: string; players: number; seconds: number; minutes_per_player_day: number }[];
 }
 
 export interface SuspiciousTradeRow {

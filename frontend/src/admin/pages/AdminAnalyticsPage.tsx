@@ -53,6 +53,7 @@ export default function AdminAnalyticsPage() {
           <RetentionSection data={data} />
           <FunnelSection data={data} />
           <ModesSection data={data} />
+          <SectionTimeSection data={data} />
           <MonetizationSection data={data} />
           <SuspiciousTradesSection data={data} />
           <p className="text-xs text-slate-500">
@@ -193,6 +194,98 @@ function ModesSection({ data }: { data: AnalyticsReport }) {
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+/** Section keys come from sectionOf (lib/sectionTime.ts); an unknown one is shown as is. */
+const SECTION_LABELS: Record<string, string> = {
+  home: "Главная",
+  packs: "Паки",
+  collection: "Коллекция",
+  trades: "Обмены",
+  market: "Трансферный рынок",
+  clubs: "Клубы",
+  academy: "Академия",
+  base: "Клубная база",
+  town: "Город",
+  "my-player": "Мой игрок",
+  friends: "Друзья",
+  tasks: "Задания",
+  wheel: "Колесо фортуны",
+  "weekly-cup": "Кубок недели",
+  "match-day": "Матчдей",
+  "club-pass": "Клубный пропуск",
+  season: "Сезон",
+  style: "Стиль",
+  halloween: "Ночь тыкв",
+  fans: "Битва фанатов",
+  anniversary: "Годовщина",
+  newbie: "Новичок",
+  play: "Игры (список)",
+  "play/arena": "Card Arena",
+  "play/memory": "Memory",
+  "play/tactico": "Тактико",
+  "play/career": "Карьера",
+  "play/player-career": "Карьера игрока",
+  "play/manager": "Менеджер",
+  "play/stratego": "Стратего",
+  "play/mordoboi": "Мордобой",
+  "play/kontra": "Контратака",
+  "play/magic": "Мяч и Магия",
+  "play/magnate": "Магнат",
+  "play/saboteur": "Сапёр",
+  "play/penalty": "Пенальти",
+  "play/free-kick": "Штрафной удар",
+  "play/free-kick-classic": "Штрафной (классика)",
+  "play/one-on-one": "Атака 1 на 1",
+  "play/otvetka": "Ответка",
+  "play/fergie-time": "Ферги Тайм",
+  "play/zames": "Замес",
+  "play/hangman": "Футбольные буквы",
+  "play/blackjack": "21: Добавленное время",
+  "play/lucky-board": "Табло удачи",
+  "play/pairs": "Пары",
+  "play/fut-draft": "FUT Draft",
+  other: "Другое",
+};
+
+function hours(seconds: number): string {
+  const h = seconds / 3600;
+  return h >= 10 ? `${Math.round(h)} ч` : h >= 1 ? `${h.toFixed(1)} ч` : `${Math.round(seconds / 60)} мин`;
+}
+
+function SectionTimeSection({ data }: { data: AnalyticsReport }) {
+  const rows = data.section_time ?? [];
+  const max = Math.max(1, ...rows.map((r) => r.seconds));
+  const total = rows.reduce((sum, r) => sum + r.seconds, 0);
+  return (
+    <section className="rounded-2xl border border-white/5 bg-bg-surface p-4">
+      <p className="font-display text-base font-bold">Где проводят время</p>
+      <p className="mb-3 text-xs text-slate-400">
+        Активное время за {data.days} дн.: экран открыт и игрок что-то делал в последние полторы минуты. «Мин/день» —
+        сколько в среднем проводит игрок в разделе в день, когда в него заходит. Считается с момента запуска учёта.
+      </p>
+      {rows.length === 0 ? (
+        <p className="text-sm text-slate-400">Данных пока нет</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {rows.map((r) => (
+            <div key={r.section} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 text-sm">
+              <span className="truncate text-slate-300">
+                {SECTION_LABELS[r.section] ?? r.section}{" "}
+                <span className="text-xs text-slate-500">· {pct(r.seconds / total)}</span>
+              </span>
+              <span className="font-mono text-xs text-slate-400">
+                {hours(r.seconds)} · {players(r.players)} · {r.minutes_per_player_day} мин/день
+              </span>
+              <div className="col-span-2 h-1.5 overflow-hidden rounded-full bg-white/5">
+                <div className="h-full rounded-full bg-sky-400/70" style={{ width: `${(r.seconds / max) * 100}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

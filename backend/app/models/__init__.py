@@ -120,7 +120,7 @@ from app.models.transaction import CoinTransaction
 from app.models.trophy import TrophyDefinition, UserTrophy
 from app.models.wheel import WheelPrize, WheelSpin
 from app.models.user import User
-from app.models.user_activity import UserDailyActivity
+from app.models.user_activity import SectionTimeDaily, UserDailyActivity
 from app.models.stars_payment_receipt import StarsPaymentReceipt
 from app.models.duel import DuelHistory, PlayerRivalry
 from app.models.equipment import EquipmentCollection, EquipmentItem, UserEquipment
@@ -316,6 +316,7 @@ __all__ = [
     "WheelPrize",
     "WheelSpin",
     "User",
+    "SectionTimeDaily",
     "UserDailyActivity",
     "StarsPaymentReceipt",
     "ClubSubscription",

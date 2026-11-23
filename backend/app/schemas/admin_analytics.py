@@ -94,6 +94,13 @@ class SuspiciousTradesOut(BaseModel):
     rows: list[SuspiciousTradeRowOut]
 
 
+class SectionTimeRowOut(BaseModel):
+    section: str
+    players: int
+    seconds: int
+    minutes_per_player_day: float
+
+
 class AnalyticsReportOut(BaseModel):
     days: int
     today: str
@@ -103,3 +110,4 @@ class AnalyticsReportOut(BaseModel):
     funnel: FunnelOut
     monetization: MonetizationOut
     suspicious_trades: SuspiciousTradesOut
+    section_time: list[SectionTimeRowOut] = []

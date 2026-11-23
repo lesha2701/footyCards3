@@ -25,6 +25,7 @@ import { prefetchHome } from "@/lib/homeBundle";
 import { hasSeenOnboarding, markOnboardingSeen } from "@/lib/onboarding";
 import { startSession } from "@/lib/startSession";
 import { useTelegramBackButton } from "@/lib/useTelegramBackButton";
+import SectionTimeTracker from "@/components/SectionTimeTracker";
 
 // Every screen except the landing page is split into its own chunk and
 // fetched on first visit — players never download the admin panel, and the
@@ -291,6 +292,7 @@ export default function App() {
   return (
     <Suspense fallback={<LoadingScreen />}>
     <TelegramBackButton />
+    <SectionTimeTracker />
     <NewbieTaskWatcher />
     <AdminPaySheet />
     {!window.location.pathname.startsWith("/admin") && <StreakRewardPopup />}

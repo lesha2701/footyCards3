@@ -21,6 +21,7 @@ from typing import Any, Optional
 from sqlalchemy import ColumnElement, distinct, func, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services import section_time_service
 from app.core.timeutil import app_timezone, ensure_aware, local_today
 from app.models.blackjack import BlackjackMatch
 from app.models.career import CareerParticipant
@@ -511,4 +512,5 @@ async def analytics_report(db: AsyncSession, days: int, today: Optional[date] = 
         "funnel": await _funnel(db, days, today),
         "monetization": await _monetization(db, days, today, activity["active_in_period"]),
         "suspicious_trades": await _suspicious_trades(db, since),
+        "section_time": await section_time_service.report(db, _first),
     }

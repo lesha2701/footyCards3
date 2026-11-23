@@ -19,6 +19,7 @@ from app.services.game_config_service import ConfigCacheMiddleware
 from app.routers import (
     home,
     presence,
+    section_time,
     admin_badges,
     admin_bingo,
     admin_card_collections,
@@ -189,6 +190,7 @@ API_PREFIX = "/api/v1"
 app.include_router(auth.router, prefix=API_PREFIX)
 app.include_router(presence.router, prefix=API_PREFIX)
 app.include_router(home.router, prefix=API_PREFIX)
+app.include_router(section_time.router, prefix=API_PREFIX)
 app.include_router(tasks.router, prefix=API_PREFIX)
 app.include_router(players.router, prefix=API_PREFIX)
 app.include_router(card_collections.router, prefix=API_PREFIX)
