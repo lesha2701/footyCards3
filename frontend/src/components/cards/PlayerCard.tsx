@@ -185,6 +185,15 @@ function PlayerCard({
               👑
             </span>
           )}
+          {player.chemistry_shield && !hwSkin && !fanSkin && !isPath && (
+            <span
+              className="absolute bottom-1 right-1 rounded-md bg-black/70 px-1 text-caption leading-tight"
+              aria-label="Без отрицательной химии"
+              title="Без отрицательной химии"
+            >
+              🛡️
+            </span>
+          )}
           {isPath && (
             <div className="absolute bottom-1 right-1">
               <PathCardMark talentCode={talentOverride || player.path_talent_code!} stage={pathStage} size={size} />

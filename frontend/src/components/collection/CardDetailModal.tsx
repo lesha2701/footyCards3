@@ -218,6 +218,15 @@ export default function CardDetailModal({
                       Коллекция: {player.collection_name}
                     </p>
                   )}
+                  {player.chemistry_shield && (
+                    <div className="rounded-xl border border-amber-300/30 bg-amber-300/10 px-3 py-2">
+                      <p className="text-xs font-bold text-amber-200">🛡️ Особая способность: «Без отрицательной химии»</p>
+                      <p className="mt-0.5 text-caption text-ink-mist">
+                        У него не бывает плохих связей: с любым соседом связь не ниже средней. И химия никогда не даёт
+                        ему минус — даже не на своей позиции. Работает во всех режимах.
+                      </p>
+                    </div>
+                  )}
                   {(frozen || squad) && (
                     <p className="flex items-center gap-1.5 text-xs text-ink-mist">
                       <IconLock size={13} />
