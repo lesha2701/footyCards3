@@ -1,13 +1,15 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import func, insert, select
+from sqlalchemy import func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.models.enums import CardSource, GiftKind, NotificationType, TransactionType
 from app.models.gift import Gift, GiftSet
+from app.models.card import UserCard
 from app.models.notification import Notification
+from app.models.pack import StarsInvoice
 from app.models.user import User
 from app.schemas.gift import GiftClaimResult, GiftOut, GiftPurchaseResult, GiftSetOut
 from app.services import collection_service
@@ -55,6 +57,13 @@ async def reserve_gift_serial_numbers(db: AsyncSession, gift_set: GiftSet, count
     return start
 
 
+async def bought_with_stars(db: AsyncSession, gift_id: int) -> bool:
+    """A player paid Stars for this gift (its invoice was delivered)."""
+    return (await db.execute(
+        select(StarsInvoice.id).where(StarsInvoice.gift_id == gift_id).limit(1)
+    )).scalar_one_or_none() is not None
+
+
 async def claim_gift(db: AsyncSession, user: User, gift_id: int) -> GiftClaimResult:
     """Opens a pending gift — reward is only granted once the recipient
     explicitly claims it (never on receipt), mirroring opening a pack. Row
@@ -93,6 +102,15 @@ async def claim_gift(db: AsyncSession, user: User, gift_id: int) -> GiftClaimRes
         else:
             for field in ("cards", "coach_cards", "stadium_cards", "skill_tokens", "muses", "collection_rewards"):
                 getattr(pack_result, field).extend(getattr(granted, field))
+
+    if pack_result is not None and pack_result.cards and await bought_with_stars(db, gift.id):
+        # Someone paid real Stars for it: like a Stars pack, its cards are
+        # free (tradeable once the owner is a «проверенный аккаунт»). Admin
+        # gifts stay bound (CardSource.gift is in BOUND_SOURCES).
+        card_ids = [item.card.id for item in pack_result.cards]
+        await db.execute(update(UserCard).where(UserCard.id.in_(card_ids)).values(from_free_source=False))
+        for item in pack_result.cards:
+            item.card.from_free_source = False
 
     if gift_set.coins_amount:
         user = await lock_user_for_update(db, user.id)

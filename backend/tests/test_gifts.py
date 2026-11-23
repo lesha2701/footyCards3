@@ -4,6 +4,7 @@ from sqlalchemy import select
 import app.core.rate_limit as rate_limit_module
 from app.config import get_settings
 from app.models.enums import GiftKind, Rarity
+from app.models.card import UserCard
 from app.models.gift import Gift
 from app.services import image_service, stars_payment_service
 from tests.factories import create_gift_set, create_pack, create_player, get_user_by_telegram_id
@@ -180,6 +181,11 @@ async def test_player_can_buy_gift_for_another_player_with_stars(client, db_sess
     assert body["coins_credited"] == 30
     assert len(body["pack_result"]["cards"]) == 1
     assert body["new_balance"] == 500 + 30
+    # Paid with real Stars: the card is free (tradeable), like a Stars pack.
+    assert body["pack_result"]["cards"][0]["card"]["from_free_source"] is False
+    card = await db_session.get(UserCard, body["pack_result"]["cards"][0]["card"]["id"])
+    await db_session.refresh(card)
+    assert card.from_free_source is False
 
 
 async def test_cannot_gift_yourself(client, db_session, bot_token, monkeypatch):
@@ -567,3 +573,18 @@ async def test_gift_with_two_packs_shows_every_card(client, db_session, bot_toke
     )).json()["id"]
     body = (await client.post(f"/api/v1/gifts/{gift_id}/claim", headers=headers)).json()
     assert len(body["pack_result"]["cards"]) == 4 and body["coins_credited"] == 100
+
+
+async def test_admin_gift_cards_stay_bound(client, db_session, bot_token):
+    auth = await _admin_auth(client, bot_token)
+    headers = telegram_headers(860021, bot_token)
+    await client.post("/api/v1/auth/session", headers=headers)
+    user = await get_user_by_telegram_id(db_session, 860021)
+    await create_player(db_session, rarity=Rarity.legendary)
+    pack = await create_pack(db_session, "admin-chest", price=0, card_count=1, probabilities={Rarity.legendary: 1.0})
+    gift_set = await create_gift_set(db_session, coins_amount=0, stars_price=0, pack_id=pack.id)
+    gift_id = (await client.post(
+        "/api/v1/admin/gifts/send", headers=auth, json={"gift_set_id": gift_set.id, "user_id": user.id},
+    )).json()["id"]
+    body = (await client.post(f"/api/v1/gifts/{gift_id}/claim", headers=headers)).json()
+    assert body["pack_result"]["cards"][0]["card"]["from_free_source"] is True
