@@ -1,7 +1,7 @@
 """Time players spend in each section of the Mini App, per local day
 
-Revision ID: 0334
-Revises: 0333
+Revision ID: 0335
+Revises: 0334
 Create Date: 2026-11-23
 """
 from typing import Sequence, Union
@@ -9,8 +9,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0334"
-down_revision: Union[str, None] = "0333"
+revision: str = "0335"
+down_revision: Union[str, None] = "0334"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
