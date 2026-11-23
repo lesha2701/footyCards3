@@ -121,3 +121,16 @@ async def test_collection_name_propagates_through_nested_user_card_schema(client
     other_item = next(i for i in items if i["player"]["id"] == other_player.id)
     assert tagged_item["player"]["collection_name"] == "Icons"
     assert other_item["player"]["collection_name"] is None
+
+
+async def test_sold_out_numbered_edition_stops_dropping_from_packs(client, db_session, bot_token):
+    """A pack-droppable numbered edition (e.g. Тотти of «Гладиаторы», 20 copies)
+    drops until its tirage is out, then never again."""
+    edition = await create_player(db_session, rarity=Rarity.epic, edition_size=2, next_serial_number=2)
+    await db_session.commit()
+    assert (await pick_random_player(db_session, Rarity.epic)).id == edition.id  # copy #2 is still free
+    edition.next_serial_number = 3
+    other = await create_player(db_session, rarity=Rarity.epic)
+    await db_session.commit()
+    for _ in range(20):
+        assert (await pick_random_player(db_session, Rarity.epic)).id == other.id

@@ -119,6 +119,26 @@ def test_team_chemistry_is_the_sum_and_bonus_follows_rules():
     assert result.team == 30
 
 
+def test_chemistry_shield_has_no_red_links_and_no_minus():
+    """«Без отрицательной химии» (Player.chemistry_shield, e.g. Тотти of «Гладиаторы»)."""
+    rules = ChemistryRules(rating_per_point=1, off_position_penalty=3)
+    pairs = _squad()  # every slot its own club and country: all links «none»
+    shielded = _pl("Roma", "Italy", Position.CB)  # CB in the LB slot: off position
+    shielded.chemistry_shield = True
+    pairs = [(NS(player=shielded), s) if s.code == "DEF1" else (c, s) for c, s in pairs]
+    result = compute_chemistry(pairs, "4-3-3", rules)
+    levels = {(l.a, l.b): l.level for l in result.links}
+    assert levels[("DEF1", "DEF2")] == LINK_MEDIUM and levels[("DEF1", "MID1")] == LINK_MEDIUM
+    assert levels[("DEF2", "DEF3")] == LINK_NONE  # links not touching him are unchanged
+    assert result.players["DEF1"].rating_bonus == 0  # no off-position minus
+    assert result.players["DEF2"].points == 1  # his neighbour gains from the medium link
+    # Without the shield the same squad has red links and the minus.
+    shielded.chemistry_shield = False
+    result = compute_chemistry(pairs, "4-3-3", rules)
+    assert result.players["DEF1"].rating_bonus == -3
+    assert all(l.level == LINK_NONE for l in result.links)
+
+
 def test_empty_slots_have_no_links_and_team_max_uses_formation_size():
     pairs = [p for p in _squad(club=lambda s: "Same") if p[1].code in ("GK", "DEF2")]
     result = compute_chemistry(pairs, "4-3-3", ChemistryRules(), slot_count=11)

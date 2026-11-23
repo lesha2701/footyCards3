@@ -28,6 +28,9 @@ Rules:
     stadium's (Stadium.club, «домашний стадион») — the stadium extra only
     where the stadium itself applies (tournaments: the home side only;
     callers pass stadium_club=None for the away side).
+  * «Без отрицательной химии» (Player.chemistry_shield): every link that
+    touches such a player is at least medium (never a red «none» line),
+    and his rating bonus never goes below zero (no off-position minus).
 
 Application order (see lineup_service.calculate_base_strength and
 player_tournament_simulation_service._build_side): card rating + diamond
@@ -245,6 +248,10 @@ def player_points(link_sum: int, on_position: bool, rules: ChemistryRules) -> in
     return min(cap, max(min(rules.player_floor, cap), reached))
 
 
+def has_shield(card) -> bool:
+    return bool(getattr(getattr(card, "player", None), "chemistry_shield", False))
+
+
 def coach_country_of(coach) -> str | None:
     return _group_key(getattr(coach, "country", None)) if coach is not None else None
 
@@ -288,6 +295,8 @@ def compute_chemistry(
     for a, b in FORMATION_LINKS.get(formation, ()):
         if a in by_code and b in by_code:
             level = link_level(by_code[a].player, by_code[b].player)
+            if level == LINK_NONE and (has_shield(by_code[a]) or has_shield(by_code[b])):
+                level = LINK_MEDIUM
             if link_floor:
                 floor = max(link_floor.get(a, 0), link_floor.get(b, 0))
                 if floor and _LEVEL_ORDER[level] < floor:
@@ -320,6 +329,8 @@ def compute_chemistry(
             if (coach_extra or stadium_extra or talent_extra or equipment_extra) else base
         )
         bonus = pts * rules.rating_per_point - (0 if on_position else rules.off_position_penalty)
+        if bonus < 0 and has_shield(card):
+            bonus = 0
         result.players[slot.code] = PlayerChemistry(
             slot_code=slot.code, points=pts, link_sum=link_sums[slot.code], on_position=on_position, rating_bonus=bonus,
             coach_bonus=coach_extra, stadium_bonus=stadium_extra,
@@ -362,6 +373,7 @@ def with_match_ratings(cards_with_slots: Iterable[tuple[Any, Any]], chemistry: C
                 display_name=p.display_name, position=p.position, rating=boosted_rating(p.rating, bonus),
                 rarity=p.rarity, club=p.club, country=p.country,
                 attack_rating=getattr(p, "attack_rating", None), defense_rating=getattr(p, "defense_rating", None),
+                chemistry_shield=getattr(p, "chemistry_shield", False),
             ),
         ), slot))
     return out

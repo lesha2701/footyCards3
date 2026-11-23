@@ -195,14 +195,14 @@ async def _pick_player(db: AsyncSession, rarity: Rarity, position=None, exclude:
     """A random active pack player of `rarity` (and `position`), never one
     already given in this pack; falls back to any rarity for the position,
     then to pack_service.pick_random_player."""
-    from app.services.pack_service import _collection_active_filter, pick_random_player
+    from app.services.pack_service import _collection_active_filter, edition_open_filter, pick_random_player
 
     base = (
         select(Player)
         .outerjoin(CardCollection, Player.collection_id == CardCollection.id)
         .where(
             Player.is_active.is_(True), Player.is_pack_droppable.is_(True), Player.path_talent_code.is_(None),
-            _collection_active_filter(), Player.rarity != Rarity.diamond,
+            _collection_active_filter(), Player.rarity != Rarity.diamond, edition_open_filter(),
         )
     )
     if exclude:

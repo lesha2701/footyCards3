@@ -222,6 +222,7 @@ def _with_player(card, **changes):
         rarity=p.rarity, club=p.club, country=p.country,
         attack_rating=getattr(p, "attack_rating", None), defense_rating=getattr(p, "defense_rating", None),
         path_talent_code=getattr(p, "path_talent_code", None),
+        chemistry_shield=getattr(p, "chemistry_shield", False),
     )
     for key, value in changes.items():
         setattr(player, key, value)

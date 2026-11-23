@@ -67,6 +67,8 @@ export interface Player {
   collection_skin?: string | null;
   /** Numbered edition: copies that will ever exist; null = a regular card. */
   edition_size?: number | null;
+  /** «Без отрицательной химии»: no red links and no chemistry minus. */
+  chemistry_shield?: boolean;
   /** «Академия»: set = a path card with this talent. */
   path_talent_code?: string | null;
   /** «Один футболист» key; null = by the display name. */

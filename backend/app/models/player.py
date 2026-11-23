@@ -48,6 +48,10 @@ class Player(TimestampMixin, Base):
     # Numbered edition («№37 из 100»): the most copies that will ever exist;
     # next_serial_number counts them. NULL = a regular card, no limit.
     edition_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # «Без отрицательной химии» (chemistry_service.compute_chemistry): his
+    # links are never «none» and his match chemistry bonus never goes below
+    # zero, in every mode that uses neighbour-link chemistry.
+    chemistry_shield: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     # «Академия» (services/path_service.py): set = this diamond design is a
     # path card with this talent (chosen by the admin); NULL = a regular card.
     path_talent_code: Mapped[Optional[str]] = mapped_column(

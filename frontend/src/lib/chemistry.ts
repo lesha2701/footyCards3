@@ -23,6 +23,9 @@ export interface ChemistryPlayerInput {
   equipmentChemistry?: number;
   teamCountry?: string | null;
   teamChemistry?: number;
+  /** «Без отрицательной химии» (Player.chemistry_shield): his links are never
+   * «none» and his rating bonus never goes below zero. */
+  chemistryShield?: boolean;
 }
 
 export interface ChemistryResult {
@@ -88,7 +91,8 @@ export function computeChemistry(
   for (const [a, b] of adjacency) {
     const pa = bySlot.get(a), pb = bySlot.get(b);
     if (!pa || !pb) continue;
-    const level = linkLevel(pa, pb);
+    const raw = linkLevel(pa, pb);
+    const level: ChemistryLinkLevel = raw === "none" && (pa.chemistryShield || pb.chemistryShield) ? "medium" : raw;
     const points = linkPoints(level, rules);
     links.push({ a, b, level, points });
     linkSums.set(a, (linkSums.get(a) ?? 0) + points);
@@ -107,7 +111,9 @@ export function computeChemistry(
     const points = extra ? Math.min(Math.max(0, rules.player_max), base + extra) : base;
     result[p.slot] = {
       slot_code: p.slot, points, link_sum: linkSum, on_position: onPosition,
-      rating_bonus: points * rules.rating_per_point - (onPosition ? 0 : rules.off_position_penalty),
+      rating_bonus: Math.max(
+        p.chemistryShield ? 0 : -Infinity, points * rules.rating_per_point - (onPosition ? 0 : rules.off_position_penalty),
+      ),
       coach_bonus: coachBonus, stadium_bonus: stadiumBonus,
     };
   }
@@ -118,7 +124,7 @@ export function computeChemistry(
 interface SlotLike {
   slot_code: string;
   ideal_position: string;
-  player: { id: number; display_name: string; club: string; country: string; position: string } | null;
+  player: { id: number; display_name: string; club: string; country: string; position: string; chemistry_shield?: boolean } | null;
   /** The slot's card «Экипировка» (Card Arena slots carry the whole card). */
   equipment?: CardEquipmentChemistry | null;
 }
@@ -164,7 +170,7 @@ function inputsOf(slots: SlotLike[]): ChemistryPlayerInput[] {
     .filter((s) => s.player)
     .map((s) => ({
       slot: s.slot_code, club: s.player!.club, country: s.player!.country, position: s.player!.position,
-      idealPosition: s.ideal_position, ...(s.equipment ?? {}),
+      idealPosition: s.ideal_position, chemistryShield: s.player!.chemistry_shield ?? false, ...(s.equipment ?? {}),
     }));
 }
 

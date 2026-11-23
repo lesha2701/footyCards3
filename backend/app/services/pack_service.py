@@ -204,6 +204,12 @@ def _collection_active_filter():
     return or_(Player.collection_id.is_(None), CardCollection.is_active.is_(True))
 
 
+def edition_open_filter():
+    """A numbered edition (Player.edition_size) stops dropping once its
+    tirage is out — card_creation would refuse the copy after it."""
+    return or_(Player.edition_size.is_(None), Player.next_serial_number <= Player.edition_size)
+
+
 async def pick_random_player(db: AsyncSession, rarity: Rarity, pool: str = "default") -> Player:
     """A random active, pack-droppable player of `rarity`. pool="default"
     (every source except the «Академия» pack) never drops a «Академия»
@@ -221,7 +227,7 @@ async def pick_random_player(db: AsyncSession, rarity: Rarity, pool: str = "defa
         .outerjoin(CardCollection, Player.collection_id == CardCollection.id)
         .where(
             Player.rarity == rarity, Player.is_active.is_(True), Player.is_pack_droppable.is_(True),
-            _collection_active_filter(), path_filter,
+            _collection_active_filter(), path_filter, edition_open_filter(),
         )
         .order_by(func.random())
         .limit(1)
@@ -236,7 +242,7 @@ async def pick_random_player(db: AsyncSession, rarity: Rarity, pool: str = "defa
             .outerjoin(CardCollection, Player.collection_id == CardCollection.id)
             .where(
                 Player.is_active.is_(True), Player.is_pack_droppable.is_(True), _collection_active_filter(),
-                Player.path_talent_code.is_(None),
+                Player.path_talent_code.is_(None), edition_open_filter(),
             )
             .order_by(func.random())
             .limit(1)
@@ -250,6 +256,7 @@ async def pick_random_player(db: AsyncSession, rarity: Rarity, pool: str = "defa
 async def _pick_collection_player(db: AsyncSession, rarity: Rarity, collection_id: int) -> Player:
     base = select(Player).where(
         Player.collection_id == collection_id, Player.is_active.is_(True), Player.path_talent_code.is_(None),
+        edition_open_filter(),
     )
     player = (await db.execute(base.where(Player.rarity == rarity).order_by(func.random()).limit(1))).scalar_one_or_none()
     if player is None:

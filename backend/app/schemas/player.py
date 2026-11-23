@@ -39,6 +39,8 @@ class PlayerOut(BaseModel):
     collection_skin: Optional[str] = None
     # Numbered edition: copies that will ever exist; null = a regular card.
     edition_size: Optional[int] = None
+    # «Без отрицательной химии» (chemistry_service): no red links, no minus.
+    chemistry_shield: bool = False
     # «Академия»: set = a path card with this talent (services/path_talent_catalog.py).
     path_talent_code: Optional[str] = None
     # «Один футболист» (services/player_identity.py); null = by display name.
@@ -67,6 +69,8 @@ class PlayerOut(BaseModel):
         result = {name: getattr(data, name, None) for name in _PLAYER_COLUMN_FIELDS}
         collection = getattr(data, "collection", None)
         result["collection_name"] = collection.name if collection is not None else None
+        # Unflushed rows / stand-ins may not carry it yet: no shield then.
+        result["chemistry_shield"] = bool(getattr(data, "chemistry_shield", False))
         result["collection_skin"] = getattr(collection, "card_skin", None) if collection is not None else None
         result["attack_rating"] = data.attack_rating if data.attack_rating is not None else data.rating
         result["defense_rating"] = data.defense_rating if data.defense_rating is not None else data.rating

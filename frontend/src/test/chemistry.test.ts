@@ -93,3 +93,27 @@ describe("chemistryFrozenText", () => {
     expect(chemistryFrozenText({ ...base, frozen: true, live_enabled: false })).toBeNull();
   });
 });
+
+
+describe("chemistry shield («Без отрицательной химии»)", () => {
+  const rules = {
+    link_strong: 2, link_medium: 1, thresholds: [1, 2, 4], player_max: 3, player_floor: 0,
+    rating_per_point: 1, off_position_penalty: 3, coach_country_points: 1, stadium_club_points: 1,
+  } as ChemistryRules;
+  const adjacency: [string, string][] = [["DEF1", "DEF2"], ["DEF2", "DEF3"]];
+  const players = (shield: boolean) => [
+    { slot: "DEF1", club: "Roma", country: "Italy", position: "CB", idealPosition: "LB", chemistryShield: shield },
+    { slot: "DEF2", club: "A", country: "X", position: "CB", idealPosition: "CB" },
+    { slot: "DEF3", club: "B", country: "Y", position: "CB", idealPosition: "CB" },
+  ];
+
+  it("turns his red links medium and never gives him a minus", () => {
+    const r = computeChemistry(players(true), adjacency, rules);
+    expect(r.links.map((l) => l.level)).toEqual(["medium", "none"]);
+    expect(r.players.DEF1.rating_bonus).toBe(0);
+    expect(r.players.DEF2.points).toBe(1);
+    const plain = computeChemistry(players(false), adjacency, rules);
+    expect(plain.players.DEF1.rating_bonus).toBe(-3);
+    expect(plain.links.map((l) => l.level)).toEqual(["none", "none"]);
+  });
+});
