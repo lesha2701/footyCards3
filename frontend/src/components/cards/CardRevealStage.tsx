@@ -1,6 +1,7 @@
 import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useMemo } from "react";
 
+import HoloTilt from "@/components/cards/HoloTilt";
 import { IconGlobe, IconHelp, IconStadium, IconTag } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
 import { pathFrameClass, talentByCode, usePathCatalog } from "@/lib/pathCards";
@@ -66,42 +67,44 @@ export function RevealStage({
         {revealed && player.rarity === "legendary" && <LegendaryConfetti />}
         {revealed && player.rarity === "diamond" && !isAcademy && <DiamondSparkle />}
         {revealed && isAcademy && <AcademyBloom />}
-        <motion.div
-          initial={{ scale: 0.85, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className={`relative flex aspect-square w-64 flex-col items-center justify-center overflow-hidden rounded-3xl bg-gradient-to-b ${
-            showFrom("rarity")
-              ? isAcademy ? pathFrameClass(0, 0, true) : RARITY_GRADIENTS[player.rarity]
-              : "from-bg-raised to-bg-surface"
-          } p-[3px] ${showFrom("rarity") && !isAcademy ? RARITY_GLOW[player.rarity] : ""}`}
-        >
-          <div className="flex h-full w-full flex-col items-center justify-center rounded-[22px] bg-bg-surface">
-            {revealed ? (
-              <motion.img
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                src={staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-                alt={player.display_name}
-                className="h-full w-full object-cover"
-              />
-            ) : showFrom("silhouette") ? (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-32 w-32 rounded-full bg-bg-raised" />
-            ) : (
-              <IconHelp size={44} className="text-ink-mist-dim" />
-            )}
-          </div>
+        <HoloTilt rarity={player.rarity} enabled={revealed}>
+          <motion.div
+            initial={{ scale: 0.85, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className={`relative flex aspect-square w-64 flex-col items-center justify-center overflow-hidden rounded-3xl bg-gradient-to-b ${
+              showFrom("rarity")
+                ? isAcademy ? pathFrameClass(0, 0, true) : RARITY_GRADIENTS[player.rarity]
+                : "from-bg-raised to-bg-surface"
+            } p-[3px] ${showFrom("rarity") && !isAcademy ? RARITY_GLOW[player.rarity] : ""}`}
+          >
+            <div className="flex h-full w-full flex-col items-center justify-center rounded-[22px] bg-bg-surface">
+              {revealed ? (
+                <motion.img
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  src={staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
+                  alt={player.display_name}
+                  className="h-full w-full object-cover"
+                />
+              ) : showFrom("silhouette") ? (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-32 w-32 rounded-full bg-bg-raised" />
+              ) : (
+                <IconHelp size={44} className="text-ink-mist-dim" />
+              )}
+            </div>
 
-          {showFrom("position") && (
-            <span className="absolute left-2 top-2 rounded-md bg-black/70 px-2 py-1 font-mono text-caption font-bold text-ink-chalk">
-              {player.position}
-            </span>
-          )}
-          {showFrom("rarity") && (
-            <span className="absolute right-2 top-2 rounded-md bg-black/70 px-2 py-1 text-caption font-bold text-ink-chalk">
-              {isAcademy ? "🌱 Академия" : RARITY_LABELS[player.rarity]}
-            </span>
-          )}
-        </motion.div>
+            {showFrom("position") && (
+              <span className="absolute left-2 top-2 rounded-md bg-black/70 px-2 py-1 font-mono text-caption font-bold text-ink-chalk">
+                {player.position}
+              </span>
+            )}
+            {showFrom("rarity") && (
+              <span className="absolute right-2 top-2 rounded-md bg-black/70 px-2 py-1 text-caption font-bold text-ink-chalk">
+                {isAcademy ? "🌱 Академия" : RARITY_LABELS[player.rarity]}
+              </span>
+            )}
+          </motion.div>
+        </HoloTilt>
       </div>
 
       <div className="min-h-[70px] space-y-1">

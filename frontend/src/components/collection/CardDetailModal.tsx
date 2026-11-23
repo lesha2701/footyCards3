@@ -5,6 +5,7 @@ import { fetchCardStars, fetchPlayerCopies, setCardsLocked, setMainCopy } from "
 import { fetchActiveLineup, setActiveLineup } from "@/api/lineups";
 import { fetchPathState } from "@/api/path";
 import DiamondFeedModal from "@/components/cards/DiamondFeedModal";
+import HoloTilt from "@/components/cards/HoloTilt";
 import { IconCoin, IconLock, IconLockOpen, IconPlay, IconStar, IconTag, IconUpgrade } from "@/components/icons";
 import CardSkillPanel from "@/components/collection/CardSkillPanel";
 import CardStarPanel from "@/components/collection/CardStarPanel";
@@ -146,7 +147,7 @@ export default function CardDetailModal({
             <div {...swipeDown}>
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/15 sm:hidden" aria-hidden />
             <div className="flex gap-3">
-              <div className="relative w-28 shrink-0">
+              <HoloTilt rarity={player.rarity} rounded="rounded-2xl" className="relative w-28 shrink-0">
                 <img loading="lazy"
                   src={staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                   alt={player.display_name}
@@ -156,7 +157,7 @@ export default function CardDetailModal({
                 <span className="absolute left-1.5 top-1.5 rounded-md bg-black/70 px-1.5 py-0.5 font-display text-base font-bold leading-none text-white">
                   {rating}
                 </span>
-              </div>
+              </HoloTilt>
               <div className="min-w-0 flex-1">
                 <p className="font-display text-lg font-bold leading-tight text-ink-chalk">{player.display_name}</p>
                 <p className="mt-0.5 text-sm text-ink-mist">{POSITION_LABELS[player.position]} · {player.club}</p>
