@@ -417,7 +417,9 @@ describe("ManagerPage", () => {
     updateManagerClub.mockResolvedValue({ ...base, club });
     renderPage();
     expect(await screen.findByText("Место 2")).toBeInTheDocument();
-    // The second place lists only the card not taken by the first.
+    // The empty second place stays folded; opened, it lists only the card not taken by the first.
+    expect(screen.queryByText("Воспитанник Б")).toBeNull();
+    fireEvent.click(screen.getByText("Выбрать"));
     fireEvent.click(screen.getByText("Воспитанник Б"));
     await waitFor(() => expect(updateManagerClub.mock.calls.map((c) => c[0])).toContainEqual({ academy_card_id: 12, academy_slot: 2 }));
   });

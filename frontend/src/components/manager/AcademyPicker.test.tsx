@@ -14,9 +14,12 @@ describe("AcademyPicker", () => {
     expect(screen.getAllByText(/Игрок \d+/).length).toBeGreaterThan(30);
   });
 
-  it("opens by itself when nobody is chosen, best first, and searches", () => {
+  it("an empty place stays folded until «Выбрать», then best first and searchable", () => {
     render(<AcademyPicker {...base} selected={null} />);
-    expect(screen.getAllByRole("button")[0].textContent).toContain("Игрок 30");
+    expect(screen.queryAllByText(/Игрок \d+/)).toHaveLength(0);
+    expect(screen.getByText(/30 карт на выбор/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Выбрать"));
+    expect(screen.getAllByRole("button")[1].textContent).toContain("Игрок 30");
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "игрок 7" } });
     expect(screen.getAllByText(/Игрок \d+/)).toHaveLength(1);
   });

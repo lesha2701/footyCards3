@@ -22,8 +22,8 @@ export default function AcademyPicker({ options, selected, locked, busy, onPick,
       .sort((a, b) => b.rating - a.rating || a.name.localeCompare(b.name));
   }, [options, query]);
 
-  // Nothing chosen yet: the choice is what the section is for.
-  const listed = open || (!current && !locked);
+  // The list only on demand: an empty second place doesn't unroll the whole collection.
+  const listed = open && !locked;
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -38,8 +38,14 @@ export default function AcademyPicker({ options, selected, locked, busy, onPick,
             </button>
           )}
         </div>
+      ) : locked ? (
+        <p className="text-caption text-ink-mist">Игрок академии не выбран. Выбрать можно в предсезонку.</p>
       ) : (
-        !listed && <p className="text-caption text-ink-mist">Игрок академии не выбран. Выбрать можно в предсезонку.</p>
+        <button type="button" onClick={() => setOpen(!open)}
+          className="flex items-center gap-2 rounded-xl border border-dashed border-violet-400/50 bg-violet-400/5 p-2.5 text-left">
+          <span className="min-w-0 flex-1 text-sm text-ink-mist">Место свободно · {options.length} карт на выбор</span>
+          <span className="shrink-0 rounded-lg bg-violet-400 px-2.5 py-1.5 text-micro font-bold text-bg-base">{open ? "Свернуть" : "Выбрать"}</span>
+        </button>
       )}
 
       {listed && (
