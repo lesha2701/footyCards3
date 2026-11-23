@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { fetchNewbie, openNewbieFirstPack } from "@/api/newbie";
 import LoadingScreen from "@/components/common/LoadingScreen";
 import OnboardingScreen from "@/components/common/OnboardingScreen";
-import { IconPack } from "@/components/icons";
+import stadium from "@/assets/newbie/welcome-stadium.webp";
+import { staticUrl } from "@/lib/api";
 import { formatGameError } from "@/lib/errors";
 import { takeStartPath } from "@/lib/startLink";
 import { RARITY_LABELS, RARITY_TEXT } from "@/lib/rarity";
@@ -48,22 +49,30 @@ export default function NewbieWelcome({ onFinish }: { onFinish: () => void }) {
 
   const top = state.first_pack_top;
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-bg-base">
-      <div className="flex flex-1 flex-col items-center justify-center gap-6 px-8 text-center">
-        <motion.span
-          initial={{ scale: 0.6, opacity: 0 }}
-          animate={{ scale: [0.6, 1.08, 1], opacity: 1, rotate: [0, -3, 3, 0] }}
-          transition={{ duration: 0.8 }}
-          className="flex h-28 w-28 items-center justify-center rounded-[2rem] bg-bg-surface text-accent-lime shadow-[0_0_60px_-10px_rgba(190,242,100,0.5)]"
-        >
-          <IconPack size={56} />
-        </motion.span>
+    <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-bg-base">
+      {/* A night stadium under the floodlights, darkened towards the text. */}
+      <img src={stadium} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" />
+      <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/20 to-bg-base" />
+      <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-bg-base via-bg-base/90 to-transparent" />
+
+      <div className="safe-top relative flex items-center justify-center gap-2 pt-5">
+        <img src="/brand/victor-fc-crest.jpg" alt="" className="h-8 w-8 rounded-full ring-1 ring-white/20" />
+        <span className="font-display text-sm font-bold tracking-wide text-ink-chalk drop-shadow">
+          VICTOR <span className="text-accent-lime">FC</span>
+        </span>
+      </div>
+
+      <div className="relative flex flex-1 flex-col items-center justify-center gap-5 px-8 text-center">
+        <DebutPack opening={open.isPending} />
         <div className="space-y-2">
-          <p className="font-mono text-micro uppercase tracking-wider text-ink-mist">Добро пожаловать в Victor FC</p>
-          <p className="font-display text-2xl font-bold text-ink-chalk">Твой первый пак уже ждёт</p>
+          <p className="font-mono text-micro uppercase tracking-[0.2em] text-accent-lime/90">Добро пожаловать в клуб</p>
+          <p className="font-display text-2xl font-black leading-tight text-ink-chalk drop-shadow-[0_2px_12px_rgba(0,0,0,0.8)]">
+            Твой первый пак уже&nbsp;ждёт
+          </p>
           {top && (
             <p className="text-sm text-ink-mist">
               Внутри гарантированно <span className={`font-bold ${RARITY_TEXT[top]}`}>{RARITY_LABELS[top].toLowerCase()}</span> карта.
+              <br />
               Дальше — целая команда и первый матч.
             </p>
           )}
@@ -74,7 +83,7 @@ export default function NewbieWelcome({ onFinish }: { onFinish: () => void }) {
           </p>
         )}
       </div>
-      <div className="safe-bottom px-6 pb-6 pt-2">
+      <div className="safe-bottom relative px-6 pb-6 pt-2">
         <button
           onClick={() => {
             haptic("medium");
@@ -86,6 +95,47 @@ export default function NewbieWelcome({ onFinish }: { onFinish: () => void }) {
           {open.isPending ? "Открываем..." : "Открыть пак"}
         </button>
       </div>
+    </div>
+  );
+}
+
+/** «Пак дебютанта» floating in the light: slow rays behind, a soft lime
+ * glow, a gentle hover — and a shake while it opens. */
+function DebutPack({ opening }: { opening: boolean }) {
+  const reduce = useReducedMotion();
+  return (
+    <div className="relative flex h-64 w-64 items-center justify-center">
+      <motion.div
+        aria-hidden="true"
+        className="absolute inset-[-30%] rounded-full opacity-60"
+        style={{
+          background:
+            "repeating-conic-gradient(from 0deg, rgba(198,230,58,0.22) 0deg 6deg, transparent 6deg 22deg)",
+          maskImage: "radial-gradient(circle, black 20%, transparent 68%)",
+          WebkitMaskImage: "radial-gradient(circle, black 20%, transparent 68%)",
+        }}
+        animate={reduce ? undefined : { rotate: 360 }}
+        transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
+      />
+      <div aria-hidden="true" className="absolute h-44 w-44 rounded-full bg-accent-lime/30 blur-3xl" />
+      <motion.img
+        src={staticUrl("packs/debut.webp")}
+        alt="Пак дебютанта"
+        className="relative h-60 w-auto drop-shadow-[0_18px_30px_rgba(0,0,0,0.7)]"
+        initial={{ scale: 0.6, opacity: 0, y: 30 }}
+        animate={
+          opening
+            ? { scale: 1.06, opacity: 1, y: 0, rotate: [0, -4, 4, -4, 4, 0] }
+            : reduce
+              ? { scale: 1, opacity: 1, y: 0 }
+              : { scale: 1, opacity: 1, y: [0, -8, 0] }
+        }
+        transition={
+          opening
+            ? { duration: 0.5, repeat: Infinity }
+            : { scale: { duration: 0.6 }, opacity: { duration: 0.6 }, y: { duration: 3.2, repeat: Infinity, ease: "easeInOut" } }
+        }
+      />
     </div>
   );
 }
