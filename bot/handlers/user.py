@@ -1,12 +1,18 @@
 import re
 
+import logging
+
 from aiogram import F, Router
+from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 
 import db
 from config import get_bot_settings
+from handlers.chat_pack import static_url
 from keyboards import invite_keyboard, open_app_keyboard
+
+logger = logging.getLogger(__name__)
 
 router = Router(name="user")
 # Group/supergroup chats run in "chat mode" (see handlers/chat_pack.py) —
@@ -15,6 +21,19 @@ router = Router(name="user")
 router.message.filter(F.chat.type == "private")
 settings = get_bot_settings()
 SAFE_SOURCE = re.compile(r"[A-Za-z0-9_-]{1,64}")
+# The first thing a newcomer sees: the «Пак дебютанта» on a night stadium,
+# the same pack the app's welcome screen opens.
+WELCOME_PHOTO = "bot/welcome-pack.jpg"
+FREE_PACK_BUTTON = "🎁 Забрать бесплатный пак"
+
+
+def newcomer_text(first_name: str) -> str:
+    return (
+        f"Привет, {first_name}! 👋\n\n"
+        "🎁 <b>Твой первый пак уже ждёт</b> — открой его и начни собирать свой состав "
+        "из звёзд футбола: карточки, паки, мини-игры и обмены с друзьями.\n\n"
+        "Жми кнопку ниже 👇"
+    )
 
 HELP_TEXT = (
     "⚽ <b>VICTOR FC</b> — коллекционируй футболистов, открывай паки и играй!\n\n"
@@ -119,6 +138,9 @@ async def cmd_start(message: Message) -> None:
             keyboard = open_app_keyboard(query=f"?src={payload}", text="🥅 Пробить пенальти")
         elif SAFE_SOURCE.fullmatch(payload):
             keyboard = open_app_keyboard(query=f"?src={payload}")
+            if await db.get_user_by_telegram_id(message.from_user.id) is None:
+                await send_welcome_pack(message, query=f"?src={payload}")
+                return
     elif payload and payload.startswith("magnate_"):
         code = payload[len("magnate_"):]
         text = (
@@ -150,7 +172,24 @@ async def cmd_start(message: Message) -> None:
             "Нажми кнопку ниже, чтобы открыть VICTOR FC и посмотреть её 👇"
         )
 
+    if payload is None and await db.get_user_by_telegram_id(message.from_user.id) is None:
+        await send_welcome_pack(message)
+        return
+
     await message.answer(text, reply_markup=keyboard)
+
+
+async def send_welcome_pack(message: Message, query: str = "") -> None:
+    """A newcomer (no account yet) from an ad link or a bare /start: the pack
+    picture with a «take your free pack» button instead of the plain hello.
+    Falls back to text if Telegram can't fetch the picture."""
+    text = newcomer_text(message.from_user.first_name)
+    keyboard = open_app_keyboard(query=query, text=FREE_PACK_BUTTON)
+    try:
+        await message.answer_photo(static_url(WELCOME_PHOTO), caption=text, reply_markup=keyboard)
+    except TelegramAPIError:
+        logger.warning("welcome pack photo failed, sending text", exc_info=True)
+        await message.answer(text, reply_markup=keyboard)
 
 
 @router.message(Command("help"))
