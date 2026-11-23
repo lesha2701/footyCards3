@@ -224,3 +224,27 @@ def test_europe_has_belgium_and_norway_and_less_czech_poland():
     eu = manager_filial.REGIONS["europe"]["countries"]
     assert "Бельгия" in eu and "Норвегия" in eu
     assert eu["Чехия"][1] == 1.5 and eu["Польша"][1] == 2.5
+
+
+async def test_promotion_lifts_the_peak_of_a_growing_alumnus(client, db_session, bot_token):
+    uid, headers, view = await _filial_club(client, db_session, bot_token, 897031)
+    await client.post(f"{API}/manager/filial/pick", headers=headers, json={"index": 0})
+    config = await get_config(db_session)
+    club = await manager_service._owned_club(db_session, uid)
+    al = (await manager_filial.club_alumni(db_session, club.id, al_key := manager_service.season_key(datetime.now(timezone.utc))))[0]
+    al.joined_key = al_key  # age 17, growing
+    step = FC["filial_promotion_peak"]
+    old_rating = manager_service._division_rating(club.division, config)
+    club.division -= 1
+    new_rating = manager_service._division_rating(club.division, config)
+    cap = new_rating + al.potential
+    al.peak = cap - step - 1
+    grown = await manager_filial.on_promotion(db_session, club, al_key, config)
+    assert grown == [(al.name, step)] and al.peak == cap - 1
+    # Never above a release in the new division.
+    assert (await manager_filial.on_promotion(db_session, club, al_key, config)) == [(al.name, 1)] and al.peak == cap
+    assert (await manager_filial.on_promotion(db_session, club, al_key, config)) == []
+    # Past his peak age he doesn't grow any more.
+    al.peak, al.peak_age = cap - 5, 17
+    assert (await manager_filial.on_promotion(db_session, club, al_key, config)) == []
+    assert new_rating >= old_rating

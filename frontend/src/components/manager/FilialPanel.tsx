@@ -179,7 +179,7 @@ function FilialPromise({ view }: { view: ManagerFilialView }) {
       <p className="text-micro font-bold uppercase tracking-wide text-amber-200">Что даёт филиал</p>
       <p className="text-micro text-ink-chalk">📝 Контракты выпускников: {st.contracts} на старте, до {st.contracts_max} с «Интернатом»</p>
       <p className="text-micro text-ink-chalk">🎓 Выпуск раз в {seasons(st.every)} (с «Интернатом» — раз в {seasons(st.every_min)}), кандидатов на выбор: {st.candidates}, им по {st.start_age} лет</p>
-      <p className="text-micro text-ink-chalk">📈 Выпускник растёт к пику, играет за клуб, его можно продать рынку или другому президенту</p>
+      <p className="text-micro text-ink-chalk">📈 Выпускник растёт к пику, играет за клуб, его можно продать рынку или другому президенту. Повышение клуба в дивизионе поднимает пик тех, кто ещё растёт</p>
       <div className="mt-0.5 grid grid-cols-2 gap-1">
         {view.buildings.map((b) => (
           <div key={b.code} className="flex items-center gap-1.5 rounded-lg bg-bg-surface px-1.5 py-1">

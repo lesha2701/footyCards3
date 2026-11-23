@@ -2347,6 +2347,10 @@ async def _settle(db: AsyncSession, key: str, config) -> None:
             await finance.book(db, club, "promotion", bonus, key)
             club.best_division = min(club.best_division or new, new)
             title, text = "повышение ⬆️", f"Теперь {division_name(new)}. Бонус {money(bonus)} в бюджет"
+            # The alumni still growing aim higher with the club (`filial.on_promotion`).
+            grown = await filial.on_promotion(db, club, key, config)
+            if grown:
+                text += ". Выпускники метят выше: " + ", ".join(f"{name} +{n}" for name, n in grown)
         else:
             parachute = max(0, old_grant - new_grant) * config.manager_parachute_pct // 100
             await finance.book(db, club, "parachute", parachute, key)

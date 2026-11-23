@@ -73,7 +73,9 @@ DEFAULTS: dict = {
     # + «Поля» (+1 a level) at an age in filial_peak_age, filial_grow_gap
     # under the peak at the start, a decline of filial_decline per season
     # from filial_decline_age (+1 season per «Спортзал» level), retirement at
-    # an age in filial_retire_age. The market buys him back at
+    # an age in filial_retire_age; a promotion of the club adds
+    # filial_promotion_peak to the peak of an alumnus still growing (never
+    # above a release in the new division). The market buys him back at
     # manager_sell_back_pct once a season; other presidents pay
     # filial_min_price_pct..filial_max_price_pct of his value (no dumping),
     # filial_fee_pct of it is burnt, and one pair of clubs trades again only
@@ -84,7 +86,7 @@ DEFAULTS: dict = {
     # Stars (convenience and style only): «Срочный выпуск», «Переброс», «Скаутский отчёт», name, a header skin.
     "filial_rush_stars": 75, "filial_reroll_stars": 75, "filial_report_stars": 50, "filial_name_stars": 99, "filial_skin_stars": 49,
     "filial_every": 4, "filial_every_min": 3, "filial_contracts": 1, "filial_candidates": 2,
-    "filial_start_age": 17, "filial_potential_max": 6, "filial_grow_gap": 12,
+    "filial_start_age": 17, "filial_potential_max": 6, "filial_grow_gap": 12, "filial_promotion_peak": 2,
     "filial_peak_age": [25, 28], "filial_decline_age": 30, "filial_decline": 1.5, "filial_retire_age": [33, 37],
     "filial_min_price_pct": 90, "filial_max_price_pct": 300, "filial_fee_pct": 5, "filial_pair_cooldown_seasons": 4,
     # Sponsors: % of G. place_pct = by place (index 0 = champion); rest_pct =

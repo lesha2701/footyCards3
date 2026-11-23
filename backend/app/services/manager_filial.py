@@ -249,6 +249,31 @@ async def club_alumni(db: AsyncSession, club_id: int, key: str) -> list[ManagerA
     return out
 
 
+async def on_promotion(db: AsyncSession, club, key: str, config) -> list[tuple[str, int]]:
+    """The club went up a division: every alumnus of it still growing (younger
+    than his peak age) raises his peak by `filial_promotion_peak` — never above
+    what a release in the new division would reach with his potential and his
+    filial's «Поля». The whole curve shifts with the peak. Returns (name, +n)."""
+    step = int(_cfg(config)["filial_promotion_peak"])
+    if step <= 0:
+        return []
+    from app.services import manager_service as ms
+
+    out = []
+    filials: dict[int, Optional[ManagerFilial]] = {}
+    for al in await club_alumni(db, club.id, key):
+        if age_at(al, key) >= al.peak_age:
+            continue
+        if al.filial_id not in filials:
+            filials[al.filial_id] = await db.get(ManagerFilial, al.filial_id)
+        cap = ms._division_rating(club.division, config) + al.potential + _level(filials[al.filial_id], "fields")
+        add = min(step, cap - al.peak)
+        if add > 0:
+            al.peak += add
+            out.append((al.name, add))
+    return out
+
+
 async def used_contracts(db: AsyncSession, f: ManagerFilial, key: str) -> int:
     return sum(1 for al in await club_alumni(db, f.club_id, key) if al.filial_id == f.id)
 
