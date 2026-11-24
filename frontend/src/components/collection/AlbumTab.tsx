@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { losesProgress } from "@/lib/cardStars";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { motion, type PanInfo } from "framer-motion";
 
 import CardUpgradeModal from "@/components/cards/CardUpgradeModal";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
@@ -8,6 +9,9 @@ import EmptyState from "@/components/common/EmptyState";
 import { CardGridSkeleton } from "@/components/common/Skeleton";
 import CardDetailModal from "@/components/collection/CardDetailModal";
 import CardFilterBar from "@/components/collection/CardFilterBar";
+import { AlbumCover, AlbumPage, CompleteStamp, SlotNumber, Sticker } from "@/components/collection/AlbumBook";
+import { freshOnPage, markPageSeen } from "@/lib/albumSeen";
+import { haptic } from "@/lib/telegram";
 import { cardLockProps } from "@/lib/cardLocks";
 import { activeCount, matchesPlayer, useCardFilter } from "@/lib/cardFilter";
 import CardSkillBadge from "@/components/cards/CardSkillBadge";
@@ -23,11 +27,20 @@ import type { AlbumCollectionSummary, AlbumPlayer, AlbumStaff } from "@/types";
 
 export default function AlbumTab() {
   const [openCollectionId, setOpenCollectionId] = useState<number | null>(null);
+  // The pages in album order, for flipping between them with a swipe.
+  const { data: overview } = useQuery({ queryKey: ["album-overview", ""], queryFn: () => fetchAlbumOverview() });
+  const pages = (overview?.collections ?? []).filter((c) => !c.available_from).map((c) => c.id);
 
   return openCollectionId === null ? (
     <AlbumOverview onOpen={setOpenCollectionId} />
   ) : (
-    <AlbumDetail collectionId={openCollectionId} onBack={() => setOpenCollectionId(null)} />
+    <AlbumDetail
+      key={openCollectionId}
+      collectionId={openCollectionId}
+      pages={pages}
+      onGo={setOpenCollectionId}
+      onBack={() => setOpenCollectionId(null)}
+    />
   );
 }
 
@@ -38,24 +51,14 @@ function AlbumOverview({ onOpen }: { onOpen: (id: number) => void }) {
     queryFn: () => fetchAlbumOverview(search || undefined),
   });
 
-  const pct = data && data.overall_total > 0 ? Math.round((data.overall_owned / data.overall_total) * 100) : 0;
-
   return (
     <div className="flex flex-col gap-4">
       {data && (
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-950/60 to-bg-surface p-4">
-          <p className="font-mono text-micro uppercase tracking-wider text-ink-mist">Собрано карточек</p>
-          <div className="mt-1 flex items-end justify-between">
-            <p className="font-display text-3xl font-bold text-ink-chalk">
-              {data.overall_owned}
-              <span className="ml-1 text-lg font-semibold text-ink-mist">/ {data.overall_total}</span>
-            </p>
-            <span className="rounded-full bg-black/30 px-2.5 py-1 font-mono text-sm font-bold text-accent-lime">{pct}%</span>
-          </div>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-bg-raised">
-            <div className="h-full rounded-full bg-gradient-to-r from-accent-cyan to-accent-lime" style={{ width: `${pct}%` }} />
-          </div>
-        </div>
+        <AlbumCover
+          owned={data.overall_owned}
+          total={data.overall_total}
+          completed={data.collections.filter((c) => c.id > 0 && c.is_complete).length}
+        />
       )}
 
       {!search && <NextGoal collections={data?.collections} onOpen={onOpen} />}
@@ -76,8 +79,8 @@ function AlbumOverview({ onOpen }: { onOpen: (id: number) => void }) {
       )}
 
       <div className="flex flex-col gap-2.5">
-        {data?.collections.map((c) => (
-          <CollectionSpread key={c.id} collection={c} onClick={() => onOpen(c.id)} />
+        {data?.collections.map((c, i) => (
+          <CollectionSpread key={c.id} page={i + 1} collection={c} onClick={() => onOpen(c.id)} />
         ))}
       </div>
     </div>
@@ -124,15 +127,17 @@ function availableFromLabel(iso: string): string {
   return new Date(iso).toLocaleDateString("ru-RU", { day: "numeric", month: "long", timeZone: "Europe/Moscow" });
 }
 
-function CollectionSpread({ collection, onClick }: { collection: AlbumCollectionSummary; onClick: () => void }) {
+function CollectionSpread({ collection, page, onClick }: { collection: AlbumCollectionSummary; page: number; onClick: () => void }) {
   const pct = collection.total_count > 0 ? Math.round((collection.owned_count / collection.total_count) * 100) : 0;
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-3 rounded-2xl bg-bg-surface p-2.5 text-left active:scale-[0.98] ${
-        collection.is_complete ? "ring-1 ring-accent-lime/40" : ""
+      className={`relative flex items-center gap-3 overflow-hidden rounded-2xl bg-bg-surface p-2.5 text-left active:scale-[0.98] ${
+        collection.is_complete ? "ring-1 ring-amber-300/40" : ""
       }`}
     >
+      <span className="absolute right-2 top-1 font-mono text-[9px] font-bold uppercase tracking-wider text-ink-mist-dim">Стр. {page}</span>
+      {collection.is_complete && <CompleteStamp size={46} className="absolute right-7 top-1/2 -translate-y-1/2 opacity-80" />}
       <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-bg-raised">
         {collection.image_path ? (
           <img decoding="async" loading="lazy" src={staticUrl(collection.image_path) ?? undefined} alt="" className="h-full w-full object-cover" />
@@ -177,7 +182,14 @@ function CollectionSpread({ collection, onClick }: { collection: AlbumCollection
   );
 }
 
-function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: () => void }) {
+function AlbumDetail({
+  collectionId, pages, onGo, onBack,
+}: {
+  collectionId: number;
+  pages: number[];
+  onGo: (id: number) => void;
+  onBack: () => void;
+}) {
   const [search, setSearch] = useState("");
   // Same saved default filter as «Мои карты» (rarity/country/club/position).
   const { filter, setFilter, defaultFilter } = useCardFilter();
@@ -193,21 +205,89 @@ function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: (
   const visible = (data?.players ?? []).filter((slot) => matchesPlayer(filter, slot.player));
   const want = useWantToggle();
 
+  // Page flipping: arrows and a sideways swipe go to the neighbour page.
+  const at = pages.indexOf(collectionId);
+  const prev = at > 0 ? pages[at - 1] : null;
+  const next = at >= 0 && at < pages.length - 1 ? pages[at + 1] : null;
+  const flip = (id: number | null) => {
+    if (id === null) return;
+    haptic("light");
+    onGo(id);
+  };
+  const onSwipe = (_: unknown, info: PanInfo) => {
+    if (Math.abs(info.offset.x) < 70 || Math.abs(info.offset.y) > Math.abs(info.offset.x)) return;
+    flip(info.offset.x < 0 ? next : prev);
+  };
+
+  // Stickers got since the last visit of this page are pressed in.
+  const ownedIds = useMemo(
+    () => (data?.players ?? []).filter((p) => p.owned).map((p) => p.player.id),
+    [data?.players],
+  );
+  const [fresh, setFresh] = useState<Set<number>>(new Set());
+  const ownedKey = ownedIds.join(",");
+  const loaded = !!data;
+  useEffect(() => {
+    if (!loaded || search) return;
+    setFresh(freshOnPage(collectionId, ownedIds));
+    markPageSeen(collectionId, ownedIds);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collectionId, ownedKey, loaded, search]);
+  const numberOf = new Map((data?.players ?? []).map((p, i) => [p.player.id, i + 1]));
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
-        <button onClick={onBack} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-bg-surface active:scale-95">
+        <button onClick={onBack} aria-label="К альбому" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-bg-surface active:scale-95">
           <IconChevronLeft size={16} />
         </button>
-        <div className="min-w-0">
-          <p className="truncate font-display text-base font-bold text-ink-chalk">{data?.name ?? "…"}</p>
-          {data && (
-            <p className="font-mono text-xs text-ink-mist">
-              {data.owned_count} / {data.total_count} собрано
-              {data.total_count > 0 && ` · ${Math.round((data.owned_count / data.total_count) * 100)}%`}
-            </p>
+        <p className="min-w-0 flex-1 truncate font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-amber-200/70">
+          Альбом{at >= 0 ? ` · стр. ${at + 1} из ${pages.length}` : ""}
+        </p>
+        <button
+          onClick={() => flip(prev)}
+          disabled={prev === null}
+          aria-label="Предыдущая страница"
+          className="flex h-9 w-9 items-center justify-center rounded-xl bg-bg-surface active:scale-95 disabled:opacity-30"
+        >
+          <IconChevronLeft size={16} />
+        </button>
+        <button
+          onClick={() => flip(next)}
+          disabled={next === null}
+          aria-label="Следующая страница"
+          className="flex h-9 w-9 items-center justify-center rounded-xl bg-bg-surface active:scale-95 disabled:opacity-30"
+        >
+          <IconChevronRight size={16} />
+        </button>
+      </div>
+
+      <div className="relative">
+        <div className="flex items-start gap-3 pl-1">
+          {data?.image_path && (
+            <img src={staticUrl(data.image_path) ?? undefined} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover ring-1 ring-amber-200/20" />
           )}
+          <div className="min-w-0 flex-1 pr-16">
+            <p className="font-display text-lg font-black uppercase leading-tight tracking-wide text-ink-chalk">{data?.name ?? "…"}</p>
+            {data && (
+              <>
+                <p className="mt-0.5 font-mono text-xs text-ink-mist">
+                  {data.owned_count} / {data.total_count} наклеено
+                </p>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/40">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${data.total_count ? Math.round((data.owned_count / data.total_count) * 100) : 0}%`,
+                      background: data.is_complete ? "linear-gradient(90deg,#a07a2c,#f5d77a)" : "linear-gradient(90deg,#22d3ee,#bef264)",
+                    }}
+                  />
+                </div>
+              </>
+            )}
+          </div>
         </div>
+        {data?.is_complete && <CompleteStamp size={66} className="absolute -right-1 -top-2" />}
       </div>
 
       {data?.available_from && (
@@ -257,18 +337,45 @@ function AlbumDetail({ collectionId, onBack }: { collectionId: number; onBack: (
         />
       )}
 
-      <div className="grid grid-cols-3 gap-2">
-        {visible.map((slot, i) => (
-          <div key={slot.player.id} className="animate-card-in" style={{ animationDelay: `${Math.min(i, 14) * 22}ms` }}>
-            <AlbumSlot
-              slot={slot}
-              onOpen={() => slot.card && setDetailCard(slot.card)}
-              wanted={want.wanted.has(slot.player.id)}
-              onToggleWant={() => want.toggle(slot.player.id)}
-            />
-          </div>
-        ))}
-      </div>
+      {visible.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, x: 24 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.25 }}
+          drag="x"
+          dragConstraints={{ left: 0, right: 0 }}
+          dragElastic={0.25}
+          dragDirectionLock
+          onDragEnd={onSwipe}
+          className="touch-pan-y"
+        >
+          <AlbumPage>
+            <div className="grid grid-cols-3 gap-x-2.5 gap-y-3 pl-1.5 pt-1">
+              {visible.map((slot, i) => {
+                const n = numberOf.get(slot.player.id) ?? i + 1;
+                return (
+                  <div key={slot.player.id} className="relative">
+                    <SlotNumber n={n} />
+                    {slot.owned && slot.card ? (
+                      <Sticker seed={slot.player.id} fresh={fresh.has(slot.player.id)} delay={0.1 + Math.min(i, 8) * 0.06}>
+                        <AlbumSlot slot={slot} number={n} onOpen={() => slot.card && setDetailCard(slot.card)} wanted={false} onToggleWant={() => {}} />
+                      </Sticker>
+                    ) : (
+                      <AlbumSlot
+                        slot={slot}
+                        number={n}
+                        onOpen={() => {}}
+                        wanted={want.wanted.has(slot.player.id)}
+                        onToggleWant={() => want.toggle(slot.player.id)}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </AlbumPage>
+        </motion.div>
+      )}
 
       {!!data?.staff?.length && (
         <section className="flex flex-col gap-2">
@@ -338,11 +445,13 @@ function useWantToggle() {
 
 function AlbumSlot({
   slot,
+  number,
   onOpen,
   wanted,
   onToggleWant,
 }: {
   slot: AlbumPlayer;
+  number: number;
   onOpen: () => void;
   wanted: boolean;
   onToggleWant: () => void;
@@ -352,7 +461,10 @@ function AlbumSlot({
     // Diamonds never trade (except «Академия»), so they can't be in «Ищу».
     const wantable = slot.player.rarity !== "diamond" || !!slot.player.path_talent_code;
     return (
-      <div className="relative flex aspect-[3/4] flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-white/15 bg-black/10 p-2 text-center">
+      <div className="relative flex aspect-[3/4] flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border border-dashed border-amber-100/15 bg-black/25 p-2 text-center shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)]">
+        <span aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center font-display text-5xl font-black text-white/[0.04]">
+          {number}
+        </span>
         {wantable && (
           <button
             onClick={onToggleWant}
