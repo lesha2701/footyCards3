@@ -8,6 +8,8 @@ import { staticUrl } from "@/lib/api";
 import { pathFrameClass, talentByCode, usePathCatalog } from "@/lib/pathCards";
 import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
 import { playSound } from "@/lib/sound";
+import { asFinish, FINISH_ICONS, FINISH_LABELS } from "@/lib/finish";
+import { hapticNotify } from "@/lib/telegram";
 import type { Player } from "@/types";
 import { isWalkout, STAGES, type Stage } from "@/components/cards/revealStages";
 export type { Stage } from "@/components/cards/revealStages";
@@ -19,7 +21,7 @@ export type { Stage } from "@/components/cards/revealStages";
 // shape, and which has no `duplicate_count` concept at all (a club's cards aren't
 // deduplicated the way a personal collection's are).
 export interface RevealableOpenedCard {
-  card: { player: Player };
+  card: { player: Player; finish?: string | null };
   is_new: boolean;
   duplicate_count?: number;
 }
@@ -46,6 +48,11 @@ export function RevealStage({
   useEffect(() => {
     if (revealed) playSound(player.rarity === "legendary" || player.rarity === "diamond" ? "rare" : "reveal");
   }, [revealed, player.rarity]);
+  // «Редкая версия»: announced as the card turns over.
+  const finish = asFinish(opened.card.finish);
+  useEffect(() => {
+    if (revealed && finish) hapticNotify("success");
+  }, [revealed, finish]);
   // Legendary/diamond: a «выход» scene per stage instead of the card filling in.
   const walkout = isWalkout(player);
 
@@ -134,6 +141,17 @@ export function RevealStage({
         )}
         {revealed && (
           <>
+            {finish && (
+              <motion.p
+                initial={{ scale: 0.6, opacity: 0 }}
+                animate={{ scale: [0.6, 1.15, 1], opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+                className="mx-auto w-fit rounded-full bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-400 px-3 py-1 text-xs font-black uppercase tracking-wide text-bg-base shadow-[0_0_18px_rgba(252,211,77,0.6)]"
+                data-testid="reveal-finish"
+              >
+                {FINISH_ICONS[finish]} {FINISH_LABELS[finish]}!
+              </motion.p>
+            )}
             <p className="font-display text-lg font-bold text-ink-chalk">{player.display_name}</p>
             <p className="font-mono text-base font-semibold text-accent-cyan">Рейтинг {player.rating}</p>
             <p className="font-mono text-xs text-ink-mist">АТК {player.attack_rating} · ЗЩТ {player.defense_rating}</p>

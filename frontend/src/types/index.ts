@@ -136,6 +136,8 @@ export interface UserCard {
   player: Player;
   acquired_at: string;
   source: string;
+  /** «Редкая версия» of this copy (gold / autograph / night). */
+  finish?: string | null;
   is_locked_by_admin: boolean;
   is_locked_in_trade: boolean;
   is_in_lineup: boolean;

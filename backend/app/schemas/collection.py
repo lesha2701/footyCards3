@@ -20,6 +20,8 @@ class UserCardListItem(BaseModel):
     arena_assists: int = 0
     arena_mvps: int = 0
     source: CardSource
+    # «Редкая версия»: "gold" / "autograph" / "night", None = regular.
+    finish: Optional[str] = None
     is_locked_by_admin: bool
     is_locked_in_trade: bool
     is_in_lineup: bool
@@ -86,6 +88,7 @@ class UserCardListItem(BaseModel):
             "hidden_from_trade": data.hidden_from_trade,
             "is_user_locked": bool(getattr(data, "is_user_locked", False)),
             "is_main": bool(getattr(data, "is_main", False)),
+            "finish": getattr(data, "finish", None),
             "diamond_rating_bonus": getattr(data, "diamond_rating_bonus", 0) or 0,
             "stars": getattr(data, "stars", 0) or 0,
             "star_progress": getattr(data, "star_progress", 0) or 0,

@@ -219,6 +219,7 @@ export default function MyCardsTab() {
             player={card.player}
             stars={card.stars}
             serial={card.serial_number}
+            finish={card.finish}
             pathStage={card.path_stage} prestige={card.prestige} talentOverride={card.talent_override}
             badge={<CardTileBadges card={card} />}
             {...cardLockProps(card)}

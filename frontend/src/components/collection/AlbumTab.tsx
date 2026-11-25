@@ -495,6 +495,7 @@ function AlbumSlot({
       onClick={onOpen}
       stars={slot.card.stars}
       serial={slot.card.serial_number}
+      finish={slot.card.finish}
       pathStage={slot.card.path_stage}
       prestige={slot.card.prestige}
       talentOverride={slot.card.talent_override}

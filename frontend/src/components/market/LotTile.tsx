@@ -21,6 +21,7 @@ export default function LotTile({ lot, now, onOpen }: { lot: AuctionLot; now: nu
       <PlayerCard
         player={card.player}
         stars={card.stars}
+        finish={card.finish}
         pathStage={card.path_stage}
         prestige={card.prestige}
         talentOverride={card.talent_override}

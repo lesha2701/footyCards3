@@ -11,6 +11,8 @@ import { pathFrameClass } from "@/lib/pathCards";
 import { prestigeMarks, prestigeStyle } from "@/lib/prestige";
 import { RARITY_GLOW_STATIC, RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
 import { specialSerial } from "@/lib/serials";
+import { asFinish, FINISH_LABELS, signatureName } from "@/lib/finish";
+import goldFrame from "@/assets/cards/gold-frame.webp";
 import type { Player } from "@/types";
 
 interface Props {
@@ -41,6 +43,8 @@ interface Props {
   onLongPress?: () => void;
   /** This copy's number: a numbered edition shows «№37/100». */
   serial?: number | null;
+  /** «Редкая версия» of this copy: gold frame / autograph / night edition. */
+  finish?: string | null;
 }
 
 const LONG_PRESS_MS = 450;
@@ -55,8 +59,9 @@ const NAME_TEXT = { sm: "text-caption", md: "text-xs", lg: "text-sm" } as const;
 
 function PlayerCard({
   player, size = "md", badge, footer, onClick, selected, dimmed, stars = 0, pathStage, prestige = 0, talentOverride,
-  animated = false, inSquad = false, userLocked = false, mainCopy = false, onLongPress, serial,
+  animated = false, inSquad = false, userLocked = false, mainCopy = false, onLongPress, serial, finish: finishRaw,
 }: Props) {
+  const finish = asFinish(finishRaw);
   // Long press: a timer started on pointer down; moving the finger (scroll)
   // or lifting it early cancels it, and the click that follows a fired long
   // press is swallowed so the card doesn't also open.
@@ -119,6 +124,10 @@ function PlayerCard({
   const starGlow = stars >= 5
     ? " ring-2 ring-amber-300/80 shadow-[0_0_18px_rgba(252,211,77,0.55)]"
     : stars >= 3 ? " ring-1 ring-amber-300/50 shadow-[0_0_10px_rgba(252,211,77,0.3)]" : "";
+  // «Золотая версия» sits in the engraved gold frame (art) instead of the
+  // rarity gradient; «Ночная» gets a midnight frame.
+  const gold = finish === "gold" && !isPath;
+  const night = finish === "night" && !isPath;
   const imageUrl = staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp");
 
   return (
@@ -130,16 +139,23 @@ function PlayerCard({
       aria-label={`${player.display_name}, ${player.position}, рейтинг ${player.rating}, ${RARITY_LABELS[player.rarity]}${
         isPath ? ", Академия" : ""
       }${inSquad ? ", в составе" : ""}${mainCopy ? ", основная копия" : userLocked ? ", под замком" : ""}`}
-      className={`group relative flex select-none [-webkit-touch-callout:none] aspect-[3/4] w-full flex-col overflow-hidden rounded-2xl bg-gradient-to-b ${frame} ${
-        isPath ? "p-[3px]" : "p-[2px]"
+      className={`group relative flex select-none [-webkit-touch-callout:none] aspect-[3/4] w-full flex-col overflow-hidden rounded-2xl ${
+        gold ? "shadow-[0_0_14px_rgba(234,179,8,0.45)]" : night ? "bg-gradient-to-b from-indigo-300 via-violet-700 to-slate-950 shadow-[0_0_14px_rgba(129,140,248,0.45)]" : `bg-gradient-to-b ${frame}`
+      } ${
+        gold ? "" : isPath ? "p-[3px]" : "p-[2px]"
       }${!selected ? starGlow : ""}${hwSkin ? ` hw-frame-${hwSkin}` : ""}${fanSkin ? " fans-frame" : ""}${goldSkin ? " gold100-frame" : ""} transition-transform active:scale-[0.97] ${
         selected ? (player.rarity === "diamond" ? "ring-4 ring-rarity-diamond" : "ring-4 ring-accent-lime") : ""
       } ${dimmed ? "opacity-40 grayscale" : ""} ${onClick ? "cursor-pointer" : "cursor-default"}${
         skin && !selected ? ` ${skin}` : ""
       }`}
-      style={fanSkin && fanColor ? ({ "--fan": fanColor } as React.CSSProperties) : undefined}
+      style={
+        gold
+          ? { backgroundImage: `url(${goldFrame})`, backgroundSize: "100% 100%", padding: "7.5% 8.5%" }
+          : fanSkin && fanColor ? ({ "--fan": fanColor } as React.CSSProperties) : undefined
+      }
+      data-finish={finish ?? undefined}
     >
-      <div className="flex h-full w-full flex-col overflow-hidden rounded-[14px] bg-bg-surface">
+      <div className={`flex h-full w-full flex-col overflow-hidden bg-bg-surface ${gold ? "rounded-[8px]" : "rounded-[14px]"}`}>
         <div className="relative flex-1 overflow-hidden bg-black/20">
           <img
             src={imageUrl}
@@ -148,7 +164,29 @@ function PlayerCard({
             loading="lazy"
             decoding="async"
             draggable={false}
+            style={night ? { filter: "saturate(0.55) brightness(0.8) contrast(1.15) hue-rotate(-12deg)" } : undefined}
           />
+          {night && (
+            <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-indigo-950/60 via-indigo-900/10 to-violet-950/50">
+              <span className="absolute left-[18%] top-[22%] text-[8px] text-white/80">✦</span>
+              <span className="absolute right-[22%] top-[34%] text-[6px] text-white/70">✦</span>
+              <span className="absolute left-[40%] top-[12%] text-[5px] text-white/60">✦</span>
+              <span className="absolute right-[12%] top-[14%] text-[10px] text-amber-100/80">☾</span>
+            </div>
+          )}
+          {finish === "autograph" && (
+            <span
+              aria-label={FINISH_LABELS.autograph}
+              className="pointer-events-none absolute bottom-[6%] right-[6%] max-w-[90%] -rotate-[10deg] truncate text-right leading-none text-white"
+              style={{
+                fontFamily: '"Segoe Script", "Brush Script MT", "Snell Roundhand", "Dancing Script", cursive',
+                fontSize: size === "sm" ? 15 : size === "md" ? 20 : 26,
+                textShadow: "0 1px 2px rgba(0,0,0,0.9), 0 0 6px rgba(0,0,0,0.6)",
+              }}
+            >
+              {signatureName(player.display_name)}
+            </span>
+          )}
           <div className="absolute left-1 top-1 rounded-md bg-black/70 px-1.5 py-0.5 text-center font-display font-bold leading-none text-white">
             <span className={RATING_TEXT[size]}>{player.rating}</span>
             {prestige > 0 && (

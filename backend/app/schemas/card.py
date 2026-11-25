@@ -17,6 +17,8 @@ class UserCardOut(BaseModel):
     acquired_at: datetime
     source: CardSource
     is_locked_by_admin: bool
+    # «Редкая версия»: "gold" / "autograph" / "night", None = regular.
+    finish: Optional[str] = None
     is_locked_in_trade: bool
     is_in_lineup: bool
     is_in_tactico_squad: bool
@@ -90,6 +92,7 @@ class UserCardOut(BaseModel):
             "hidden_from_trade": data.hidden_from_trade,
             "is_user_locked": bool(getattr(data, "is_user_locked", False)),
             "is_main": bool(getattr(data, "is_main", False)),
+            "finish": getattr(data, "finish", None),
             "bound_until": getattr(data, "bound_until", None),
             "diamond_rating_bonus": getattr(data, "diamond_rating_bonus", 0) or 0,
             "stars": getattr(data, "stars", 0) or 0,

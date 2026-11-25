@@ -118,6 +118,7 @@ export default function AuctionLotPage() {
             player={card.player}
             size="md"
             stars={card.stars}
+            finish={card.finish}
             pathStage={card.path_stage}
             prestige={card.prestige}
             talentOverride={card.talent_override}

@@ -106,9 +106,12 @@ async def _new_card(
 ) -> UserCard:
     from app.services.card_value_service import bound_at_creation
 
+    from app.services.card_finish_service import roll_finish
+
     card = UserCard(
         owner_id=owner_id, player_id=player_id, source=source, source_ref_id=source_ref_id,
         serial_number=serial_number, from_free_source=await bound_at_creation(db, source, source_ref_id),
+        finish=await roll_finish(db, source, player_id),
     )
     db.add(card)
     await db.flush()

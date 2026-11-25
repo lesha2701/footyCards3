@@ -22,6 +22,7 @@ import { useSwipeDownToClose } from "@/lib/useSwipe";
 import { haptic } from "@/lib/telegram";
 import { pathFrameClass } from "@/lib/pathCards";
 import { prestigeMarks, prestigeStyle } from "@/lib/prestige";
+import { asFinish, FINISH_ICONS, FINISH_LABELS } from "@/lib/finish";
 import { POSITION_LABELS, RARITY_GLOW_STATIC, RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
 import type { UserCard } from "@/types";
 
@@ -182,6 +183,11 @@ export default function CardDetailModal({
                 <p className="mt-1 text-xs text-ink-mist">
                   {isPath ? "🌱 Академия" : RARITY_LABELS[player.rarity]} · № {card.serial_number}{player.edition_size != null && ` из ${player.edition_size}`}
                 </p>
+                {asFinish(card.finish) && (
+                  <p className="mt-1 inline-block rounded-full bg-amber-300/15 px-2 py-0.5 text-caption font-bold text-amber-200">
+                    {FINISH_ICONS[asFinish(card.finish)!]} {FINISH_LABELS[asFinish(card.finish)!]}
+                  </p>
+                )}
                 {isBoundForever(card) && (
                   <p className="mt-1 inline-block rounded-full bg-fuchsia-500/20 px-2 py-0.5 text-caption font-bold text-fuchsia-200">
                     💜 Эксклюзив · навсегда твоя

@@ -1300,6 +1300,13 @@ class GameConfig(TimestampMixin, Base):
     chemistry_coach_country_points: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     chemistry_stadium_club_points: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
+    # --- «Редкие версии» (services/card_finish_service.py) ---
+    # Chance, per mille, that a card from a pack comes out as a special
+    # print: gold frame, a signature on the photo, the night edition.
+    finish_gold_per_mille: Mapped[int] = mapped_column(Integer, default=20, server_default="20", nullable=False)
+    finish_autograph_per_mille: Mapped[int] = mapped_column(Integer, default=5, server_default="5", nullable=False)
+    finish_night_per_mille: Mapped[int] = mapped_column(Integer, default=10, server_default="10", nullable=False)
+
     # --- «Звёзды карточек» (services/card_star_service.py) ---
     # Off = no new duplicates can be fed and no new stars claimed; stars
     # already earned keep their rating bonus either way (like card skills).

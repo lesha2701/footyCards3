@@ -108,6 +108,10 @@ class UserCard(Base):
         String(32), ForeignKey("path_talents.code", ondelete="RESTRICT"), nullable=True
     )
     talent_reforged: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # «Редкая версия» (services/card_finish_service.py): this copy came out
+    # of a pack as a special print — "gold", "autograph" or "night"; NULL =
+    # the regular card. Cosmetic: the same player, stats and value rules.
+    finish: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
 
     owner: Mapped["User"] = relationship(back_populates="cards")
     player: Mapped["Player"] = relationship(back_populates="cards")

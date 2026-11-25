@@ -93,7 +93,7 @@ def _stands_alone(card, personal_squad_ids: set[int]) -> bool:
     is under the owner's «замок» — pickers and quick actions must be able to
     reach exactly that copy, and a squad copy is shown with its lock."""
     return bool(
-        card.skill_code or _invested(card) or card.is_in_lineup or card.is_in_tactico_squad
+        card.skill_code or _invested(card) or card.is_in_lineup or card.is_in_tactico_squad or card.finish
         or card.is_user_locked or card.is_main or card.id in personal_squad_ids
     )
 
@@ -164,12 +164,13 @@ async def list_user_cards(
         UserCard.id, UserCard.player_id, UserCard.skill_code, UserCard.stars, UserCard.star_progress,
         UserCard.path_level, UserCard.path_stage, UserCard.prestige, Player.rarity,
         UserCard.is_in_lineup, UserCard.is_in_tactico_squad, UserCard.is_user_locked, UserCard.is_main,
+        UserCard.finish,
     ))).all()
     all_cards = [
         SimpleNamespace(
             id=r.id, player_id=r.player_id, skill_code=r.skill_code, rarity=r.rarity,
             is_in_lineup=r.is_in_lineup, is_in_tactico_squad=r.is_in_tactico_squad, is_user_locked=r.is_user_locked,
-            is_main=r.is_main,
+            is_main=r.is_main, finish=r.finish,
             has_star_investment=(lambda r=r: bool(r.stars or r.star_progress)),
             has_path_progress=(lambda r=r: bool(r.path_level or r.path_stage or r.prestige)),
         )
@@ -737,7 +738,11 @@ async def get_album_collection_detail(
         squad_copy: dict[int, UserCard] = {}
         for card in all_owned:
             dup_counts[card.player_id] = dup_counts.get(card.player_id, 0) + 1
-            owned_cards[card.player_id] = _pick_representative(owned_cards.get(card.player_id), card)
+            # A special print («редкая версия») is the copy the album shows.
+            current = owned_cards.get(card.player_id)
+            owned_cards[card.player_id] = (
+                card if card.finish and not (current and current.finish) else _pick_representative(current, card)
+            )
             if card.is_in_lineup or card.is_in_tactico_squad or card.id in in_squad:
                 squad_copy.setdefault(card.player_id, card)
         # The album shows the copy that plays (with its squad lock) when
