@@ -142,6 +142,42 @@ async def top_rows(db: AsyncSession, metric: RankingMetric, limit: int, week_sta
     return [(user, int(value or 0)) for user, value in rows if (value or 0) > floor]
 
 
+# «Ценность альбома»: what one footballer adds to the album by his rarity,
+# and the bonus of the best rare version of him the player holds.
+ALBUM_RARITY_POINTS = {"common": 1, "rare": 3, "epic": 8, "legendary": 20, "diamond": 30}
+ALBUM_FINISH_POINTS = {"gold": 10, "night": 15, "autograph": 30}
+
+
+def _album_value_statement():
+    from sqlalchemy import case
+
+    from app.models.player import Player
+
+    finish_pts = case(*[(UserCard.finish == k, v) for k, v in ALBUM_FINISH_POINTS.items()], else_=0)
+    per_player = (
+        select(
+            UserCard.owner_id.label("uid"),
+            UserCard.player_id.label("pid"),
+            func.max(finish_pts).label("finish_pts"),
+        )
+        .group_by(UserCard.owner_id, UserCard.player_id)
+        .subquery()
+    )
+    rarity_pts = case(*[(Player.rarity == k, v) for k, v in ALBUM_RARITY_POINTS.items()], else_=1)
+    totals = (
+        select(per_player.c.uid, func.sum(rarity_pts + per_player.c.finish_pts).label("n"))
+        .join(Player, Player.id == per_player.c.pid)
+        .group_by(per_player.c.uid)
+        .subquery()
+    )
+    stmt = (
+        select(User, totals.c.n)
+        .join(totals, totals.c.uid == User.id)
+        .where(User.is_banned.is_(False), User.is_admin.is_(False), totals.c.n > 0)
+    )
+    return stmt, totals.c.n
+
+
 def _standing_statement(metric: RankingMetric):
     if metric == RankingMetric.cards_count:
         value_expr = func.count(UserCard.id)
@@ -166,6 +202,8 @@ def _standing_statement(metric: RankingMetric):
             .where(User.is_banned.is_(False), User.is_admin.is_(False))
             .group_by(User.id)
         )
+    elif metric == RankingMetric.album_value:
+        stmt, value_expr = _album_value_statement()
     elif metric == RankingMetric.academy_level:
         # «Уровень Академии»: the sum of the building's wing levels.
         from app.models.card_path import UserAcademy

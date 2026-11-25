@@ -1120,6 +1120,7 @@ export type RankingMetric =
   | "matches_won"
   | "cards_count"
   | "unique_players"
+  | "album_value"
   | "referral_count"
   | "tactics_rating"
   | "penalty_rating"

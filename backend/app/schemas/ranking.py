@@ -11,6 +11,9 @@ class RankingMetric(str, enum.Enum):
     matches_won = "matches_won"
     cards_count = "cards_count"
     unique_players = "unique_players"
+    # «Ценность альбома»: different footballers weighted by rarity plus the
+    # best rare version (gold / night / autograph) of each.
+    album_value = "album_value"
     referral_count = "referral_count"
     tactics_rating = "tactics_rating"
     penalty_rating = "penalty_rating"

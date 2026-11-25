@@ -72,7 +72,7 @@ const WEEKLY_TOP_METRICS: [string, string][] = [
   ["arena_rating", "Рейтинг Arena"], ["tactics_rating", "Рейтинг Тактико"], ["penalty_rating", "Рейтинг Пенальти"],
   ["stratego_rating", "Рейтинг Стратего"], ["stratego_puzzles", "Задачи Стратего"], ["mordoboi_rating", "Рейтинг Мордобоя"],
   ["kontra_rating", "Арена Контратаки"], ["magic_rating", "Рейтинг «Мяч и Магия»"], ["league_rating", "Рейтинг лиги"], ["matches_won", "Победы"],
-  ["cards_count", "Карт в коллекции"], ["unique_players", "Уникальных игроков"], ["referral_count", "Рефералов"],
+  ["cards_count", "Карт в коллекции"], ["unique_players", "Уникальных игроков"], ["album_value", "Ценность альбома"], ["referral_count", "Рефералов"],
   ["base_level", "Уровень базы"], ["academy_level", "Уровень Академии"], ["academy_prestige", "Престиж Академии"],
   ["games_week", "Игр за неделю"], ["stars_week", "Звёзд за неделю"], ["referrals_week", "Рефералов за неделю"],
 ];

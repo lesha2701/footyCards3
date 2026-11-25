@@ -24,6 +24,7 @@ const METRICS: { value: RankingMetric; label: string; Icon: (props: IconProps) =
   { value: "matches_won", label: "Победы", Icon: IconTrophy },
   { value: "cards_count", label: "Карт в коллекции", Icon: IconCollection },
   { value: "unique_players", label: "Уникальных игроков", Icon: IconUsers },
+  { value: "album_value", label: "Ценность альбома", Icon: IconCollection },
   { value: "referral_count", label: "Рефералов", Icon: IconHandshake },
   { value: "base_level", label: "Уровень базы", Icon: IconStadium },
   { value: "academy_level", label: "Уровень Академии", Icon: IconStar },
