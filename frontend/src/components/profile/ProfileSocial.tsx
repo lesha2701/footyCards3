@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
 import { fetchProfileSocial, giveRespect } from "@/api/profile";
 import ShareButton from "@/components/common/ShareButton";
@@ -39,14 +40,18 @@ export function RespectBar({ userId, isMe }: { userId: number; isMe: boolean }) 
 }
 
 /** The profile's latest moments: rare prints, trophies, completed collections. */
+const FEED_PREVIEW = 3;
+
 export function ProfileFeed({ userId }: { userId: number }) {
+  const [showAll, setShowAll] = useState(false);
   const { data } = useQuery({ queryKey: ["profile-social", userId], queryFn: () => fetchProfileSocial(userId) });
   if (!data?.feed.length) return null;
+  const events = showAll ? data.feed : data.feed.slice(0, FEED_PREVIEW);
   return (
     <section className="rounded-2xl bg-bg-surface p-4" data-testid="profile-feed">
       <p className="mb-2 text-micro font-bold uppercase tracking-[0.2em] text-ink-mist">📰 Последние события</p>
       <ol className="relative flex flex-col gap-2 border-l border-white/10 pl-4">
-        {data.feed.map((e, i) => (
+        {events.map((e, i) => (
           <li key={i} className="relative flex items-center gap-2.5">
             <span className="absolute -left-[23px] flex h-4 w-4 items-center justify-center rounded-full bg-bg-base text-[10px] ring-1 ring-white/15">
               {e.icon}
@@ -61,6 +66,15 @@ export function ProfileFeed({ userId }: { userId: number }) {
           </li>
         ))}
       </ol>
+      {data.feed.length > FEED_PREVIEW && (
+        <button
+          onClick={() => setShowAll((v) => !v)}
+          className="mt-3 w-full rounded-xl bg-white/5 py-2 text-xs font-semibold text-ink-mist active:scale-[0.98]"
+          data-testid="profile-feed-toggle"
+        >
+          {showAll ? "Свернуть" : `Показать все · ${data.feed.length}`}
+        </button>
+      )}
     </section>
   );
 }
