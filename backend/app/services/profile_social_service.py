@@ -91,7 +91,7 @@ async def feed(db: AsyncSession, user_id: int) -> list[dict]:
 
 
 HALL_CABINET = 6
-HALL_PEDESTALS = 5
+HALL_PEDESTALS = 6  # the whole gift shelf (gift_service.SHELF_SIZE)
 
 
 async def hall(db: AsyncSession, user_id: int) -> dict:

@@ -111,7 +111,8 @@ export const CAB_GLASS: Pt[] = ([[78, 90], [395, 248], [395, 490], [78, 332]] as
 export const CAB_ITEM_W = 34;
 export const CAB_ITEM_H = 40;
 
-/* Pedestals: their base bottom (107, 180) on a floor point; the gift stands
+/* Pedestals (the whole gift shelf, 6): a row behind the carpet along the
+ * left wall, a row in front of it. Their base bottom (107, 180) on a floor point; the gift stands
  * on the top's centre (103, 62). Back to front = paint order. */
 const KP = 0.23;
 export const PEDESTAL_SPOTS: Pt[] = [
@@ -119,7 +120,8 @@ export const PEDESTAL_SPOTS: Pt[] = [
   [104, 276],
   [58, 300],
   [302, 304],
-  [246, 334],
+  [246, 332],
+  [190, 360],
 ];
 export const PEDESTALS = PEDESTAL_SPOTS.map((at) => {
   const sprite = place(BOX.pedestal, KP, [107, 180], at);
