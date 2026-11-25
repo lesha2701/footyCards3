@@ -1,73 +1,65 @@
 import { motion, useReducedMotion } from "framer-motion";
 import type { ReactNode } from "react";
 
+import coverArt from "@/assets/album/cover.webp";
+
 /** The look of the sticker album: a leather cover, paper pages, a gold
  * «СОБРАНО» stamp, numbered slots and stickers that sit a little crooked. */
 
-/** The album's cover: dark green leather, a stitched edge, gold lettering
- * and the overall progress as a gold ribbon. */
+/** The album's cover: an emerald leather cover (art) with the club's V
+ * embossed in gold in its shield, and the title and overall progress
+ * stamped on the free leather to the right. */
 export function AlbumCover({ owned, total, completed }: { owned: number; total: number; completed: number }) {
   const pct = total > 0 ? Math.round((owned / total) * 100) : 0;
   return (
     <div
-      className="relative overflow-hidden rounded-2xl p-[3px] shadow-[0_12px_30px_rgba(0,0,0,0.45)]"
-      style={{ background: "linear-gradient(135deg, #8a6a2a, #f5d77a 30%, #8a6a2a 55%, #e9c25a 80%, #6b4f1c)" }}
+      className="relative aspect-[5/2] w-full overflow-hidden rounded-2xl shadow-[0_12px_30px_rgba(0,0,0,0.5)]"
+      style={{ backgroundImage: `url(${coverArt})`, backgroundSize: "100% 100%" }}
       data-testid="album-cover"
     >
-      <div
-        className="relative overflow-hidden rounded-[14px] px-4 pb-4 pt-5"
-        style={{
-          background:
-            "radial-gradient(120% 90% at 30% 0%, #1f4a35 0%, #0f2a1e 55%, #08170f 100%)",
-        }}
+      {/* the club's V, embossed in gold in the shield */}
+      <svg
+        viewBox="0 0 100 100"
+        aria-hidden="true"
+        className="absolute left-[18.7%] top-[41%] w-[8.5%] -translate-x-1/2 -translate-y-1/2"
+        style={{ filter: "drop-shadow(0 1px 0 rgba(0,0,0,0.7)) drop-shadow(0 -0.5px 0 rgba(255,240,190,0.5))" }}
       >
-        {/* leather grain */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 opacity-[0.18] mix-blend-overlay"
+        <defs>
+          <linearGradient id="album-gold" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#fff1b8" />
+            <stop offset="0.45" stopColor="#e2b84f" />
+            <stop offset="1" stopColor="#9a7326" />
+          </linearGradient>
+        </defs>
+        <line x1="30" y1="28" x2="54" y2="74" stroke="url(#album-gold)" strokeWidth="24" strokeLinecap="round" />
+        <circle cx="74" cy="30" r="13" fill="url(#album-gold)" />
+      </svg>
+
+      <div className="absolute inset-y-[11%] left-[36%] right-[7%] flex flex-col justify-center">
+        <p className="font-mono text-[9px] font-bold uppercase tracking-[0.35em] text-amber-200/75">Victor FC</p>
+        <p
+          className="font-display text-[clamp(20px,7vw,30px)] font-black uppercase leading-none tracking-[0.06em]"
           style={{
-            backgroundImage:
-              "radial-gradient(rgba(255,255,255,0.5) 0.6px, transparent 0.8px), radial-gradient(rgba(0,0,0,0.6) 0.7px, transparent 0.9px)",
-            backgroundSize: "5px 5px, 7px 7px",
-            backgroundPosition: "0 0, 2px 3px",
+            backgroundImage: "linear-gradient(180deg, #fff3c4, #e9c25a 45%, #a07a2c)",
+            WebkitBackgroundClip: "text",
+            color: "transparent",
+            filter: "drop-shadow(0 1px 0 rgba(0,0,0,0.7))",
           }}
-        />
-        {/* stitching */}
-        <div aria-hidden="true" className="pointer-events-none absolute inset-2 rounded-[10px] border border-dashed border-amber-200/30" />
-
-        <div className="relative flex items-start justify-between gap-3">
-          <div>
-            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.35em] text-amber-200/70">Victor FC</p>
-            <p
-              className="font-display text-3xl font-black uppercase leading-none tracking-[0.08em]"
-              style={{
-                backgroundImage: "linear-gradient(180deg, #fff3c4, #e9c25a 45%, #a07a2c)",
-                WebkitBackgroundClip: "text",
-                color: "transparent",
-                filter: "drop-shadow(0 1px 0 rgba(0,0,0,0.6))",
-              }}
-            >
-              Альбом
-            </p>
-            <p className="mt-1 text-[11px] text-amber-100/60">
-              {completed > 0 ? `Собрано страниц: ${completed}` : "Собери первую страницу целиком"}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="whitespace-nowrap font-display text-2xl font-bold leading-none text-amber-50">
-              {owned}
-              <span className="text-base font-semibold text-amber-100/50"> / {total}</span>
-            </p>
-            <p className="mt-1 font-mono text-xs font-bold text-amber-300">{pct}%</p>
-          </div>
-        </div>
-
-        <div className="relative mt-3 h-2 overflow-hidden rounded-full bg-black/40 ring-1 ring-amber-200/15">
+        >
+          Альбом
+        </p>
+        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/45 ring-1 ring-amber-200/20">
           <div
             className="h-full rounded-full"
             style={{ width: `${pct}%`, background: "linear-gradient(90deg, #a07a2c, #f5d77a, #e9c25a)" }}
           />
         </div>
+        <p className="mt-1 flex items-baseline justify-between gap-2 text-[10px] text-amber-100/70">
+          <span className="truncate">{completed > 0 ? `Собрано страниц: ${completed}` : "Собери первую страницу"}</span>
+          <span className="shrink-0 font-mono">
+            <b className="text-xs text-amber-50">{owned}</b>/{total} · <b className="text-amber-300">{pct}%</b>
+          </span>
+        </p>
       </div>
     </div>
   );
