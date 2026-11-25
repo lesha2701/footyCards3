@@ -23,12 +23,12 @@ async def test_only_pack_cards_roll_a_finish(db_session):
     db_session.add(user)
     await db_session.flush()
     player = await create_player(db_session, rarity=Rarity.rare)
-    with patch.object(card_finish_service.random, "random", return_value=0.0):
+    with patch.object(card_finish_service._rng, "random", return_value=0.0):
         from_pack = await create_user_card(db_session, user.id, player.id, CardSource.pack)
         from_trade = await create_user_card(db_session, user.id, player.id, CardSource.admin_grant)
     assert from_pack.finish == "autograph"
     assert from_trade.finish is None
-    with patch.object(card_finish_service.random, "random", return_value=0.99):
+    with patch.object(card_finish_service._rng, "random", return_value=0.99):
         plain = await create_user_card(db_session, user.id, player.id, CardSource.pack)
     assert plain.finish is None
 

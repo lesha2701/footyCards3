@@ -17,6 +17,9 @@ from app.models.player import Player
 from app.services.game_config_service import get_config
 
 FINISHES = ("autograph", "night", "gold")  # rarest first
+# Its own generator: a roll never shifts the global `random` sequence other
+# draws (and seeded tests) rely on.
+_rng = random.Random()
 PACK_SOURCES = {
     CardSource.pack, CardSource.free_pack, CardSource.stars_purchase,
     CardSource.chat_pack, CardSource.wheel, CardSource.daily_reward,
@@ -61,6 +64,6 @@ async def roll_finish(db: AsyncSession, source: CardSource, player_id: int) -> O
         return None
     config = await get_config(db)
     return pick_finish(
-        random.random(),
+        _rng.random(),
         config.finish_gold_per_mille, config.finish_autograph_per_mille, config.finish_night_per_mille,
     )

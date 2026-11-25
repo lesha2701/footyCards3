@@ -30,9 +30,9 @@ async def test_a_rare_print_is_posted_on_the_club_wall(client, db_session, bot_t
     await db_session.flush()
     db_session.add(ClubMember(club_id=club.id, user_id=user.id, role=ClubRole.captain))
     player = await create_player(db_session, rarity=Rarity.epic)
-    with patch.object(card_finish_service.random, "random", return_value=0.0):
+    with patch.object(card_finish_service._rng, "random", return_value=0.0):
         await create_user_card(db_session, user.id, player.id, CardSource.pack)
-    with patch.object(card_finish_service.random, "random", return_value=0.99):
+    with patch.object(card_finish_service._rng, "random", return_value=0.99):
         await create_user_card(db_session, user.id, player.id, CardSource.pack)
     await db_session.commit()
     posts = (await db_session.execute(select(ClubPost).where(ClubPost.club_id == club.id))).scalars().all()
