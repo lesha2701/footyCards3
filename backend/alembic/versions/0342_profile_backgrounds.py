@@ -1,7 +1,7 @@
 """Profile header backgrounds become pictures (frontend assets/profile/bg/<style_key>.webp):
 the old gradients keep their rows, and three new backgrounds are added —
 «Золотая лихорадка» (its gradient existed but was never sold) and the
-premium «Легенда» / «Неоновый город». Prices are ordinary `cosmetics` rows,
+premium «Легенда» / «Неоновый город»; «Северное сияние» drops to 75 coins. Prices are ordinary `cosmetics` rows,
 edited in the admin panel.
 
 Revision ID: 0342
@@ -38,9 +38,11 @@ def upgrade() -> None:
             "INSERT INTO cosmetics (kind, name, description, style_key, coins_price, stars_price, is_exclusive, sort_order) "
             "VALUES ('profile_background', :name, :description, :key, :coins, :stars, false, :order)"
         ), {"name": name, "description": description, "key": key, "coins": coins, "stars": stars, "order": order})
+    op.execute("UPDATE cosmetics SET coins_price = 75 WHERE kind = 'profile_background' AND style_key = 'aurora'")
 
 
 def downgrade() -> None:
+    op.execute("UPDATE cosmetics SET coins_price = 8000 WHERE kind = 'profile_background' AND style_key = 'aurora'")
     keys = ", ".join(f"'{k}'" for _, _, k, _, _, _ in BACKGROUNDS)
     op.execute(
         "DELETE FROM user_cosmetics WHERE cosmetic_id IN "
