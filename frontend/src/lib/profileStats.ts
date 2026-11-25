@@ -9,10 +9,14 @@ export function modeRows(p: ProfilePublic): [string, number, number, number][] {
   ];
 }
 
-/** All modes summed: «12-3-5». */
-export function record(p: ProfilePublic): string {
-  const sum = (i: 1 | 2 | 3) => modeRows(p).reduce((acc, row) => acc + row[i], 0);
-  return `${sum(1)}-${sum(2)}-${sum(3)}`;
+/** The card's three numbers — only the ones worth showing off. */
+export function cardStats(p: ProfilePublic): [string, string][] {
+  const wins = modeRows(p).reduce((acc, row) => acc + row[1], 0);
+  return [
+    [compact(p.unique_cards), "Коллекция"],
+    [compact(wins), "Победы"],
+    [p.rarest_card ? `${p.rarest_card.rating}` : "—", "Топ-карта"],
+  ];
 }
 
 export function dayStreakLabel(days: number): string {

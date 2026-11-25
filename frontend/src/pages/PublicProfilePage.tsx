@@ -12,7 +12,7 @@ import GiftShelf from "@/components/profile/GiftShelf";
 import { ProfileFeed, RespectBar } from "@/components/profile/ProfileSocial";
 import { ShowcaseRow } from "@/components/profile/Showcase";
 import { staticUrl } from "@/lib/api";
-import { compact, modeRows, record } from "@/lib/profileStats";
+import { cardStats, modeRows } from "@/lib/profileStats";
 import { useAuthStore } from "@/store/authStore";
 import type { UserPublic } from "@/types";
 
@@ -47,14 +47,7 @@ export default function PublicProfilePage() {
         clubPass={profile.club_pass_active}
         userId={profile.id}
         isMe={isMe}
-        stats={[
-          [compact(profile.total_cards), "Карты"],
-          [compact(profile.unique_cards), "Уник."],
-          [compact(profile.packs_opened), "Паки"],
-          [record(profile), "Матчи"],
-          [profile.arena_rating > 0 ? `${profile.arena_rating}` : "—", "Arena"],
-          [`${profile.level}`, "Уровень"],
-        ]}
+        stats={cardStats(profile)}
         details={<ModeRecords rows={modeRows(profile)} />}
         actions={
           <>

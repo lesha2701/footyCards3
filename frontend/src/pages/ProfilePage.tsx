@@ -37,7 +37,7 @@ import {
   IconUsers,
 } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
-import { compact, modeRows, record } from "@/lib/profileStats";
+import { cardStats, modeRows } from "@/lib/profileStats";
 import { PRIVACY_POLICY_URL, USER_AGREEMENT_URL } from "@/lib/legalLinks";
 import { TX_TYPE_LABELS } from "@/lib/transactionLabels";
 import { hapticNotify, openLink } from "@/lib/telegram";
@@ -382,14 +382,7 @@ export default function ProfilePage() {
     );
   }
 
-  const stats: [string, string][] = [
-    [compact(user.balance), "Монеты"],
-    [compact(profile.total_cards), "Карты"],
-    [compact(profile.unique_cards), "Уник."],
-    [compact(profile.packs_opened), "Паки"],
-    [record(profile), "Матчи"],
-    [`${profile.daily_login_streak}`, "Серия"],
-  ];
+  const stats = cardStats(profile);
 
   return (
     <div className="flex flex-col gap-4">

@@ -12,14 +12,23 @@ import type { Badge, EquippedCosmetics } from "@/types";
 
 /** One mode's W-D-L, for the card's «tap the numbers» details. */
 export function ModeRecords({ rows }: { rows: [string, number, number, number][] }) {
+  const played = rows.reduce((acc, [, w, d, l]) => acc + w + d + l, 0);
+  const won = rows.reduce((acc, [, w]) => acc + w, 0);
   return (
-    <div className="mt-3 grid grid-cols-3 gap-1.5 rounded-2xl bg-black/25 p-2 text-center text-caption">
-      {rows.map(([mode, w, d, l]) => (
-        <span key={mode} className="flex flex-col">
-          <span className="font-mono font-bold text-ink-chalk">{w}-{d}-{l}</span>
-          <span className="text-[10px] text-ink-mist">{mode} П-Н-П</span>
-        </span>
-      ))}
+    <div className="mt-3 rounded-2xl bg-black/25 p-2 text-center text-caption">
+      <div className="grid grid-cols-3 gap-1.5">
+        {rows.map(([mode, w, d, l]) => (
+          <span key={mode} className="flex flex-col">
+            <span className="font-mono font-bold text-ink-chalk">{w}-{d}-{l}</span>
+            <span className="text-[10px] text-ink-mist">{mode} П-Н-П</span>
+          </span>
+        ))}
+      </div>
+      {played > 0 && (
+        <p className="mt-1.5 text-[11px] text-amber-100/70">
+          Побед: <b className="text-amber-100">{Math.round((won / played) * 100)}%</b> из {played} матчей
+        </p>
+      )}
     </div>
   );
 }
@@ -95,12 +104,12 @@ export function ProfileCard({
       <div className="my-3 h-px bg-gradient-to-r from-transparent via-amber-300/50 to-transparent" />
       <button
         onClick={() => details && setShowDetails((v) => !v)}
-        className="grid w-full grid-cols-3 gap-y-2 text-center active:opacity-80"
+        className="grid w-full grid-cols-3 text-center active:opacity-80"
         data-testid="profile-stats"
       >
         {stats.map(([value, label]) => (
           <span key={label} className="flex flex-col">
-            <span className="font-mono text-lg font-bold leading-tight text-amber-100">{value}</span>
+            <span className="font-mono text-2xl font-bold leading-tight text-amber-100">{value}</span>
             <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-amber-100/50">{label}</span>
           </span>
         ))}
