@@ -8,13 +8,25 @@ import { IconChevronLeft } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
 import { asFinish, FINISH_ICONS, FINISH_LABELS } from "@/lib/finish";
 import {
-  CAB_COLS, CAB_H, CAB_TOP, CAB_U, CAB_W, FRAME_H, FRAME_SLOTS, FRAME_W, PEDESTALS, cabinetSlot, frameOrigin, leftWall, rightWall,
+  BANNER, CABINET, CAB_GLASS, CAB_ITEM_H, CAB_ITEM_W, CARPET, FLOOR, FRAMES, FRAME_IN_H, FRAME_IN_W, HALL_TOP, HALL_VIEW, PEDESTALS, PLANT, ROPES,
+  WALL_LEFT, WALL_RIGHT, cabinetSlot, rect, type Placed,
 } from "@/lib/hall";
 import { RARITY_LABELS } from "@/lib/rarity";
 import { SPECIAL_LABELS, type SpecialSerial } from "@/lib/giftSerial";
 import { useAuthStore } from "@/store/authStore";
 import type { Rarity } from "@/types";
 
+import bannerArt from "@/assets/hall/banner.webp";
+import cabinetArt from "@/assets/hall/cabinet.webp";
+import carpetArt from "@/assets/hall/carpet.webp";
+import floorArt from "@/assets/hall/floor.webp";
+import frameArt from "@/assets/hall/frame.webp";
+import pedestalArt from "@/assets/hall/pedestal.webp";
+import plantArt from "@/assets/hall/plant.webp";
+import ropeArt from "@/assets/hall/rope.webp";
+import spotlightArt from "@/assets/hall/spotlight.webp";
+import wallLeftArt from "@/assets/hall/wall_left.webp";
+import wallRightArt from "@/assets/hall/wall_right.webp";
 import cupArt from "@/assets/trophies/champion.webp";
 
 /** Trophy art by code (assets/trophies/<code>.webp), the champion cup otherwise. */
@@ -137,54 +149,46 @@ function ArrangeRow({ icon, title, text, cta, onClick }: { icon: string; title: 
   );
 }
 
-function Room({ hall, isMe, onPick }: { hall: Hall; isMe: boolean; onPick: (p: Plaque) => void }) {
-  const floor: [number, number][] = [[200, 200], [380, 290], [200, 380], [20, 290]];
-  const lw: [number, number][] = [[200, 40], [20, 130], [20, 290], [200, 200]];
-  const rw: [number, number][] = [[200, 40], [380, 130], [380, 290], [200, 200]];
-  const cab: [number, number][] = [rightWall(CAB_U, CAB_TOP), rightWall(CAB_U + CAB_W, CAB_TOP), rightWall(CAB_U + CAB_W, CAB_TOP + CAB_H), rightWall(CAB_U, CAB_TOP + CAB_H)];
+/** A placed sprite as an SVG <image> (mirrored when the placement says so). */
+function Sprite({ p, src, opacity }: { p: Placed; src: string; opacity?: number }) {
+  const r = rect(p);
   return (
-    <svg viewBox="0 0 400 400" className="block w-full">
-      <defs>
-        <linearGradient id="hall-lw" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#173226" />
-          <stop offset="1" stopColor="#21412f" />
-        </linearGradient>
-        <linearGradient id="hall-rw" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#1a3628" />
-          <stop offset="1" stopColor="#12281d" />
-        </linearGradient>
-        <radialGradient id="hall-spot" cx="0.5" cy="0" r="1">
-          <stop offset="0" stopColor="#fde68a" stopOpacity="0.35" />
-          <stop offset="1" stopColor="#fde68a" stopOpacity="0" />
-        </radialGradient>
-        <pattern id="hall-tiles" width="20" height="20" patternUnits="userSpaceOnUse" patternTransform="matrix(1,0.5,-1,0.5,0,0)">
-          <rect width="20" height="20" fill="#e9dfc8" />
-          <rect width="10" height="10" fill="#d9ccb0" />
-          <rect x="10" y="10" width="10" height="10" fill="#d9ccb0" />
-        </pattern>
-      </defs>
+    <image
+      href={src}
+      {...r}
+      opacity={opacity}
+      preserveAspectRatio="none"
+      transform={p.flip ? `translate(${2 * r.x + r.width} 0) scale(-1 1)` : undefined}
+    />
+  );
+}
 
-      {/* Walls and floor */}
-      <polygon points={pts(lw)} fill="url(#hall-lw)" />
-      <polygon points={pts(rw)} fill="url(#hall-rw)" />
-      <polyline points={pts([leftWall(180, 8), leftWall(0, 8), rightWall(180, 8)])} fill="none" stroke="#caa349" strokeWidth="1.5" />
-      <polyline points={pts([leftWall(180, 140), leftWall(0, 140), rightWall(180, 140)])} fill="none" stroke="#caa349" strokeOpacity="0.5" />
-      <polygon points={pts(floor)} fill="url(#hall-tiles)" />
-      <polygon points={pts(floor)} fill="#000" fillOpacity="0.12" />
-      <polygon points={pts([[200, 214], [236, 232], [200, 366], [164, 348]])} fill="#8f1d24" opacity="0.9" />
-      <polygon points={pts([[200, 220], [228, 234], [200, 358], [172, 344]])} fill="none" stroke="#e2b85a" strokeOpacity="0.6" />
-      <line x1="200" y1="40" x2="200" y2="200" stroke="#0a1a12" strokeWidth="1.5" />
+function Room({ hall, isMe, onPick }: { hall: Hall; isMe: boolean; onPick: (p: Plaque) => void }) {
+  return (
+    <svg viewBox={`0 ${HALL_TOP} ${HALL_VIEW} ${HALL_VIEW - HALL_TOP}`} className="block w-full">
+      <defs>
+        <linearGradient id="hall-ceiling" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#050b08" />
+          <stop offset="1" stopColor="#0c1712" />
+        </linearGradient>
+      </defs>
+      <rect width={HALL_VIEW} height={HALL_VIEW} fill="url(#hall-ceiling)" />
+
+      {/* The room: floor, carpet, walls */}
+      <Sprite p={FLOOR} src={floorArt} />
+      <Sprite p={CARPET} src={carpetArt} />
+      <Sprite p={WALL_LEFT} src={wallLeftArt} />
+      <Sprite p={WALL_RIGHT} src={wallRightArt} />
+      <Sprite p={BANNER} src={bannerArt} />
 
       {/* Frames on the left wall: the «Витрина» cards */}
-      {FRAME_SLOTS.map((slot, i) => {
+      {FRAMES.map(({ frame, inner, lamp }, i) => {
         const card = hall.frames[i];
-        const [x0, y0] = frameOrigin(slot.x0);
-        const color = card ? FRAME_COLORS[card.player.rarity] : "#3a5a48";
         const finish = card ? asFinish(card.finish) : null;
+        const color = card ? FRAME_COLORS[card.player.rarity] : null;
         return (
           <g
             key={i}
-            transform={`matrix(1,-0.5,0,1,${x0},${y0})`}
             className={card ? "cursor-pointer" : undefined}
             data-testid="hall-frame"
             onClick={() =>
@@ -199,47 +203,35 @@ function Room({ hall, isMe, onPick }: { hall: Hall; isMe: boolean; onPick: (p: P
               })
             }
           >
-            <ellipse cx={FRAME_W / 2} cy={-14} rx="26" ry="9" fill="url(#hall-spot)" />
-            <rect x="-4" y="-4" width={FRAME_W + 8} height={FRAME_H + 8} rx="2" fill={card ? "#b8902e" : "#24402f"} stroke={color} strokeWidth="2" />
-            <rect x="0" y="0" width={FRAME_W} height={FRAME_H} fill="#0c1712" />
-            {card?.player.image_path ? (
-              <image href={staticUrl(card.player.image_path) ?? undefined} x="0" y="0" width={FRAME_W} height={FRAME_H} preserveAspectRatio="xMidYMid slice" />
-            ) : (
-              isMe && !card && <text x={FRAME_W / 2} y={FRAME_H / 2 + 5} textAnchor="middle" fontSize="16" fill="#4f7a62">+</text>
-            )}
-            {card && (
-              <>
-                <rect x="1" y="1" width="18" height="11" rx="2" fill="#000" fillOpacity="0.6" />
-                <text x="10" y="9.5" textAnchor="middle" fontSize="8" fontWeight="800" fill={color}>{card.player.rating}</text>
-                {finish && <text x={FRAME_W - 2} y="10" textAnchor="end" fontSize="8">{FINISH_ICONS[finish]}</text>}
-              </>
-            )}
+            <Sprite p={frame} src={frameArt} />
+            <g transform={`matrix(1,-0.5,0,1,${inner[0]},${inner[1]})`}>
+              {card?.player.image_path ? (
+                <image href={staticUrl(card.player.image_path) ?? undefined} width={FRAME_IN_W} height={FRAME_IN_H} preserveAspectRatio="xMidYMid slice" />
+              ) : (
+                isMe && !card && <text x={FRAME_IN_W / 2} y={FRAME_IN_H / 2 + 6} textAnchor="middle" fontSize="18" fill="#c9a24a" fillOpacity="0.7">+</text>
+              )}
+              {card && color && (
+                <>
+                  <rect x="1" y="1" width="18" height="11" rx="2" fill="#000" fillOpacity="0.65" />
+                  <text x="10" y="9.5" textAnchor="middle" fontSize="8" fontWeight="800" fill={color}>{card.player.rating}</text>
+                  {finish && <text x={FRAME_IN_W - 2} y="10" textAnchor="end" fontSize="8">{FINISH_ICONS[finish]}</text>}
+                </>
+              )}
+            </g>
+            <Sprite p={lamp} src={spotlightArt} opacity={card ? 1 : 0.55} />
           </g>
         );
       })}
 
+      {/* Decor behind the cabinet's right end */}
+      <Sprite p={PLANT} src={plantArt} />
+
       {/* Cabinet on the right wall: trophies, then collections */}
-      <polygon points={pts(cab)} fill="#3b2414" stroke="#c99a3e" strokeWidth="2" />
-      <polygon
-        points={pts([rightWall(CAB_U + 5, CAB_TOP + 5), rightWall(CAB_U + CAB_W - 5, CAB_TOP + 5), rightWall(CAB_U + CAB_W - 5, CAB_TOP + CAB_H - 5), rightWall(CAB_U + 5, CAB_TOP + CAB_H - 5)])}
-        fill="#1d130b"
-      />
-      {[58, 118].map((v) => (
-        <polygon key={v} points={pts([rightWall(CAB_U + 5, CAB_TOP + v), rightWall(CAB_U + CAB_W - 5, CAB_TOP + v), rightWall(CAB_U + CAB_W - 5, CAB_TOP + v + 4), rightWall(CAB_U + 5, CAB_TOP + v + 4)])} fill="#c99a3e" />
-      ))}
-      {Array.from({ length: CAB_COLS * 2 }, (_, i) => {
-        const [x, y] = cabinetSlot(i);
-        return (
-          <g key={`l${i}`}>
-            <polygon points={pts([[x - 3, y - 54], [x + 3, y - 54], [x + 15, y], [x - 15, y]])} fill="#ffd98a" fillOpacity="0.07" />
-            <circle cx={x} cy={y - 54} r="2" fill="#ffe8a3" />
-          </g>
-        );
-      })}
-      {Array.from({ length: CAB_COLS * 2 }, (_, i) => {
+      <Sprite p={CABINET} src={cabinetArt} />
+      {Array.from({ length: 6 }, (_, i) => {
         const item = hall.cabinet[i];
-        const [x, y] = cabinetSlot(i);
         if (!item) return null;
+        const [x, y] = cabinetSlot(i);
         const art = item.image_path ? staticUrl(item.image_path) : item.kind === "trophy" ? (TROPHY_ART[item.code ?? ""] ?? cupArt) : null;
         return (
           <g
@@ -254,20 +246,22 @@ function Room({ hall, isMe, onPick }: { hall: Hall; isMe: boolean; onPick: (p: P
               })
             }
           >
+            <ellipse cx={x} cy={y} rx="11" ry="3" fill="#000" fillOpacity="0.35" />
             {art ? (
-              <image href={art} x={x - 17} y={y - 38} width="34" height="38" preserveAspectRatio="xMidYMax meet" />
+              <image href={art} x={x - CAB_ITEM_W / 2} y={y - CAB_ITEM_H} width={CAB_ITEM_W} height={CAB_ITEM_H} preserveAspectRatio="xMidYMax meet" />
             ) : (
-              <text x={x} y={y - 6} textAnchor="middle" fontSize="26">{item.icon}</text>
+              <text x={x} y={y - 4} textAnchor="middle" fontSize="24">{item.icon}</text>
             )}
           </g>
         );
       })}
-      <polygon points={pts(cab)} fill="#bfe8ff" fillOpacity="0.06" pointerEvents="none" />
+      <polygon points={pts(CAB_GLASS)} fill="#e6f6ff" fillOpacity="0.07" pointerEvents="none" />
 
       {/* Pedestals on the floor: the gift shelf */}
-      {PEDESTALS.map(([x, y], i) => {
+      {PEDESTALS.map(({ sprite, top }, i) => {
         const gift = hall.pedestals[i];
         const special = gift?.special as SpecialSerial | null | undefined;
+        const [x, y] = top;
         return (
           <g
             key={i}
@@ -285,24 +279,28 @@ function Room({ hall, isMe, onPick }: { hall: Hall; isMe: boolean; onPick: (p: P
               })
             }
           >
-            <ellipse cx={x} cy={y + 16} rx="22" ry="10" fill="#000" fillOpacity="0.25" />
-            <path d={`M${x - 18} ${y} L${x - 18} ${y + 14} A18 9 0 0 0 ${x + 18} ${y + 14} L${x + 18} ${y} Z`} fill="#cfcac0" />
-            <ellipse cx={x} cy={y} rx="18" ry="9" fill="#f5f2ea" stroke={special ? "#fcd34d" : "#bdb6a6"} strokeWidth={special ? 1.5 : 0.8} />
+            <Sprite p={sprite} src={pedestalArt} />
+            {special && <ellipse cx={x} cy={y} rx="17" ry="7" fill="none" stroke="#fcd34d" strokeWidth="1.5" />}
             {gift ? (
               gift.gift_set.image_path ? (
-                <image href={staticUrl(gift.gift_set.image_path) ?? undefined} x={x - 16} y={y - 30} width="32" height="32" preserveAspectRatio="xMidYMax meet" />
+                <image href={staticUrl(gift.gift_set.image_path) ?? undefined} x={x - 15} y={y - 28} width="30" height="30" preserveAspectRatio="xMidYMax meet" />
               ) : (
-                <text x={x} y={y - 4} textAnchor="middle" fontSize="20">🎁</text>
+                <text x={x} y={y - 2} textAnchor="middle" fontSize="18">🎁</text>
               )
             ) : (
-              isMe && <text x={x} y={y + 4} textAnchor="middle" fontSize="12" fill="#a8a092">+</text>
+              isMe && <text x={x} y={y + 4} textAnchor="middle" fontSize="12" fill="#8a8270">+</text>
             )}
             {gift?.serial_number != null && (
-              <text x={x} y={y + 13} textAnchor="middle" fontSize="7" fontWeight="700" fill={special ? "#a16207" : "#6b6457"}>№{gift.serial_number}</text>
+              <text x={x} y={y + 22} textAnchor="middle" fontSize="6.5" fontWeight="800" fill={special ? "#7c4a03" : "#5b4a1c"}>№{gift.serial_number}</text>
             )}
           </g>
         );
       })}
+
+      {/* Velvet ropes along the front */}
+      {ROPES.map((p, i) => (
+        <Sprite key={i} p={p} src={ropeArt} />
+      ))}
     </svg>
   );
 }
