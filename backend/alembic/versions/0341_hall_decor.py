@@ -27,7 +27,7 @@ KINDS_AFTER = KINDS_BEFORE + ", " + HALL_KINDS
 # style_key = the art (frontend assets/hall/niche_<key>.webp, pedestal_<key>.webp).
 # (kind, name, description, style_key, coins, stars, order)
 SKINS = (
-    ("hall_cabinet", "Дубовая ниша", "Светлый дуб и тёплые лампы", "oak", 20000, 0, 1),
+    ("hall_cabinet", "Дубовая ниша", "Светлый дуб и тёплые лампы", "oak", 2000, 0, 1),
     ("hall_cabinet", "Мраморная ниша", "Белый мрамор с прожилками", "marble", 0, 40, 2),
     ("hall_cabinet", "Хрустальная ниша", "Лёд, хрусталь и серебро", "crystal", 0, 50, 3),
     ("hall_cabinet", "Неоновая ниша", "Чёрное стекло и зелёный неон", "neon", 0, 75, 4),
