@@ -167,3 +167,30 @@ async def test_hall_decor_places_take_only_owned_items_of_their_kind(client, db_
     seen = (await client.get(f"/api/v1/users/{me.id}/hall", headers=guest)).json()["decor"]
     assert seen == layout  # visitors see the owner's room
     assert "corner" not in (await put("corner", None)).json()  # back to the default palm
+
+
+async def test_public_profile_card_shows_league_club_trophies_and_last_seen(client, db_session, bot_token):
+    from app.models.club import Club, ClubMember
+    from app.models.enums import ClubLogoShape, ClubRole, ClubType
+    from app.models.league import LeagueTier
+    from app.models.trophy import TrophyDefinition, UserTrophy
+
+    headers, _ = await _login(client, bot_token, 770040, db_session)
+    _, other = await _login(client, bot_token, 770041, db_session)
+    db_session.add(LeagueTier(name="Дворовая лига", min_rating=0, color="#cd7f32", reward_coins=0, sort_order=0))
+    club = Club(name="Card FC", club_type=ClubType.open, logo_shape=ClubLogoShape.shield,
+                logo_color="#123456", captain_id=other.id, invite_code="cardfc1", budget=0)
+    db_session.add(club)
+    trophy = TrophyDefinition(code="card_test", name="Кубок", is_active=True)
+    db_session.add(trophy)
+    await db_session.flush()
+    db_session.add(ClubMember(club_id=club.id, user_id=other.id, role=ClubRole.captain))
+    db_session.add(UserTrophy(user_id=other.id, trophy_definition_id=trophy.id))
+    other.last_seen_at = datetime.now(timezone.utc)
+    await db_session.commit()
+
+    profile = (await client.get(f"/api/v1/users/{other.id}", headers=headers)).json()
+    assert profile["league"]["name"] == "Дворовая лига"
+    assert profile["club"]["id"] == club.id and profile["club"]["name"] == "Card FC"
+    assert profile["trophies_count"] == 1
+    assert profile["last_seen_at"] is not None

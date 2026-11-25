@@ -34,7 +34,21 @@ export const BACKGROUND_STYLES: Record<string, string> = {
   aurora: "bg-gradient-to-br from-teal-600/50 via-indigo-800/50 to-fuchsia-800/40",
   gold_rush: "bg-gradient-to-b from-amber-500/40 via-yellow-900/40 to-bg-surface",
   derby: "bg-gradient-to-r from-red-700/50 via-bg-surface to-sky-700/50",
+  legend: "bg-gradient-to-b from-amber-700/40 via-stone-900 to-emerald-950",
+  neon_city: "bg-gradient-to-br from-fuchsia-800/50 via-slate-950 to-cyan-800/40",
 };
+
+/** Profile backgrounds are pictures (assets/profile/bg/<style_key>.webp);
+ * the gradient above is the fallback for a key without one. */
+const BACKGROUND_ART: Record<string, string> = Object.fromEntries(
+  Object.entries(import.meta.glob("../assets/profile/bg/*.webp", { eager: true, import: "default" }) as Record<string, string>).map(
+    ([path, url]) => [path.split("/").pop()!.replace(/\.webp$/, ""), url],
+  ),
+);
+
+export function backgroundArt(styleKey: string | null | undefined): string | null {
+  return styleKey ? BACKGROUND_ART[styleKey] ?? null : null;
+}
 
 /** Card frame skins: an extra outline around the player's own cards. */
 export const CARD_SKIN_STYLES: Record<string, string> = {

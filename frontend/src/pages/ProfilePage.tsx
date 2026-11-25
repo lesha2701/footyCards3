@@ -388,19 +388,9 @@ export default function ProfilePage() {
     <div className="flex flex-col gap-4">
       <ProfileCard
         rank={profile.league_rank}
-        rankLabel={league?.name ?? "рейтинг"}
-        rankImage={league?.image_path}
+        rankLabel={league?.name ?? profile.league?.name ?? "рейтинг"}
+        rankImage={league?.image_path ?? profile.league?.image_path}
         onRank={() => navigate("/league")}
-        corner={
-          <button
-            onClick={() => navigate("/profile/settings")}
-            aria-label="Настройки"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-black/30 text-amber-100 ring-1 ring-amber-200/30 active:scale-90"
-            data-testid="profile-edit"
-          >
-            <IconEdit size={16} />
-          </button>
-        }
         avatarUrl={user.avatar_url}
         cosmetics={profile.cosmetics}
         name={`${user.first_name ?? ""} ${user.last_name ?? ""}`.trim()}
@@ -408,11 +398,26 @@ export default function ProfilePage() {
         subtitle={`${user.username ? `@${user.username} · ` : ""}с нами с ${new Date(user.created_at).toLocaleDateString("ru-RU")}`}
         streak={profile.daily_login_streak}
         clubPass={profile.club_pass_active}
+        club={profile.club}
+        topCard={profile.rarest_card}
+        onTopCard={() => navigate("/collection")}
         userId={user.id}
         isMe
         stats={stats}
         details={<ModeRecords rows={modeRows(profile)} />}
-        actions={<div className="flex justify-center"><ShareButton kind="profile" id={0} label="Поделиться профилем" compact /></div>}
+        actions={
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => navigate("/profile/settings")}
+              className="flex items-center gap-1.5 rounded-full bg-black/30 px-3 py-1.5 text-xs font-bold text-amber-100 ring-1 ring-amber-200/30 active:scale-95"
+              data-testid="profile-edit"
+            >
+              <IconEdit size={14} />
+              Настроить
+            </button>
+            <ShareButton kind="profile" id={0} label="Поделиться" compact />
+          </div>
+        }
       />
 
       {/* The four groups */}

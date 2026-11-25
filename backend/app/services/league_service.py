@@ -118,6 +118,13 @@ async def _current_league_percent(
     return round(in_current / len(rows) * 100, 1)
 
 
+async def league_of(db: AsyncSession, user: User) -> Optional[LeagueTier]:
+    """The league a player is in (sticky, like `get_league_status`)."""
+    tiers = (await db.execute(select(LeagueTier).order_by(LeagueTier.min_rating))).scalars().all()
+    current, _ = _tier_for_rating(tiers, max(total_rating(user), await _floor_rating(db, user.id)))
+    return current
+
+
 async def list_tiers(db: AsyncSession) -> list[LeagueTierPublicOut]:
     tiers = (await db.execute(select(LeagueTier).order_by(LeagueTier.min_rating))).scalars().all()
     return [await _to_public_out(db, t) for t in tiers]

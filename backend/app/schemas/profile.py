@@ -3,11 +3,27 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from app.models.enums import ClubLogoShape
 from app.schemas.badge import BadgeOut
+from app.schemas.club_emblem import ClubEmblemOut
 from app.schemas.collection import UserCardListItem
 from app.schemas.gift import GiftShelfItem
 from app.schemas.monetization import EquippedCosmeticsOut, RewardBundleOut
 from app.schemas.player import PlayerOut
+
+
+class ProfileLeagueOut(BaseModel):
+    name: str
+    color: str
+    image_path: Optional[str] = None
+
+
+class ProfileClubOut(BaseModel):
+    id: int
+    name: str
+    logo_shape: ClubLogoShape
+    logo_color: str
+    emblem: Optional[ClubEmblemOut] = None
 
 
 class ProfilePublicOut(BaseModel):
@@ -44,6 +60,11 @@ class ProfilePublicOut(BaseModel):
     penalty_matches_lost: int
     # «Витрина»: up to three copies the owner chose to show off.
     showcase: list[UserCardListItem] = []
+    # The profile card: the league by name, the club, when last in the game, trophies.
+    league: Optional[ProfileLeagueOut] = None
+    club: Optional[ProfileClubOut] = None
+    last_seen_at: Optional[datetime] = None
+    trophies_count: int = 0
 
 
 class ReferralMilestoneOut(BaseModel):

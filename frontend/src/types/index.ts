@@ -1527,6 +1527,18 @@ export interface ProfilePublic {
   penalty_matches_lost: number;
   /** «Витрина»: up to three copies the owner shows off. */
   showcase?: UserCard[];
+  league?: { name: string; color: string; image_path: string | null } | null;
+  club?: ProfileClub | null;
+  last_seen_at?: string | null;
+  trophies_count?: number;
+}
+
+export interface ProfileClub {
+  id: number;
+  name: string;
+  logo_shape: ClubLogoShape;
+  logo_color: string;
+  emblem: ClubEmblem | null;
 }
 
 export interface ProfilePrivate extends ProfilePublic {

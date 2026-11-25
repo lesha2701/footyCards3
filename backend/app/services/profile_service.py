@@ -1,4 +1,5 @@
 import time
+from typing import Optional
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +18,7 @@ from app.models.trophy import UserTrophy
 from app.models.user import User
 from app.schemas.badge import BadgeOut, OwnedBadgeOut
 from app.schemas.player import PlayerOut
-from app.schemas.profile import ProfilePrivateOut, ProfilePublicOut, ProfileSettingsUpdate
+from app.schemas.profile import ProfileClubOut, ProfileLeagueOut, ProfilePrivateOut, ProfilePublicOut, ProfileSettingsUpdate
 from app.schemas.trophy import UserTrophyOut
 from app.schemas.user import UserPublicOut
 from app.services.game_config_service import get_config
@@ -193,7 +194,36 @@ async def _build_public(db: AsyncSession, user: User) -> ProfilePublicOut:
         penalty_matches_drawn=penalty_drawn,
         penalty_matches_lost=penalty_lost,
         showcase=await showcase_cards(db, user),
+        league=await _league_brief(db, user),
+        club=await _club_brief(db, user.id),
+        last_seen_at=user.last_seen_at,
+        trophies_count=await _trophies_count(db, user.id),
     )
+
+
+async def _league_brief(db: AsyncSession, user: User) -> Optional[ProfileLeagueOut]:
+    from app.services import league_service
+
+    tier = await league_service.league_of(db, user)
+    return ProfileLeagueOut(name=tier.name, color=tier.color, image_path=tier.image_path) if tier else None
+
+
+async def _club_brief(db: AsyncSession, user_id: int) -> Optional[ProfileClubOut]:
+    from app.models.club import Club, ClubMember
+    from app.services.club_emblem_service import emblem_out
+
+    club = (await db.execute(
+        select(Club).join(ClubMember, ClubMember.club_id == Club.id).where(ClubMember.user_id == user_id)
+    )).scalar_one_or_none()
+    if club is None:
+        return None
+    return ProfileClubOut(id=club.id, name=club.name, logo_shape=club.logo_shape, logo_color=club.logo_color, emblem=emblem_out(club))
+
+
+async def _trophies_count(db: AsyncSession, user_id: int) -> int:
+    from app.models.trophy import UserTrophy
+
+    return (await db.execute(select(func.count(UserTrophy.id)).where(UserTrophy.user_id == user_id))).scalar_one()
 
 
 SHOWCASE_SIZE = 3

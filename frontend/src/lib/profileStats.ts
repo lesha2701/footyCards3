@@ -15,7 +15,7 @@ export function cardStats(p: ProfilePublic): [string, string][] {
   return [
     [compact(p.unique_cards), "Коллекция"],
     [compact(wins), "Победы"],
-    [p.rarest_card ? `${p.rarest_card.rating}` : "—", "Топ-карта"],
+    [compact(p.trophies_count ?? 0), "Трофеи"],
   ];
 }
 

@@ -1,5 +1,5 @@
 import { staticUrl } from "@/lib/api";
-import { BRUTALITY_EMOJI, ENTRANCE_EMOJI, GLOVE_FILTERS, SHORTS_STYLES, backgroundClass, cardSkinClass, frameClass } from "@/lib/cosmetics";
+import { BRUTALITY_EMOJI, ENTRANCE_EMOJI, GLOVE_FILTERS, SHORTS_STYLES, backgroundArt, backgroundClass, cardSkinClass, frameClass } from "@/lib/cosmetics";
 import type { CosmeticCatalogItem } from "@/types";
 
 /** A small picture of what an item looks like; `lg` for shop tiles and the
@@ -48,7 +48,10 @@ export default function CosmeticPreview({
     );
   }
   if (item.kind === "profile_background") {
-    return <span className={`block rounded-xl ${lg ? "h-20 w-28" : "h-12 w-16"} ${backgroundClass(item.style_key) ?? "bg-bg-raised"}`} />;
+    const art = backgroundArt(item.style_key);
+    const size = lg ? "h-20 w-28" : "h-12 w-16";
+    if (art) return <img src={art} alt="" className={`block rounded-xl object-cover ${size}`} />;
+    return <span className={`block rounded-xl ${size} ${backgroundClass(item.style_key) ?? "bg-bg-raised"}`} />;
   }
   return (
     <span className={`block rounded-full ${lg ? "p-1" : "p-[3px]"} ${frameClass(item.style_key) ?? ""}`}>

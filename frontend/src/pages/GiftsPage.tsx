@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { adminBroadcastGift, adminSendGift, fetchAdminTrophies, grantTrophy } from "@/admin/api";
 import {
@@ -35,11 +35,19 @@ import { useOpenTile } from "@/lib/useOpenTile";
 import { useAuthStore } from "@/store/authStore";
 import type { Gift, GiftClaimResult, GiftLeaderRow, GiftSet, TrophyDefinition, UserPublic } from "@/types";
 
+/** «Подарить» on someone's profile opens this page with that player
+ * already picked as the recipient (router state `giftTo`). */
+function usePresetRecipient(): UserPublic | null {
+  const state = useLocation().state as { giftTo?: UserPublic } | null;
+  return state?.giftTo ?? null;
+}
+
 export default function GiftsPage() {
+  const presetTo = usePresetRecipient();
   const user = useAuthStore((s) => s.user);
   const updateBalance = useAuthStore((s) => s.updateBalance);
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<"mine" | "shop" | "top">("mine");
+  const [tab, setTab] = useState<"mine" | "shop" | "top">(presetTo ? "shop" : "mine");
   const [claimResult, setClaimResult] = useState<GiftClaimResult | null>(null);
   const [detailGift, setDetailGift] = useState<Gift | null>(null);
   const [openStackId, setOpenStackId] = useState<number | null>(null);
@@ -81,6 +89,12 @@ export default function GiftsPage() {
       </h1>
 
       {user.is_admin && <AdminGiftControls />}
+
+      {presetTo && (
+        <p className="rounded-2xl bg-rarity-epic/15 px-4 py-3 text-sm text-fuchsia-100" data-testid="gift-preset">
+          🎁 Подарок для <b>{presetTo.first_name ?? presetTo.username ?? "игрока"}</b>: выбери новый в магазине или передай свой из «Мои».
+        </p>
+      )}
 
       <div className="grid grid-cols-3 gap-1 rounded-2xl bg-bg-surface p-1">
         {([
@@ -549,7 +563,7 @@ function GiftTransfer({ gifts, onDone, startOpen = false }: { gifts: Gift[]; onD
   const queryClient = useQueryClient();
   const { data: price } = useQuery({ queryKey: ["gifts", "transfer-price"], queryFn: fetchGiftTransferPrice });
   const [open, setOpen] = useState(startOpen);
-  const [target, setTarget] = useState<UserPublic | null>(null);
+  const [target, setTarget] = useState<UserPublic | null>(usePresetRecipient());
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -823,8 +837,9 @@ function CollectiblePurchasePanel({ giftSet, onDone }: { giftSet: GiftSet; onDon
   const user = useAuthStore((s) => s.user);
   const updateBalance = useAuthStore((s) => s.updateBalance);
   const queryClient = useQueryClient();
-  const [recipientMode, setRecipientMode] = useState<"self" | "friend">("self");
-  const [target, setTarget] = useState<UserPublic | null>(null);
+  const preset = usePresetRecipient();
+  const [recipientMode, setRecipientMode] = useState<"self" | "friend">(preset ? "friend" : "self");
+  const [target, setTarget] = useState<UserPublic | null>(preset);
   const [message, setMessage] = useState("");
   const [currency, setCurrency] = useState<"stars" | "coins">(giftSet.coins_price > 0 ? "coins" : "stars");
   const [busy, setBusy] = useState(false);
@@ -1002,7 +1017,7 @@ function CollectiblePurchasePanel({ giftSet, onDone }: { giftSet: GiftSet; onDon
 function BundleShop({ giftSets }: { giftSets: GiftSet[] }) {
   const [selectedSet, setSelectedSet] = useState<GiftSet | null>(null);
   const tiles = useOpenTile<number>();
-  const [target, setTarget] = useState<UserPublic | null>(null);
+  const [target, setTarget] = useState<UserPublic | null>(usePresetRecipient());
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

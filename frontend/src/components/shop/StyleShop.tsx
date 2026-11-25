@@ -6,7 +6,7 @@ import { buyCosmeticWithCoins, createCosmeticStarsInvoice, equipCosmetic, fetchC
 import { IconCoin } from "@/components/icons";
 import CosmeticPreview from "@/components/shop/CosmeticPreview";
 import InfoTile from "@/components/shop/InfoTile";
-import { KIND_LABELS, backgroundClass } from "@/lib/cosmetics";
+import { KIND_LABELS, backgroundArt, backgroundClass } from "@/lib/cosmetics";
 import { formatGameError } from "@/lib/errors";
 import { payShopWithStars } from "@/lib/shopStars";
 import { hapticNotify } from "@/lib/telegram";
@@ -101,7 +101,10 @@ export default function StyleShop() {
     <div className="flex flex-col gap-3">
       {catalog && (
         <section
-          className={`flex items-center gap-4 rounded-3xl p-4 ring-1 ring-white/5 ${backgroundClass(catalog.equipped.background) ?? "bg-bg-surface"}`}
+          className={`flex items-center gap-4 rounded-3xl bg-cover bg-center p-4 ring-1 ring-white/5 ${backgroundClass(catalog.equipped.background) ?? "bg-bg-surface"}`}
+          style={backgroundArt(catalog.equipped.background) ? {
+            backgroundImage: `linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.6)), url(${backgroundArt(catalog.equipped.background)})`,
+          } : undefined}
         >
           <CosmeticPreview item={{ kind: "profile_frame", style_key: catalog.equipped.frame ?? "" }} avatarUrl={avatar} />
           <div className="min-w-0 flex-1">

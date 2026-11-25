@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { Skeleton } from "@/components/common/Skeleton";
 import { PublicMyPlayer } from "@/components/myPlayer/MyPlayerEntry";
 import FriendButton from "@/components/profile/FriendButton";
 import { ModeRecords, ProfileCard } from "@/components/profile/ProfileCard";
-import { IconChevronLeft, IconSwap } from "@/components/icons";
+import { IconChevronLeft, IconGift, IconSwap } from "@/components/icons";
 import { fetchPublicProfile } from "@/api/profile";
 import AcademyShowcase from "@/components/path/AcademyShowcase";
 import GiftShelf from "@/components/profile/GiftShelf";
@@ -16,10 +17,16 @@ import { cardStats, modeRows } from "@/lib/profileStats";
 import { useAuthStore } from "@/store/authStore";
 import type { UserPublic } from "@/types";
 
+import tileGifts from "@/assets/profile/tile_rewards.webp";
+import tileHall from "@/assets/profile/tile_hall.webp";
+
+type Panel = "showcase" | "gifts";
+
 export default function PublicProfilePage() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
   const me = useAuthStore((s) => s.user);
+  const [panel, setPanel] = useState<Panel | null>(null);
   const { data: profile, isLoading } = useQuery({
     queryKey: ["public-profile", userId],
     queryFn: () => fetchPublicProfile(Number(userId)),
@@ -28,9 +35,16 @@ export default function PublicProfilePage() {
   if (isLoading) return <ProfileSkeleton />;
   if (!profile) return null;
   const isMe = me?.id === profile.id;
+  const asTarget: UserPublic = {
+    id: profile.id, username: profile.username, first_name: profile.first_name,
+    last_name: profile.last_name, avatar_url: profile.avatar_url, level: profile.level,
+    arena_rating: profile.arena_rating, created_at: profile.created_at, active_badge: profile.active_badge,
+  };
+  const hasShowcase = !!profile.showcase?.length;
+  const open: Panel = panel ?? (hasShowcase ? "showcase" : "gifts");
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4">
       <button onClick={() => navigate(-1)} className="flex items-center gap-1 self-start text-sm text-accent-lime">
         <IconChevronLeft size={16} />
         Назад
@@ -38,13 +52,18 @@ export default function PublicProfilePage() {
 
       <ProfileCard
         rank={profile.league_rank}
-        rankLabel="рейтинг"
+        rankLabel={profile.league?.name ?? "рейтинг"}
+        rankImage={profile.league?.image_path}
         avatarUrl={profile.avatar_url}
         cosmetics={profile.cosmetics}
         name={`${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim()}
         badge={profile.active_badge}
         subtitle={`${profile.username ? `@${profile.username} · ` : ""}с нами с ${new Date(profile.created_at).toLocaleDateString("ru-RU")}`}
         clubPass={profile.club_pass_active}
+        club={profile.club}
+        lastSeenAt={profile.last_seen_at}
+        topCard={profile.rarest_card}
+        onTopCard={() => navigate(`/users/${profile.id}/album`)}
         userId={profile.id}
         isMe={isMe}
         stats={cardStats(profile)}
@@ -55,70 +74,75 @@ export default function PublicProfilePage() {
             {!isMe && (
               <div className="grid grid-cols-2 gap-2">
                 <button
-                  onClick={() => {
-                    const target: UserPublic = {
-                      id: profile.id, username: profile.username, first_name: profile.first_name,
-                      last_name: profile.last_name, avatar_url: profile.avatar_url, level: profile.level,
-                      arena_rating: profile.arena_rating, created_at: profile.created_at, active_badge: profile.active_badge,
-                    };
-                    navigate("/trades/new", { state: { target } });
-                  }}
+                  onClick={() => navigate("/trades/new", { state: { target: asTarget } })}
                   className="flex items-center justify-center gap-1.5 rounded-full bg-floodlight px-3 py-2 text-xs font-bold text-bg-base active:scale-95"
                 >
                   <IconSwap size={14} />
                   Обмен
                 </button>
-                <FriendButton userId={profile.id} className="whitespace-nowrap !px-2" />
                 <button
-                  onClick={() => navigate(`/users/${profile.id}/album`)}
-                  className="col-span-2 flex items-center justify-center gap-1.5 rounded-full bg-amber-300/15 px-4 py-2 text-xs font-bold text-amber-200 active:scale-95"
-                  data-testid="open-friend-album"
+                  onClick={() => navigate("/gifts", { state: { giftTo: asTarget } })}
+                  className="flex items-center justify-center gap-1.5 rounded-full bg-rarity-epic/25 px-3 py-2 text-xs font-bold text-fuchsia-200 active:scale-95"
+                  data-testid="gift-to-user"
                 >
-                  📖 Смотреть альбом
+                  <IconGift size={14} />
+                  Подарить
                 </button>
+                <span className="col-span-2 flex justify-center">
+                  <FriendButton userId={profile.id} className="w-full whitespace-nowrap" />
+                </span>
               </div>
             )}
           </>
         }
       />
 
-      <button
-        onClick={() => navigate(`/users/${profile.id}/hall`)}
-        className="relative flex items-center gap-3 overflow-hidden rounded-2xl border border-amber-300/30 bg-gradient-to-r from-[#3b2414] via-[#1a3628] to-[#0c1712] p-4 text-left active:scale-[0.98]"
-        data-testid="open-hall"
-      >
-        <span className="text-4xl drop-shadow">🏛</span>
-        <span className="min-w-0 flex-1">
-          <span className="block font-display text-base font-bold text-amber-100">Зал славы</span>
-          <span className="block text-caption text-ink-mist">Картины, кубки и подарки — в одной комнате</span>
-        </span>
-        <span className="rounded-full bg-amber-300/20 px-3 py-1.5 text-micro font-bold text-amber-100">Войти</span>
-      </button>
-
-      {!!profile.showcase?.length && <ShowcaseRow cards={profile.showcase} />}
-
-      <GiftShelf userId={profile.id} />
+      {/* Everything else in one row of tiles; the two that open in place share one panel. */}
+      <div className="grid grid-cols-4 gap-2">
+        <PlaceTile art={tileHall} title="Зал славы" onClick={() => navigate(`/users/${profile.id}/hall`)} testId="open-hall" />
+        <PlaceTile
+          art={profile.showcase?.[0]?.player.image_path ? staticUrl(profile.showcase[0].player.image_path) : null}
+          emoji="🃏"
+          title="Витрина"
+          active={open === "showcase"}
+          onClick={() => setPanel("showcase")}
+        />
+        <PlaceTile art={tileGifts} title="Подарки" active={open === "gifts"} onClick={() => setPanel("gifts")} />
+        <PlaceTile emoji="📖" title="Альбом" onClick={() => navigate(`/users/${profile.id}/album`)} testId="open-friend-album" />
+      </div>
+      {open === "showcase" &&
+        (hasShowcase ? (
+          <ShowcaseRow cards={profile.showcase!} />
+        ) : (
+          <p className="rounded-2xl bg-bg-surface p-4 text-center text-caption text-ink-mist">Витрина пока пустая</p>
+        ))}
+      {open === "gifts" && <GiftShelf userId={profile.id} />}
 
       <ProfileFeed userId={profile.id} />
-
       <PublicMyPlayer userId={profile.id} />
-
       <AcademyShowcase userId={profile.id} />
-
-      {profile.rarest_card && (
-        <section className="flex items-center gap-3 rounded-2xl bg-rarity-legendary/10 p-4">
-          <img decoding="async" loading="lazy"
-            src={staticUrl(profile.rarest_card.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-            alt={profile.rarest_card.display_name}
-            className="h-16 w-16 rounded-xl object-cover"
-          />
-          <div>
-            <p className="text-caption text-rarity-legendary">Самая редкая карточка</p>
-            <p className="font-display text-sm font-bold text-ink-chalk">{profile.rarest_card.display_name}</p>
-          </div>
-        </section>
-      )}
     </div>
+  );
+}
+
+function PlaceTile({ art, emoji, title, active, onClick, testId }: {
+  art?: string | null; emoji?: string; title: string; active?: boolean; onClick: () => void; testId?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex flex-col items-center gap-1 rounded-2xl border px-1 pb-2 pt-1.5 text-center active:scale-[0.95] ${
+        active ? "border-amber-300/70 bg-amber-300/10" : "border-white/10 bg-bg-surface"
+      }`}
+      data-testid={testId}
+    >
+      {art ? (
+        <img src={art} alt="" className="pointer-events-none h-14 w-14 rounded-lg object-contain drop-shadow-[0_4px_6px_rgba(0,0,0,0.55)]" />
+      ) : (
+        <span className="flex h-14 w-14 items-center justify-center text-4xl drop-shadow">{emoji}</span>
+      )}
+      <span className="text-[11px] font-bold leading-tight text-ink-chalk">{title}</span>
+    </button>
   );
 }
 
