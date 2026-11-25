@@ -108,3 +108,29 @@ async def test_admin_gift_transfer_stats(client, db_session, bot_token):
     stats = (await client.get("/api/v1/admin/gifts/transfer-stats", headers={"Authorization": f"Bearer {token}"})).json()
     assert stats["stars"] == 10 and stats["copies"] == 1 and stats["senders"] == 1
     assert stats["top_sets"] == [{"name": "Статистика", "copies": 1}]
+
+
+async def test_hall_of_fame_shows_showcase_trophies_and_counts(client, db_session, bot_token):
+    from app.models.trophy import TrophyDefinition, UserTrophy
+
+    headers, me = await _login(client, bot_token, 770040, db_session)
+    _, other = await _login(client, bot_token, 770041, db_session)
+    empty = (await client.get(f"/api/v1/users/{other.id}/hall", headers=headers)).json()
+    assert empty["frames"] == [] and empty["cabinet"] == [] and empty["pedestals"] == []
+
+    player = await create_player(db_session, rarity=Rarity.epic)
+    card = await create_user_card(db_session, other.id, player.id, CardSource.admin_grant)
+    card.finish = "gold"
+    other.showcase_card_ids = [card.id]
+    trophy = TrophyDefinition(code="champion", name="Чемпион", description="Первое место")
+    db_session.add(trophy)
+    await db_session.flush()
+    db_session.add(UserTrophy(user_id=other.id, trophy_definition_id=trophy.id, message="Спасибо!"))
+    await db_session.commit()
+
+    hall = (await client.get(f"/api/v1/users/{other.id}/hall", headers=headers)).json()
+    assert [f["id"] for f in hall["frames"]] == [card.id]
+    assert hall["cabinet"][0]["kind"] == "trophy" and hall["cabinet"][0]["code"] == "champion"
+    assert hall["cabinet"][0]["description"] == "Спасибо!"
+    assert hall["totals"]["trophies"] == 1 and hall["totals"]["rare_prints"] == 1
+    assert (await client.get("/api/v1/users/999999/hall", headers=headers)).status_code == 404

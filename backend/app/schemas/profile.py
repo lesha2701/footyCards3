@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from app.schemas.badge import BadgeOut
 from app.schemas.collection import UserCardListItem
+from app.schemas.gift import GiftShelfItem
 from app.schemas.monetization import EquippedCosmeticsOut, RewardBundleOut
 from app.schemas.player import PlayerOut
 
@@ -95,3 +96,31 @@ class ProfileSocialOut(BaseModel):
     respected_today: bool
     can_respect: bool
     feed: list[ProfileFeedEvent]
+
+
+class HallCabinetItem(BaseModel):
+    kind: str  # "trophy" | "collection"
+    code: Optional[str] = None
+    name: str
+    description: str = ""
+    icon: str
+    image_path: Optional[str] = None
+    at: datetime
+
+
+class HallTotals(BaseModel):
+    trophies: int
+    collections: int
+    gifts: int
+    rare_prints: int
+    respects: int
+
+
+class HallOut(BaseModel):
+    """«Зал славы»: the «Витрина» cards in the wall frames, trophies and
+    completed collections in the cabinet, the gift shelf on the pedestals."""
+
+    frames: list[UserCardListItem]
+    cabinet: list[HallCabinetItem]
+    pedestals: list[GiftShelfItem]
+    totals: HallTotals

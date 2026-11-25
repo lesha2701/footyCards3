@@ -1,12 +1,14 @@
 import { api } from "@/lib/api";
 import type {
   CoinTransaction,
+  GiftShelfItem,
   OwnedBadge,
   Page,
   ProfilePrivate,
   ProfilePublic,
   ProfileSettingsUpdate,
   UserPublic,
+  UserCard,
   UserTrophy,
 } from "@/types";
 
@@ -82,5 +84,28 @@ export async function fetchProfileSocial(userId: number): Promise<ProfileSocial>
 
 export async function giveRespect(userId: number): Promise<ProfileSocial> {
   const { data } = await api.post<ProfileSocial>(`/users/${userId}/respect`);
+  return data;
+}
+
+export interface HallCabinetItem {
+  kind: "trophy" | "collection";
+  code: string | null;
+  name: string;
+  description: string;
+  icon: string;
+  image_path: string | null;
+  at: string;
+}
+
+export interface Hall {
+  frames: UserCard[];
+  cabinet: HallCabinetItem[];
+  pedestals: GiftShelfItem[];
+  totals: { trophies: number; collections: number; gifts: number; rare_prints: number; respects: number };
+}
+
+/** «Зал славы» of a profile. */
+export async function fetchHall(userId: number): Promise<Hall> {
+  const { data } = await api.get<Hall>(`/users/${userId}/hall`);
   return data;
 }

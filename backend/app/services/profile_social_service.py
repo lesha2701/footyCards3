@@ -88,3 +88,46 @@ async def feed(db: AsyncSession, user_id: int) -> list[dict]:
 
     events.sort(key=when, reverse=True)
     return events[:FEED_SIZE]
+
+
+HALL_CABINET = 6
+HALL_PEDESTALS = 5
+
+
+async def hall(db: AsyncSession, user_id: int) -> dict:
+    """«Зал славы» — built only from what the profile already shows: the
+    «Витрина» copies, trophies (newest first) then completed collections,
+    and the gift shelf (pinned first, then the rarest serials)."""
+    from app.services import gift_service, profile_service
+
+    target = await _target(db, user_id)
+    trophies = (await db.execute(
+        select(UserTrophy).where(UserTrophy.user_id == user_id).order_by(UserTrophy.granted_at.desc())
+    )).scalars().all()
+    collections = (await db.execute(
+        select(UserCollectionReward, CardCollection).join(CardCollection, CardCollection.id == UserCollectionReward.collection_id)
+        .where(UserCollectionReward.user_id == user_id).order_by(UserCollectionReward.granted_at.desc())
+    )).all()
+    cabinet = [
+        {"kind": "trophy", "code": t.trophy.code, "name": t.trophy.name, "description": t.message or t.trophy.description or "",
+         "icon": t.trophy.icon or "🏆", "image_path": t.trophy.image_path, "at": t.granted_at}
+        for t in trophies
+    ] + [
+        {"kind": "collection", "name": c.name, "description": "Коллекция собрана целиком", "icon": "📖",
+         "image_path": c.image_path, "at": r.granted_at}
+        for r, c in collections
+    ]
+    shelf = await gift_service.gift_shelf(db, user_id)
+    rare = (await db.execute(
+        select(func.count()).select_from(UserCard).where(UserCard.owner_id == user_id, UserCard.finish.is_not(None))
+    )).scalar_one()
+    respects = (await db.execute(
+        select(func.count()).select_from(ProfileRespect).where(ProfileRespect.target_id == user_id)
+    )).scalar_one()
+    return {
+        "frames": await profile_service.showcase_cards(db, target),
+        "cabinet": cabinet[:HALL_CABINET],
+        "pedestals": shelf.items[:HALL_PEDESTALS],
+        "totals": {"trophies": len(trophies), "collections": len(collections), "gifts": shelf.copies,
+                   "rare_prints": rare, "respects": respects},
+    }
