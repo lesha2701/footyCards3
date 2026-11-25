@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy import func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.exceptions import AppError, ConflictError, NotFoundError
 from app.models.enums import CardSource, GiftKind, NotificationType, TransactionType
 from app.models.gift import Gift, GiftSet
 from app.models.card import UserCard
@@ -280,3 +280,90 @@ async def set_gift_pinned(db: AsyncSession, user: User, gift_id: int, pinned: bo
     await db.commit()
     await db.refresh(gift)
     return GiftOut.model_validate(gift)
+
+
+# --- passing an owned copy on: Telegram Stars only ("gift_transfer:<gift id>:<recipient id>") ---
+
+
+async def _transferable_gift(db: AsyncSession, owner_id: int, gift_id: int, lock: bool = False) -> Gift:
+    query = select(Gift).where(Gift.id == gift_id)
+    if lock:
+        query = query.with_for_update(of=Gift).execution_options(populate_existing=True)
+    gift = (await db.execute(query)).scalar_one_or_none()
+    if gift is None or gift.recipient_id != owner_id:
+        raise NotFoundError("Подарок не найден")
+    if gift.gift_set.kind != GiftKind.collectible or gift.claimed_at is None:
+        raise ConflictError("Передать можно только открытый коллекционный подарок")
+    return gift
+
+
+async def _transfer_recipient(db: AsyncSession, owner_id: int, recipient_id: int) -> User:
+    if recipient_id == owner_id:
+        raise ConflictError("Нельзя передать подарок самому себе")
+    recipient = await db.get(User, recipient_id)
+    if recipient is None or recipient.is_banned:
+        raise NotFoundError("Игрок не найден")
+    return recipient
+
+
+async def transfer_price(db: AsyncSession) -> int:
+    from app.services.game_config_service import get_config
+
+    return max(1, int((await get_config(db)).gift_transfer_stars))
+
+
+async def create_transfer_invoice(db: AsyncSession, user: User, gift_id: int, recipient_id: int):
+    """A numbered copy the user owns goes to another player — paid with Stars
+    only, never coins. Nothing moves until the payment is delivered."""
+    from app.services import shop_product_service
+
+    gift = await _transferable_gift(db, user.id, gift_id)
+    recipient = await _transfer_recipient(db, user.id, recipient_id)
+    stars = await transfer_price(db)
+    serial = f" №{gift.serial_number}" if gift.serial_number is not None else ""
+    return await shop_product_service.create_invoice(
+        db, user, f"gift_transfer:{gift.id}:{recipient.id}", stars,
+        f"Передача подарка «{gift.gift_set.name}»",
+        f"Твой подарок «{gift.gift_set.name}»{serial} перейдёт к игроку {recipient.full_display_name()}.",
+    )
+
+
+def _transfer_args(arg: str) -> tuple[int, int]:
+    gift_id, _, recipient_id = arg.partition(":")
+    return int(gift_id), int(recipient_id)
+
+
+async def validate_transfer_stars(db: AsyncSession, user_id: int, arg: str, stars_amount: int) -> tuple[bool, str]:
+    gift_id, recipient_id = _transfer_args(arg)
+    try:
+        await _transferable_gift(db, user_id, gift_id)
+        await _transfer_recipient(db, user_id, recipient_id)
+    except AppError as exc:
+        return False, exc.message
+    if stars_amount < await transfer_price(db):
+        return False, "Цена передачи изменилась — попробуй ещё раз"
+    return True, ""
+
+
+async def deliver_transfer_stars(db: AsyncSession, user: User, arg: str) -> dict:
+    """Already paid: the copy changes owner under its row lock. It keeps its
+    serial and stays claimed (its prize was already taken), comes unpinned,
+    and the payer becomes its sender. The caller commits."""
+    from app.services.notification_service import notify
+
+    gift_id, recipient_id = _transfer_args(arg)
+    gift = await _transferable_gift(db, user.id, gift_id, lock=True)
+    gift.recipient_id = recipient_id
+    gift.sender_id = user.id
+    gift.message = None
+    gift.is_admin_gift = False
+    gift.is_pinned = False
+    gift.pinned_at = None
+    db.add(gift)
+    serial = f" №{gift.serial_number}" if gift.serial_number is not None else ""
+    await notify(
+        db, recipient_id, NotificationType.admin_message, "🎁 Тебе передали подарок",
+        f"{user.full_display_name()} передал(а) тебе подарок «{gift.gift_set.name}»{serial}.",
+        related_object_type="gift", related_object_id=gift.id,
+    )
+    return {"kind": "gift_transfer", "name": gift.gift_set.name, "serial_number": gift.serial_number}

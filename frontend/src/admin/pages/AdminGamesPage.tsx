@@ -376,6 +376,14 @@ export default function AdminGamesPage() {
               </label>
             </div>
           </AdminSection>
+          <AdminSection title="Передача подарков" group="Общее">
+            <p className="mb-3 text-sm text-ink-mist">
+              Свой коллекционный подарок (конкретную копию с номером) можно передать другому игроку только за звёзды.
+            </p>
+            <div className="grid grid-cols-2 items-end gap-3">
+              {field("gift_transfer_stars", "Цена передачи, ⭐")}
+            </div>
+          </AdminSection>
           <AdminSection title="Рефералы" group="Общее">
             <p className="mb-3 text-xs text-slate-500">
               Друг засчитывается, когда поиграл указанное число разных дней (не за пак — паки бывают бесплатные).

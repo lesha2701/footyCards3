@@ -451,6 +451,9 @@ class GameConfig(TimestampMixin, Base):
     comeback_gift_cooldown_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     comeback_gift_coins: Mapped[int] = mapped_column(Integer, default=3000, nullable=False)
     comeback_gift_pack_slug: Mapped[str] = mapped_column(String, default="elite", nullable=False)
+    # A claimed collectible gift (a numbered copy) passed on to another player:
+    # Telegram Stars only (shop key "gift_transfer:<gift id>:<recipient id>").
+    gift_transfer_stars: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     # Thanks to Stars buyers (stars_patron_service): «Покровитель недели» —
     # the previous week's top buyers (at least week_min Stars): #1 gets the
     # trophy and a card of week_card_rarity, places 2..week_places get coins;

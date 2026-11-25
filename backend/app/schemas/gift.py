@@ -111,3 +111,7 @@ class AdminGiftBroadcastIn(BaseModel):
 
 class AdminGiftBroadcastOut(BaseModel):
     recipients: int
+
+
+class GiftTransferIn(BaseModel):
+    recipient_id: int

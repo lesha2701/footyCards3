@@ -367,6 +367,7 @@ export interface GameConfig {
   comeback_gift_cooldown_days: number;
   comeback_gift_coins: number;
   comeback_gift_pack_slug: string;
+  gift_transfer_stars: number;
   stars_patron_enabled: boolean;
   stars_patron_week_min: number;
   stars_patron_week_places: number;

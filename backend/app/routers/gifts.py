@@ -12,6 +12,7 @@ from app.schemas.gift import (
     GiftPurchaseResult,
     GiftSendIn,
     GiftSetOut,
+    GiftTransferIn,
 )
 from app.schemas.stars import StarsInvoiceCreateOut, StarsInvoiceStatusOut
 from app.services import gift_service, stars_payment_service
@@ -38,6 +39,18 @@ async def gift_invoice_status(
     payload_token: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
     return await stars_payment_service.get_invoice_status(db, user, payload_token)
+
+
+@router.get("/transfer-price")
+async def gift_transfer_price(db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
+    return {"stars": await gift_service.transfer_price(db)}
+
+
+@router.post("/{gift_id}/transfer-invoice", response_model=StarsInvoiceCreateOut)
+async def create_gift_transfer_invoice(
+    gift_id: int, payload: GiftTransferIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return await gift_service.create_transfer_invoice(db, user, gift_id, payload.recipient_id)
 
 
 @router.get("/mine", response_model=list[GiftOut])

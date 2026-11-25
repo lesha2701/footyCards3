@@ -374,6 +374,7 @@ class GameConfigOut(BaseModel):
     comeback_gift_cooldown_days: int = 30
     comeback_gift_coins: int = 3000
     comeback_gift_pack_slug: str = "elite"
+    gift_transfer_stars: int = 10
     stars_patron_enabled: bool = True
     stars_patron_week_min: int = 100
     stars_patron_week_places: int = 3
@@ -1340,6 +1341,7 @@ class GameConfigUpdate(BaseModel):
     comeback_gift_cooldown_days: Optional[int] = Field(default=None, ge=1, le=365)
     comeback_gift_coins: Optional[int] = Field(default=None, ge=0, le=100000)
     comeback_gift_pack_slug: Optional[str] = Field(default=None, max_length=100)
+    gift_transfer_stars: Optional[int] = Field(default=None, ge=1, le=10000)
     stars_patron_enabled: Optional[bool] = None
     stars_patron_week_min: Optional[int] = Field(default=None, ge=1, le=1000000)
     stars_patron_week_places: Optional[int] = Field(default=None, ge=0, le=10)

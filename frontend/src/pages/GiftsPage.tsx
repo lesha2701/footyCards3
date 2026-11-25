@@ -6,11 +6,14 @@ import {
   buyCollectibleWithCoins,
   claimGift,
   createGiftInvoice,
+  createGiftTransferInvoice,
   fetchGiftInvoiceStatus,
+  fetchGiftTransferPrice,
   fetchGiftSets,
   fetchMyGifts,
   pinGift,
 } from "@/api/gifts";
+import { fetchShopInvoiceStatus } from "@/api/monetization";
 import { searchUsers } from "@/api/profile";
 import PlayerCard from "@/components/cards/PlayerCard";
 import SkillTokenTile from "@/components/cards/SkillTokenTile";
@@ -20,6 +23,7 @@ import InfoTile from "@/components/shop/InfoTile";
 import { IconCoin, IconGift, IconInboxEmpty, IconSearch, IconTrophy } from "@/components/icons";
 import RewardModal, { RewardCoins } from "@/components/common/RewardModal";
 import { ApiRequestError, staticUrl } from "@/lib/api";
+import { stackGifts, type GiftStack } from "@/lib/giftStacks";
 import { RARITY_LABELS } from "@/lib/rarity";
 import { hapticNotify, openTelegramInvoice, showConfirm } from "@/lib/telegram";
 import { useOpenTile } from "@/lib/useOpenTile";
@@ -33,6 +37,7 @@ export default function GiftsPage() {
   const [tab, setTab] = useState<"mine" | "shop">("mine");
   const [claimResult, setClaimResult] = useState<GiftClaimResult | null>(null);
   const [detailGift, setDetailGift] = useState<Gift | null>(null);
+  const [openStackId, setOpenStackId] = useState<number | null>(null);
 
   const { data: myGifts } = useQuery({ queryKey: ["gifts", "mine"], queryFn: fetchMyGifts });
 
@@ -54,6 +59,8 @@ export default function GiftsPage() {
   const collectibles = (myGifts ?? []).filter((g) => g.gift_set.kind === "collectible" && !!g.claimed_at);
   const pendingGifts = (myGifts ?? []).filter((g) => !g.claimed_at);
   const claimedBundles = (myGifts ?? []).filter((g) => g.gift_set.kind === "bundle" && g.claimed_at);
+  const stacks = stackGifts(collectibles);
+  const openStack = stacks.find((s) => s.setId === openStackId) ?? null;
   const isEmpty = collectibles.length === 0 && pendingGifts.length === 0 && claimedBundles.length === 0;
 
   return (
@@ -97,31 +104,14 @@ export default function GiftsPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            {collectibles.length > 0 && (
+            {stacks.length > 0 && (
               <div className="grid grid-cols-3 gap-2">
-                {collectibles.map((g) => (
-                  <button
-                    key={g.id}
-                    onClick={() => setDetailGift(g)}
-                    className="flex flex-col items-center gap-1.5 rounded-2xl bg-bg-surface p-2.5 active:scale-[0.98]"
-                  >
-                    <span className="relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-rarity-epic/10">
-                      {g.gift_set.image_path ? (
-                        <img decoding="async" loading="lazy" src={staticUrl(g.gift_set.image_path) ?? undefined} className="h-full w-full object-cover" />
-                      ) : (
-                        <IconGift size={26} className="text-rarity-epic" />
-                      )}
-                      {g.is_pinned && (
-                        <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent-lime text-micro font-bold text-bg-base">
-                          ★
-                        </span>
-                      )}
-                    </span>
-                    <span className="w-full truncate text-center text-caption font-semibold text-ink-chalk">{g.gift_set.name}</span>
-                    {g.serial_number != null && (
-                      <span className="font-mono text-micro text-ink-mist-dim">№{g.serial_number}</span>
-                    )}
-                  </button>
+                {stacks.map((s) => (
+                  <GiftStackTile
+                    key={s.setId}
+                    stack={s}
+                    onClick={() => (s.copies.length === 1 ? setDetailGift(s.copies[0]) : setOpenStackId(s.setId))}
+                  />
                 ))}
               </div>
             )}
@@ -178,6 +168,9 @@ export default function GiftsPage() {
       )}
 
       {claimResult && <GiftClaimResultModal result={claimResult} onClose={() => setClaimResult(null)} />}
+      {openStack && !detailGift && (
+        <GiftStackSheet stack={openStack} onPick={setDetailGift} onClose={() => setOpenStackId(null)} />
+      )}
       {detailGift && <GiftDetailSheet gift={detailGift} onClose={() => setDetailGift(null)} />}
     </div>
   );
@@ -305,10 +298,180 @@ function GiftDetailSheet({ gift, onClose }: { gift: Gift; onClose: () => void })
         >
           {gift.is_pinned ? "Открепить" : "Закрепить в профиле"}
         </button>
+        <GiftTransfer gift={gift} onDone={onClose} />
         <button onClick={onClose} className="mt-2 w-full rounded-2xl bg-white/5 py-2.5 text-sm font-semibold text-ink-mist active:scale-95">
           Закрыть
         </button>
       </div>
+    </div>
+  );
+}
+
+function GiftStackTile({ stack, onClick }: { stack: GiftStack; onClick: () => void }) {
+  const first = stack.copies[0];
+  const count = stack.copies.length;
+  return (
+    <button
+      onClick={onClick}
+      className="relative flex flex-col items-center gap-1.5 rounded-2xl bg-bg-surface p-2.5 active:scale-[0.98]"
+      data-testid="gift-stack"
+    >
+      {count > 1 && (
+        <>
+          <span aria-hidden className="absolute inset-x-3 -top-1 h-2 rounded-t-xl bg-bg-surface/60" />
+          <span aria-hidden className="absolute inset-x-5 -top-2 h-2 rounded-t-xl bg-bg-surface/30" />
+        </>
+      )}
+      <span className="relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-rarity-epic/10">
+        {first.gift_set.image_path ? (
+          <img decoding="async" loading="lazy" src={staticUrl(first.gift_set.image_path) ?? undefined} className="h-full w-full object-cover" />
+        ) : (
+          <IconGift size={26} className="text-rarity-epic" />
+        )}
+        {stack.pinned && (
+          <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent-lime text-micro font-bold text-bg-base">
+            ★
+          </span>
+        )}
+      </span>
+      {count > 1 && (
+        <span className="absolute left-1.5 top-1.5 rounded-full bg-floodlight px-1.5 py-0.5 font-mono text-micro font-bold text-bg-base">
+          ×{count}
+        </span>
+      )}
+      <span className="w-full truncate text-center text-caption font-semibold text-ink-chalk">{first.gift_set.name}</span>
+      {count === 1 && first.serial_number != null ? (
+        <span className="font-mono text-micro text-ink-mist-dim">№{first.serial_number}</span>
+      ) : count > 1 ? (
+        <span className="text-micro text-ink-mist-dim">{count} шт.</span>
+      ) : null}
+    </button>
+  );
+}
+
+/** The numbered copies of one stack: pick a copy to pin it or pass it on. */
+function GiftStackSheet({ stack, onPick, onClose }: { stack: GiftStack; onPick: (g: Gift) => void; onClose: () => void }) {
+  const first = stack.copies[0];
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-center" onClick={onClose}>
+      <div
+        className="flex max-h-[80vh] w-full max-w-sm flex-col rounded-t-3xl bg-bg-surface p-5 sm:rounded-3xl"
+        onClick={(e) => e.stopPropagation()}
+        data-testid="gift-stack-sheet"
+      >
+        <div className="flex items-center gap-3">
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-rarity-epic/10">
+            {first.gift_set.image_path ? (
+              <img decoding="async" src={staticUrl(first.gift_set.image_path) ?? undefined} className="h-full w-full object-cover" />
+            ) : (
+              <IconGift size={24} className="text-rarity-epic" />
+            )}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate font-display text-base font-bold text-ink-chalk">{first.gift_set.name}</p>
+            <p className="text-xs text-ink-mist">У тебя {stack.copies.length} шт. · выбери копию по номеру</p>
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-4 gap-2 overflow-y-auto pb-1">
+          {stack.copies.map((g) => (
+            <button
+              key={g.id}
+              onClick={() => onPick(g)}
+              className={`relative rounded-xl px-1 py-2.5 font-mono text-xs font-bold active:scale-95 ${
+                g.is_pinned ? "bg-accent-lime/20 text-accent-lime" : "bg-black/25 text-ink-chalk"
+              }`}
+            >
+              №{g.serial_number ?? "—"}
+              {g.is_pinned && <span className="absolute right-1 top-0.5 text-micro">★</span>}
+            </button>
+          ))}
+        </div>
+        <button onClick={onClose} className="mt-3 w-full rounded-2xl bg-white/5 py-2.5 text-sm font-semibold text-ink-mist active:scale-95">
+          Закрыть
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** «Подарить другу»: this exact numbered copy goes to another player — Stars only. */
+function GiftTransfer({ gift, onDone }: { gift: Gift; onDone: () => void }) {
+  const queryClient = useQueryClient();
+  const { data: price } = useQuery({ queryKey: ["gifts", "transfer-price"], queryFn: fetchGiftTransferPrice });
+  const [open, setOpen] = useState(false);
+  const [target, setTarget] = useState<UserPublic | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const stars = price?.stars;
+
+  const send = async () => {
+    if (!target) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const invoice = await createGiftTransferInvoice(gift.id, target.id);
+      const paymentStatus = await openTelegramInvoice(invoice.invoice_link, invoice.payload_token);
+      if (paymentStatus === "cancelled") return;
+      if (paymentStatus === "failed") {
+        setError("Платёж не прошёл");
+        return;
+      }
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const status = await fetchShopInvoiceStatus(invoice.payload_token);
+        if (status.status === "completed") {
+          hapticNotify("success");
+          setSentTo(target.username ?? target.first_name ?? "игрок");
+          queryClient.invalidateQueries({ queryKey: ["gifts", "mine"] });
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      throw new Error("Подарок ещё не передан — проверь через минуту");
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : err instanceof Error ? err.message : "Не удалось передать подарок");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (sentTo) {
+    return (
+      <div className="mt-3 rounded-2xl bg-accent-lime/10 p-3 text-sm text-accent-lime">
+        Подарок №{gift.serial_number} передан: {sentTo}
+        <button onClick={onDone} className="mt-2 block w-full rounded-xl bg-white/5 py-2 text-xs font-semibold text-ink-mist">
+          Готово
+        </button>
+      </div>
+    );
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="mt-2 w-full rounded-2xl bg-amber-300/15 py-2.5 text-sm font-bold text-amber-200 active:scale-95"
+        data-testid="gift-transfer-open"
+      >
+        🎁 Подарить другу{stars ? ` · ${stars} ⭐` : ""}
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-3 flex flex-col gap-2 rounded-2xl bg-black/20 p-3 text-left" data-testid="gift-transfer">
+      <p className="text-xs text-ink-mist">
+        Копия №{gift.serial_number} перейдёт к выбранному игроку. Передача — только за звёзды.
+      </p>
+      <RecipientPicker target={target} onSelect={setTarget} />
+      {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
+      <button
+        onClick={send}
+        disabled={!target || busy || !stars}
+        className="w-full rounded-2xl bg-floodlight py-2.5 text-sm font-bold text-bg-base active:scale-95 disabled:opacity-40"
+      >
+        {busy ? "Передаём…" : `Передать за ${stars ?? "…"} ⭐`}
+      </button>
     </div>
   );
 }

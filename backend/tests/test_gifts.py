@@ -6,7 +6,7 @@ from app.config import get_settings
 from app.models.enums import GiftKind, Rarity
 from app.models.card import UserCard
 from app.models.gift import Gift
-from app.services import image_service, stars_payment_service
+from app.services import gift_service, image_service, stars_payment_service
 from tests.factories import create_gift_set, create_pack, create_player, get_user_by_telegram_id
 from tests.utils import telegram_headers
 
@@ -588,3 +588,60 @@ async def test_admin_gift_cards_stay_bound(client, db_session, bot_token):
     )).json()["id"]
     body = (await client.post(f"/api/v1/gifts/{gift_id}/claim", headers=headers)).json()
     assert body["pack_result"]["cards"][0]["card"]["from_free_source"] is True
+
+
+async def test_owned_collectible_copy_is_passed_on_for_stars_only(client, db_session, bot_token, monkeypatch):
+    from datetime import datetime, timezone
+
+    from app.models.notification import Notification
+
+    async def _fake_link(*args, **kwargs):
+        return "https://t.me/invoice/x"
+
+    monkeypatch.setattr(stars_payment_service, "_request_telegram_invoice_link", _fake_link)
+    gift_set = await create_gift_set(db_session, name="Кубок", kind=GiftKind.collectible, coins_price=100, stars_price=0)
+    owner = await _register(client, db_session, 860020, bot_token)
+    friend = await _register(client, db_session, 860021, bot_token)
+    headers = telegram_headers(860020, bot_token)
+    now = datetime.now(timezone.utc)
+    copies = [
+        Gift(gift_set_id=gift_set.id, recipient_id=owner.id, serial_number=n, claimed_at=now, is_pinned=n == 2,
+             pinned_at=now if n == 2 else None)
+        for n in (1, 2, 3)
+    ]
+    pending = Gift(gift_set_id=gift_set.id, recipient_id=owner.id, serial_number=4)
+    db_session.add_all([*copies, pending])
+    await db_session.commit()
+    ids = [g.id for g in copies]
+    owner_id, friend_id = owner.id, friend.id
+
+    assert (await client.get("/api/v1/gifts/transfer-price", headers=headers)).json() == {"stars": 10}
+    # An unclaimed copy, someone else's copy and a gift to yourself are refused.
+    r = await client.post(f"/api/v1/gifts/{pending.id}/transfer-invoice", headers=headers, json={"recipient_id": friend.id})
+    assert r.status_code == 409
+    r = await client.post(f"/api/v1/gifts/{copies[0].id}/transfer-invoice",
+                          headers=telegram_headers(860021, bot_token), json={"recipient_id": owner.id})
+    assert r.status_code == 404
+    r = await client.post(f"/api/v1/gifts/{copies[1].id}/transfer-invoice", headers=headers, json={"recipient_id": owner.id})
+    assert r.status_code == 409
+
+    r = await client.post(f"/api/v1/gifts/{copies[1].id}/transfer-invoice", headers=headers, json={"recipient_id": friend.id})
+    assert r.status_code == 200, r.text
+    token, stars = r.json()["payload_token"], r.json()["stars_amount"]
+    assert stars == 10
+    assert (await stars_payment_service.validate_pre_checkout(db_session, token, stars))[0]
+    await stars_payment_service.deliver_payment(db_session, token, owner.telegram_id, "ch-gift-transfer", stars)
+
+    db_session.expire_all()
+    moved = await db_session.get(Gift, ids[1])
+    assert moved.recipient_id == friend_id and moved.sender_id == owner_id
+    assert moved.serial_number == 2 and moved.claimed_at is not None and not moved.is_pinned
+    mine = (await client.get("/api/v1/gifts/mine", headers=headers)).json()
+    assert sorted(g["serial_number"] for g in mine) == [1, 3, 4]
+    note = (await db_session.execute(select(Notification).where(Notification.user_id == friend_id))).scalars().all()
+    assert any("№2" in n.body for n in note)
+
+    # The copy is gone: a stale invoice fails at pre-checkout, a new one is refused.
+    assert not (await gift_service.validate_transfer_stars(db_session, owner_id, f"{ids[1]}:{friend_id}", 10))[0]
+    r = await client.post(f"/api/v1/gifts/{ids[1]}/transfer-invoice", headers=headers, json={"recipient_id": friend_id})
+    assert r.status_code == 404

@@ -43,3 +43,14 @@ export async function pinGift(giftId: number, pinned: boolean): Promise<Gift> {
   const { data } = await api.patch<Gift>(`/gifts/${giftId}/pin`, { pinned });
   return data;
 }
+
+export async function fetchGiftTransferPrice(): Promise<{ stars: number }> {
+  const { data } = await api.get<{ stars: number }>("/gifts/transfer-price");
+  return data;
+}
+
+/** A numbered copy the user owns, passed on to another player — Stars only. */
+export async function createGiftTransferInvoice(giftId: number, recipientId: number): Promise<StarsInvoiceCreate> {
+  const { data } = await api.post<StarsInvoiceCreate>(`/gifts/${giftId}/transfer-invoice`, { recipient_id: recipientId });
+  return data;
+}
