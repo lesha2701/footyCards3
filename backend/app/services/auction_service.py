@@ -501,6 +501,7 @@ async def list_lots(
     position: Optional[str] = None,
     skill: Optional[str] = None,
     min_stars: Optional[int] = None,
+    finish: Optional[bool] = None,
     min_price: Optional[int] = None,
     max_price: Optional[int] = None,
     kind: Optional[str] = None,
@@ -534,6 +535,8 @@ async def list_lots(
         query = query.where(UserCard.skill_code == skill)
     if min_stars:
         query = query.where(UserCard.stars >= min_stars)
+    if finish:
+        query = query.where(UserCard.finish.is_not(None))
     if min_price is not None:
         query = query.where(price >= min_price)
     if max_price is not None:

@@ -75,6 +75,7 @@ export default function CardFilterBar({
           </>
         )}
         {showSkill && <Chip active={filter.has_skill} label="С навыком" onClick={() => set({ has_skill: !filter.has_skill })} />}
+        {showSkill && <Chip active={filter.finish} label="✨ Редкие версии" onClick={() => set({ finish: !filter.finish })} />}
       </div>
 
       {!open && extra.length > 0 && (

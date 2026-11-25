@@ -13,6 +13,7 @@ import CardPassport, { CardBack } from "@/components/collection/CardPassport";
 import { motion } from "framer-motion";
 import CardEquipmentPanel from "@/components/equipment/CardEquipmentPanel";
 import ShareButton from "@/components/common/ShareButton";
+import { ShowcaseToggle } from "@/components/profile/Showcase";
 import PathPanel from "@/components/path/PathPanel";
 import { staticUrl } from "@/lib/api";
 import { isBoundForever, squadLabel } from "@/lib/cardLocks";
@@ -295,6 +296,7 @@ export default function CardDetailModal({
                       onChanged={(text) => { setNotice(text); refreshLists(); }}
                     />
                   )}
+                  <ShowcaseToggle cardId={card.id} />
                   <label className="flex min-h-[44px] items-center justify-between gap-3 rounded-xl bg-black/20 px-3 py-2">
                     <span className="flex flex-col">
                       <span className="flex items-center gap-1.5 text-xs font-semibold text-ink-chalk">

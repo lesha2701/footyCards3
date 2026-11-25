@@ -1,9 +1,10 @@
 import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useMemo } from "react";
 
+import cardBack from "@/assets/cards/back.webp";
 import HoloTilt from "@/components/cards/HoloTilt";
 import LegendWalkout, { WalkoutBackdrop } from "@/components/cards/LegendWalkout";
-import { IconGlobe, IconHelp, IconStadium, IconTag } from "@/components/icons";
+import { IconGlobe, IconStadium, IconTag } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
 import { pathFrameClass, talentByCode, usePathCatalog } from "@/lib/pathCards";
 import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
@@ -75,6 +76,8 @@ export function RevealStage({
       {total > 1 && <p className="font-mono text-xs text-ink-mist-dim">Карточка {index + 1} / {total}</p>}
 
       <div className="relative">
+        {/* A «редкая версия» gives itself away just before the turn: its colour flashes behind the card. */}
+        {finish && stage === "silhouette" && <FinishTease finish={finish} />}
         {revealed && (
           <motion.div
             initial={{ opacity: 0, scale: 0.7 }}
@@ -99,16 +102,22 @@ export function RevealStage({
             <div className="flex h-full w-full flex-col items-center justify-center rounded-[22px] bg-bg-surface">
               {revealed ? (
                 <motion.img
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
+                  initial={{ opacity: 0, rotateY: 90, scale: 0.95 }}
+                  animate={{ opacity: 1, rotateY: 0, scale: 1 }}
+                  transition={{ duration: 0.45, ease: "easeOut" }}
                   src={staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
                   alt={player.display_name}
                   className="h-full w-full object-cover"
                 />
-              ) : showFrom("silhouette") ? (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-32 w-32 rounded-full bg-bg-raised" />
               ) : (
-                <IconHelp size={44} className="text-ink-mist-dim" />
+                // The card lies face down (the club's back) until it turns over.
+                <motion.div
+                  animate={showFrom("silhouette") ? { rotateY: [0, 8, -8, 0] } : { rotateY: 0 }}
+                  transition={{ duration: 0.6 }}
+                  className="h-full w-full bg-cover bg-center"
+                  style={{ backgroundImage: `url(${cardBack})` }}
+                  data-testid="reveal-back"
+                />
               )}
             </div>
 
@@ -176,6 +185,27 @@ export function RevealStage({
 
       {stage !== "reveal" && <p className="text-xs text-ink-mist-dim">Нажми, чтобы продолжить</p>}
     </div>
+  );
+}
+
+const TEASE_COLORS: Record<string, string> = {
+  gold: "radial-gradient(circle, #fde68a, #f59e0b 45%, transparent 70%)",
+  night: "radial-gradient(circle, #c4b5fd, #4f46e5 45%, transparent 70%)",
+  autograph: "radial-gradient(circle, #ffffff, #fcd34d 40%, transparent 70%)",
+};
+
+function FinishTease({ finish }: { finish: string }) {
+  const reduced = useReducedMotion();
+  return (
+    <motion.div
+      aria-hidden
+      data-testid="reveal-finish-tease"
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={reduced ? { opacity: 0.7, scale: 1.3 } : { opacity: [0, 0.9, 0.5, 0.9], scale: [0.8, 1.45, 1.3, 1.45] }}
+      transition={{ duration: 0.9, ease: "easeOut" }}
+      className="pointer-events-none absolute inset-0 -z-10 rounded-full blur-2xl"
+      style={{ background: TEASE_COLORS[finish] ?? TEASE_COLORS.gold }}
+    />
   );
 }
 

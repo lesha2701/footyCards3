@@ -137,7 +137,10 @@ class CollectionFilterParams:
         sort_dir: SortDir = "desc",
         has_skill: Optional[bool] = None,
         position_category: Optional[str] = None,
+        finish: Optional[bool] = None,
     ):
+        # True = only «редкие версии» (gold / night / autograph).
+        self.finish = finish
         self.rarity = rarity
         self.position_category = position_category
         self.country = country
@@ -273,6 +276,8 @@ class AlbumCollectionDetailOut(BaseModel):
     reward_claimed: bool
     players: List[AlbumPlayerOut]
     available_from: Optional[datetime] = None
+    # Footballers of the page held in a «редкая версия»; all of them = «Золотая страница».
+    finished_count: int = 0
     # Coaches and stadiums of the collection (they count toward it too).
     staff: List["AlbumStaffOut"] = []
 

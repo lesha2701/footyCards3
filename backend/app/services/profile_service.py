@@ -192,7 +192,48 @@ async def _build_public(db: AsyncSession, user: User) -> ProfilePublicOut:
         penalty_matches_won=penalty_won,
         penalty_matches_drawn=penalty_drawn,
         penalty_matches_lost=penalty_lost,
+        showcase=await showcase_cards(db, user),
     )
+
+
+SHOWCASE_SIZE = 3
+
+
+async def showcase_cards(db: AsyncSession, user: User) -> list:
+    """The «Витрина» copies still owned, in the chosen order."""
+    from sqlalchemy.orm import joinedload
+
+    from app.models.card import UserCard
+    from app.schemas.collection import UserCardListItem
+
+    ids = [i for i in (user.showcase_card_ids or []) if isinstance(i, int)][:SHOWCASE_SIZE]
+    if not ids:
+        return []
+    cards = {
+        c.id: c for c in (await db.execute(
+            select(UserCard).where(UserCard.id.in_(ids), UserCard.owner_id == user.id).options(joinedload(UserCard.player))
+        )).unique().scalars().all()
+    }
+    return [UserCardListItem.model_validate(cards[i]) for i in ids if i in cards]
+
+
+async def set_showcase(db: AsyncSession, user: User, card_ids: list[int]) -> list:
+    from app.core.exceptions import ConflictError
+    from app.models.card import UserCard
+
+    ids = list(dict.fromkeys(card_ids))
+    if len(ids) > SHOWCASE_SIZE:
+        raise ConflictError(f"В витрине помещается {SHOWCASE_SIZE} карты")
+    if ids:
+        mine = set((await db.execute(
+            select(UserCard.id).where(UserCard.id.in_(ids), UserCard.owner_id == user.id)
+        )).scalars().all())
+        if mine != set(ids):
+            raise NotFoundError("Карта не найдена")
+    user.showcase_card_ids = ids
+    db.add(user)
+    await db.commit()
+    return await showcase_cards(db, user)
 
 
 async def get_public_profile(db: AsyncSession, user_id: int) -> ProfilePublicOut:

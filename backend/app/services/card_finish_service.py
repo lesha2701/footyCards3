@@ -33,6 +33,26 @@ def pick_finish(roll: float, gold: int, autograph: int, night: int) -> Optional[
     return None
 
 
+FINISH_LABELS = {"gold": "Золотая версия", "night": "Ночная версия", "autograph": "С автографом"}
+FINISH_ICONS = {"gold": "✨", "night": "🌙", "autograph": "✍️"}
+
+
+async def announce_on_club_wall(db: AsyncSession, owner_id: int, player_id: int, finish: str) -> None:
+    """The owner's club sees the pull on its wall, written by the owner
+    (no bot notification — an ordinary post). Not committed here."""
+    from sqlalchemy import select
+
+    from app.models.club import ClubMember
+    from app.models.club_wall import ClubPost
+
+    club_id = (await db.execute(select(ClubMember.club_id).where(ClubMember.user_id == owner_id))).scalar_one_or_none()
+    player = await db.get(Player, player_id)
+    if club_id is None or player is None:
+        return
+    text = f"{FINISH_ICONS.get(finish, '✨')} Мне выпала редкая версия: {player.display_name} — «{FINISH_LABELS.get(finish, finish)}»!"
+    db.add(ClubPost(club_id=club_id, user_id=owner_id, text=text[:500]))
+
+
 async def roll_finish(db: AsyncSession, source: CardSource, player_id: int) -> Optional[str]:
     if source not in PACK_SOURCES:
         return None

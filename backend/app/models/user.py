@@ -416,6 +416,8 @@ class User(TimestampMixin, Base):
     # Saved default card filter (rarity/country/club/position/sort) for the
     # collection, album and Forge — see PUT /collection/filter-default.
     card_filter_default: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # «Витрина» of the profile: up to three of the owner's card ids, in order.
+    showcase_card_ids: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Currently-equipped Badge (if any), shown next to this user's name
     # everywhere a public identity is rendered. `lazy="joined"` so every

@@ -38,6 +38,7 @@ async def list_lots(
     position: Optional[Position] = None,
     skill: Optional[str] = Query(default=None, max_length=32),
     min_stars: Optional[int] = Query(default=None, ge=0, le=10),
+    finish: Optional[bool] = None,
     min_price: Optional[int] = Query(default=None, ge=0),
     max_price: Optional[int] = Query(default=None, ge=0),
     kind: Optional[Literal["auction", "fixed"]] = None,
@@ -49,7 +50,7 @@ async def list_lots(
 ):
     return await auction_service.list_lots(
         db, user, search=search, rarity=rarity, position=position.value if position else None, skill=skill,
-        min_stars=min_stars, min_price=min_price, max_price=max_price, kind=kind, sort=sort, limit=limit, offset=offset,
+        min_stars=min_stars, finish=finish, min_price=min_price, max_price=max_price, kind=kind, sort=sort, limit=limit, offset=offset,
     )
 
 

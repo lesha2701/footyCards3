@@ -192,6 +192,7 @@ const LeaguePage = lazy(() => import("@/pages/LeaguePage"));
 const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
 const GiftsPage = lazy(() => import("@/pages/GiftsPage"));
 const PublicProfilePage = lazy(() => import("@/pages/PublicProfilePage"));
+const FriendAlbumPage = lazy(() => import("@/pages/FriendAlbumPage"));
 const CareerPage = lazy(() => import("@/pages/CareerPage"));
 const CareerMatchPage = lazy(() => import("@/pages/CareerMatchPage"));
 const FriendsPage = lazy(() => import("@/pages/FriendsPage"));
@@ -477,6 +478,7 @@ export default function App() {
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/gifts" element={<GiftsPage />} />
         <Route path="/users/:userId" element={<PublicProfilePage />} />
+        <Route path="/users/:userId/album" element={<FriendAlbumPage />} />
       </Route>
       <Route path="/play/free-kick-3d" element={<Navigate to="/play/free-kick" replace />} />
 

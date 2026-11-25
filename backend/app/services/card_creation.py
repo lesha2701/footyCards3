@@ -115,6 +115,10 @@ async def _new_card(
     )
     db.add(card)
     await db.flush()
+    if card.finish:
+        from app.services.card_finish_service import announce_on_club_wall
+
+        await announce_on_club_wall(db, owner_id, player_id, card.finish)
     from app.services.artifact_service import apply_card_bonus
     from app.services.trade_finder_service import notify_wanted_card
 

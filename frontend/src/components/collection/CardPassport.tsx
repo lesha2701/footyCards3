@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { fetchCardPassport } from "@/api/collection";
 import cardBack from "@/assets/cards/back.webp";
+import { cardMedals } from "@/lib/cardMedals";
 import { specialSerial } from "@/lib/serials";
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -77,6 +78,7 @@ export default function CardPassport({ cardId }: { cardId: number }) {
   const special = specialSerial(data.serial_number, data.edition_size);
   const arena = data.arena_goals + data.arena_assists + data.arena_mvps;
   const previous = data.owners.slice(0, -1);
+  const medals = cardMedals(data.arena_goals, data.arena_assists, data.arena_mvps);
 
   return (
     <section className="rounded-2xl border border-amber-200/15 bg-gradient-to-b from-emerald-950/50 to-transparent p-3" data-testid="card-passport">
@@ -106,6 +108,13 @@ export default function CardPassport({ cardId }: { cardId: number }) {
             <p>
               В Арене: <b className="text-ink-chalk">{data.arena_goals}</b> гол. · <b className="text-ink-chalk">{data.arena_assists}</b> пас. ·{" "}
               <b className="text-ink-chalk">{data.arena_mvps}</b> MVP
+            </p>
+          )}
+          {medals.length > 0 && (
+            <p className="flex flex-wrap gap-1" data-testid="card-medals">
+              {medals.map((m) => (
+                <span key={m} className="rounded-full bg-amber-300/15 px-2 py-0.5 text-caption font-bold text-amber-200">{m}</span>
+              ))}
             </p>
           )}
           {data.number_one_owner && data.serial_number !== 1 && (

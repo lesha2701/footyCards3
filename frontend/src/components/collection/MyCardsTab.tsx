@@ -67,6 +67,7 @@ export default function MyCardsTab() {
     sort_by: filter.sort_by,
     sort_dir: "desc",
     has_skill: filter.has_skill || undefined,
+    finish: filter.finish || undefined,
     page: pageNum,
     page_size: PAGE_SIZE,
   };

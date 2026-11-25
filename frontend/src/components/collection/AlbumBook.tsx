@@ -66,7 +66,9 @@ export function AlbumCover({ owned, total, completed }: { owned: number; total: 
 }
 
 /** The round gold stamp pressed onto a finished page. */
-export function CompleteStamp({ size = 72, className = "" }: { size?: number; className?: string }) {
+export function CompleteStamp({
+  size = 72, className = "", golden = false,
+}: { size?: number; className?: string; golden?: boolean }) {
   const reduce = useReducedMotion();
   return (
     <motion.div
@@ -78,16 +80,18 @@ export function CompleteStamp({ size = 72, className = "" }: { size?: number; cl
         width: size,
         height: size,
         border: "3px double rgba(233,194,90,0.95)",
-        background: "radial-gradient(circle, rgba(233,194,90,0.18), rgba(233,194,90,0.04) 70%)",
-        boxShadow: "0 0 18px rgba(233,194,90,0.35)",
+        background: golden
+          ? "radial-gradient(circle, #fff3c4, #e9c25a 55%, #a07a2c)"
+          : "radial-gradient(circle, rgba(233,194,90,0.18), rgba(233,194,90,0.04) 70%)",
+        boxShadow: golden ? "0 0 26px rgba(252,211,77,0.75)" : "0 0 18px rgba(233,194,90,0.35)",
       }}
-      data-testid="album-stamp"
+      data-testid={golden ? "album-stamp-golden" : "album-stamp"}
     >
       <span
-        className="text-center font-display font-black uppercase leading-[1.05] text-amber-300"
-        style={{ fontSize: size * 0.16, letterSpacing: "0.08em" }}
+        className={`text-center font-display font-black uppercase leading-[1.05] ${golden ? "text-[#5a3d0a]" : "text-amber-300"}`}
+        style={{ fontSize: size * (golden ? 0.15 : 0.16), letterSpacing: "0.08em" }}
       >
-        ★<br />Собрано<br />★
+        ★<br />{golden ? "Золотая" : "Собрано"}<br />★
       </span>
     </motion.div>
   );

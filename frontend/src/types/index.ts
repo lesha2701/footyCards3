@@ -1520,6 +1520,8 @@ export interface ProfilePublic {
   penalty_matches_won: number;
   penalty_matches_drawn: number;
   penalty_matches_lost: number;
+  /** «Витрина»: up to three copies the owner shows off. */
+  showcase?: UserCard[];
 }
 
 export interface ProfilePrivate extends ProfilePublic {
@@ -2311,6 +2313,8 @@ export interface AlbumCollectionDetail {
   reward_claimed: boolean;
   available_from?: string | null;
   players: AlbumPlayer[];
+  /** Footballers of the page held in a «редкая версия»; all = «Золотая страница». */
+  finished_count?: number;
   /** Coaches and stadiums of the collection (they count toward it too). */
   staff?: AlbumStaff[];
 }

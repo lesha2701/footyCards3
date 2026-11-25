@@ -146,6 +146,8 @@ async def list_user_cards(
         query = query.where(UserCard.skill_code.is_not(None))
     elif getattr(filters, "has_skill", None) is False:
         query = query.where(UserCard.skill_code.is_(None))
+    if getattr(filters, "finish", None) is True:
+        query = query.where(UserCard.finish.is_not(None))
 
     if filters.sort_by == "rating":
         order_col = Player.rating
@@ -736,6 +738,7 @@ async def get_album_collection_detail(
         all_owned = cards_result.unique().scalars().all()
         in_squad = await personal_squad_card_ids(db, [c.id for c in all_owned])
         squad_copy: dict[int, UserCard] = {}
+        finished_players = {c.player_id for c in all_owned if c.finish}
         for card in all_owned:
             dup_counts[card.player_id] = dup_counts.get(card.player_id, 0) + 1
             # A special print («редкая версия») is the copy the album shows.
@@ -750,6 +753,7 @@ async def get_album_collection_detail(
         owned_cards.update(squad_copy)
     else:
         in_squad = set()
+        finished_players = set()
     skilled = await _skilled_copies(db, user_id, owned_cards.keys())
 
     slots: List[AlbumPlayerOut] = []
@@ -810,6 +814,7 @@ async def get_album_collection_detail(
         owned_count=owned, total_count=total, is_complete=owned >= total,
         reward_claimed=False if collection_id == OTHER_COLLECTION_ID else await _reward_claimed(db, user_id, collection_id),
         players=slots,
+        finished_count=len(finished_players) if not search else 0,
     )
 
 

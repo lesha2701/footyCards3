@@ -85,6 +85,8 @@ export interface AuctionLotFilters {
   position?: string;
   skill?: string;
   min_stars?: number;
+  /** true = only «редкие версии». */
+  finish?: boolean;
   min_price?: number;
   max_price?: number;
   kind?: "auction" | "fixed";

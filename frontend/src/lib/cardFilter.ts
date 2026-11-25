@@ -12,10 +12,12 @@ export interface CardFilter {
   position: string | null;
   sort_by: "rating" | "rarity" | "acquired_at";
   has_skill: boolean;
+  /** Only «редкие версии» (gold / night / autograph); not part of the saved default. */
+  finish: boolean;
 }
 
 export const EMPTY_FILTER: CardFilter = {
-  rarity: null, country: null, club: null, position: null, sort_by: "acquired_at", has_skill: false,
+  rarity: null, country: null, club: null, position: null, sort_by: "acquired_at", has_skill: false, finish: false,
 };
 
 export function fromSaved(saved: CardFilterDefault | null | undefined): CardFilter {
@@ -26,6 +28,7 @@ export function fromSaved(saved: CardFilterDefault | null | undefined): CardFilt
     position: saved?.position ?? null,
     sort_by: saved?.sort_by ?? "acquired_at",
     has_skill: !!saved?.has_skill,
+    finish: false,
   };
 }
 
@@ -42,7 +45,7 @@ export function sameFilter(a: CardFilter, b: CardFilter): boolean {
 
 /** How many narrowing fields are set (sort doesn't count). */
 export function activeCount(filter: CardFilter): number {
-  return [filter.rarity, filter.country, filter.club, filter.position].filter(Boolean).length + (filter.has_skill ? 1 : 0);
+  return [filter.rarity, filter.country, filter.club, filter.position].filter(Boolean).length + (filter.has_skill ? 1 : 0) + (filter.finish ? 1 : 0);
 }
 
 /** Client-side filter for lists already on the client (album, Forge). */

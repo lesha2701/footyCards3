@@ -26,10 +26,17 @@ export interface CollectionFilters {
   search?: string;
   /** true = only copies with a skill, false = only without. */
   has_skill?: boolean;
+  /** true = only «редкие версии». */
+  finish?: boolean;
   sort_by?: "rating" | "rarity" | "acquired_at";
   sort_dir?: "asc" | "desc";
   page?: number;
   page_size?: number;
+}
+
+export async function setShowcase(cardIds: number[]): Promise<UserCard[]> {
+  const { data } = await api.put<UserCard[]>("/collection/showcase", { card_ids: cardIds });
+  return data;
 }
 
 export async function fetchCollection(filters: CollectionFilters): Promise<Page<UserCard>> {

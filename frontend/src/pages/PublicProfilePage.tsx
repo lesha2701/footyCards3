@@ -8,6 +8,7 @@ import FriendButton from "@/components/profile/FriendButton";
 import { IconChevronLeft, IconSwap } from "@/components/icons";
 import { fetchPublicProfile } from "@/api/profile";
 import AcademyShowcase from "@/components/path/AcademyShowcase";
+import { ShowcaseRow } from "@/components/profile/Showcase";
 import { staticUrl } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import type { UserPublic } from "@/types";
@@ -60,7 +61,16 @@ export default function PublicProfilePage() {
           </button>
         )}
         {me?.id !== profile.id && <FriendButton userId={profile.id} />}
+        <button
+          onClick={() => navigate(`/users/${profile.id}/album`)}
+          className="mt-1 flex items-center gap-1.5 rounded-full bg-amber-300/15 px-4 py-2 text-xs font-bold text-amber-200 active:scale-95"
+          data-testid="open-friend-album"
+        >
+          📖 Смотреть альбом
+        </button>
       </section>
+
+      {!!profile.showcase?.length && <ShowcaseRow cards={profile.showcase} />}
 
       <section className="rounded-2xl bg-bg-surface p-4">
         <div className="grid grid-cols-2 gap-y-4">

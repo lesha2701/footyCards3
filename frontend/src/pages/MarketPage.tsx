@@ -129,6 +129,7 @@ function MarketList() {
   const [position, setPosition] = useState("");
   const [skill, setSkill] = useState("");
   const [minStars, setMinStars] = useState(0);
+  const [finishOnly, setFinishOnly] = useState(false);
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [sort, setSort] = useState<NonNullable<AuctionLotFilters["sort"]>>("ending");
@@ -148,6 +149,7 @@ function MarketList() {
     position: position || undefined,
     skill: skill || undefined,
     min_stars: minStars || undefined,
+    finish: finishOnly || undefined,
     min_price: minPrice ? Number(minPrice) : undefined,
     max_price: maxPrice ? Number(maxPrice) : undefined,
     kind: kind || undefined,
@@ -160,7 +162,7 @@ function MarketList() {
     refetchInterval: POLL_MS,
     placeholderData: (prev) => prev,
   });
-  const activeFilters = [rarity, position, skill, minStars, minPrice, maxPrice].filter(Boolean).length;
+  const activeFilters = [rarity, position, skill, minStars, finishOnly, minPrice, maxPrice].filter(Boolean).length;
   const now = useNow();
 
   const selectClass = "w-full rounded-xl bg-bg-surface px-3 py-2 text-xs text-ink-chalk outline-none";
@@ -212,6 +214,13 @@ function MarketList() {
               <option key={n} value={n}>от {"★".repeat(n)}</option>
             ))}
           </select>
+          <button
+            onClick={() => setFinishOnly((v) => !v)}
+            className={`col-span-2 rounded-xl px-3 py-2 text-xs font-semibold ${finishOnly ? "bg-amber-300/20 text-amber-200" : "bg-bg-surface text-ink-mist"}`}
+            aria-pressed={finishOnly}
+          >
+            ✨ Только редкие версии (золотая, ночная, с автографом)
+          </button>
           <input
             inputMode="numeric"
             value={minPrice}
@@ -228,7 +237,7 @@ function MarketList() {
           />
           {activeFilters > 0 && (
             <button
-              onClick={() => { setRarity(""); setPosition(""); setSkill(""); setMinStars(0); setMinPrice(""); setMaxPrice(""); }}
+              onClick={() => { setRarity(""); setPosition(""); setSkill(""); setMinStars(0); setFinishOnly(false); setMinPrice(""); setMaxPrice(""); }}
               className="col-span-2 rounded-xl bg-white/5 py-2 text-xs text-ink-mist"
             >
               Сбросить фильтры

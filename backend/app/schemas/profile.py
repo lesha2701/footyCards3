@@ -4,6 +4,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from app.schemas.badge import BadgeOut
+from app.schemas.collection import UserCardListItem
 from app.schemas.monetization import EquippedCosmeticsOut, RewardBundleOut
 from app.schemas.player import PlayerOut
 
@@ -40,6 +41,8 @@ class ProfilePublicOut(BaseModel):
     penalty_matches_won: int
     penalty_matches_drawn: int
     penalty_matches_lost: int
+    # «Витрина»: up to three copies the owner chose to show off.
+    showcase: list[UserCardListItem] = []
 
 
 class ReferralMilestoneOut(BaseModel):

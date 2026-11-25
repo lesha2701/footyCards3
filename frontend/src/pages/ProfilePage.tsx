@@ -16,6 +16,7 @@ import { UserBadge } from "@/components/common/UserBadge";
 import ProfileMuse from "@/components/muses/ProfileMuse";
 import { MyPlayerEntry } from "@/components/myPlayer/MyPlayerEntry";
 import AcademyShowcase from "@/components/path/AcademyShowcase";
+import { ShowcaseRow } from "@/components/profile/Showcase";
 import LoginCalendar from "@/components/profile/LoginCalendar";
 import ThemeSetting from "@/components/profile/ThemeSetting";
 import MonetizationEntries from "@/components/shop/MonetizationEntries";
@@ -210,6 +211,9 @@ export default function ProfilePage() {
 
       <MonetizationEntries />
 
+      {profile?.showcase?.length ? (
+        <ShowcaseRow cards={profile.showcase} title="Моя витрина" />
+      ) : null}
       <MyPlayerEntry />
       <ProfileMuse />
       {user && <AcademyShowcase userId={user.id} />}

@@ -1,6 +1,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
@@ -75,6 +76,17 @@ async def claim_card_star(
     card_id: int, payload: CardStarClaimRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
     return await card_star_service.claim(db, user, card_id, payload.idempotency_key)
+
+
+class ShowcaseIn(BaseModel):
+    card_ids: list[int]
+
+
+@router.put("/showcase", response_model=list[UserCardListItem])
+async def put_showcase(body: ShowcaseIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    from app.services.profile_service import set_showcase
+
+    return await set_showcase(db, user, body.card_ids)
 
 
 @router.get("/album", response_model=AlbumOverviewOut)

@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -5,7 +7,7 @@ from app.core.dependencies import get_current_user
 from app.core.pagination import Page, PageParams
 from app.database import get_db
 from app.models.user import User
-from app.schemas.collection import CollectionFilterParams, UserCardListItem
+from app.schemas.collection import AlbumCollectionDetailOut, AlbumOverviewOut, CollectionFilterParams, UserCardListItem
 from app.schemas.profile import ProfilePublicOut
 from app.schemas.user import UserPublicOut
 from app.services.collection_service import list_user_cards
@@ -26,6 +28,38 @@ async def search(
 @router.get("/{user_id}", response_model=ProfilePublicOut)
 async def public_profile(user_id: int, db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
     return await get_public_profile(db, user_id)
+
+
+@router.get("/{user_id}/album", response_model=AlbumOverviewOut)
+async def public_album(
+    user_id: int, search: Optional[str] = Query(default=None, max_length=64),
+    db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user),
+):
+    """Another player's album, read-only — to leaf through and find a trade."""
+    from app.services.collection_service import get_album_overview
+
+    await get_public_user(db, user_id)
+    return await get_album_overview(db, user_id, search)
+
+
+@router.get("/{user_id}/album/{collection_id}", response_model=AlbumCollectionDetailOut)
+async def public_album_page(
+    user_id: int, collection_id: int, search: Optional[str] = Query(default=None, max_length=64),
+    db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user),
+):
+    from app.services.collection_service import get_album_collection_detail
+
+    await get_public_user(db, user_id)
+    return await get_album_collection_detail(db, user_id, collection_id, search)
+
+
+async def get_public_user(db: AsyncSession, user_id: int) -> User:
+    from app.core.exceptions import NotFoundError
+
+    target = await db.get(User, user_id)
+    if target is None or target.is_banned:
+        raise NotFoundError("User not found")
+    return target
 
 
 @router.get("/{user_id}/collection", response_model=Page[UserCardListItem])

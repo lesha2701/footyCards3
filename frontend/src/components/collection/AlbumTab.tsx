@@ -25,30 +25,35 @@ import { ApiRequestError, staticUrl } from "@/lib/api";
 import { POSITION_LABELS, RARITY_GRADIENTS, RARITY_ORDER } from "@/lib/rarity";
 import type { AlbumCollectionSummary, AlbumPlayer, AlbumStaff } from "@/types";
 
-export default function AlbumTab() {
+/** The sticker album; `ownerId` = another player's, read-only (no rewards,
+ * no «Ищу», no card actions, no «NEW» bookkeeping). */
+export default function AlbumTab({ ownerId }: { ownerId?: number } = {}) {
   const [openCollectionId, setOpenCollectionId] = useState<number | null>(null);
   // The pages in album order, for flipping between them with a swipe.
-  const { data: overview } = useQuery({ queryKey: ["album-overview", ""], queryFn: () => fetchAlbumOverview() });
+  const { data: overview } = useQuery({
+    queryKey: ["album-overview", "", ownerId ?? "me"], queryFn: () => fetchAlbumOverview(undefined, ownerId),
+  });
   const pages = (overview?.collections ?? []).filter((c) => !c.available_from).map((c) => c.id);
 
   return openCollectionId === null ? (
-    <AlbumOverview onOpen={setOpenCollectionId} />
+    <AlbumOverview onOpen={setOpenCollectionId} ownerId={ownerId} />
   ) : (
     <AlbumDetail
       key={openCollectionId}
       collectionId={openCollectionId}
       pages={pages}
+      ownerId={ownerId}
       onGo={setOpenCollectionId}
       onBack={() => setOpenCollectionId(null)}
     />
   );
 }
 
-function AlbumOverview({ onOpen }: { onOpen: (id: number) => void }) {
+function AlbumOverview({ onOpen, ownerId }: { onOpen: (id: number) => void; ownerId?: number }) {
   const [search, setSearch] = useState("");
   const { data, isLoading } = useQuery({
-    queryKey: ["album-overview", search],
-    queryFn: () => fetchAlbumOverview(search || undefined),
+    queryKey: ["album-overview", search, ownerId ?? "me"],
+    queryFn: () => fetchAlbumOverview(search || undefined, ownerId),
   });
 
   return (
@@ -61,7 +66,7 @@ function AlbumOverview({ onOpen }: { onOpen: (id: number) => void }) {
         />
       )}
 
-      {!search && <NextGoal collections={data?.collections} onOpen={onOpen} />}
+      {!search && !ownerId && <NextGoal collections={data?.collections} onOpen={onOpen} />}
 
       <div className="flex items-center gap-2 rounded-xl bg-bg-surface px-3 py-2.5">
         <IconSearch size={15} className="shrink-0 text-ink-mist-dim" />
@@ -183,10 +188,11 @@ function CollectionSpread({ collection, page, onClick }: { collection: AlbumColl
 }
 
 function AlbumDetail({
-  collectionId, pages, onGo, onBack,
+  collectionId, pages, ownerId, onGo, onBack,
 }: {
   collectionId: number;
   pages: number[];
+  ownerId?: number;
   onGo: (id: number) => void;
   onBack: () => void;
 }) {
@@ -194,9 +200,11 @@ function AlbumDetail({
   // Same saved default filter as «Мои карты» (rarity/country/club/position).
   const { filter, setFilter, defaultFilter } = useCardFilter();
   const { data, isLoading } = useQuery({
-    queryKey: ["album-detail", collectionId, search],
-    queryFn: () => fetchAlbumCollectionDetail(collectionId, search || undefined),
+    queryKey: ["album-detail", collectionId, search, ownerId ?? "me"],
+    queryFn: () => fetchAlbumCollectionDetail(collectionId, search || undefined, ownerId),
   });
+  // «Золотая страница»: every footballer of a finished page in a rare print.
+  const golden = !!data && data.is_complete && data.total_count > 0 && (data.finished_count ?? 0) >= data.total_count;
 
   const {
     detailCard, setDetailCard, confirmSell, setConfirmSell,
@@ -228,7 +236,7 @@ function AlbumDetail({
   const ownedKey = ownedIds.join(",");
   const loaded = !!data;
   useEffect(() => {
-    if (!loaded || search) return;
+    if (!loaded || search || ownerId) return;
     setFresh(freshOnPage(collectionId, ownedIds));
     markPageSeen(collectionId, ownedIds);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -287,7 +295,7 @@ function AlbumDetail({
             )}
           </div>
         </div>
-        {data?.is_complete && <CompleteStamp size={66} className="absolute -right-1 -top-2" />}
+        {data?.is_complete && <CompleteStamp size={66} golden={golden} className="absolute -right-1 -top-2" />}
       </div>
 
       {data?.available_from && (
@@ -295,7 +303,7 @@ function AlbumDetail({
           🔒 Коллекция откроется {availableFromLabel(data.available_from)} — карточки будут только в юбилейном паке
         </div>
       )}
-      {data && !data.is_complete && data.reward_coins > 0 && (
+      {data && !ownerId && !data.is_complete && data.reward_coins > 0 && (
         <div className="flex flex-col gap-1 rounded-xl bg-bg-surface px-3 py-2.5 text-xs text-ink-mist">
           <p>
             Не хватает <b className="text-ink-chalk">{data.total_count - data.owned_count}</b> футболистов
@@ -309,9 +317,21 @@ function AlbumDetail({
           </p>
         </div>
       )}
-      {data?.is_complete && (
+      {data?.is_complete && !ownerId && (
         <div className="rounded-xl bg-accent-lime/10 px-3 py-2.5 text-center text-xs font-semibold text-accent-lime">
           <IconParty size={14} className="mr-1 inline align-[-2px]" />Коллекция собрана{data.reward_coins > 0 ? ` — получено ${data.reward_coins} монет` : ""}!
+        </div>
+      )}
+      {data?.is_complete && !search && (
+        <div
+          className={`rounded-xl px-3 py-2.5 text-center text-xs font-semibold ${
+            golden ? "bg-gradient-to-r from-amber-300/25 via-yellow-200/20 to-amber-300/25 text-amber-200" : "bg-white/5 text-ink-mist"
+          }`}
+          data-testid="golden-page"
+        >
+          {golden
+            ? "✨ Золотая страница — все футболисты в редких версиях!"
+            : <>✨ Золотая страница: <b className="text-amber-200">{data.finished_count ?? 0}</b> / {data.total_count} в редких версиях</>}
         </div>
       )}
 
@@ -358,7 +378,7 @@ function AlbumDetail({
                     <SlotNumber n={n} />
                     {slot.owned && slot.card ? (
                       <Sticker seed={slot.player.id} fresh={fresh.has(slot.player.id)} delay={0.1 + Math.min(i, 8) * 0.06}>
-                        <AlbumSlot slot={slot} number={n} onOpen={() => slot.card && setDetailCard(slot.card)} wanted={false} onToggleWant={() => {}} />
+                        <AlbumSlot slot={slot} number={n} onOpen={() => !ownerId && slot.card && setDetailCard(slot.card)} wanted={false} onToggleWant={() => {}} />
                       </Sticker>
                     ) : (
                       <AlbumSlot
@@ -367,6 +387,7 @@ function AlbumDetail({
                         onOpen={() => {}}
                         wanted={want.wanted.has(slot.player.id)}
                         onToggleWant={() => want.toggle(slot.player.id)}
+                        canWant={!ownerId}
                       />
                     )}
                   </div>
@@ -449,17 +470,19 @@ function AlbumSlot({
   onOpen,
   wanted,
   onToggleWant,
+  canWant = true,
 }: {
   slot: AlbumPlayer;
   number: number;
   onOpen: () => void;
   wanted: boolean;
   onToggleWant: () => void;
+  canWant?: boolean;
 }) {
   const canUpgrade = useSkillUpgradeCheck();
   if (!slot.owned || !slot.card) {
     // Diamonds never trade (except «Академия»), so they can't be in «Ищу».
-    const wantable = slot.player.rarity !== "diamond" || !!slot.player.path_talent_code;
+    const wantable = canWant && (slot.player.rarity !== "diamond" || !!slot.player.path_talent_code);
     return (
       <div className="relative flex aspect-[3/4] flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border border-dashed border-amber-100/15 bg-black/25 p-2 text-center shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)]">
         <span aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center font-display text-5xl font-black text-white/[0.04]">
