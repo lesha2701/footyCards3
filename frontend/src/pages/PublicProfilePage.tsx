@@ -8,6 +8,7 @@ import FriendButton from "@/components/profile/FriendButton";
 import { IconChevronLeft, IconSwap } from "@/components/icons";
 import { fetchPublicProfile } from "@/api/profile";
 import AcademyShowcase from "@/components/path/AcademyShowcase";
+import GiftShelf from "@/components/profile/GiftShelf";
 import { ShowcaseRow } from "@/components/profile/Showcase";
 import { staticUrl } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
@@ -71,6 +72,8 @@ export default function PublicProfilePage() {
       </section>
 
       {!!profile.showcase?.length && <ShowcaseRow cards={profile.showcase} />}
+
+      <GiftShelf userId={profile.id} />
 
       <section className="rounded-2xl bg-bg-surface p-4">
         <div className="grid grid-cols-2 gap-y-4">

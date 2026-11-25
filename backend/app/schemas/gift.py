@@ -69,6 +69,7 @@ class GiftOut(BaseModel):
     serial_number: Optional[int] = None
     claimed_at: Optional[datetime] = None
     created_at: datetime
+    transfer_unseen: bool = False
 
 
 class GiftClaimResult(BaseModel):
@@ -115,3 +116,51 @@ class AdminGiftBroadcastOut(BaseModel):
 
 class GiftTransferIn(BaseModel):
     recipient_id: int
+
+
+class GiftBatchTransferIn(BaseModel):
+    gift_ids: list[int] = Field(min_length=1, max_length=50)
+    recipient_id: int
+    message: Optional[str] = Field(default=None, max_length=200)
+
+
+class GiftHistoryEntry(BaseModel):
+    kind: str  # "issued" | "transfer"
+    at: datetime
+    from_user: Optional[UserPublicOut] = None
+    to_user: Optional[UserPublicOut] = None
+    message: Optional[str] = None
+
+
+class GiftHistoryOut(BaseModel):
+    gift_id: int
+    serial_number: Optional[int] = None
+    entries: list[GiftHistoryEntry]
+
+
+class GiftShelfItem(BaseModel):
+    id: int
+    gift_set: GiftSetOut
+    serial_number: Optional[int] = None
+    is_pinned: bool
+    special: Optional[str] = None
+
+
+class GiftShelfOut(BaseModel):
+    sets: int
+    copies: int
+    special: int
+    items: list[GiftShelfItem]
+
+
+class GiftLeaderRow(BaseModel):
+    place: int
+    user: UserPublicOut
+    sets: int
+    copies: int
+    special: int
+
+
+class GiftLeaderboardOut(BaseModel):
+    rows: list[GiftLeaderRow]
+    me: Optional[GiftLeaderRow] = None

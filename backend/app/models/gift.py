@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String
@@ -60,6 +60,8 @@ class Gift(TimestampMixin, Base):
     message: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     is_admin_gift: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_pinned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Passed on by another player and not yet shown to the new owner.
+    transfer_unseen: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     pinned_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     serial_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     claimed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -69,3 +71,23 @@ class Gift(TimestampMixin, Base):
 
     gift_set: Mapped["GiftSet"] = relationship(back_populates="gifts", lazy="joined")
     sender: Mapped[Optional["User"]] = relationship(foreign_keys="[Gift.sender_id]", lazy="joined")
+
+
+class GiftTransfer(Base):
+    """One copy passed on for Stars. A batch (one invoice) shares `batch`;
+    rows wait as "pending" until the payment is delivered, the "done" ones
+    are the copy's history. `prev_sender_id` keeps who the copy came from
+    before, so the very first giver is not lost."""
+
+    __tablename__ = "gift_transfers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    batch: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    gift_id: Mapped[int] = mapped_column(ForeignKey("gifts.id", ondelete="CASCADE"), nullable=False, index=True)
+    from_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    to_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    prev_sender_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    message: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

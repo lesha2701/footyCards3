@@ -645,3 +645,93 @@ async def test_owned_collectible_copy_is_passed_on_for_stars_only(client, db_ses
     assert not (await gift_service.validate_transfer_stars(db_session, owner_id, f"{ids[1]}:{friend_id}", 10))[0]
     r = await client.post(f"/api/v1/gifts/{ids[1]}/transfer-invoice", headers=headers, json={"recipient_id": friend_id})
     assert r.status_code == 404
+
+
+SPECIAL_CASES = {
+    1: "first", 7: "lucky", 77: "lucky", 777: "lucky", 10: "jubilee", 100: "jubilee", 1000: "jubilee",
+    11: "twins", 222: "twins", 300: "round", 1200: "round", 121: "mirror", 1001: "mirror",
+    2: None, 12: None, 42: None, 101: "mirror", 150: None,
+}
+
+
+def test_special_serials_match_the_ts_twin_cases():
+    for n, code in SPECIAL_CASES.items():
+        assert gift_service.special_serial(n) == code, n
+
+
+async def test_batch_transfer_with_a_note_history_shelf_and_collectors(client, db_session, bot_token, monkeypatch):
+    from datetime import datetime, timezone
+
+    async def _fake_link(*args, **kwargs):
+        return "https://t.me/invoice/x"
+
+    monkeypatch.setattr(stars_payment_service, "_request_telegram_invoice_link", _fake_link)
+    cup = await create_gift_set(db_session, name="Кубок", kind=GiftKind.collectible, coins_price=100, stars_price=0)
+    star = await create_gift_set(db_session, name="Звезда", kind=GiftKind.collectible, coins_price=100, stars_price=0)
+    owner = await _register(client, db_session, 860030, bot_token)
+    friend = await _register(client, db_session, 860031, bot_token)
+    headers, friend_headers = telegram_headers(860030, bot_token), telegram_headers(860031, bot_token)
+    now = datetime.now(timezone.utc)
+    copies = [Gift(gift_set_id=cup.id, recipient_id=owner.id, serial_number=n, claimed_at=now) for n in (7, 8, 100, 9)]
+    copies.append(Gift(gift_set_id=star.id, recipient_id=owner.id, serial_number=1, claimed_at=now))
+    db_session.add_all(copies)
+    await db_session.commit()
+    ids = [g.id for g in copies]
+    owner_tg, friend_id = owner.telegram_id, friend.id
+
+    r = await client.post("/api/v1/gifts/transfer-invoice", headers=headers,
+                          json={"gift_ids": [ids[0], ids[1], ids[0]], "recipient_id": friend_id, "message": "С днём рождения!"})
+    assert r.status_code == 200, r.text
+    token, stars = r.json()["payload_token"], r.json()["stars_amount"]
+    assert stars == 20  # two copies × 10 ⭐, the duplicate id counted once
+    assert (await stars_payment_service.validate_pre_checkout(db_session, token, stars))[0]
+    await stars_payment_service.deliver_payment(db_session, token, owner_tg, "ch-gift-batch", stars)
+
+    theirs = (await client.get("/api/v1/gifts/mine", headers=friend_headers)).json()
+    assert sorted(g["serial_number"] for g in theirs) == [7, 8]
+    assert all(g["transfer_unseen"] and g["message"] == "С днём рождения!" for g in theirs)
+    assert (await client.post("/api/v1/gifts/seen", headers=friend_headers)).json() == {"updated": 2}
+    assert not any(g["transfer_unseen"] for g in (await client.get("/api/v1/gifts/mine", headers=friend_headers)).json())
+
+    history = (await client.get(f"/api/v1/gifts/{ids[0]}/history", headers=friend_headers)).json()
+    assert [e["kind"] for e in history["entries"]] == ["issued", "transfer"]
+    assert history["entries"][0]["to_user"]["id"] == owner.id
+    assert history["entries"][1]["to_user"]["id"] == friend_id and history["entries"][1]["message"] == "С днём рождения!"
+    assert (await client.get(f"/api/v1/gifts/{ids[0]}/history", headers=headers)).status_code == 404
+
+    # A paid batch can't be delivered twice, nor validated again.
+    assert not (await gift_service.validate_batch_stars(db_session, owner.id, "nope", 10))[0]
+
+    shelf = (await client.get(f"/api/v1/users/{owner.id}/gift-shelf", headers=friend_headers)).json()
+    assert shelf["sets"] == 2 and shelf["copies"] == 3 and shelf["special"] == 2
+    assert [(i["serial_number"], i["special"]) for i in shelf["items"]] == [(1, "first"), (100, "jubilee")]
+
+    board = (await client.get("/api/v1/gifts/leaderboard", headers=friend_headers)).json()
+    mine = board["me"]
+    assert mine["user"]["id"] == friend_id and mine["sets"] == 1 and mine["copies"] == 2 and mine["special"] == 1
+    top = {row["user"]["id"]: row for row in board["rows"]}
+    assert top[owner.id]["sets"] == 2 and top[owner.id]["place"] < mine["place"]
+
+    # Someone else's copy or too many copies at once are refused.
+    r = await client.post("/api/v1/gifts/transfer-invoice", headers=friend_headers,
+                          json={"gift_ids": [ids[2]], "recipient_id": owner.id})
+    assert r.status_code == 404
+    r = await client.post("/api/v1/gifts/transfer-invoice", headers=headers,
+                          json={"gift_ids": list(range(1, 60)), "recipient_id": friend_id})
+    assert r.status_code == 422
+
+
+async def test_an_invoice_of_the_first_version_is_still_delivered(client, db_session, bot_token):
+    from datetime import datetime, timezone
+
+    gift_set = await create_gift_set(db_session, name="Старый", kind=GiftKind.collectible, coins_price=1, stars_price=0)
+    owner = await _register(client, db_session, 860040, bot_token)
+    friend = await _register(client, db_session, 860041, bot_token)
+    gift = Gift(gift_set_id=gift_set.id, recipient_id=owner.id, serial_number=5, claimed_at=datetime.now(timezone.utc))
+    db_session.add(gift)
+    await db_session.commit()
+    arg = f"{gift.id}:{friend.id}"
+    assert (await gift_service.validate_transfer_stars(db_session, owner.id, arg, 10))[0]
+    await gift_service.deliver_transfer_stars(db_session, owner, arg)
+    await db_session.commit()
+    assert gift.recipient_id == friend.id and gift.transfer_unseen

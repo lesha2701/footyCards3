@@ -1,5 +1,8 @@
 import { api } from "@/lib/api";
-import type { Gift, GiftClaimResult, GiftPurchaseResult, GiftSet, StarsInvoiceCreate, StarsInvoiceStatus } from "@/types";
+import type {
+  Gift, GiftClaimResult, GiftHistory, GiftLeaderboard, GiftPurchaseResult, GiftSet, GiftShelf, StarsInvoiceCreate,
+  StarsInvoiceStatus,
+} from "@/types";
 
 export async function fetchGiftSets(): Promise<GiftSet[]> {
   const { data } = await api.get<GiftSet[]>("/gifts/sets");
@@ -49,8 +52,31 @@ export async function fetchGiftTransferPrice(): Promise<{ stars: number }> {
   return data;
 }
 
-/** A numbered copy the user owns, passed on to another player — Stars only. */
-export async function createGiftTransferInvoice(giftId: number, recipientId: number): Promise<StarsInvoiceCreate> {
-  const { data } = await api.post<StarsInvoiceCreate>(`/gifts/${giftId}/transfer-invoice`, { recipient_id: recipientId });
+/** Numbered copies the user owns, passed on to another player — Stars only. */
+export async function createGiftTransferInvoice(
+  giftIds: number[], recipientId: number, message?: string,
+): Promise<StarsInvoiceCreate> {
+  const { data } = await api.post<StarsInvoiceCreate>("/gifts/transfer-invoice", {
+    gift_ids: giftIds, recipient_id: recipientId, message: message || undefined,
+  });
+  return data;
+}
+
+export async function markGiftTransfersSeen(): Promise<void> {
+  await api.post("/gifts/seen");
+}
+
+export async function fetchGiftHistory(giftId: number): Promise<GiftHistory> {
+  const { data } = await api.get<GiftHistory>(`/gifts/${giftId}/history`);
+  return data;
+}
+
+export async function fetchGiftLeaderboard(): Promise<GiftLeaderboard> {
+  const { data } = await api.get<GiftLeaderboard>("/gifts/leaderboard");
+  return data;
+}
+
+export async function fetchGiftShelf(userId: number): Promise<GiftShelf> {
+  const { data } = await api.get<GiftShelf>(`/users/${userId}/gift-shelf`);
   return data;
 }

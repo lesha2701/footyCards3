@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { adminBroadcastGift, adminSendGift, fetchAdminTrophies, grantTrophy } from "@/admin/api";
 import {
@@ -7,8 +8,11 @@ import {
   claimGift,
   createGiftInvoice,
   createGiftTransferInvoice,
+  fetchGiftHistory,
   fetchGiftInvoiceStatus,
+  fetchGiftLeaderboard,
   fetchGiftTransferPrice,
+  markGiftTransfersSeen,
   fetchGiftSets,
   fetchMyGifts,
   pinGift,
@@ -23,18 +27,19 @@ import InfoTile from "@/components/shop/InfoTile";
 import { IconCoin, IconGift, IconInboxEmpty, IconSearch, IconTrophy } from "@/components/icons";
 import RewardModal, { RewardCoins } from "@/components/common/RewardModal";
 import { ApiRequestError, staticUrl } from "@/lib/api";
-import { stackGifts, type GiftStack } from "@/lib/giftStacks";
+import { SPECIAL_LABELS, specialSerial } from "@/lib/giftSerial";
+import { filterBySerial, giftsWord, sortCopies, stackGifts, type CopySort, type GiftStack } from "@/lib/giftStacks";
 import { RARITY_LABELS } from "@/lib/rarity";
 import { hapticNotify, openTelegramInvoice, showConfirm } from "@/lib/telegram";
 import { useOpenTile } from "@/lib/useOpenTile";
 import { useAuthStore } from "@/store/authStore";
-import type { Gift, GiftClaimResult, GiftSet, TrophyDefinition, UserPublic } from "@/types";
+import type { Gift, GiftClaimResult, GiftLeaderRow, GiftSet, TrophyDefinition, UserPublic } from "@/types";
 
 export default function GiftsPage() {
   const user = useAuthStore((s) => s.user);
   const updateBalance = useAuthStore((s) => s.updateBalance);
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<"mine" | "shop">("mine");
+  const [tab, setTab] = useState<"mine" | "shop" | "top">("mine");
   const [claimResult, setClaimResult] = useState<GiftClaimResult | null>(null);
   const [detailGift, setDetailGift] = useState<Gift | null>(null);
   const [openStackId, setOpenStackId] = useState<number | null>(null);
@@ -60,6 +65,11 @@ export default function GiftsPage() {
   const pendingGifts = (myGifts ?? []).filter((g) => !g.claimed_at);
   const claimedBundles = (myGifts ?? []).filter((g) => g.gift_set.kind === "bundle" && g.claimed_at);
   const stacks = stackGifts(collectibles);
+  const unseen = collectibles.filter((g) => g.transfer_unseen);
+  const markSeen = () => {
+    queryClient.setQueryData<Gift[]>(["gifts", "mine"], (old) => old?.map((g) => ({ ...g, transfer_unseen: false })));
+    markGiftTransfersSeen().catch(() => undefined);
+  };
   const openStack = stacks.find((s) => s.setId === openStackId) ?? null;
   const isEmpty = collectibles.length === 0 && pendingGifts.length === 0 && claimedBundles.length === 0;
 
@@ -72,23 +82,22 @@ export default function GiftsPage() {
 
       {user.is_admin && <AdminGiftControls />}
 
-      <div className="flex gap-2 rounded-2xl bg-bg-surface p-1">
-        <button
-          onClick={() => setTab("mine")}
-          className={`flex-1 rounded-xl py-2 text-sm font-semibold transition ${
-            tab === "mine" ? "bg-floodlight text-bg-base" : "text-ink-mist"
-          }`}
-        >
-          Мои подарки{pendingGifts.length > 0 ? ` (${pendingGifts.length})` : ""}
-        </button>
-        <button
-          onClick={() => setTab("shop")}
-          className={`flex-1 rounded-xl py-2 text-sm font-semibold transition ${
-            tab === "shop" ? "bg-floodlight text-bg-base" : "text-ink-mist"
-          }`}
-        >
-          Магазин подарков
-        </button>
+      <div className="grid grid-cols-3 gap-1 rounded-2xl bg-bg-surface p-1">
+        {([
+          ["mine", `Мои${pendingGifts.length > 0 ? ` (${pendingGifts.length})` : ""}`],
+          ["shop", "Магазин"],
+          ["top", "Коллекционеры"],
+        ] as const).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`truncate rounded-xl px-1 py-2 text-xs font-semibold transition ${
+              tab === key ? "bg-floodlight text-bg-base" : "text-ink-mist"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {tab === "mine" ? (
@@ -163,10 +172,13 @@ export default function GiftsPage() {
             )}
           </div>
         )
-      ) : (
+      ) : tab === "shop" ? (
         <GiftShop />
+      ) : (
+        <GiftCollectors />
       )}
 
+      {unseen.length > 0 && !claimResult && <ReceivedGiftsModal gifts={unseen} onClose={markSeen} />}
       {claimResult && <GiftClaimResultModal result={claimResult} onClose={() => setClaimResult(null)} />}
       {openStack && !detailGift && (
         <GiftStackSheet stack={openStack} onPick={setDetailGift} onClose={() => setOpenStackId(null)} />
@@ -253,9 +265,48 @@ function GiftClaimResultModal({ result, onClose }: { result: GiftClaimResult; on
   );
 }
 
+function GiftImage({ gift, size }: { gift: Gift; size: string }) {
+  return (
+    <span className={`flex ${size} shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-rarity-epic/10`}>
+      {gift.gift_set.image_path ? (
+        <img decoding="async" loading="lazy" src={staticUrl(gift.gift_set.image_path) ?? undefined} className="h-full w-full object-cover" />
+      ) : (
+        <IconGift size={32} className="text-rarity-epic" />
+      )}
+    </span>
+  );
+}
+
+/** «Особый номер»: a gold chip with its name. */
+function SpecialChip({ serial }: { serial: number | null }) {
+  const code = specialSerial(serial);
+  if (!code) return null;
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-amber-300/20 px-2 py-0.5 text-micro font-bold text-amber-200">
+      ✨ {SPECIAL_LABELS[code]} номер
+    </span>
+  );
+}
+
+function editionLine(gift: Gift): string {
+  const issued = Math.max(0, gift.gift_set.next_serial_number - 1);
+  return gift.gift_set.max_supply ? `Выпущено ${issued} из ${gift.gift_set.max_supply}` : `Выпущено ${issued}`;
+}
+
+function personName(u: UserPublic | null | undefined): string {
+  if (!u) return "администрация";
+  return u.username ?? u.first_name ?? `игрок #${u.id}`;
+}
+
 function GiftDetailSheet({ gift, onClose }: { gift: Gift; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const { data: history } = useQuery({
+    queryKey: ["gifts", "history", gift.id],
+    queryFn: () => fetchGiftHistory(gift.id),
+    enabled: showHistory,
+  });
 
   const pinMutation = useMutation({
     mutationFn: (pinned: boolean) => pinGift(gift.id, pinned),
@@ -269,14 +320,10 @@ function GiftDetailSheet({ gift, onClose }: { gift: Gift; onClose: () => void })
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl bg-bg-surface p-5 text-center" onClick={(e) => e.stopPropagation()}>
-        <span className="mx-auto flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl bg-rarity-epic/10">
-          {gift.gift_set.image_path ? (
-            <img decoding="async" loading="lazy" src={staticUrl(gift.gift_set.image_path) ?? undefined} className="h-full w-full object-cover" />
-          ) : (
-            <IconGift size={40} className="text-rarity-epic" />
-          )}
-        </span>
+      <div className="max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-bg-surface p-5 text-center" onClick={(e) => e.stopPropagation()}>
+        <div className={`mx-auto w-fit rounded-2xl ${specialSerial(gift.serial_number) ? "ring-2 ring-amber-300/70 shadow-[0_0_24px_rgba(252,211,77,0.35)]" : ""}`}>
+          <GiftImage gift={gift} size="h-24 w-24" />
+        </div>
         <p className="mt-3 font-display text-base font-bold text-ink-chalk">{gift.gift_set.name}</p>
         {gift.serial_number != null && (
           <p className="mt-1 font-mono text-xs text-accent-lime">
@@ -284,8 +331,10 @@ function GiftDetailSheet({ gift, onClose }: { gift: Gift; onClose: () => void })
             {gift.gift_set.max_supply ? ` из ${gift.gift_set.max_supply}` : ""}
           </p>
         )}
+        <div className="mt-1"><SpecialChip serial={gift.serial_number} /></div>
+        <p className="mt-1 text-micro text-ink-mist-dim">{editionLine(gift)}</p>
         <p className="mt-1 text-xs text-ink-mist">
-          {gift.sender ? `От ${gift.sender.username ?? gift.sender.first_name ?? "игрока"}` : "От администрации"}
+          {gift.sender ? `От ${personName(gift.sender)}` : "От администрации"}
         </p>
         {gift.message && <p className="mt-1 text-xs italic text-ink-mist-dim">«{gift.message}»</p>}
 
@@ -298,7 +347,34 @@ function GiftDetailSheet({ gift, onClose }: { gift: Gift; onClose: () => void })
         >
           {gift.is_pinned ? "Открепить" : "Закрепить в профиле"}
         </button>
-        <GiftTransfer gift={gift} onDone={onClose} />
+        <GiftTransfer gifts={[gift]} onDone={onClose} />
+
+        <button
+          onClick={() => setShowHistory((v) => !v)}
+          className="mt-2 w-full rounded-2xl bg-white/5 py-2.5 text-sm font-semibold text-ink-chalk active:scale-95"
+          data-testid="gift-history-toggle"
+        >
+          📜 История копии
+        </button>
+        {showHistory && (
+          <ol className="mt-2 flex flex-col gap-1.5 text-left" data-testid="gift-history">
+            {(history?.entries ?? []).map((e, idx) => (
+              <li key={idx} className="flex gap-2 rounded-xl bg-black/20 px-3 py-2 text-xs">
+                <span className="mt-0.5">{e.kind === "issued" ? "🏷" : "🎁"}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="text-ink-chalk">
+                    {e.kind === "issued"
+                      ? `Выпущен · ${e.from_user ? `подарок от ${personName(e.from_user)}` : "от администрации"} → ${personName(e.to_user)}`
+                      : `${personName(e.from_user)} → ${personName(e.to_user)}`}
+                  </span>
+                  {e.message && <span className="block italic text-ink-mist-dim">«{e.message}»</span>}
+                  <span className="block text-micro text-ink-mist-dim">{new Date(e.at).toLocaleDateString("ru-RU")}</span>
+                </span>
+              </li>
+            ))}
+            {!history && <li className="text-xs text-ink-mist">Загрузка…</li>}
+          </ol>
+        )}
         <button onClick={onClose} className="mt-2 w-full rounded-2xl bg-white/5 py-2.5 text-sm font-semibold text-ink-mist active:scale-95">
           Закрыть
         </button>
@@ -322,7 +398,11 @@ function GiftStackTile({ stack, onClick }: { stack: GiftStack; onClick: () => vo
           <span aria-hidden className="absolute inset-x-5 -top-2 h-2 rounded-t-xl bg-bg-surface/30" />
         </>
       )}
-      <span className="relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-rarity-epic/10">
+      <span
+        className={`relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-rarity-epic/10 ${
+          stack.special > 0 ? "ring-2 ring-amber-300/60" : ""
+        }`}
+      >
         {first.gift_set.image_path ? (
           <img decoding="async" loading="lazy" src={staticUrl(first.gift_set.image_path) ?? undefined} className="h-full w-full object-cover" />
         ) : (
@@ -341,51 +421,120 @@ function GiftStackTile({ stack, onClick }: { stack: GiftStack; onClick: () => vo
       )}
       <span className="w-full truncate text-center text-caption font-semibold text-ink-chalk">{first.gift_set.name}</span>
       {count === 1 && first.serial_number != null ? (
-        <span className="font-mono text-micro text-ink-mist-dim">№{first.serial_number}</span>
+        <span className={`font-mono text-micro ${specialSerial(first.serial_number) ? "text-amber-200" : "text-ink-mist-dim"}`}>
+          №{first.serial_number}
+        </span>
       ) : count > 1 ? (
-        <span className="text-micro text-ink-mist-dim">{count} шт.</span>
+        <span className="text-micro text-ink-mist-dim">
+          {count} шт.{stack.special > 0 && <span className="text-amber-200"> · ✨{stack.special}</span>}
+        </span>
       ) : null}
     </button>
   );
 }
 
-/** The numbered copies of one stack: pick a copy to pin it or pass it on. */
+/** The numbered copies of one stack: find a serial, sort the rarest first,
+ * pick one copy — or several to pass on at once. */
 function GiftStackSheet({ stack, onPick, onClose }: { stack: GiftStack; onPick: (g: Gift) => void; onClose: () => void }) {
   const first = stack.copies[0];
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<CopySort>("serial");
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<number[]>([]);
+  const [sending, setSending] = useState(false);
+  const shown = filterBySerial(sortCopies(stack.copies, sort), query);
+  const pickedGifts = stack.copies.filter((g) => picked.includes(g.id));
+  const toggle = (g: Gift) =>
+    setPicked((ids) => (ids.includes(g.id) ? ids.filter((i) => i !== g.id) : ids.length >= 50 ? ids : [...ids, g.id]));
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-center" onClick={onClose}>
       <div
-        className="flex max-h-[80vh] w-full max-w-sm flex-col rounded-t-3xl bg-bg-surface p-5 sm:rounded-3xl"
+        className="flex max-h-[85vh] w-full max-w-sm flex-col rounded-t-3xl bg-bg-surface p-5 sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
         data-testid="gift-stack-sheet"
       >
         <div className="flex items-center gap-3">
-          <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-rarity-epic/10">
-            {first.gift_set.image_path ? (
-              <img decoding="async" src={staticUrl(first.gift_set.image_path) ?? undefined} className="h-full w-full object-cover" />
-            ) : (
-              <IconGift size={24} className="text-rarity-epic" />
-            )}
-          </span>
+          <GiftImage gift={first} size="h-14 w-14" />
           <div className="min-w-0">
             <p className="truncate font-display text-base font-bold text-ink-chalk">{first.gift_set.name}</p>
-            <p className="text-xs text-ink-mist">У тебя {stack.copies.length} шт. · выбери копию по номеру</p>
+            <p className="text-xs text-ink-mist">
+              У тебя {stack.copies.length} шт.{stack.special > 0 ? ` · ✨ особых: ${stack.special}` : ""}
+            </p>
+            <p className="text-micro text-ink-mist-dim">{editionLine(first)}</p>
           </div>
         </div>
-        <div className="mt-4 grid grid-cols-4 gap-2 overflow-y-auto pb-1">
-          {stack.copies.map((g) => (
+
+        {sending ? (
+          <div className="mt-3 overflow-y-auto">
+            <GiftTransfer gifts={pickedGifts} startOpen onDone={onClose} />
+            <button onClick={() => setSending(false)} className="mt-2 w-full text-xs text-ink-mist">← Назад к выбору</button>
+          </div>
+        ) : (
+          <>
+            <div className="mt-3 flex gap-2">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                inputMode="numeric"
+                placeholder="Найти №…"
+                className="min-w-0 flex-1 rounded-xl bg-black/25 px-3 py-2 text-sm text-ink-chalk outline-none placeholder:text-ink-mist-dim"
+                data-testid="gift-serial-search"
+              />
+              <button
+                onClick={() => setSort(sort === "serial" ? "special" : "serial")}
+                className={`shrink-0 rounded-xl px-3 py-2 text-xs font-bold ${sort === "special" ? "bg-amber-300/20 text-amber-200" : "bg-black/25 text-ink-mist"}`}
+                data-testid="gift-sort-special"
+              >
+                {sort === "special" ? "✨ Особые" : "По номеру"}
+              </button>
+            </div>
             <button
-              key={g.id}
-              onClick={() => onPick(g)}
-              className={`relative rounded-xl px-1 py-2.5 font-mono text-xs font-bold active:scale-95 ${
-                g.is_pinned ? "bg-accent-lime/20 text-accent-lime" : "bg-black/25 text-ink-chalk"
-              }`}
+              onClick={() => { setSelecting(!selecting); setPicked([]); }}
+              className={`mt-2 rounded-xl py-2 text-xs font-semibold ${selecting ? "bg-floodlight/20 text-accent-lime" : "bg-black/20 text-ink-mist"}`}
+              data-testid="gift-select-many"
             >
-              №{g.serial_number ?? "—"}
-              {g.is_pinned && <span className="absolute right-1 top-0.5 text-micro">★</span>}
+              {selecting ? "Отменить выбор" : "☑ Выбрать несколько, чтобы подарить"}
             </button>
-          ))}
-        </div>
+            <div className="mt-3 grid grid-cols-4 gap-2 overflow-y-auto pb-1">
+              {shown.map((g) => {
+                const special = specialSerial(g.serial_number);
+                const on = picked.includes(g.id);
+                return (
+                  <button
+                    key={g.id}
+                    onClick={() => (selecting ? toggle(g) : onPick(g))}
+                    title={special ? SPECIAL_LABELS[special] : undefined}
+                    className={`relative rounded-xl px-1 py-2.5 font-mono text-xs font-bold active:scale-95 ${
+                      on
+                        ? "bg-floodlight text-bg-base"
+                        : special
+                          ? "bg-amber-300/20 text-amber-200 ring-1 ring-amber-300/50"
+                          : g.is_pinned
+                            ? "bg-accent-lime/20 text-accent-lime"
+                            : "bg-black/25 text-ink-chalk"
+                    }`}
+                  >
+                    №{g.serial_number ?? "—"}
+                    {g.is_pinned && <span className="absolute right-1 top-0.5 text-micro">★</span>}
+                    {special && !on && <span className="absolute left-1 top-0.5 text-micro">✨</span>}
+                  </button>
+                );
+              })}
+              {shown.length === 0 && <p className="col-span-4 py-4 text-center text-xs text-ink-mist">Такого номера нет</p>}
+            </div>
+            {selecting && (
+              <button
+                onClick={() => setSending(true)}
+                disabled={picked.length === 0}
+                className="mt-3 w-full rounded-2xl bg-amber-300/20 py-2.5 text-sm font-bold text-amber-200 active:scale-95 disabled:opacity-40"
+                data-testid="gift-send-picked"
+              >
+                🎁 Подарить выбранные ({picked.length})
+              </button>
+            )}
+          </>
+        )}
         <button onClick={onClose} className="mt-3 w-full rounded-2xl bg-white/5 py-2.5 text-sm font-semibold text-ink-mist active:scale-95">
           Закрыть
         </button>
@@ -394,23 +543,26 @@ function GiftStackSheet({ stack, onPick, onClose }: { stack: GiftStack; onPick: 
   );
 }
 
-/** «Подарить другу»: this exact numbered copy goes to another player — Stars only. */
-function GiftTransfer({ gift, onDone }: { gift: Gift; onDone: () => void }) {
+/** «Подарить другу»: these exact numbered copies go to another player with an
+ * optional note — Stars only, the price per copy. */
+function GiftTransfer({ gifts, onDone, startOpen = false }: { gifts: Gift[]; onDone: () => void; startOpen?: boolean }) {
   const queryClient = useQueryClient();
   const { data: price } = useQuery({ queryKey: ["gifts", "transfer-price"], queryFn: fetchGiftTransferPrice });
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen);
   const [target, setTarget] = useState<UserPublic | null>(null);
+  const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
-  const stars = price?.stars;
+  const total = price ? price.stars * gifts.length : null;
+  const serials = gifts.map((g) => `№${g.serial_number}`).join(", ");
 
   const send = async () => {
-    if (!target) return;
+    if (!target || gifts.length === 0) return;
     setError(null);
     setBusy(true);
     try {
-      const invoice = await createGiftTransferInvoice(gift.id, target.id);
+      const invoice = await createGiftTransferInvoice(gifts.map((g) => g.id), target.id, message.trim() || undefined);
       const paymentStatus = await openTelegramInvoice(invoice.invoice_link, invoice.payload_token);
       if (paymentStatus === "cancelled") return;
       if (paymentStatus === "failed") {
@@ -421,7 +573,7 @@ function GiftTransfer({ gift, onDone }: { gift: Gift; onDone: () => void }) {
         const status = await fetchShopInvoiceStatus(invoice.payload_token);
         if (status.status === "completed") {
           hapticNotify("success");
-          setSentTo(target.username ?? target.first_name ?? "игрок");
+          setSentTo(personName(target));
           queryClient.invalidateQueries({ queryKey: ["gifts", "mine"] });
           return;
         }
@@ -438,7 +590,7 @@ function GiftTransfer({ gift, onDone }: { gift: Gift; onDone: () => void }) {
   if (sentTo) {
     return (
       <div className="mt-3 rounded-2xl bg-accent-lime/10 p-3 text-sm text-accent-lime">
-        Подарок №{gift.serial_number} передан: {sentTo}
+        {gifts.length === 1 ? `Подарок №${gifts[0].serial_number} передан` : `${giftsWord(gifts.length)} — переданы`}: {sentTo}
         <button onClick={onDone} className="mt-2 block w-full rounded-xl bg-white/5 py-2 text-xs font-semibold text-ink-mist">
           Готово
         </button>
@@ -453,7 +605,7 @@ function GiftTransfer({ gift, onDone }: { gift: Gift; onDone: () => void }) {
         className="mt-2 w-full rounded-2xl bg-amber-300/15 py-2.5 text-sm font-bold text-amber-200 active:scale-95"
         data-testid="gift-transfer-open"
       >
-        🎁 Подарить другу{stars ? ` · ${stars} ⭐` : ""}
+        🎁 Подарить другу{price ? ` · ${price.stars} ⭐` : ""}
       </button>
     );
   }
@@ -461,17 +613,110 @@ function GiftTransfer({ gift, onDone }: { gift: Gift; onDone: () => void }) {
   return (
     <div className="mt-3 flex flex-col gap-2 rounded-2xl bg-black/20 p-3 text-left" data-testid="gift-transfer">
       <p className="text-xs text-ink-mist">
-        Копия №{gift.serial_number} перейдёт к выбранному игроку. Передача — только за звёзды.
+        {gifts.length === 1 ? `Копия ${serials}` : `${giftsWord(gifts.length)} (${serials})`} {gifts.length === 1 ? "перейдёт" : "перейдут"} к выбранному игроку.
+        Передача — только за звёзды{price ? `, ${price.stars} ⭐ за копию` : ""}.
       </p>
       <RecipientPicker target={target} onSelect={setTarget} />
+      <textarea
+        value={message}
+        onChange={(e) => setMessage(e.target.value.slice(0, 200))}
+        rows={2}
+        placeholder="Открытка к подарку (необязательно)"
+        className="resize-none rounded-xl bg-black/20 px-3 py-2 text-sm text-ink-chalk outline-none placeholder:text-ink-mist-dim"
+        data-testid="gift-transfer-note"
+      />
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>}
       <button
         onClick={send}
-        disabled={!target || busy || !stars}
+        disabled={!target || busy || total == null || gifts.length === 0}
         className="w-full rounded-2xl bg-floodlight py-2.5 text-sm font-bold text-bg-base active:scale-95 disabled:opacity-40"
       >
-        {busy ? "Передаём…" : `Передать за ${stars ?? "…"} ⭐`}
+        {busy ? "Передаём…" : `Передать за ${total ?? "…"} ⭐`}
       </button>
+    </div>
+  );
+}
+
+/** Copies another player passed on, shown once with an unwrapping. */
+function ReceivedGiftsModal({ gifts, onClose }: { gifts: Gift[]; onClose: () => void }) {
+  const first = gifts[0];
+  const notes = [...new Set(gifts.map((g) => g.message).filter(Boolean))] as string[];
+  return (
+    <RewardModal
+      title={gifts.length === 1 ? "Тебе передали подарок!" : `Тебе передали ${giftsWord(gifts.length)}!`}
+      subtitle={`от ${personName(first.sender)}`}
+      hero={<GiftImage gift={first} size="h-20 w-20" />}
+      rarity={gifts.some((g) => specialSerial(g.serial_number)) ? "legendary" : null}
+      items={[
+        <div key="list" className="flex w-full flex-col gap-2" data-testid="received-gifts">
+          <div className="flex flex-wrap justify-center gap-1.5">
+            {gifts.slice(0, 12).map((g) => (
+              <span
+                key={g.id}
+                className={`rounded-full px-2 py-1 font-mono text-xs font-bold ${
+                  specialSerial(g.serial_number) ? "bg-amber-300/20 text-amber-200" : "bg-white/10 text-ink-chalk"
+                }`}
+              >
+                {g.gift_set.name} №{g.serial_number}
+              </span>
+            ))}
+            {gifts.length > 12 && <span className="text-xs text-ink-mist">и ещё {gifts.length - 12}</span>}
+          </div>
+          {notes.map((n) => (
+            <p key={n} className="rounded-xl bg-white/5 px-3 py-2 text-center text-sm italic text-ink-chalk">✉️ «{n}»</p>
+          ))}
+        </div>,
+      ]}
+      buttonLabel="В коллекцию!"
+      onClose={onClose}
+    />
+  );
+}
+
+/** «Коллекционеры»: who has the most different gifts and special serials. */
+function GiftCollectors() {
+  const navigate = useNavigate();
+  const { data } = useQuery({ queryKey: ["gifts", "leaderboard"], queryFn: fetchGiftLeaderboard });
+  if (!data) return <p className="py-6 text-center text-sm text-ink-mist">Загрузка…</p>;
+  if (data.rows.length === 0) return <EmptyState icon={IconTrophy} title="Пока никто не собирает подарки" />;
+  const row = (r: GiftLeaderRow, mine: boolean) => (
+    <button
+      key={`${mine ? "me" : "row"}-${r.user.id}`}
+      onClick={() => navigate(`/users/${r.user.id}`)}
+      className={`flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left active:scale-[0.99] ${mine ? "bg-floodlight/15" : "bg-bg-surface"}`}
+    >
+      <span className={`w-7 text-center font-mono text-sm font-bold ${r.place <= 3 ? "text-amber-200" : "text-ink-mist"}`}>
+        {r.place <= 3 ? ["🥇", "🥈", "🥉"][r.place - 1] : r.place}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1 truncate text-sm font-semibold text-ink-chalk">
+          {personName(r.user)}
+          <UserBadge badge={r.user.active_badge} />
+        </span>
+        <span className="text-micro text-ink-mist">
+          {r.copies} шт.{r.special > 0 && <span className="text-amber-200"> · ✨ особых {r.special}</span>}
+        </span>
+      </span>
+      <span className="text-right">
+        <span className="block font-mono text-base font-bold text-ink-chalk">{r.sets}</span>
+        <span className="text-micro text-ink-mist-dim">разных</span>
+      </span>
+    </button>
+  );
+  const meShown = data.me && data.rows.some((r) => r.user.id === data.me!.user.id);
+  return (
+    <div className="flex flex-col gap-2" data-testid="gift-collectors">
+      <p className="text-xs text-ink-mist">
+        Место — по числу разных коллекционных подарков, при равенстве — по числу копий. ✨ Особые номера: №1, 7/77/777,
+        10/100/1000, одинаковые цифры, круглые сотни и зеркальные.
+      </p>
+      {data.rows.map((r) => row(r, r.user.id === data.me?.user.id))}
+      {data.me && !meShown && (
+        <>
+          <p className="text-center text-micro text-ink-mist-dim">···</p>
+          {row(data.me, true)}
+        </>
+      )}
     </div>
   );
 }

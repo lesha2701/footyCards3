@@ -12,6 +12,9 @@ from app.schemas.gift import (
     GiftPurchaseResult,
     GiftSendIn,
     GiftSetOut,
+    GiftBatchTransferIn,
+    GiftHistoryOut,
+    GiftLeaderboardOut,
     GiftTransferIn,
 )
 from app.schemas.stars import StarsInvoiceCreateOut, StarsInvoiceStatusOut
@@ -44,6 +47,30 @@ async def gift_invoice_status(
 @router.get("/transfer-price")
 async def gift_transfer_price(db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
     return {"stars": await gift_service.transfer_price(db)}
+
+
+@router.post("/transfer-invoice", response_model=StarsInvoiceCreateOut)
+async def create_gift_batch_transfer_invoice(
+    payload: GiftBatchTransferIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return await gift_service.create_batch_transfer_invoice(
+        db, user, payload.gift_ids, payload.recipient_id, payload.message
+    )
+
+
+@router.post("/seen")
+async def mark_gift_transfers_seen(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return {"updated": await gift_service.mark_transfers_seen(db, user)}
+
+
+@router.get("/leaderboard", response_model=GiftLeaderboardOut)
+async def gift_leaderboard(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await gift_service.gift_leaderboard(db, user)
+
+
+@router.get("/{gift_id}/history", response_model=GiftHistoryOut)
+async def gift_history(gift_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await gift_service.gift_history(db, user, gift_id)
 
 
 @router.post("/{gift_id}/transfer-invoice", response_model=StarsInvoiceCreateOut)

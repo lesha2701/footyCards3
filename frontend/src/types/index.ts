@@ -1643,6 +1643,50 @@ export interface Gift {
   serial_number: number | null;
   claimed_at: string | null;
   created_at: string;
+  /** Passed on by another player and not yet shown. */
+  transfer_unseen?: boolean;
+}
+
+export interface GiftHistoryEntry {
+  kind: "issued" | "transfer";
+  at: string;
+  from_user: UserPublic | null;
+  to_user: UserPublic | null;
+  message: string | null;
+}
+
+export interface GiftHistory {
+  gift_id: number;
+  serial_number: number | null;
+  entries: GiftHistoryEntry[];
+}
+
+export interface GiftShelfItem {
+  id: number;
+  gift_set: GiftSet;
+  serial_number: number | null;
+  is_pinned: boolean;
+  special: string | null;
+}
+
+export interface GiftShelf {
+  sets: number;
+  copies: number;
+  special: number;
+  items: GiftShelfItem[];
+}
+
+export interface GiftLeaderRow {
+  place: number;
+  user: UserPublic;
+  sets: number;
+  copies: number;
+  special: number;
+}
+
+export interface GiftLeaderboard {
+  rows: GiftLeaderRow[];
+  me: GiftLeaderRow | null;
 }
 
 export interface GiftClaimResult {

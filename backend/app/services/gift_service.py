@@ -282,7 +282,36 @@ async def set_gift_pinned(db: AsyncSession, user: User, gift_id: int, pinned: bo
     return GiftOut.model_validate(gift)
 
 
-# --- passing an owned copy on: Telegram Stars only ("gift_transfer:<gift id>:<recipient id>") ---
+# --- passing owned copies on: Telegram Stars only -----------------------------------
+# Keys: "gift_batch:<batch>" (rows in gift_transfers, one or many copies, an
+# optional note) and the first version's "gift_transfer:<gift id>:<recipient id>"
+# (still delivered for invoices created before the batches).
+
+MAX_BATCH = 50
+
+
+def special_serial(n: Optional[int]) -> Optional[str]:
+    """A serial worth showing off; the TS twin is lib/giftSerial.ts (same cases
+    in both tests). Codes in rarity order — see SPECIAL_ORDER."""
+    if n is None or n < 1:
+        return None
+    s = str(n)
+    if n == 1:
+        return "first"
+    if set(s) == {"7"}:
+        return "lucky"
+    if n >= 10 and s == "1" + "0" * (len(s) - 1):
+        return "jubilee"
+    if len(s) >= 2 and len(set(s)) == 1:
+        return "twins"
+    if n % 100 == 0:
+        return "round"
+    if len(s) >= 3 and s == s[::-1]:
+        return "mirror"
+    return None
+
+
+SPECIAL_ORDER = ["first", "lucky", "jubilee", "twins", "round", "mirror"]
 
 
 async def _transferable_gift(db: AsyncSession, owner_id: int, gift_id: int, lock: bool = False) -> Gift:
@@ -312,20 +341,79 @@ async def transfer_price(db: AsyncSession) -> int:
     return max(1, int((await get_config(db)).gift_transfer_stars))
 
 
-async def create_transfer_invoice(db: AsyncSession, user: User, gift_id: int, recipient_id: int):
-    """A numbered copy the user owns goes to another player — paid with Stars
-    only, never coins. Nothing moves until the payment is delivered."""
+def _gifts_word(n: int) -> str:
+    d10, d100 = n % 10, n % 100
+    word = "подарок" if d10 == 1 and d100 != 11 else "подарка" if 2 <= d10 <= 4 and not 12 <= d100 <= 14 else "подарков"
+    return f"{n} {word}"
+
+
+def _serials(gifts: list[Gift]) -> str:
+    nums = [f"№{g.serial_number}" for g in gifts if g.serial_number is not None]
+    if len(nums) > 6:
+        return ", ".join(nums[:6]) + f" и ещё {len(nums) - 6}"
+    return ", ".join(nums)
+
+
+async def create_batch_transfer_invoice(
+    db: AsyncSession, user: User, gift_ids: list[int], recipient_id: int, message: Optional[str] = None,
+):
+    """Copies the user owns go to another player — paid with Stars only
+    (price × copies), never coins. Nothing moves until the payment is
+    delivered; the copies wait in pending gift_transfers rows of one batch."""
+    import secrets
+
+    from app.models.gift import GiftTransfer
     from app.services import shop_product_service
 
-    gift = await _transferable_gift(db, user.id, gift_id)
+    ids = list(dict.fromkeys(gift_ids))
+    if not ids or len(ids) > MAX_BATCH:
+        raise ConflictError(f"За раз можно передать от 1 до {MAX_BATCH} подарков")
+    gifts = [await _transferable_gift(db, user.id, gid) for gid in ids]
     recipient = await _transfer_recipient(db, user.id, recipient_id)
-    stars = await transfer_price(db)
-    serial = f" №{gift.serial_number}" if gift.serial_number is not None else ""
+    note = (message or "").strip()[:200] or None
+    stars = await transfer_price(db) * len(gifts)
+    batch = secrets.token_hex(8)
+    for g in gifts:
+        db.add(GiftTransfer(batch=batch, gift_id=g.id, from_user_id=user.id, to_user_id=recipient.id, message=note))
+    await db.flush()
+    names = sorted({g.gift_set.name for g in gifts})
+    what = f"«{names[0]}»" if len(names) == 1 else f"{len(names)} видов"
+    title = f"Передача подарка {what}" if len(gifts) == 1 else f"Передача: {_gifts_word(len(gifts))}"
     return await shop_product_service.create_invoice(
-        db, user, f"gift_transfer:{gift.id}:{recipient.id}", stars,
-        f"Передача подарка «{gift.gift_set.name}»",
-        f"Твой подарок «{gift.gift_set.name}»{serial} перейдёт к игроку {recipient.full_display_name()}.",
+        db, user, f"gift_batch:{batch}", stars, title[:32],
+        f"Подарки {what} ({_serials(gifts)}) перейдут к игроку {recipient.full_display_name()}.",
     )
+
+
+async def create_transfer_invoice(db: AsyncSession, user: User, gift_id: int, recipient_id: int):
+    return await create_batch_transfer_invoice(db, user, [gift_id], recipient_id)
+
+
+async def _batch_rows(db: AsyncSession, batch: str):
+    from app.models.gift import GiftTransfer
+
+    return list((await db.execute(
+        select(GiftTransfer).where(GiftTransfer.batch == batch).order_by(GiftTransfer.id)
+    )).scalars().all())
+
+
+async def _check_batch(db: AsyncSession, user_id: int, rows) -> None:
+    if not rows or any(r.status != "pending" for r in rows):
+        raise ConflictError("Эта передача уже не действует")
+    for r in rows:
+        await _transferable_gift(db, user_id, r.gift_id)
+    await _transfer_recipient(db, user_id, rows[0].to_user_id)
+
+
+async def validate_batch_stars(db: AsyncSession, user_id: int, batch: str, stars_amount: int) -> tuple[bool, str]:
+    rows = await _batch_rows(db, batch)
+    try:
+        await _check_batch(db, user_id, rows)
+    except AppError as exc:
+        return False, exc.message
+    if stars_amount < await transfer_price(db) * len(rows):
+        return False, "Цена передачи изменилась — попробуй ещё раз"
+    return True, ""
 
 
 def _transfer_args(arg: str) -> tuple[int, int]:
@@ -345,25 +433,193 @@ async def validate_transfer_stars(db: AsyncSession, user_id: int, arg: str, star
     return True, ""
 
 
-async def deliver_transfer_stars(db: AsyncSession, user: User, arg: str) -> dict:
-    """Already paid: the copy changes owner under its row lock. It keeps its
-    serial and stays claimed (its prize was already taken), comes unpinned,
-    and the payer becomes its sender. The caller commits."""
+async def _move(db: AsyncSession, user: User, gift_ids: list[int], recipient_id: int, message: Optional[str], rows=None) -> list[Gift]:
+    """Already paid: each copy changes owner under its row lock. It keeps its
+    serial and stays claimed (its prize was already taken), comes unpinned and
+    unseen, and the payer becomes its sender. The caller commits."""
+    from app.models.gift import GiftTransfer
     from app.services.notification_service import notify
 
-    gift_id, recipient_id = _transfer_args(arg)
-    gift = await _transferable_gift(db, user.id, gift_id, lock=True)
-    gift.recipient_id = recipient_id
-    gift.sender_id = user.id
-    gift.message = None
-    gift.is_admin_gift = False
-    gift.is_pinned = False
-    gift.pinned_at = None
-    db.add(gift)
-    serial = f" №{gift.serial_number}" if gift.serial_number is not None else ""
+    now = datetime.now(timezone.utc)
+    by_gift = {r.gift_id: r for r in rows or []}
+    moved = []
+    for gid in sorted(gift_ids):
+        gift = await _transferable_gift(db, user.id, gid, lock=True)
+        row = by_gift.get(gid)
+        if row is None:
+            row = GiftTransfer(batch=f"single-{gid}-{int(now.timestamp())}", gift_id=gid, from_user_id=user.id,
+                               to_user_id=recipient_id, message=message)
+            db.add(row)
+        row.prev_sender_id = gift.sender_id
+        row.status = "done"
+        row.completed_at = now
+        gift.recipient_id = recipient_id
+        gift.sender_id = user.id
+        gift.message = message
+        gift.is_admin_gift = False
+        gift.is_pinned = False
+        gift.pinned_at = None
+        gift.transfer_unseen = True
+        db.add(gift)
+        moved.append(gift)
+    name = moved[0].gift_set.name
+    if len(moved) == 1:
+        serial = f" №{moved[0].serial_number}" if moved[0].serial_number is not None else ""
+        body = f"{user.full_display_name()} передал(а) тебе подарок «{name}»{serial}."
+    else:
+        body = f"{user.full_display_name()} передал(а) тебе {_gifts_word(len(moved))}: {_serials(moved)}."
+    if message:
+        body += f" «{message}»"
     await notify(
-        db, recipient_id, NotificationType.admin_message, "🎁 Тебе передали подарок",
-        f"{user.full_display_name()} передал(а) тебе подарок «{gift.gift_set.name}»{serial}.",
-        related_object_type="gift", related_object_id=gift.id,
+        db, recipient_id, NotificationType.admin_message, "🎁 Тебе передали подарок", body,
+        related_object_type="gift", related_object_id=moved[0].id,
     )
-    return {"kind": "gift_transfer", "name": gift.gift_set.name, "serial_number": gift.serial_number}
+    return moved
+
+
+async def deliver_batch_stars(db: AsyncSession, user: User, batch: str) -> dict:
+    rows = await _batch_rows(db, batch)
+    if not rows or any(r.status != "pending" for r in rows):
+        raise ConflictError("Эта передача уже не действует")
+    moved = await _move(db, user, [r.gift_id for r in rows], rows[0].to_user_id, rows[0].message, rows)
+    return {"kind": "gift_batch", "count": len(moved), "serials": [g.serial_number for g in moved]}
+
+
+async def deliver_transfer_stars(db: AsyncSession, user: User, arg: str) -> dict:
+    gift_id, recipient_id = _transfer_args(arg)
+    moved = await _move(db, user, [gift_id], recipient_id, None)
+    return {"kind": "gift_transfer", "name": moved[0].gift_set.name, "serial_number": moved[0].serial_number}
+
+
+async def mark_transfers_seen(db: AsyncSession, user: User) -> int:
+    result = await db.execute(
+        update(Gift).where(Gift.recipient_id == user.id, Gift.transfer_unseen.is_(True)).values(transfer_unseen=False)
+    )
+    await db.commit()
+    return result.rowcount or 0
+
+
+# --- a copy's story, the profile shelf and the collectors' table -------------------------
+
+
+async def gift_history(db: AsyncSession, user: User, gift_id: int):
+    from app.models.gift import GiftTransfer
+    from app.schemas.gift import GiftHistoryEntry, GiftHistoryOut
+    from app.schemas.user import UserPublicOut
+
+    gift = await db.get(Gift, gift_id)
+    if gift is None or gift.recipient_id != user.id:
+        raise NotFoundError("Подарок не найден")
+    rows = list((await db.execute(
+        select(GiftTransfer).where(GiftTransfer.gift_id == gift_id, GiftTransfer.status == "done")
+        .order_by(GiftTransfer.completed_at, GiftTransfer.id)
+    )).scalars().all())
+    ids = {i for r in rows for i in (r.from_user_id, r.to_user_id, r.prev_sender_id) if i}
+    first_sender = rows[0].prev_sender_id if rows else gift.sender_id
+    first_owner = rows[0].from_user_id if rows else gift.recipient_id
+    ids |= {i for i in (first_sender, first_owner) if i}
+    users = {u.id: u for u in (await db.execute(select(User).where(User.id.in_(ids)))).scalars().all()} if ids else {}
+
+    def pub(uid):
+        return UserPublicOut.model_validate(users[uid]) if uid in users else None
+
+    entries = [GiftHistoryEntry(
+        kind="issued", at=gift.created_at, from_user=pub(first_sender), to_user=pub(first_owner),
+        message=None,
+    )]
+    for r in rows:
+        entries.append(GiftHistoryEntry(
+            kind="transfer", at=r.completed_at, from_user=pub(r.from_user_id), to_user=pub(r.to_user_id), message=r.message,
+        ))
+    return GiftHistoryOut(gift_id=gift.id, serial_number=gift.serial_number, entries=entries)
+
+
+def _owned_collectibles():
+    return (
+        select(Gift.id, Gift.recipient_id, Gift.gift_set_id, Gift.serial_number, Gift.is_pinned)
+        .join(GiftSet, GiftSet.id == Gift.gift_set_id)
+        .where(GiftSet.kind == GiftKind.collectible, Gift.claimed_at.is_not(None))
+    )
+
+
+SHELF_SIZE = 6
+
+
+async def gift_shelf(db: AsyncSession, user_id: int):
+    """«Полка подарков» on a profile: pinned copies first, then the rarest
+    serials, one copy per set; plus totals. Notes and senders stay private."""
+    from app.schemas.gift import GiftShelfItem, GiftShelfOut
+
+    rows = (await db.execute(_owned_collectibles().where(Gift.recipient_id == user_id))).all()
+    rank = {code: i for i, code in enumerate(SPECIAL_ORDER)}
+
+    def key(r):
+        sp = special_serial(r.serial_number)
+        return (0 if r.is_pinned else 1, rank.get(sp, 99), r.serial_number or 10**9)
+
+    picked, seen_sets = [], set()
+    for r in sorted(rows, key=key):
+        if r.gift_set_id in seen_sets:
+            continue
+        if not r.is_pinned and special_serial(r.serial_number) is None and len(picked) >= 3:
+            continue
+        seen_sets.add(r.gift_set_id)
+        picked.append(r)
+        if len(picked) >= SHELF_SIZE:
+            break
+    sets = {s.id: s for s in (await db.execute(
+        select(GiftSet).where(GiftSet.id.in_({r.gift_set_id for r in picked}))
+    )).scalars().all()} if picked else {}
+    return GiftShelfOut(
+        sets=len({r.gift_set_id for r in rows}),
+        copies=len(rows),
+        special=sum(1 for r in rows if special_serial(r.serial_number)),
+        items=[
+            GiftShelfItem(
+                id=r.id, gift_set=GiftSetOut.model_validate(sets[r.gift_set_id]), serial_number=r.serial_number,
+                is_pinned=r.is_pinned, special=special_serial(r.serial_number),
+            )
+            for r in picked
+        ],
+    )
+
+
+LEADERBOARD_SIZE = 20
+
+
+async def gift_leaderboard(db: AsyncSession, user: User):
+    """Collectors of collectible gifts: different sets, then copies; the
+    special serials are counted for the shown rows only."""
+    from app.schemas.gift import GiftLeaderboardOut, GiftLeaderRow
+    from app.schemas.user import UserPublicOut
+
+    owned = _owned_collectibles().subquery()
+    sets_col = func.count(func.distinct(owned.c.gift_set_id))
+    copies_col = func.count(owned.c.id)
+    totals = (await db.execute(
+        select(owned.c.recipient_id, sets_col.label("sets"), copies_col.label("copies"))
+        .join(User, User.id == owned.c.recipient_id)
+        .where(User.is_banned.is_(False))
+        .group_by(owned.c.recipient_id)
+        .order_by(sets_col.desc(), copies_col.desc(), owned.c.recipient_id)
+    )).all()
+    place_of = {r.recipient_id: i + 1 for i, r in enumerate(totals)}
+    shown = totals[:LEADERBOARD_SIZE]
+    my = next((r for r in totals if r.recipient_id == user.id), None)
+    ids = {r.recipient_id for r in shown} | ({my.recipient_id} if my else set())
+    serials = (await db.execute(
+        select(owned.c.recipient_id, owned.c.serial_number).where(owned.c.recipient_id.in_(ids))
+    )).all() if ids else []
+    special: dict[int, int] = {}
+    for uid, n in serials:
+        if special_serial(n):
+            special[uid] = special.get(uid, 0) + 1
+    users = {u.id: u for u in (await db.execute(select(User).where(User.id.in_(ids)))).scalars().all()} if ids else {}
+
+    def row(r):
+        return GiftLeaderRow(
+            place=place_of[r.recipient_id], user=UserPublicOut.model_validate(users[r.recipient_id]),
+            sets=r.sets, copies=r.copies, special=special.get(r.recipient_id, 0),
+        )
+
+    return GiftLeaderboardOut(rows=[row(r) for r in shown], me=row(my) if my else None)

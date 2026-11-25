@@ -8,6 +8,7 @@ from app.core.pagination import Page, PageParams
 from app.database import get_db
 from app.models.user import User
 from app.schemas.collection import AlbumCollectionDetailOut, AlbumOverviewOut, CollectionFilterParams, UserCardListItem
+from app.schemas.gift import GiftShelfOut
 from app.schemas.profile import ProfilePublicOut
 from app.schemas.user import UserPublicOut
 from app.services.collection_service import list_user_cards
@@ -72,3 +73,10 @@ async def public_collection(
 ):
     """Public, read-only view of another player's cards — used when building a trade offer."""
     return await list_user_cards(db, user_id, filters, params, exclude_hidden=True)
+
+
+@router.get("/{user_id}/gift-shelf", response_model=GiftShelfOut)
+async def user_gift_shelf(user_id: int, db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
+    from app.services.gift_service import gift_shelf
+
+    return await gift_shelf(db, user_id)
