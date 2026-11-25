@@ -477,6 +477,7 @@ export default function App() {
         <Route path="/player-tournament/:id/matches/:matchId" element={<PlayerTournamentMatchPage />} />
         <Route path="/league" element={<LeaguePage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/profile/:section" element={<ProfilePage />} />
         <Route path="/gifts" element={<GiftsPage />} />
         <Route path="/users/:userId" element={<PublicProfilePage />} />
         <Route path="/users/:userId/album" element={<FriendAlbumPage />} />
