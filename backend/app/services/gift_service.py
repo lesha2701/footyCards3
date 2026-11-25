@@ -623,3 +623,34 @@ async def gift_leaderboard(db: AsyncSession, user: User):
         )
 
     return GiftLeaderboardOut(rows=[row(r) for r in shown], me=row(my) if my else None)
+
+
+
+async def admin_transfer_stats(db: AsyncSession, days: int = 30) -> dict:
+    """Admin: what passing gifts on brings — Stars paid for completed transfer
+    invoices, copies moved, distinct senders and the most passed-on sets."""
+    from datetime import timedelta
+
+    from sqlalchemy import or_
+
+    from app.models.gift import GiftTransfer
+
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    paid = or_(StarsInvoice.shop_product.like("gift_batch:%"), StarsInvoice.shop_product.like("gift_transfer:%"))
+    stars, invoices = (await db.execute(
+        select(func.coalesce(func.sum(StarsInvoice.stars_amount), 0), func.count(StarsInvoice.id))
+        .where(paid, StarsInvoice.completed_at.is_not(None), StarsInvoice.completed_at >= since)
+    )).one()
+    done = (GiftTransfer.status == "done", GiftTransfer.completed_at >= since)
+    copies, senders = (await db.execute(
+        select(func.count(GiftTransfer.id), func.count(func.distinct(GiftTransfer.from_user_id))).where(*done)
+    )).one()
+    top = (await db.execute(
+        select(GiftSet.name, func.count(GiftTransfer.id).label("n"))
+        .join(Gift, Gift.id == GiftTransfer.gift_id).join(GiftSet, GiftSet.id == Gift.gift_set_id)
+        .where(*done).group_by(GiftSet.name).order_by(func.count(GiftTransfer.id).desc()).limit(5)
+    )).all()
+    return {
+        "days": days, "stars": int(stars or 0), "invoices": int(invoices or 0), "copies": int(copies or 0),
+        "senders": int(senders or 0), "top_sets": [{"name": name, "copies": n} for name, n in top],
+    }

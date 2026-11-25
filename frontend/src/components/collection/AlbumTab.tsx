@@ -9,6 +9,7 @@ import EmptyState from "@/components/common/EmptyState";
 import { CardGridSkeleton } from "@/components/common/Skeleton";
 import CardDetailModal from "@/components/collection/CardDetailModal";
 import CardFilterBar from "@/components/collection/CardFilterBar";
+import PlayerSourcesSheet from "@/components/collection/PlayerSourcesSheet";
 import { AlbumCover, AlbumPage, CompleteStamp, SlotNumber, Sticker } from "@/components/collection/AlbumBook";
 import { freshOnPage, markPageSeen } from "@/lib/albumSeen";
 import { haptic } from "@/lib/telegram";
@@ -212,6 +213,7 @@ function AlbumDetail({
   } = useCardActions([["album-detail"], ["album-overview"], ["collection"], ["collection-stats"]]);
   const visible = (data?.players ?? []).filter((slot) => matchesPlayer(filter, slot.player));
   const want = useWantToggle();
+  const [sourcesFor, setSourcesFor] = useState<number | null>(null);
 
   // Page flipping: arrows and a sideways swipe go to the neighbour page.
   const at = pages.indexOf(collectionId);
@@ -384,7 +386,7 @@ function AlbumDetail({
                       <AlbumSlot
                         slot={slot}
                         number={n}
-                        onOpen={() => {}}
+                        onOpen={() => !ownerId && setSourcesFor(slot.player.id)}
                         wanted={want.wanted.has(slot.player.id)}
                         onToggleWant={() => want.toggle(slot.player.id)}
                         canWant={!ownerId}
@@ -407,6 +409,7 @@ function AlbumDetail({
         </section>
       )}
 
+      {sourcesFor !== null && <PlayerSourcesSheet playerId={sourcesFor} onClose={() => setSourcesFor(null)} />}
       {detailCard && (
         <CardDetailModal
           key={detailCard.id}
@@ -484,13 +487,18 @@ function AlbumSlot({
     // Diamonds never trade (except «Академия»), so they can't be in «Ищу».
     const wantable = canWant && (slot.player.rarity !== "diamond" || !!slot.player.path_talent_code);
     return (
-      <div className="relative flex aspect-[3/4] flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border border-dashed border-amber-100/15 bg-black/25 p-2 text-center shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)]">
+      <div
+        onClick={onOpen}
+        role={canWant ? "button" : undefined}
+        data-testid="album-missing-slot"
+        className={`relative flex aspect-[3/4] flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border border-dashed border-amber-100/15 bg-black/25 p-2 text-center shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)] ${canWant ? "cursor-pointer active:scale-[0.98]" : ""}`}
+      >
         <span aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center font-display text-5xl font-black text-white/[0.04]">
           {number}
         </span>
         {wantable && (
           <button
-            onClick={onToggleWant}
+            onClick={(e) => { e.stopPropagation(); onToggleWant(); }}
             className={`absolute inset-x-1.5 bottom-1.5 rounded-lg py-1 text-micro font-bold active:scale-95 ${
               wanted ? "bg-accent-lime/20 text-accent-lime" : "bg-white/10 text-ink-mist"
             }`}

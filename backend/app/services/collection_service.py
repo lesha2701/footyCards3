@@ -365,7 +365,8 @@ async def duplicate_sale_plan(
     """Copies "Продать дубликаты" would sell: for every player owned more than
     once, one copy is always kept (a locked / in-squad / skilled / starred
     copy if there is one, otherwise the best-bonus, lowest-numbered copy),
-    and only plain, unlocked, skill-less, star-less spare copies are sold.
+    and only plain, unlocked, skill-less, star-less spare copies are sold —
+    never a rare print (`finish`).
     Diamond cards are left alone unless asked (they are diamond-upgrade
     material), and so are the spares of a player whose copy already has
     stars or a started «копилка» (they are star material) unless asked."""
@@ -379,14 +380,15 @@ async def duplicate_sale_plan(
     for copies in by_player.values():
         if len(copies) < 2:
             continue
-        protected = [c for c in copies if _locked(c) or c.skill_code or _invested(c)]
+        protected = [c for c in copies if _locked(c) or c.skill_code or _invested(c) or c.finish]
         if not protected:
             keeper = sorted(copies, key=lambda c: (-card_rating_bonus(c), c.serial_number or 0))[0]
             protected = [keeper]
         if not include_star_material and any(c.has_star_investment() for c in copies):
             continue
         for card in copies:
-            if card in protected or _locked(card) or card.skill_code or _invested(card):
+            # A rare print (gold / autograph / night) is never a spare.
+            if card in protected or _locked(card) or card.skill_code or _invested(card) or card.finish:
                 continue
             if card.player.rarity == Rarity.diamond and not include_diamond:
                 continue

@@ -119,3 +119,21 @@ class TradePreviewOut(BaseModel):
     get_value: int
     ok: bool
     problem: Optional[str] = None
+
+
+class PlayerSourceFriend(BaseModel):
+    user: UserPublicOut
+    card_id: int
+
+
+class PlayerSourcePack(BaseModel):
+    id: int
+    name: str
+
+
+class PlayerSourcesOut(BaseModel):
+    player: PlayerOut
+    packs: list[PlayerSourcePack]
+    market_lots: int
+    market_from: Optional[int] = None
+    friends: list[PlayerSourceFriend]

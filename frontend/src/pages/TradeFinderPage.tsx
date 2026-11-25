@@ -12,6 +12,7 @@ import CardsSectionTabs from "@/components/layout/CardsSectionTabs";
 import { fetchCollection } from "@/api/collection";
 import {
   addTradeWish,
+  fetchFriendTradeMatches,
   fetchTradeMatches,
   fetchTradeWishes,
   removeTradeWish,
@@ -22,23 +23,24 @@ import {
 import { ApiRequestError } from "@/lib/api";
 import type { Player } from "@/types";
 
-type Tab = "matches" | "lists";
+type Tab = "friends" | "matches" | "lists";
 
 /** «Поиск обменов»: the player lists who they look for («Ищу») and who they
  * are ready to give («Отдаю»); the server suggests active partners. The
  * offer itself opens the usual new-trade screen with the cards picked. */
 export default function TradeFinderPage() {
-  const [tab, setTab] = useState<Tab>("matches");
+  const [tab, setTab] = useState<Tab>("friends");
 
   return (
     <div className="flex flex-col gap-4">
       <h1 className="font-display text-xl font-bold text-ink-chalk">Поиск обменов</h1>
       <CardsSectionTabs />
       <div className="flex gap-2">
+        <TabButton active={tab === "friends"} label="С друзьями" onClick={() => setTab("friends")} />
         <TabButton active={tab === "matches"} label="Совпадения" onClick={() => setTab("matches")} />
         <TabButton active={tab === "lists"} label="Мои списки" onClick={() => setTab("lists")} />
       </div>
-      {tab === "matches" ? <Matches onEditLists={() => setTab("lists")} /> : <Lists />}
+      {tab === "friends" ? <FriendMatches /> : tab === "matches" ? <Matches onEditLists={() => setTab("lists")} /> : <Lists />}
     </div>
   );
 }
@@ -100,6 +102,65 @@ function Matches({ onEditLists }: { onEditLists: () => void }) {
       ))}
       <p className="text-caption text-ink-mist-dim">
         Показываем игроков, заходивших в игру за последние дни. Карточки в предложении можно поменять перед отправкой.
+      </p>
+    </div>
+  );
+}
+
+/** Friends whose spare copies fill my album gaps and the other way round —
+ * computed from the albums, no «Ищу»/«Отдаю» lists needed. */
+function FriendMatches() {
+  const navigate = useNavigate();
+  const { data: matches, isLoading } = useQuery({ queryKey: ["trade-friend-matches"], queryFn: fetchFriendTradeMatches });
+  if (isLoading) return <ListSkeleton />;
+  if (!matches?.length) {
+    return (
+      <div className="flex flex-col items-center gap-3">
+        <EmptyState
+          icon={IconSwap}
+          title="Пока нет пар"
+          description="Здесь появятся друзья, у которых есть лишние карточки, которых нет у тебя, — и наоборот."
+        />
+        <button onClick={() => navigate("/friends")} className="rounded-full bg-floodlight px-4 py-2 text-xs font-bold text-bg-base active:scale-95">
+          Найти друзей
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-3" data-testid="friend-matches">
+      {matches.map((m) => (
+        <div key={m.user.id} className="flex flex-col gap-3 rounded-2xl bg-bg-surface p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex min-w-0 items-center gap-1 truncate text-sm font-semibold text-ink-chalk">
+              {m.user.username ?? m.user.first_name ?? `Игрок #${m.user.id}`}
+              <UserBadge badge={m.user.active_badge} />
+            </span>
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-caption font-bold ${m.mutual ? "bg-accent-lime/15 text-accent-lime" : "bg-white/10 text-ink-mist"}`}>
+              {m.they_have.length} ⇄ {m.they_want.length}
+            </span>
+          </div>
+          <MatchRow label="У друга лишние — у тебя таких нет" cards={m.they_have} empty="Ничего нового для тебя" />
+          <MatchRow label="У тебя лишние — у друга таких нет" cards={m.they_want} empty="Твои лишние ему не нужны" />
+          <button
+            onClick={() =>
+              navigate("/trades/new", {
+                state: {
+                  target: m.user,
+                  offeredIds: m.they_want.slice(0, Math.max(1, Math.min(3, m.they_have.length || 1))).map((c) => c.card_id),
+                  requestedIds: m.they_have.slice(0, 3).map((c) => c.card_id),
+                },
+              })
+            }
+            className="flex items-center justify-center gap-1 rounded-xl bg-floodlight py-2.5 text-sm font-bold text-bg-base active:scale-95"
+          >
+            <IconSwap size={14} />
+            Обменяться в один тап
+          </button>
+        </div>
+      ))}
+      <p className="text-caption text-ink-mist-dim">
+        Берём только лишние копии (вторая и дальше) без редких версий. Карточки в предложении можно поменять перед отправкой.
       </p>
     </div>
   );

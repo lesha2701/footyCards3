@@ -39,7 +39,7 @@ settings = get_settings()
 
 SHARE_DIR = STATIC_DIR / "share"
 SHAREABLE_RARITIES = {Rarity.legendary, Rarity.diamond}
-KINDS = ("card", "match", "trophy", "my_player", "trade_wishes", "mordoboi_win", "anniversary_recap")
+KINDS = ("card", "match", "trophy", "my_player", "trade_wishes", "mordoboi_win", "anniversary_recap", "profile")
 
 
 def referral_link(user: User) -> str:
@@ -123,6 +123,33 @@ async def _trophy(db: AsyncSession, user: User, trophy_id: int) -> tuple[str, st
     )
     path = _store(image, "trophy", trophy.id, f"{d.name}|{d.description}|{d.image_path}")
     return path, f"Новый трофей: «{d.name}»! 🏆 Собирай карточки в Victor FC"
+
+
+async def _profile(db: AsyncSession, user: User) -> tuple[str, str]:
+    """The caller's own profile: level, cards, «Респект», the showcase."""
+    from app.services import profile_service, profile_social_service
+
+    public = await profile_service.get_public_profile(db, user.id)
+    social = await profile_social_service.social(db, user, user.id)
+    cards = [
+        {
+            "name": c.player.display_name, "rating": c.player.rating,
+            "rarity": getattr(c.player.rarity, "value", str(c.player.rarity)), "image": _static_path(c.player.image_path),
+        }
+        for c in public.showcase[:3]
+    ]
+    if not cards and public.rarest_card is not None:
+        rc = public.rarest_card
+        cards = [{"name": rc.display_name, "rating": rc.rating, "rarity": getattr(rc.rarity, "value", str(rc.rarity)),
+                  "image": _static_path(rc.image_path)}]
+    stats = [(str(public.unique_cards), "футболистов"), (str(public.total_cards), "карточек"), (str(social["respects"]), "респектов")]
+    name = user.full_display_name()
+    image = share_card_service.render_profile(
+        name=name, level=public.level, stats=stats, cards=cards, bot_username=settings.telegram_bot_username,
+    )
+    fingerprint = f"{name}|{public.level}|{stats}|{[(c['name'], c['rating'], c['rarity']) for c in cards]}"
+    path = _store(image, "profile", user.id, fingerprint)
+    return path, f"Мой профиль в Victor FC: {public.unique_cards} футболистов в коллекции! ⚽ Собери свою"
 
 
 async def _my_player(db: AsyncSession, user: User) -> tuple[str, str]:
@@ -471,6 +498,8 @@ async def prepare_share(db: AsyncSession, user: User, kind: str, object_id: int)
         path, caption = await _trophy(db, user, object_id)
     elif kind == "my_player":
         path, caption = await _my_player(db, user)
+    elif kind == "profile":
+        path, caption = await _profile(db, user)
     elif kind == "manager_player":
         path, caption = await _manager_player(db, user)
     elif kind == "prospect":

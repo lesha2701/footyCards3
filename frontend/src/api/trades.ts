@@ -87,6 +87,26 @@ export async function removeTradeWish(kind: TradeWishKind, playerId: number): Pr
   return data;
 }
 
+/** «С друзьями»: friends' spare copies I lack and mine they lack — no lists needed. */
+export async function fetchFriendTradeMatches(): Promise<TradeMatch[]> {
+  const { data } = await api.get<TradeMatch[]>("/trades/finder/friends");
+  return data;
+}
+
+export interface PlayerSources {
+  player: Player;
+  packs: { id: number; name: string }[];
+  market_lots: number;
+  market_from: number | null;
+  friends: { user: UserPublic; card_id: number }[];
+}
+
+/** «Где взять» a footballer missing from the album. */
+export async function fetchPlayerSources(playerId: number): Promise<PlayerSources> {
+  const { data } = await api.get<PlayerSources>(`/trades/finder/sources/${playerId}`);
+  return data;
+}
+
 export async function fetchTradeMatches(): Promise<TradeMatch[]> {
   const { data } = await api.get<TradeMatch[]>("/trades/finder/matches");
   return data;

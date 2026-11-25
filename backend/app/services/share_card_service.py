@@ -190,6 +190,52 @@ def render_trophy(*, name: str, description: str, image: Optional[Path], bot_use
     return _jpeg(img)
 
 
+RARITY_FRAMES = {
+    "common": (148, 163, 184), "rare": (56, 189, 248), "epic": (192, 132, 252),
+    "legendary": (250, 204, 21), "diamond": (125, 211, 252),
+}
+
+
+def render_profile(*, name: str, level: int, stats: list[tuple[str, str]], cards: list[dict], bot_username: str) -> bytes:
+    """«Мой профиль»: the name, three stat tiles and up to three showcase
+    cards (art, rating, name) on the brand background."""
+    img, draw = _base("Мой профиль", bot_username)
+    _center(draw, 145, name, _fit(draw, name, FONT_HEAVY, 46, SIZE - 80), WHITE)
+    _center(draw, 200, f"Уровень {level}", _font(FONT_BOLD, 24), MIST)
+    # Stat tiles.
+    tile_w, gap, top = 220, 20, 250
+    x0 = (SIZE - (tile_w * len(stats) + gap * (len(stats) - 1))) // 2
+    for i, (value, label) in enumerate(stats):
+        x = x0 + i * (tile_w + gap)
+        draw.rounded_rectangle([x, top, x + tile_w, top + 110], radius=20, fill=(24, 38, 31), outline=(60, 80, 70), width=2)
+        vf = _fit(draw, value, FONT_HEAVY, 42, tile_w - 30)
+        w = draw.textlength(value, font=vf)
+        draw.text((x + (tile_w - w) / 2, top + 16), value, font=vf, fill=LIME)
+        lf = _font(FONT_BOLD, 20)
+        w = draw.textlength(label, font=lf)
+        draw.text((x + (tile_w - w) / 2, top + 72), label, font=lf, fill=MIST)
+    # Showcase cards.
+    if cards:
+        cw, ch, cg, ctop = 200, 268, 24, 392
+        cx0 = (SIZE - (cw * len(cards) + cg * (len(cards) - 1))) // 2
+        for i, c in enumerate(cards[:3]):
+            x = cx0 + i * (cw + cg)
+            frame = RARITY_FRAMES.get(c.get("rarity", ""), (148, 163, 184))
+            draw.rounded_rectangle([x - 5, ctop - 5, x + cw + 5, ctop + ch + 5], radius=26, fill=frame)
+            draw.rounded_rectangle([x, ctop, x + cw, ctop + ch], radius=22, fill=(12, 20, 16))
+            art = _load(c.get("image"))
+            if art is not None:
+                art = ImageOps.fit(art.convert("RGBA"), (cw - 16, ch - 80), Image.Resampling.LANCZOS)
+                _paste_rounded(img, art, (x + 8, ctop + 8, x + cw - 8, ctop + ch - 72), 18)
+                draw = ImageDraw.Draw(img)
+            rf = _font(FONT_HEAVY, 30)
+            draw.text((x + 16, ctop + 12), str(c.get("rating", "")), font=rf, fill=WHITE, stroke_width=3, stroke_fill=(0, 0, 0))
+            nf = _fit(draw, c.get("name", ""), FONT_BOLD, 20, cw - 20)
+            w = draw.textlength(c.get("name", ""), font=nf)
+            draw.text((x + (cw - w) / 2, ctop + ch - 52), c.get("name", ""), font=nf, fill=WHITE)
+    return _jpeg(img)
+
+
 # «Мой игрок»: the constructor's option palettes (frontend lib/myPlayer.ts).
 _SKIN = ["#f6d7c3", "#eac0a0", "#d7a27c", "#b67b52", "#8d5a3b", "#5e3b26"]
 _HAIR = ["#1f1a17", "#4a2f1f", "#7b4a26", "#c08a3e", "#e3c27a", "#a33a1f", "#bdbdbd"]

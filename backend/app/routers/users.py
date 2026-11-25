@@ -9,7 +9,7 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.collection import AlbumCollectionDetailOut, AlbumOverviewOut, CollectionFilterParams, UserCardListItem
 from app.schemas.gift import GiftShelfOut
-from app.schemas.profile import ProfilePublicOut
+from app.schemas.profile import ProfilePublicOut, ProfileSocialOut
 from app.schemas.user import UserPublicOut
 from app.services.collection_service import list_user_cards
 from app.services.profile_service import get_public_profile, search_users
@@ -80,3 +80,19 @@ async def user_gift_shelf(user_id: int, db: AsyncSession = Depends(get_db), _use
     from app.services.gift_service import gift_shelf
 
     return await gift_shelf(db, user_id)
+
+
+@router.get("/{user_id}/social", response_model=ProfileSocialOut)
+async def user_social(user_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    from app.services import profile_social_service
+
+    return await profile_social_service.social(db, user, user_id)
+
+
+@router.post("/{user_id}/respect", response_model=ProfileSocialOut)
+async def user_respect(user_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    from app.core.rate_limit import check_rate_limit
+    from app.services import profile_social_service
+
+    await check_rate_limit(f"respect:{user.id}", max_calls=30, window_seconds=60)
+    return await profile_social_service.give_respect(db, user, user_id)

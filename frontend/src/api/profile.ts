@@ -59,3 +59,28 @@ export async function fetchMyAttention(): Promise<Attention> {
   const { data } = await api.get<Attention>("/profile/me/attention");
   return data;
 }
+
+export interface ProfileFeedEvent {
+  kind: "finish" | "trophy" | "collection";
+  at: string;
+  icon: string;
+  text: string;
+  image_path: string | null;
+}
+
+export interface ProfileSocial {
+  respects: number;
+  respected_today: boolean;
+  can_respect: boolean;
+  feed: ProfileFeedEvent[];
+}
+
+export async function fetchProfileSocial(userId: number): Promise<ProfileSocial> {
+  const { data } = await api.get<ProfileSocial>(`/users/${userId}/social`);
+  return data;
+}
+
+export async function giveRespect(userId: number): Promise<ProfileSocial> {
+  const { data } = await api.post<ProfileSocial>(`/users/${userId}/respect`);
+  return data;
+}

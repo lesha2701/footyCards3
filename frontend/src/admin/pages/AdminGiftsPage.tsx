@@ -11,6 +11,7 @@ import {
   updateGiftSet,
   uploadGiftSetImage,
 } from "@/admin/api";
+import GiftTransferStatsCard from "@/admin/components/GiftTransferStatsCard";
 import NumberInput from "@/components/common/NumberInput";
 import { ApiRequestError, staticUrl } from "@/lib/api";
 import { showConfirm } from "@/lib/telegram";
@@ -100,6 +101,8 @@ export default function AdminGiftsPage() {
         </div>
         <button onClick={openCreate} className="rounded-lg bg-accent px-3 py-2 text-xs font-bold text-bg-base">+ Набор</button>
       </div>
+
+      <GiftTransferStatsCard />
 
       {isLoading && <p className="text-sm text-slate-400">Загрузка...</p>}
 

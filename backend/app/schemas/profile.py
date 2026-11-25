@@ -80,3 +80,18 @@ class AttentionOut(BaseModel):
     league_unseen_rewards: int = 0
     friend_requests: int = 0
     career_invites: int = 0
+
+
+class ProfileFeedEvent(BaseModel):
+    kind: str  # "finish" | "trophy" | "collection"
+    at: datetime
+    icon: str
+    text: str
+    image_path: Optional[str] = None
+
+
+class ProfileSocialOut(BaseModel):
+    respects: int
+    respected_today: bool
+    can_respect: bool
+    feed: list[ProfileFeedEvent]

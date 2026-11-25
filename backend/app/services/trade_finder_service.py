@@ -277,3 +277,128 @@ async def notify_wanted_card(db: AsyncSession, owner_id: int, player_id: int) ->
         )
         wish.notified_at = now
     return len(wishes)
+
+
+# --- «С друзьями»: spare copies that fill each other's album, no lists needed -----
+
+
+async def _spares_and_owned(db: AsyncSession, user_ids: list[int]) -> tuple[dict, dict]:
+    """user -> {player_id: plainest tradeable spare card id} (two or more
+    tradeable copies, not hidden from trades) and user -> owned player ids."""
+    spares: dict[int, dict[int, int]] = defaultdict(dict)
+    rows = (await db.execute(
+        select(UserCard.owner_id, UserCard.player_id, UserCard.id)
+        .join(Player, Player.id == UserCard.player_id)
+        .where(UserCard.owner_id.in_(user_ids), UserCard.hidden_from_trade.is_(False),
+               UserCard.finish.is_(None), _tradeable_card_filter())
+        .order_by(UserCard.owner_id, UserCard.player_id, *_copy_order())
+    )).all()
+    copies: dict[tuple[int, int], list[int]] = defaultdict(list)
+    for owner_id, player_id, card_id in rows:
+        copies[(owner_id, player_id)].append(card_id)
+    for (owner_id, player_id), ids in copies.items():
+        if len(ids) >= 2:
+            spares[owner_id][player_id] = ids[0]
+    owned: dict[int, set[int]] = defaultdict(set)
+    for owner_id, player_id in (await db.execute(
+        select(UserCard.owner_id, UserCard.player_id).where(UserCard.owner_id.in_(user_ids)).distinct()
+    )).all():
+        owned[owner_id].add(player_id)
+    return spares, owned
+
+
+FRIEND_MATCH_CARDS = 12
+
+
+async def friend_matches(db: AsyncSession, user: User, config: GameConfig) -> list[dict]:
+    """For every friend who trades: their spare copies of footballers I don't
+    have at all, and my spare copies of footballers they don't have. Mutual
+    pairs first. The offer goes through trade_service.create_offer as usual."""
+    from app.services import friend_service
+
+    friend_ids = [
+        u.id for u in (await db.execute(
+            select(User).where(
+                User.id.in_(list(await friend_service.friend_ids(db, user.id))),
+                User.is_banned.is_(False), User.is_trade_banned.is_(False), User.accept_trades.is_(True),
+            )
+        )).scalars().all()
+    ]
+    if not friend_ids:
+        return []
+    spares, owned = await _spares_and_owned(db, [user.id, *friend_ids])
+    mine = spares.get(user.id, {})
+    pairs = []
+    for fid in friend_ids:
+        has = {p: c for p, c in spares.get(fid, {}).items() if p not in owned[user.id]}
+        wants = {p: c for p, c in mine.items() if p not in owned[fid]}
+        if has or wants:
+            pairs.append((fid, has, wants))
+    pairs.sort(key=lambda x: (bool(x[1]) and bool(x[2]), min(len(x[1]), len(x[2])), len(x[1]) + len(x[2])), reverse=True)
+    users = {u.id: u for u in (await db.execute(select(User).where(User.id.in_([p[0] for p in pairs])))).scalars().all()}
+    players = await _players(db, list({pid for _, has, wants in pairs for pid in [*has, *wants]}))
+    out = []
+    for fid, has, wants in pairs:
+        friend = users.get(fid)
+        if friend is None:
+            continue
+        if has and await trade_guard_service.give_block_reason(db, friend, config) is not None:
+            has = {}
+            if not wants:
+                continue
+        def items(d):
+            ranked = sorted(d.items(), key=lambda kv: -(players[kv[0]].rating if kv[0] in players else 0))
+            return [
+                {"card_id": card_id, "player": PlayerOut.model_validate(players[pid]), "marked_to_give": False}
+                for pid, card_id in ranked[:FRIEND_MATCH_CARDS] if pid in players
+            ]
+        out.append({
+            "user": UserPublicOut.model_validate(friend), "mutual": bool(has) and bool(wants),
+            "they_have": items(has), "they_want": items(wants),
+        })
+    return out
+
+
+# --- «Где взять»: a footballer missing from the album ----------------------------
+
+
+async def player_sources(db: AsyncSession, user: User, player_id: int) -> dict:
+    """Where to get a footballer: the themed packs on sale that drop his
+    collection, his active lots on «Трансферный рынок» and friends who hold a
+    spare copy. Event packs follow the sale window (pack_service rules)."""
+    from app.models.auction import AuctionLot
+    from app.models.pack import Pack
+    from app.services import friend_service
+
+    player = await db.get(Player, player_id)
+    if player is None or not player.is_active:
+        raise NotFoundError("Футболист не найден")
+    packs = []
+    if player.collection_id is not None and player.path_talent_code is None:
+        from app.services.pack_service import is_on_sale
+
+        for pack in (await db.execute(
+            select(Pack).where(Pack.player_pool == f"collection:{player.collection_id}", Pack.is_active.is_(True))
+        )).scalars().all():
+            if is_on_sale(pack):
+                packs.append({"id": pack.id, "name": pack.name})
+    now = datetime.now(timezone.utc)
+    lots = (await db.execute(
+        select(func.count(AuctionLot.id), func.min(func.coalesce(AuctionLot.buy_now_price, AuctionLot.start_price)))
+        .where(AuctionLot.player_id == player_id, AuctionLot.status == "active", AuctionLot.ends_at > now,
+               AuctionLot.seller_id != user.id)
+    )).one()
+    friends = []
+    fids = list(await friend_service.friend_ids(db, user.id))
+    if fids:
+        spares, _ = await _spares_and_owned(db, fids)
+        holders = [fid for fid in fids if player_id in spares.get(fid, {})]
+        for u in (await db.execute(select(User).where(User.id.in_(holders), User.accept_trades.is_(True)))).scalars().all():
+            friends.append({"user": UserPublicOut.model_validate(u), "card_id": spares[u.id][player_id]})
+    return {
+        "player": PlayerOut.model_validate(player),
+        "packs": packs,
+        "market_lots": lots[0] or 0,
+        "market_from": lots[1],
+        "friends": friends,
+    }

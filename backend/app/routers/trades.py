@@ -9,7 +9,7 @@ from app.database import get_db
 from app.models.enums import TradeStatus
 from app.models.user import User
 from app.schemas.trade import (
-    TradeAcceptOut, TradeCreateRequest, TradeMatchOut, TradeOfferOut, TradePreviewOut, TradePreviewRequest, TradeRulesOut, TradeWishesOut, TradeWishRequest,
+    PlayerSourcesOut, TradeAcceptOut, TradeCreateRequest, TradeMatchOut, TradeOfferOut, TradePreviewOut, TradePreviewRequest, TradeRulesOut, TradeWishesOut, TradeWishRequest,
 )
 from app.services import trade_finder_service, trade_guard_service, trade_service
 from app.services.game_config_service import get_config
@@ -44,6 +44,17 @@ async def remove_trade_wish(
     kind: Literal["want", "give"], player_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
     return await trade_finder_service.remove_wish(db, user, kind, player_id, await get_config(db))
+
+
+@router.get("/finder/friends", response_model=list[TradeMatchOut])
+async def get_friend_trade_matches(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    await check_rate_limit(f"trade_friend_matches:{user.id}", max_calls=20, window_seconds=60)
+    return await trade_finder_service.friend_matches(db, user, await get_config(db))
+
+
+@router.get("/finder/sources/{player_id}", response_model=PlayerSourcesOut)
+async def get_player_sources(player_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await trade_finder_service.player_sources(db, user, player_id)
 
 
 @router.get("/finder/matches", response_model=list[TradeMatchOut])

@@ -9,10 +9,11 @@ import { IconChevronLeft, IconSwap } from "@/components/icons";
 import { fetchPublicProfile } from "@/api/profile";
 import AcademyShowcase from "@/components/path/AcademyShowcase";
 import GiftShelf from "@/components/profile/GiftShelf";
+import { ProfileFeed, RespectBar } from "@/components/profile/ProfileSocial";
 import { ShowcaseRow } from "@/components/profile/Showcase";
 import { staticUrl } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
-import type { UserPublic } from "@/types";
+import type { ProfilePublic, UserPublic } from "@/types";
 
 export default function PublicProfilePage() {
   const { userId } = useParams<{ userId: string }>();
@@ -62,6 +63,7 @@ export default function PublicProfilePage() {
           </button>
         )}
         {me?.id !== profile.id && <FriendButton userId={profile.id} />}
+        <RespectBar userId={profile.id} isMe={me?.id === profile.id} />
         <button
           onClick={() => navigate(`/users/${profile.id}/album`)}
           className="mt-1 flex items-center gap-1.5 rounded-full bg-amber-300/15 px-4 py-2 text-xs font-bold text-amber-200 active:scale-95"
@@ -75,15 +77,9 @@ export default function PublicProfilePage() {
 
       <GiftShelf userId={profile.id} />
 
-      <section className="rounded-2xl bg-bg-surface p-4">
-        <div className="grid grid-cols-2 gap-y-4">
-          <Stat label="Рейтинг Arena" value={profile.arena_rating} />
-          <Stat label="Уникальных карточек" value={profile.unique_cards} />
-          <Stat label="Всего карточек" value={profile.total_cards} />
-          <Stat label="Место в рейтинге" value={`#${profile.arena_rank}`} accentClass="bg-floodlight bg-clip-text text-transparent" />
-          <Stat label="Матчи П/Н/П" value={`${profile.matches_won}/${profile.matches_drawn}/${profile.matches_lost}`} />
-        </div>
-      </section>
+      <ProfileStats profile={profile} />
+
+      <ProfileFeed userId={profile.id} />
 
       <PublicMyPlayer userId={profile.id} />
 
@@ -103,6 +99,26 @@ export default function PublicProfilePage() {
         </section>
       )}
     </div>
+  );
+}
+
+/** Only the numbers this player actually has: no «0», «#0» or «0/0/0» rows. */
+function ProfileStats({ profile }: { profile: ProfilePublic }) {
+  const played = profile.matches_won + profile.matches_drawn + profile.matches_lost;
+  const tiles = [
+    profile.unique_cards > 0 && <Stat key="u" label="Уникальных карточек" value={profile.unique_cards} />,
+    profile.total_cards > 0 && <Stat key="t" label="Всего карточек" value={profile.total_cards} />,
+    played > 0 && profile.arena_rating > 0 && <Stat key="r" label="Рейтинг Arena" value={profile.arena_rating} />,
+    played > 0 && profile.arena_rank > 0 && (
+      <Stat key="p" label="Место в рейтинге" value={`#${profile.arena_rank}`} accentClass="bg-floodlight bg-clip-text text-transparent" />
+    ),
+    played > 0 && <Stat key="m" label="Матчи П/Н/П" value={`${profile.matches_won}/${profile.matches_drawn}/${profile.matches_lost}`} />,
+  ].filter(Boolean);
+  if (!tiles.length) return null;
+  return (
+    <section className="rounded-2xl bg-bg-surface p-4" data-testid="profile-stats">
+      <div className="grid grid-cols-2 gap-y-4">{tiles}</div>
+    </section>
   );
 }
 

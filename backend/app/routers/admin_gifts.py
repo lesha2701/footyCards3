@@ -179,3 +179,11 @@ async def broadcast_gift(
     )
     await db.commit()
     return AdminGiftBroadcastOut(recipients=recipients)
+
+
+@router.get("/transfer-stats")
+async def gift_transfer_stats(days: int = 30, db: AsyncSession = Depends(get_db)):
+    """Passing gifts on for Stars: Stars, copies, senders and top sets."""
+    from app.services.gift_service import admin_transfer_stats
+
+    return await admin_transfer_stats(db, max(1, min(days, 365)))

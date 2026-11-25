@@ -1736,3 +1736,17 @@ export async function updateAdminLoyalty(settings: Record<string, unknown>): Pro
   const { data } = await api.put<AdminLoyalty>("/admin/loyalty", { settings });
   return data;
 }
+
+export interface GiftTransferStats {
+  days: number;
+  stars: number;
+  invoices: number;
+  copies: number;
+  senders: number;
+  top_sets: { name: string; copies: number }[];
+}
+
+export async function fetchGiftTransferStats(days = 30): Promise<GiftTransferStats> {
+  const { data } = await api.get<GiftTransferStats>("/admin/gifts/transfer-stats", { params: { days } });
+  return data;
+}
