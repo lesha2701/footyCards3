@@ -98,7 +98,8 @@ export const FRAMES = FRAME_XS.map((x) => {
 /* Cabinet against the right wall, standing on the floor: its front-left
  * bottom corner (64, 345) placed 1 depth in front of the wall base. */
 export const CABINET = place(BOX.cabinet, 0.4, [64, 345], [180, 206]);
-const CAB_COLS_PX = [135, 235, 335];
+/** Cell centres along the front: partitions at x 186 and 289 split 83…396. */
+const CAB_COLS_PX = [134, 237, 340];
 /** Where a cabinet cell's item stands: three per shelf, two shelves. */
 export function cabinetSlot(i: number): Pt {
   const x = CAB_COLS_PX[i % 3];
