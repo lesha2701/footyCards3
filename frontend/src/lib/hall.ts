@@ -101,7 +101,9 @@ export const FRAMES = FRAME_XS.map((x) => {
  * Inside the glass: columns 125–275–426–576, rows from y 93 / 243 / 397 at
  * x 125, each line falling 1:2 to the right. */
 const KN = 0.28;
-export const NICHE = place(BOX.niche, KN, [96, 29], [210, 40 + 10 / 2 + 16]);
+/** Centred on the wall: 513 px wide → u from (200 − 513·KN) / 2. */
+const NICHE_U = (200 - 513 * KN) / 2;
+export const NICHE = place(BOX.niche, KN, [96, 29], [200 + NICHE_U, 40 + NICHE_U / 2 + 16]);
 const NICHE_COLS_PX = [200, 350, 501];
 /** Where a niche cell's item stands: three per shelf, two shelves. */
 export function cabinetSlot(i: number): Pt {
@@ -135,7 +137,10 @@ export const PEDESTALS = PEDESTAL_SPOTS.map((at) => {
 
 /* Decor. */
 export const PLANT = place(BOX.plant, 0.2, [171, 322], [370, 300]);
-export const BANNER = place(BOX.banner, 0.2, [139, 20], [376, 140], 0.2, true);
+/** The pennant on the left wall, between the last frame and the corner. */
+export const BANNER = place(BOX.banner, 0.16, [139, 20], [185, 40 + (200 - 185) / 2 + 8]);
+/** A gold pilaster over the corner, where the two walls' bevelled ends meet. */
+export const PILASTER = { x: 197.5, y: 39, width: 5, height: 142 };
 export const ROPES = [
   place(BOX.rope, 0.26, [130, 236], [46, 346]),
   place(BOX.rope, 0.26, [130, 236], [340, 360], 0.26, true),

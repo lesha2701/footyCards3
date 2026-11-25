@@ -8,7 +8,7 @@ import { IconChevronLeft } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
 import { asFinish, FINISH_ICONS, FINISH_LABELS } from "@/lib/finish";
 import {
-  BANNER, CAB_ITEM_H, CAB_ITEM_W, CARPET, FLOOR, FRAMES, FRAME_IN_H, FRAME_IN_W, HALL_TOP, HALL_VIEW, NICHE, PEDESTALS, PLANT, ROPES,
+  BANNER, CAB_ITEM_H, CAB_ITEM_W, CARPET, FLOOR, FRAMES, FRAME_IN_H, FRAME_IN_W, HALL_TOP, HALL_VIEW, NICHE, PEDESTALS, PILASTER, PLANT, ROPES,
   WALL_LEFT, WALL_RIGHT, cabinetSlot, rect, type Placed,
 } from "@/lib/hall";
 import { RARITY_LABELS } from "@/lib/rarity";
@@ -170,6 +170,12 @@ function Room({ hall, isMe, onPick }: { hall: Hall; isMe: boolean; onPick: (p: P
           <stop offset="0" stopColor="#050b08" />
           <stop offset="1" stopColor="#0c1712" />
         </linearGradient>
+        <linearGradient id="hall-pilaster" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#5e4314" />
+          <stop offset="0.45" stopColor="#d8b25a" />
+          <stop offset="0.6" stopColor="#c89a3c" />
+          <stop offset="1" stopColor="#5e4314" />
+        </linearGradient>
       </defs>
       <rect width={HALL_VIEW} height={HALL_VIEW} fill="url(#hall-ceiling)" />
 
@@ -178,6 +184,7 @@ function Room({ hall, isMe, onPick }: { hall: Hall; isMe: boolean; onPick: (p: P
       <Sprite p={CARPET} src={carpetArt} />
       <Sprite p={WALL_LEFT} src={wallLeftArt} />
       <Sprite p={WALL_RIGHT} src={wallRightArt} />
+      <rect {...PILASTER} rx="1.5" fill="url(#hall-pilaster)" />
       <Sprite p={BANNER} src={bannerArt} />
 
       {/* Frames on the left wall: the «Витрина» cards */}
