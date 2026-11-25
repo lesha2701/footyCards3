@@ -107,7 +107,7 @@ export const STYLE_OPTIONS: Record<CosmeticKind, string[]> = {
   magic_castle: ["magic_castle_stadium", "magic_castle_ice", "magic_castle_volcano", "magic_castle_cup"],
   zames_hero: ["ultras", "ded", "mascot", "viking", "gold"],
   // «Зал славы» (assets/hall/niche_<key>, pedestal_<key>, decor/<key>.webp).
-  hall_cabinet: [],
+  hall_cabinet: ["oak", "marble", "crystal", "neon"],
   hall_pedestal: ["oak", "crystal", "neon"],
   hall_floor: [],
   hall_wall: [],
