@@ -211,6 +211,21 @@ export default function ProfilePage() {
 
       <MonetizationEntries />
 
+      {user && (
+        <button
+          onClick={() => navigate(`/users/${user.id}/hall`)}
+          className="relative flex items-center gap-3 overflow-hidden rounded-2xl border border-amber-300/30 bg-gradient-to-r from-[#3b2414] via-[#1a3628] to-[#0c1712] p-4 text-left active:scale-[0.98]"
+          data-testid="open-my-hall"
+        >
+          <span className="text-4xl drop-shadow">🏛</span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-display text-base font-bold text-amber-100">Мой зал славы</span>
+            <span className="block text-caption text-ink-mist">Картины, кубки и подарки — обустрой комнату</span>
+          </span>
+          <span className="rounded-full bg-amber-300/20 px-3 py-1.5 text-micro font-bold text-amber-100">Войти</span>
+        </button>
+      )}
+
       {profile?.showcase?.length ? (
         <ShowcaseRow cards={profile.showcase} title="Моя витрина" />
       ) : null}
