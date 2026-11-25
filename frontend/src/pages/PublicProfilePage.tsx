@@ -12,13 +12,14 @@ import AcademyShowcase from "@/components/path/AcademyShowcase";
 import GiftShelf from "@/components/profile/GiftShelf";
 import { ProfileFeed, RespectBar } from "@/components/profile/ProfileSocial";
 import { ShowcaseRow } from "@/components/profile/Showcase";
-import { staticUrl } from "@/lib/api";
 import { cardStats, modeRows } from "@/lib/profileStats";
 import { useAuthStore } from "@/store/authStore";
 import type { UserPublic } from "@/types";
 
+import tileAlbum from "@/assets/profile/tile_album.webp";
 import tileGifts from "@/assets/profile/tile_rewards.webp";
 import tileHall from "@/assets/profile/tile_hall.webp";
+import tileShowcase from "@/assets/profile/tile_showcase.webp";
 
 type Panel = "showcase" | "gifts";
 
@@ -70,7 +71,7 @@ export default function PublicProfilePage() {
         details={<ModeRecords rows={modeRows(profile)} />}
         actions={
           <>
-            <RespectBar userId={profile.id} isMe={isMe} />
+            {!isMe && <RespectBar userId={profile.id} isMe={false} />}
             {!isMe && (
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -101,14 +102,13 @@ export default function PublicProfilePage() {
       <div className="grid grid-cols-4 gap-2">
         <PlaceTile art={tileHall} title="Зал славы" onClick={() => navigate(`/users/${profile.id}/hall`)} testId="open-hall" />
         <PlaceTile
-          art={profile.showcase?.[0]?.player.image_path ? staticUrl(profile.showcase[0].player.image_path) : null}
-          emoji="🃏"
+          art={tileShowcase}
           title="Витрина"
           active={open === "showcase"}
           onClick={() => setPanel("showcase")}
         />
         <PlaceTile art={tileGifts} title="Подарки" active={open === "gifts"} onClick={() => setPanel("gifts")} />
-        <PlaceTile emoji="📖" title="Альбом" onClick={() => navigate(`/users/${profile.id}/album`)} testId="open-friend-album" />
+        <PlaceTile art={tileAlbum} title="Альбом" onClick={() => navigate(`/users/${profile.id}/album`)} testId="open-friend-album" />
       </div>
       {open === "showcase" &&
         (hasShowcase ? (
