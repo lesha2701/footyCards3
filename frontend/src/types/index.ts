@@ -1274,7 +1274,12 @@ export type CosmeticKind =
   | "helmet"
   | "magic_hero"
   | "magic_castle"
-  | "zames_hero";
+  | "zames_hero"
+  | "hall_cabinet"
+  | "hall_pedestal"
+  | "hall_floor"
+  | "hall_wall"
+  | "hall_front";
 
 export interface Cosmetic {
   id: number;

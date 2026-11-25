@@ -134,3 +134,32 @@ async def test_hall_of_fame_shows_showcase_trophies_and_counts(client, db_sessio
     assert hall["cabinet"][0]["description"] == "Спасибо!"
     assert hall["totals"]["trophies"] == 1 and hall["totals"]["rare_prints"] == 1
     assert (await client.get("/api/v1/users/999999/hall", headers=headers)).status_code == 404
+
+
+async def test_hall_decor_places_take_only_owned_items_of_their_kind(client, db_session, bot_token):
+    from app.models.monetization import Cosmetic, UserCosmetic
+
+    headers, me = await _login(client, bot_token, 770050, db_session)
+    guest, _ = await _login(client, bot_token, 770051, db_session)
+    cabinet = Cosmetic(kind="hall_cabinet", name="Хрусталь", style_key="crystal", stars_price=50)
+    plant = Cosmetic(kind="hall_floor", name="Статуя", style_key="statue", coins_price=100)
+    db_session.add_all([cabinet, plant])
+    await db_session.commit()
+    put = lambda slot, cid: client.put("/api/v1/users/me/hall/decor", headers=headers, json={"slot": slot, "cosmetic_id": cid})
+
+    assert (await put("cabinet", cabinet.id)).status_code == 409  # not owned yet
+    db_session.add(UserCosmetic(user_id=me.id, cosmetic_id=cabinet.id, source="stars"))
+    db_session.add(UserCosmetic(user_id=me.id, cosmetic_id=plant.id, source="coins"))
+    await db_session.commit()
+    assert (await put("cabinet", plant.id)).status_code == 404  # wrong place for it
+    assert (await put("cabinet", 0)).status_code == 409  # the cabinet holds the exhibits
+    assert (await put("nowhere", None)).status_code == 404
+    assert (await put("cabinet", cabinet.id)).status_code == 200
+    assert (await put("corner", plant.id)).status_code == 200
+    layout = (await put("front_left", 0)).json()
+    assert layout["cabinet"]["style_key"] == "crystal" and layout["corner"]["style_key"] == "statue"
+    assert layout["front_left"] is None and "wall" not in layout
+
+    seen = (await client.get(f"/api/v1/users/{me.id}/hall", headers=guest)).json()["decor"]
+    assert seen == layout  # visitors see the owner's room
+    assert "corner" not in (await put("corner", None)).json()  # back to the default palm

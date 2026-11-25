@@ -32,6 +32,11 @@ const SHORT_LABELS: Record<CosmeticKind, string> = {
   magic_hero: "Герой",
   magic_castle: "Замок",
   zames_hero: "Замес",
+  hall_cabinet: "Ниша",
+  hall_pedestal: "Постаменты",
+  hall_floor: "Угол",
+  hall_wall: "Стена",
+  hall_front: "Вход",
 };
 
 /** Owned first-to-buy order: what you can buy now, then the rest, then

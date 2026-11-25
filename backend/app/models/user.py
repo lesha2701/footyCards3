@@ -193,6 +193,8 @@ class User(TimestampMixin, Base):
     zames_hourly_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     zames_hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     zames_best_knockouts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # «Зал славы» look: place → cosmetic id, 0 = emptied (hall_decor_service).
+    hall_layout: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     # Hero skin (cosmetics kind "zames_hero") — visual only.
     equipped_zames_hero_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("cosmetics.id", ondelete="SET NULL"), nullable=True

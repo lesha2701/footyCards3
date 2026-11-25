@@ -116,6 +116,18 @@ class HallTotals(BaseModel):
     respects: int
 
 
+class HallDecorItem(BaseModel):
+    id: int
+    style_key: str
+    image_path: Optional[str] = None
+
+
+class HallDecorIn(BaseModel):
+    slot: str
+    # None = the default look, 0 = empty (decor places only).
+    cosmetic_id: Optional[int] = None
+
+
 class HallOut(BaseModel):
     """«Зал славы»: the «Витрина» cards in the wall frames, trophies and
     completed collections in the cabinet, the gift shelf on the pedestals."""
@@ -124,3 +136,5 @@ class HallOut(BaseModel):
     cabinet: list[HallCabinetItem]
     pedestals: list[GiftShelfItem]
     totals: HallTotals
+    # Places the owner changed (hall_decor_service): an item, or null = emptied.
+    decor: dict[str, Optional[HallDecorItem]] = {}

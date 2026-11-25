@@ -9,7 +9,7 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.collection import AlbumCollectionDetailOut, AlbumOverviewOut, CollectionFilterParams, UserCardListItem
 from app.schemas.gift import GiftShelfOut
-from app.schemas.profile import HallOut, ProfilePublicOut, ProfileSocialOut
+from app.schemas.profile import HallDecorIn, HallDecorItem, HallOut, ProfilePublicOut, ProfileSocialOut
 from app.schemas.user import UserPublicOut
 from app.services.collection_service import list_user_cards
 from app.services.profile_service import get_public_profile, search_users
@@ -96,6 +96,14 @@ async def user_respect(user_id: int, db: AsyncSession = Depends(get_db), user: U
 
     await check_rate_limit(f"respect:{user.id}", max_calls=30, window_seconds=60)
     return await profile_social_service.give_respect(db, user, user_id)
+
+
+@router.put("/me/hall/decor", response_model=dict[str, Optional[HallDecorItem]])
+async def set_hall_decor(payload: HallDecorIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """«Обустроить зал»: what stands in one place of the owner's hall."""
+    from app.services import hall_decor_service
+
+    return await hall_decor_service.set_slot(db, user, payload.slot, payload.cosmetic_id)
 
 
 @router.get("/{user_id}/hall", response_model=HallOut)

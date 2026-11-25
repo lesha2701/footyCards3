@@ -145,3 +145,14 @@ export const ROPES = [
   place(BOX.rope, 0.26, [130, 236], [46, 346]),
   place(BOX.rope, 0.26, [130, 236], [340, 360], 0.26, true),
 ];
+
+/** Decor places for the owner's items (the defaults above have their own
+ * placements): the picture is fitted into a box standing on `at`, or hanging
+ * from it on the wall; the right front place is mirrored. */
+export type DecorPlace = "corner" | "wall" | "front_left" | "front_right";
+export const DECOR_BOX: Record<DecorPlace, { at: Pt; w: number; h: number; hang?: boolean; flip?: boolean }> = {
+  corner: { at: [370, 300], w: 46, h: 68 },
+  wall: { at: [185, 40 + (200 - 185) / 2 + 8], w: 24, h: 40, hang: true },
+  front_left: { at: [46, 346], w: 62, h: 58 },
+  front_right: { at: [340, 360], w: 62, h: 58, flip: true },
+};

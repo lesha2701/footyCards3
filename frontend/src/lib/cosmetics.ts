@@ -106,6 +106,12 @@ export const STYLE_OPTIONS: Record<CosmeticKind, string[]> = {
   magic_hero: ["magic_hero_gold", "magic_hero_shadow", "magic_hero_frost", "magic_hero_ember", "magic_hero_grove", "magic_hero_night"],
   magic_castle: ["magic_castle_stadium", "magic_castle_ice", "magic_castle_volcano", "magic_castle_cup"],
   zames_hero: ["ultras", "ded", "mascot", "viking", "gold"],
+  // «Зал славы» (assets/hall/niche_<key>, pedestal_<key>, decor/<key>.webp).
+  hall_cabinet: [],
+  hall_pedestal: ["oak", "crystal", "neon"],
+  hall_floor: [],
+  hall_wall: [],
+  hall_front: [],
 };
 
 export const KIND_LABELS: Record<CosmeticKind, string> = {
@@ -120,6 +126,11 @@ export const KIND_LABELS: Record<CosmeticKind, string> = {
   magic_hero: "Герой «Мяч и Магия»",
   magic_castle: "Замок «Мяч и Магия»",
   zames_hero: "Герой «Замеса»",
+  hall_cabinet: "Зал славы: ниша",
+  hall_pedestal: "Зал славы: постаменты",
+  hall_floor: "Зал славы: декор в углу",
+  hall_wall: "Зал славы: на стене",
+  hall_front: "Зал славы: у входа",
 };
 
 export function frameClass(styleKey: string | null | undefined): string | null {

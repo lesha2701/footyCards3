@@ -2,28 +2,25 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { fetchHall, fetchPublicProfile, type Hall } from "@/api/profile";
+import { fetchHall, fetchPublicProfile, type Hall, type HallDecor, type HallDecorItem } from "@/api/profile";
+import HallDecorPanel from "@/components/hall/HallDecorPanel";
 import { RespectBar } from "@/components/profile/ProfileSocial";
 import { IconChevronLeft } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
 import { asFinish, FINISH_ICONS, FINISH_LABELS } from "@/lib/finish";
 import {
-  BANNER, CAB_ITEM_H, CAB_ITEM_W, CARPET, FLOOR, FRAMES, FRAME_IN_H, FRAME_IN_W, HALL_TOP, HALL_VIEW, NICHE, PEDESTALS, PILASTER, PLANT, ROPES,
-  WALL_LEFT, WALL_RIGHT, cabinetSlot, rect, type Placed,
+  BANNER, CAB_ITEM_H, DECOR_BOX, CAB_ITEM_W, CARPET, FLOOR, FRAMES, FRAME_IN_H, FRAME_IN_W, HALL_TOP, HALL_VIEW, NICHE, PEDESTALS, PILASTER, PLANT, ROPES,
+  WALL_LEFT, WALL_RIGHT, cabinetSlot, rect, type DecorPlace, type Placed,
 } from "@/lib/hall";
+import { bannerArt, decorSrc, nicheSrc, pedestalSrc, plantArt, ropeArt } from "@/lib/hallArt";
 import { RARITY_LABELS } from "@/lib/rarity";
 import { SPECIAL_LABELS, type SpecialSerial } from "@/lib/giftSerial";
 import { useAuthStore } from "@/store/authStore";
 import type { Rarity } from "@/types";
 
-import bannerArt from "@/assets/hall/banner.webp";
-import nicheArt from "@/assets/hall/cabinet_niche.webp";
 import carpetArt from "@/assets/hall/carpet.webp";
 import floorArt from "@/assets/hall/floor.webp";
 import frameArt from "@/assets/hall/frame.webp";
-import pedestalArt from "@/assets/hall/pedestal.webp";
-import plantArt from "@/assets/hall/plant.webp";
-import ropeArt from "@/assets/hall/rope.webp";
 import spotlightArt from "@/assets/hall/spotlight.webp";
 import wallLeftArt from "@/assets/hall/wall_left.webp";
 import wallRightArt from "@/assets/hall/wall_right.webp";
@@ -57,6 +54,9 @@ export default function HallOfFamePage() {
   const { data: hall } = useQuery({ queryKey: ["hall", id], queryFn: () => fetchHall(id) });
   const [plaque, setPlaque] = useState<Plaque | null>(null);
   const [arrange, setArrange] = useState(false);
+  const [decorOpen, setDecorOpen] = useState(false);
+  // «Примерка»: places shown with an item the owner is looking at.
+  const [preview, setPreview] = useState<HallDecor>({});
   const name = profile ? [profile.first_name, profile.last_name].filter(Boolean).join(" ") || profile.username : "";
 
   return (
@@ -71,7 +71,7 @@ export default function HallOfFamePage() {
       </div>
 
       <div className="relative overflow-hidden rounded-3xl bg-[#0c1712] ring-1 ring-amber-300/15" data-testid="hall-room">
-        {hall ? <Room hall={hall} isMe={isMe} onPick={setPlaque} /> : <div className="aspect-square animate-pulse" />}
+        {hall ? <Room hall={hall} decor={{ ...hall.decor, ...preview }} isMe={isMe} onPick={setPlaque} /> : <div className="aspect-square animate-pulse" />}
       </div>
 
       <section className="min-h-[84px] rounded-2xl border border-amber-300/25 bg-gradient-to-b from-amber-300/10 to-transparent p-3" data-testid="hall-plaque">
@@ -120,6 +120,19 @@ export default function HallOfFamePage() {
           🧩 Расставить экспонаты
         </button>
       )}
+      {isMe && (
+        <button
+          onClick={() => {
+            setDecorOpen((v) => !v);
+            setPreview({});
+          }}
+          className="rounded-xl bg-gradient-to-r from-amber-300/25 to-amber-500/10 py-2.5 text-sm font-bold text-amber-100 ring-1 ring-amber-300/30 active:scale-95"
+          data-testid="hall-decor-open"
+        >
+          🎨 Обустроить зал
+        </button>
+      )}
+      {isMe && decorOpen && hall && <HallDecorPanel decor={hall.decor} onPreview={setPreview} />}
       {isMe && arrange && (
         <section className="flex flex-col gap-2 rounded-2xl bg-bg-surface p-3 text-caption text-ink-mist">
           <ArrangeRow icon="🖼" title="Картины на стене" text="Три карты из «Витрины» — отметь их в карточке «В витрину»." cta="К картам" onClick={() => navigate("/collection")} />
@@ -162,7 +175,28 @@ function Sprite({ p, src, opacity }: { p: Placed; src: string; opacity?: number 
   );
 }
 
-function Room({ hall, isMe, onPick }: { hall: Hall; isMe: boolean; onPick: (p: Plaque) => void }) {
+/** An owner's decor item in its place: missing = the default sprite,
+ * null = empty, an item = its picture fitted into the place's box. */
+function Decor({ place, item, fallback }: { place: DecorPlace; item: HallDecorItem | null | undefined; fallback: React.ReactNode }) {
+  if (item === undefined) return <>{fallback}</>;
+  const src = item && decorSrc(item);
+  if (!src) return null;
+  const b = DECOR_BOX[place];
+  const x = b.at[0] - b.w / 2;
+  return (
+    <image
+      href={src}
+      x={x}
+      y={b.hang ? b.at[1] : b.at[1] - b.h}
+      width={b.w}
+      height={b.h}
+      preserveAspectRatio={b.hang ? "xMidYMin meet" : "xMidYMax meet"}
+      transform={b.flip ? `translate(${2 * x + b.w} 0) scale(-1 1)` : undefined}
+    />
+  );
+}
+
+function Room({ hall, decor, isMe, onPick }: { hall: Hall; decor: HallDecor; isMe: boolean; onPick: (p: Plaque) => void }) {
   return (
     <svg viewBox={`0 ${HALL_TOP} ${HALL_VIEW} ${HALL_VIEW - HALL_TOP}`} className="block w-full">
       <defs>
@@ -185,7 +219,7 @@ function Room({ hall, isMe, onPick }: { hall: Hall; isMe: boolean; onPick: (p: P
       <Sprite p={WALL_LEFT} src={wallLeftArt} />
       <Sprite p={WALL_RIGHT} src={wallRightArt} />
       <rect {...PILASTER} rx="1.5" fill="url(#hall-pilaster)" />
-      <Sprite p={BANNER} src={bannerArt} />
+      <Decor place="wall" item={decor.wall} fallback={<Sprite p={BANNER} src={bannerArt} />} />
 
       {/* Frames on the left wall: the «Витрина» cards */}
       {FRAMES.map(({ frame, inner, lamp }, i) => {
@@ -231,7 +265,7 @@ function Room({ hall, isMe, onPick }: { hall: Hall; isMe: boolean; onPick: (p: P
 
 
       {/* The niche in the right wall: trophies, then collections */}
-      <Sprite p={NICHE} src={nicheArt} />
+      <Sprite p={NICHE} src={nicheSrc(decor.cabinet)} />
       {Array.from({ length: 6 }, (_, i) => {
         const item = hall.cabinet[i];
         if (!item) return null;
@@ -261,7 +295,7 @@ function Room({ hall, isMe, onPick }: { hall: Hall; isMe: boolean; onPick: (p: P
       })}
 
       {/* Decor in the right corner */}
-      <Sprite p={PLANT} src={plantArt} />
+      <Decor place="corner" item={decor.corner} fallback={<Sprite p={PLANT} src={plantArt} />} />
 
       {/* Pedestals on the floor: the gift shelf */}
       {PEDESTALS.map(({ sprite, top }, i) => {
@@ -285,7 +319,7 @@ function Room({ hall, isMe, onPick }: { hall: Hall; isMe: boolean; onPick: (p: P
               })
             }
           >
-            <Sprite p={sprite} src={pedestalArt} />
+            <Sprite p={sprite} src={pedestalSrc(decor.pedestal)} />
             {special && <ellipse cx={x} cy={y} rx="17" ry="7" fill="none" stroke="#fcd34d" strokeWidth="1.5" />}
             {gift ? (
               gift.gift_set.image_path ? (
@@ -304,9 +338,8 @@ function Room({ hall, isMe, onPick }: { hall: Hall; isMe: boolean; onPick: (p: P
       })}
 
       {/* Velvet ropes along the front */}
-      {ROPES.map((p, i) => (
-        <Sprite key={i} p={p} src={ropeArt} />
-      ))}
+      <Decor place="front_left" item={decor.front_left} fallback={<Sprite p={ROPES[0]} src={ropeArt} />} />
+      <Decor place="front_right" item={decor.front_right} fallback={<Sprite p={ROPES[1]} src={ropeArt} />} />
     </svg>
   );
 }

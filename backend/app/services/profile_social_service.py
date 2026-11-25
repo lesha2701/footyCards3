@@ -98,7 +98,7 @@ async def hall(db: AsyncSession, user_id: int) -> dict:
     """«Зал славы» — built only from what the profile already shows: the
     «Витрина» copies, trophies (newest first) then completed collections,
     and the gift shelf (pinned first, then the rarest serials)."""
-    from app.services import gift_service, profile_service
+    from app.services import gift_service, hall_decor_service, profile_service
 
     target = await _target(db, user_id)
     trophies = (await db.execute(
@@ -130,4 +130,5 @@ async def hall(db: AsyncSession, user_id: int) -> dict:
         "pedestals": shelf.items[:HALL_PEDESTALS],
         "totals": {"trophies": len(trophies), "collections": len(collections), "gifts": shelf.copies,
                    "rare_prints": rare, "respects": respects},
+        "decor": await hall_decor_service.view(db, target),
     }

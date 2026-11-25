@@ -97,15 +97,34 @@ export interface HallCabinetItem {
   at: string;
 }
 
+/** A place of the hall the owner changed: the item standing there. */
+export interface HallDecorItem {
+  id: number;
+  style_key: string;
+  image_path: string | null;
+}
+
+/** Hall places: two skins (the niche, all pedestals) and four decor places. */
+export type HallSlot = "cabinet" | "pedestal" | "corner" | "wall" | "front_left" | "front_right";
+/** Missing place = the default look, null = emptied. */
+export type HallDecor = Partial<Record<HallSlot, HallDecorItem | null>>;
+
 export interface Hall {
   frames: UserCard[];
   cabinet: HallCabinetItem[];
   pedestals: GiftShelfItem[];
+  decor: HallDecor;
   totals: { trophies: number; collections: number; gifts: number; rare_prints: number; respects: number };
 }
 
 /** «Зал славы» of a profile. */
 export async function fetchHall(userId: number): Promise<Hall> {
   const { data } = await api.get<Hall>(`/users/${userId}/hall`);
+  return data;
+}
+
+/** «Обустроить зал»: `cosmeticId` null = the default look, 0 = empty. */
+export async function setHallDecor(slot: HallSlot, cosmeticId: number | null): Promise<HallDecor> {
+  const { data } = await api.put<HallDecor>("/users/me/hall/decor", { slot, cosmetic_id: cosmeticId });
   return data;
 }
