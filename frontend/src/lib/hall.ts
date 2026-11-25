@@ -77,11 +77,11 @@ export const CARPET = place(BOX.carpet, 0.25, [415, 415], [176, 292], 0.25, true
 /* Frames on the left wall. The velvet inside the frame sprite is a
  * parallelogram: left edge x 120 from y 130, 142 wide, 184 tall, its top
  * rising 1:2 — the card goes there under the same skew. */
-const KF = 0.25;
+const KF = 0.24;
 const FRAME_INNER: Pt = [120, 130];
 export const FRAME_IN_W = 142 * KF;
 export const FRAME_IN_H = 184 * KF;
-const FRAME_XS = [22, 84, 146];
+const FRAME_XS = [16, 74, 132];
 /** Left wall top at screen x. */
 const wallTop = (x: number) => 40 + (200 - x) / 2;
 export const FRAMES = FRAME_XS.map((x) => {
@@ -97,7 +97,7 @@ export const FRAMES = FRAME_XS.map((x) => {
 
 /* Cabinet against the right wall, standing on the floor: its front-left
  * bottom corner (64, 345) placed 1 depth in front of the wall base. */
-export const CABINET = place(BOX.cabinet, 0.4, [64, 345], [180, 206]);
+export const CABINET = place(BOX.cabinet, 0.4, [64, 345], [192, 212]);
 /** Cell centres along the front: partitions at x 186 and 289 split 83…396. */
 const CAB_COLS_PX = [134, 237, 340];
 /** Where a cabinet cell's item stands: three per shelf, two shelves. */
@@ -127,7 +127,7 @@ export const PEDESTALS = PEDESTAL_SPOTS.map((at) => {
 });
 
 /* Decor. */
-export const PLANT = place(BOX.plant, 0.22, [171, 322], [372, 284]);
+export const PLANT = place(BOX.plant, 0.2, [171, 322], [370, 300]);
 export const BANNER = place(BOX.banner, 0.2, [139, 20], [376, 140], 0.2, true);
 export const ROPES = [
   place(BOX.rope, 0.26, [130, 236], [46, 346]),
