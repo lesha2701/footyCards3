@@ -84,6 +84,10 @@ async def test_respect_once_a_day_feed_and_profile_share(client, db_session, bot
     assert r.status_code == 200 and r.json()["respects"] == 1 and r.json()["respected_today"]
     assert (await client.post(f"/api/v1/users/{other.id}/respect", headers=headers)).status_code == 409
     assert (await client.post(f"/api/v1/users/{me.id}/respect", headers=headers)).status_code == 409
+    # Who came by today: the owner sees it, a visitor doesn't.
+    assert r.json()["today_givers"] == []
+    own = (await client.get(f"/api/v1/users/{other.id}/social", headers=other_headers)).json()
+    assert [g["id"] for g in own["today_givers"]] == [me.id]
 
     shared = await client.post("/api/v1/share/prepare", headers=other_headers, json={"kind": "profile"})
     assert shared.status_code == 200, shared.text

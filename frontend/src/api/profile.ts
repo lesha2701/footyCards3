@@ -74,6 +74,8 @@ export interface ProfileSocial {
   respects: number;
   respected_today: boolean;
   can_respect: boolean;
+  /** Only on your own profile: who gave a respect today. */
+  today_givers: { id: number; first_name: string | null; avatar_url: string | null }[];
   feed: ProfileFeedEvent[];
 }
 

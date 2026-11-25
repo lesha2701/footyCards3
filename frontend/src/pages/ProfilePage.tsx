@@ -20,6 +20,7 @@ import AcademyShowcase from "@/components/path/AcademyShowcase";
 import { ShowcaseRow } from "@/components/profile/Showcase";
 import LoginCalendar from "@/components/profile/LoginCalendar";
 import ThemeSetting from "@/components/profile/ThemeSetting";
+import { ModeRecords, ProfileCard } from "@/components/profile/ProfileCard";
 import MonetizationEntries from "@/components/shop/MonetizationEntries";
 import { BuyCoinsModal } from "@/components/shop/CoinPackages";
 import {
@@ -27,7 +28,6 @@ import {
   IconChevronRight,
   IconCoin,
   IconEdit,
-  IconFire,
   IconGift,
   IconScroll,
   IconSwap,
@@ -37,27 +37,17 @@ import {
   IconUsers,
 } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
-import { backgroundClass, frameClass } from "@/lib/cosmetics";
+import { compact, modeRows, record } from "@/lib/profileStats";
 import { PRIVACY_POLICY_URL, USER_AGREEMENT_URL } from "@/lib/legalLinks";
 import { TX_TYPE_LABELS } from "@/lib/transactionLabels";
 import { hapticNotify, openLink } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import type { UserTrophy } from "@/types";
 
-function dayStreakLabel(days: number): string {
-  const mod10 = days % 10;
-  const mod100 = days % 100;
-  if (mod10 === 1 && mod100 !== 11) return "день";
-  if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) return "дня";
-  return "дней";
-}
-
-/** 95500 → «95,5К», 1 250 000 → «1,3М». */
-function compact(n: number): string {
-  if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toLocaleString("ru-RU", { maximumFractionDigits: 1 })}М`;
-  if (Math.abs(n) >= 10_000) return `${(n / 1000).toLocaleString("ru-RU", { maximumFractionDigits: 1 })}К`;
-  return n.toLocaleString("ru-RU");
-}
+import tileFriends from "@/assets/profile/tile_friends.webp";
+import tileHall from "@/assets/profile/tile_hall.webp";
+import tileHeroes from "@/assets/profile/tile_heroes.webp";
+import tileRewards from "@/assets/profile/tile_rewards.webp";
 
 type Section = "collection" | "heroes" | "friends" | "rewards" | "settings";
 const SECTION_TITLES: Record<Section, string> = {
@@ -82,7 +72,6 @@ export default function ProfilePage() {
   const [showTx, setShowTx] = useState(false);
   const [showBuyCoins, setShowBuyCoins] = useState(false);
   const [showDocuments, setShowDocuments] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
 
   const { data: profile } = useQuery({ queryKey: ["profile", "me"], queryFn: fetchMyProfile });
   const { data: attention } = useQuery({ queryKey: ["attention"], queryFn: fetchMyAttention, refetchInterval: 60000 });
@@ -112,12 +101,7 @@ export default function ProfilePage() {
   });
 
   if (!user || !profile) return null;
-  const frame = frameClass(profile.cosmetics?.frame);
-  const background = backgroundClass(profile.cosmetics?.background);
   const league = leagueStatus && flags?.leagues_enabled !== false ? leagueStatus.current_league : null;
-  const wins = profile.matches_won + profile.tactics_matches_won + profile.penalty_matches_won;
-  const draws = profile.matches_drawn + profile.tactics_matches_drawn + profile.penalty_matches_drawn;
-  const losses = profile.matches_lost + profile.tactics_matches_lost + profile.penalty_matches_lost;
   const rewardsWaiting = (clubPass?.is_active && !clubPass.daily_claimed_today ? 1 : 0) + (season?.claimable ?? 0);
 
   const modals = (
@@ -403,114 +387,65 @@ export default function ProfilePage() {
     [compact(profile.total_cards), "Карты"],
     [compact(profile.unique_cards), "Уник."],
     [compact(profile.packs_opened), "Паки"],
-    [`${wins}-${draws}-${losses}`, "Матчи"],
+    [record(profile), "Матчи"],
     [`${profile.daily_login_streak}`, "Серия"],
   ];
 
   return (
     <div className="flex flex-col gap-4">
-      {/* The player card */}
-      <section
-        className={`relative overflow-hidden rounded-3xl border border-amber-300/40 p-4 ${background ?? "bg-gradient-to-b from-[#3d2e10] via-[#1f1a0c] to-[#0f100c]"}`}
-        data-testid="profile-card"
-      >
-        <button
-          onClick={() => navigate("/profile/settings")}
-          aria-label="Настройки"
-          className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/30 text-amber-100 ring-1 ring-amber-200/30 active:scale-90"
-          data-testid="profile-edit"
-        >
-          <IconEdit size={16} />
-        </button>
-        <div className="flex items-start gap-3">
-          <button onClick={() => navigate("/league")} className="flex w-16 shrink-0 flex-col items-center pt-1 text-center active:scale-95">
-            <span className="font-display text-3xl font-black leading-none text-amber-200">#{profile.league_rank}</span>
-            <span className="mt-1 line-clamp-2 text-[10px] font-bold uppercase leading-tight tracking-wide text-amber-100/70">
-              {league?.name ?? "рейтинг"}
-            </span>
-            {league?.image_path && <img src={staticUrl(league.image_path) ?? undefined} className="mt-1 h-7 w-7 rounded-full object-cover" />}
+      <ProfileCard
+        rank={profile.league_rank}
+        rankLabel={league?.name ?? "рейтинг"}
+        rankImage={league?.image_path}
+        onRank={() => navigate("/league")}
+        corner={
+          <button
+            onClick={() => navigate("/profile/settings")}
+            aria-label="Настройки"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-black/30 text-amber-100 ring-1 ring-amber-200/30 active:scale-90"
+            data-testid="profile-edit"
+          >
+            <IconEdit size={16} />
           </button>
-          <div className="flex min-w-0 flex-1 flex-col items-center pr-10">
-            <span className={`rounded-full ${frame ? `p-[3px] ${frame}` : ""}`}>
-              <img decoding="async" loading="lazy"
-                src={user.avatar_url ?? staticUrl("players/placeholder/player_placeholder.webp")}
-                alt="avatar"
-                className={`h-20 w-20 rounded-full object-cover ${frame ? "ring-2 ring-bg-base" : "ring-2 ring-amber-300"}`}
-              />
-            </span>
-          </div>
-        </div>
-        <p className="mt-2 flex items-center justify-center gap-1.5 text-center font-display text-xl font-bold text-ink-chalk">
-          {user.first_name} {user.last_name}
-          <UserBadge badge={user.active_badge} />
-        </p>
-        <p className="text-center text-xs text-amber-100/60">
-          {user.username ? `@${user.username} · ` : ""}с нами с {new Date(user.created_at).toLocaleDateString("ru-RU")}
-        </p>
-        <div className="mt-2 flex flex-wrap justify-center gap-1.5">
-          {profile.club_pass_active && (
-            <span className="rounded-full bg-emerald-400/15 px-2.5 py-0.5 text-caption font-semibold text-emerald-300">Клубный абонемент</span>
-          )}
-          {profile.daily_login_streak > 0 && (
-            <span className="flex items-center gap-1 rounded-full bg-orange-500/15 px-2.5 py-0.5 text-caption font-bold text-orange-300">
-              <IconFire size={12} />
-              {profile.daily_login_streak} {dayStreakLabel(profile.daily_login_streak)} подряд
-            </span>
-          )}
-        </div>
-        <div className="my-3 h-px bg-gradient-to-r from-transparent via-amber-300/50 to-transparent" />
-        <button onClick={() => setShowDetails((v) => !v)} className="grid w-full grid-cols-3 gap-y-2 text-center active:opacity-80" data-testid="profile-stats">
-          {stats.map(([value, label]) => (
-            <span key={label} className="flex flex-col">
-              <span className="font-mono text-lg font-bold leading-tight text-amber-100">{value}</span>
-              <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-amber-100/50">{label}</span>
-            </span>
-          ))}
-        </button>
-        {showDetails && (
-          <div className="mt-3 grid grid-cols-3 gap-1.5 rounded-2xl bg-black/25 p-2 text-center text-caption">
-            {[
-              ["Arena", profile.matches_won, profile.matches_drawn, profile.matches_lost],
-              ["Тактико", profile.tactics_matches_won, profile.tactics_matches_drawn, profile.tactics_matches_lost],
-              ["Пенальти", profile.penalty_matches_won, profile.penalty_matches_drawn, profile.penalty_matches_lost],
-            ].map(([mode, w, d, l]) => (
-              <span key={mode as string} className="flex flex-col">
-                <span className="font-mono font-bold text-ink-chalk">{w}-{d}-{l}</span>
-                <span className="text-[10px] text-ink-mist">{mode} П-Н-П</span>
-              </span>
-            ))}
-          </div>
-        )}
-      </section>
+        }
+        avatarUrl={user.avatar_url}
+        cosmetics={profile.cosmetics}
+        name={`${user.first_name ?? ""} ${user.last_name ?? ""}`.trim()}
+        badge={user.active_badge}
+        subtitle={`${user.username ? `@${user.username} · ` : ""}с нами с ${new Date(user.created_at).toLocaleDateString("ru-RU")}`}
+        streak={profile.daily_login_streak}
+        clubPass={profile.club_pass_active}
+        userId={user.id}
+        isMe
+        stats={stats}
+        details={<ModeRecords rows={modeRows(profile)} />}
+        actions={<div className="flex justify-center"><ShareButton kind="profile" id={0} label="Поделиться профилем" compact /></div>}
+      />
 
       {/* The four groups */}
-      <div className="grid grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-4 gap-2">
         <GroupTile
-          emoji="🏛"
+          art={tileHall}
           title="Зал славы"
-          text="Витрина, трофеи, экипировка"
           tone="from-[#4a3412] to-[#1a1408] border-amber-300/30"
           onClick={() => navigate("/profile/collection")}
         />
         <GroupTile
-          emoji="⚽"
+          art={tileHeroes}
           title="Мои герои"
-          text="Мой игрок, муза, академия"
           tone="from-[#123a2a] to-[#08160f] border-emerald-300/25"
           onClick={() => navigate("/profile/heroes")}
         />
         <GroupTile
-          emoji="🤝"
+          art={tileFriends}
           title="Друзья"
-          text="Подарки и приглашения"
           tone="from-[#13304a] to-[#08121c] border-sky-300/25"
           badge={attention?.friend_requests || null}
           onClick={() => navigate("/profile/friends")}
         />
         <GroupTile
-          emoji="🎁"
+          art={tileRewards}
           title="Награды"
-          text="Абонемент, пропуск, монеты"
           tone="from-[#3a1846] to-[#14081a] border-fuchsia-300/25"
           badge={rewardsWaiting || null}
           onClick={() => navigate("/profile/rewards")}
@@ -523,18 +458,18 @@ export default function ProfilePage() {
   );
 }
 
-function GroupTile({ emoji, title, text, tone, badge, onClick }: {
-  emoji: string; title: string; text: string; tone: string; badge?: number | null; onClick: () => void;
+function GroupTile({ art, title, tone, badge, onClick }: {
+  art: string; title: string; tone: string; badge?: number | null; onClick: () => void;
 }) {
   return (
-    <button onClick={onClick} className={`relative flex min-h-[104px] flex-col justify-between rounded-2xl border bg-gradient-to-br p-3 text-left active:scale-[0.97] ${tone}`}>
-      <span className="text-3xl drop-shadow">{emoji}</span>
-      <span>
-        <span className="block font-display text-base font-bold text-ink-chalk">{title}</span>
-        <span className="block text-[11px] leading-tight text-ink-mist">{text}</span>
-      </span>
+    <button
+      onClick={onClick}
+      className={`relative flex flex-col items-center gap-1 rounded-2xl border bg-gradient-to-b px-1 pb-2 pt-1.5 text-center active:scale-[0.95] ${tone}`}
+    >
+      <img src={art} alt="" className="pointer-events-none h-14 w-14 object-contain drop-shadow-[0_4px_6px_rgba(0,0,0,0.55)]" />
+      <span className="text-[11px] font-bold leading-tight text-ink-chalk">{title}</span>
       {!!badge && (
-        <span className="absolute right-2.5 top-2.5 rounded-full bg-accent-lime px-2 py-0.5 font-mono text-micro font-bold text-bg-base">{badge}</span>
+        <span className="absolute -right-1 -top-1 min-w-[20px] rounded-full bg-accent-lime px-1.5 py-0.5 font-mono text-[10px] font-bold text-bg-base">{badge}</span>
       )}
     </button>
   );

@@ -5,7 +5,7 @@ import { IconUsers } from "@/components/icons";
 import { haptic } from "@/lib/telegram";
 
 /** Friend action on a public profile: add / requested / accept / friends. */
-export default function FriendButton({ userId }: { userId: number }) {
+export default function FriendButton({ userId, className = "mt-2" }: { userId: number; className?: string }) {
   const queryClient = useQueryClient();
   const { data: relation } = useQuery({ queryKey: ["friends", "relation", userId], queryFn: () => fetchFriendRelation(userId) });
   const refresh = () => {
@@ -16,7 +16,7 @@ export default function FriendButton({ userId }: { userId: number }) {
   const remove = useMutation({ mutationFn: () => removeFriend(userId), onSuccess: refresh });
   if (!relation) return null;
 
-  const base = "mt-2 flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold active:scale-95 disabled:opacity-50";
+  const base = `${className} flex items-center justify-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold active:scale-95 disabled:opacity-50`;
   if (relation === "friends") {
     return (
       <button onClick={() => remove.mutate()} disabled={remove.isPending} className={`${base} bg-white/5 text-ink-mist`}>

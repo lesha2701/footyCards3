@@ -17,6 +17,7 @@ from app.models.user import User
 from app.core.timeutil import local_today
 
 FEED_SIZE = 8
+TODAY_GIVERS = 8
 
 
 async def _target(db: AsyncSession, user_id: int) -> User:
@@ -36,7 +37,21 @@ async def social(db: AsyncSession, viewer: User, user_id: int) -> dict:
             ProfileRespect.giver_id == viewer.id, ProfileRespect.target_id == user_id, ProfileRespect.day == local_today(),
         )
     )).first() is not None
-    return {"respects": total, "respected_today": today, "can_respect": viewer.id != user_id, "feed": await feed(db, user_id)}
+    givers: list[dict] = []
+    if viewer.id == user_id:
+        # Only the owner sees who came by today.
+        givers = [
+            {"id": u.id, "first_name": u.first_name, "avatar_url": u.avatar_url}
+            for u in (await db.execute(
+                select(User).join(ProfileRespect, ProfileRespect.giver_id == User.id)
+                .where(ProfileRespect.target_id == user_id, ProfileRespect.day == local_today())
+                .order_by(ProfileRespect.created_at.desc()).limit(TODAY_GIVERS)
+            )).scalars()
+        ]
+    return {
+        "respects": total, "respected_today": today, "can_respect": viewer.id != user_id,
+        "today_givers": givers, "feed": await feed(db, user_id),
+    }
 
 
 async def give_respect(db: AsyncSession, viewer: User, user_id: int) -> dict:

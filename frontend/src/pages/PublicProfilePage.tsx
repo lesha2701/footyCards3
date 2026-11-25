@@ -2,9 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { Skeleton } from "@/components/common/Skeleton";
-import { UserBadge } from "@/components/common/UserBadge";
 import { PublicMyPlayer } from "@/components/myPlayer/MyPlayerEntry";
 import FriendButton from "@/components/profile/FriendButton";
+import { ModeRecords, ProfileCard } from "@/components/profile/ProfileCard";
 import { IconChevronLeft, IconSwap } from "@/components/icons";
 import { fetchPublicProfile } from "@/api/profile";
 import AcademyShowcase from "@/components/path/AcademyShowcase";
@@ -12,8 +12,9 @@ import GiftShelf from "@/components/profile/GiftShelf";
 import { ProfileFeed, RespectBar } from "@/components/profile/ProfileSocial";
 import { ShowcaseRow } from "@/components/profile/Showcase";
 import { staticUrl } from "@/lib/api";
+import { compact, modeRows, record } from "@/lib/profileStats";
 import { useAuthStore } from "@/store/authStore";
-import type { ProfilePublic, UserPublic } from "@/types";
+import type { UserPublic } from "@/types";
 
 export default function PublicProfilePage() {
   const { userId } = useParams<{ userId: string }>();
@@ -26,6 +27,7 @@ export default function PublicProfilePage() {
 
   if (isLoading) return <ProfileSkeleton />;
   if (!profile) return null;
+  const isMe = me?.id === profile.id;
 
   return (
     <div className="flex flex-col gap-5">
@@ -34,44 +36,58 @@ export default function PublicProfilePage() {
         Назад
       </button>
 
-      <section className="flex flex-col items-center gap-2 rounded-3xl bg-bg-surface p-5 text-center">
-        <img decoding="async" loading="lazy"
-          src={profile.avatar_url ?? staticUrl("players/placeholder/player_placeholder.webp")}
-          alt="avatar"
-          className="h-20 w-20 rounded-full ring-2 ring-accent-lime object-cover"
-        />
-        <p className="flex items-center gap-1.5 font-display text-xl font-bold text-ink-chalk">
-          {profile.first_name} {profile.last_name}
-          <UserBadge badge={profile.active_badge} />
-        </p>
-        {profile.username && <p className="text-sm text-ink-mist">@{profile.username}</p>}
-        <p className="text-xs text-ink-mist-dim">С нами с {new Date(profile.created_at).toLocaleDateString("ru-RU")}</p>
-        {me?.id !== profile.id && (
-          <button
-            onClick={() => {
-              const target: UserPublic = {
-                id: profile.id, username: profile.username, first_name: profile.first_name,
-                last_name: profile.last_name, avatar_url: profile.avatar_url, level: profile.level,
-                arena_rating: profile.arena_rating, created_at: profile.created_at, active_badge: profile.active_badge,
-              };
-              navigate("/trades/new", { state: { target } });
-            }}
-            className="mt-2 flex items-center gap-1.5 rounded-full bg-floodlight px-4 py-2 text-xs font-bold text-bg-base active:scale-95"
-          >
-            <IconSwap size={14} />
-            Предложить обмен
-          </button>
-        )}
-        {me?.id !== profile.id && <FriendButton userId={profile.id} />}
-        <RespectBar userId={profile.id} isMe={me?.id === profile.id} />
-        <button
-          onClick={() => navigate(`/users/${profile.id}/album`)}
-          className="mt-1 flex items-center gap-1.5 rounded-full bg-amber-300/15 px-4 py-2 text-xs font-bold text-amber-200 active:scale-95"
-          data-testid="open-friend-album"
-        >
-          📖 Смотреть альбом
-        </button>
-      </section>
+      <ProfileCard
+        rank={profile.league_rank}
+        rankLabel="рейтинг"
+        avatarUrl={profile.avatar_url}
+        cosmetics={profile.cosmetics}
+        name={`${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim()}
+        badge={profile.active_badge}
+        subtitle={`${profile.username ? `@${profile.username} · ` : ""}с нами с ${new Date(profile.created_at).toLocaleDateString("ru-RU")}`}
+        clubPass={profile.club_pass_active}
+        userId={profile.id}
+        isMe={isMe}
+        stats={[
+          [compact(profile.total_cards), "Карты"],
+          [compact(profile.unique_cards), "Уник."],
+          [compact(profile.packs_opened), "Паки"],
+          [record(profile), "Матчи"],
+          [profile.arena_rating > 0 ? `${profile.arena_rating}` : "—", "Arena"],
+          [`${profile.level}`, "Уровень"],
+        ]}
+        details={<ModeRecords rows={modeRows(profile)} />}
+        actions={
+          <>
+            <RespectBar userId={profile.id} isMe={isMe} />
+            {!isMe && (
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    const target: UserPublic = {
+                      id: profile.id, username: profile.username, first_name: profile.first_name,
+                      last_name: profile.last_name, avatar_url: profile.avatar_url, level: profile.level,
+                      arena_rating: profile.arena_rating, created_at: profile.created_at, active_badge: profile.active_badge,
+                    };
+                    navigate("/trades/new", { state: { target } });
+                  }}
+                  className="flex items-center justify-center gap-1.5 rounded-full bg-floodlight px-3 py-2 text-xs font-bold text-bg-base active:scale-95"
+                >
+                  <IconSwap size={14} />
+                  Обмен
+                </button>
+                <FriendButton userId={profile.id} className="whitespace-nowrap !px-2" />
+                <button
+                  onClick={() => navigate(`/users/${profile.id}/album`)}
+                  className="col-span-2 flex items-center justify-center gap-1.5 rounded-full bg-amber-300/15 px-4 py-2 text-xs font-bold text-amber-200 active:scale-95"
+                  data-testid="open-friend-album"
+                >
+                  📖 Смотреть альбом
+                </button>
+              </div>
+            )}
+          </>
+        }
+      />
 
       <button
         onClick={() => navigate(`/users/${profile.id}/hall`)}
@@ -89,8 +105,6 @@ export default function PublicProfilePage() {
       {!!profile.showcase?.length && <ShowcaseRow cards={profile.showcase} />}
 
       <GiftShelf userId={profile.id} />
-
-      <ProfileStats profile={profile} />
 
       <ProfileFeed userId={profile.id} />
 
@@ -111,35 +125,6 @@ export default function PublicProfilePage() {
           </div>
         </section>
       )}
-    </div>
-  );
-}
-
-/** Only the numbers this player actually has: no «0», «#0» or «0/0/0» rows. */
-function ProfileStats({ profile }: { profile: ProfilePublic }) {
-  const played = profile.matches_won + profile.matches_drawn + profile.matches_lost;
-  const tiles = [
-    profile.unique_cards > 0 && <Stat key="u" label="Уникальных карточек" value={profile.unique_cards} />,
-    profile.total_cards > 0 && <Stat key="t" label="Всего карточек" value={profile.total_cards} />,
-    played > 0 && profile.arena_rating > 0 && <Stat key="r" label="Рейтинг Arena" value={profile.arena_rating} />,
-    played > 0 && profile.arena_rank > 0 && (
-      <Stat key="p" label="Место в рейтинге" value={`#${profile.arena_rank}`} accentClass="bg-floodlight bg-clip-text text-transparent" />
-    ),
-    played > 0 && <Stat key="m" label="Матчи П/Н/П" value={`${profile.matches_won}/${profile.matches_drawn}/${profile.matches_lost}`} />,
-  ].filter(Boolean);
-  if (!tiles.length) return null;
-  return (
-    <section className="rounded-2xl bg-bg-surface p-4" data-testid="profile-stats">
-      <div className="grid grid-cols-2 gap-y-4">{tiles}</div>
-    </section>
-  );
-}
-
-function Stat({ label, value, accentClass }: { label: string; value: string | number; accentClass?: string }) {
-  return (
-    <div>
-      <p className={`font-mono text-2xl font-bold ${accentClass ?? "text-ink-chalk"}`}>{value}</p>
-      <p className="mt-0.5 text-caption text-ink-mist">{label}</p>
     </div>
   );
 }

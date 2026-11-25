@@ -91,10 +91,17 @@ class ProfileFeedEvent(BaseModel):
     image_path: Optional[str] = None
 
 
+class RespectGiver(BaseModel):
+    id: int
+    first_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+
 class ProfileSocialOut(BaseModel):
     respects: int
     respected_today: bool
     can_respect: bool
+    today_givers: list[RespectGiver] = []
     feed: list[ProfileFeedEvent]
 
 
