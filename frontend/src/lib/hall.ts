@@ -116,12 +116,14 @@ export const CAB_ITEM_H = 40;
  * on the top's centre (103, 62). Back to front = paint order. */
 const KP = 0.23;
 export const PEDESTAL_SPOTS: Pt[] = [
-  [150, 252],
-  [104, 276],
-  [58, 300],
-  [302, 304],
-  [246, 332],
-  [190, 360],
+  // Two rows mirrored across the carpet's axis (y + x/2 = 380): the same
+  // step (44, -22) along it, each row 47.5 off the axis along (2, 1).
+  [173, 248],
+  [129, 270],
+  [85, 292],
+  [268, 296],
+  [224, 318],
+  [180, 340],
 ];
 export const PEDESTALS = PEDESTAL_SPOTS.map((at) => {
   const sprite = place(BOX.pedestal, KP, [107, 180], at);
