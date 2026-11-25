@@ -128,7 +128,32 @@ function PlayerCard({
   // rarity gradient; «Ночная» gets a midnight frame.
   const gold = finish === "gold" && !isPath;
   const night = finish === "night" && !isPath;
+  // Full-art: a legendary or diamond footballer's photo runs under the whole
+  // card and the name lies on it, no separate strip (not over event frames).
+  const fullArt = (player.rarity === "legendary" || player.rarity === "diamond") && !isPath && !hwSkin && !fanSkin;
   const imageUrl = staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp");
+
+  const photo = (
+    <>
+      <img
+        src={imageUrl}
+        alt=""
+        className="h-full w-full object-cover"
+        loading="lazy"
+        decoding="async"
+        draggable={false}
+        style={night ? { filter: "saturate(0.55) brightness(0.8) contrast(1.15) hue-rotate(-12deg)" } : undefined}
+      />
+      {night && (
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-indigo-950/60 via-indigo-900/10 to-violet-950/50">
+          <span className="absolute left-[18%] top-[22%] text-[8px] text-white/80">✦</span>
+          <span className="absolute right-[22%] top-[34%] text-[6px] text-white/70">✦</span>
+          <span className="absolute left-[40%] top-[12%] text-[5px] text-white/60">✦</span>
+          <span className="absolute right-[12%] top-[14%] text-[10px] text-amber-100/80">☾</span>
+        </div>
+      )}
+    </>
+  );
 
   return (
     <button
@@ -155,25 +180,16 @@ function PlayerCard({
       }
       data-finish={finish ?? undefined}
     >
-      <div className={`flex h-full w-full flex-col overflow-hidden bg-bg-surface ${gold ? "rounded-[8px]" : "rounded-[14px]"}`}>
-        <div className="relative flex-1 overflow-hidden bg-black/20">
-          <img
-            src={imageUrl}
-            alt=""
-            className="h-full w-full object-cover"
-            loading="lazy"
-            decoding="async"
-            draggable={false}
-            style={night ? { filter: "saturate(0.55) brightness(0.8) contrast(1.15) hue-rotate(-12deg)" } : undefined}
-          />
-          {night && (
-            <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-indigo-950/60 via-indigo-900/10 to-violet-950/50">
-              <span className="absolute left-[18%] top-[22%] text-[8px] text-white/80">✦</span>
-              <span className="absolute right-[22%] top-[34%] text-[6px] text-white/70">✦</span>
-              <span className="absolute left-[40%] top-[12%] text-[5px] text-white/60">✦</span>
-              <span className="absolute right-[12%] top-[14%] text-[10px] text-amber-100/80">☾</span>
-            </div>
-          )}
+      <div className={`relative flex h-full w-full flex-col overflow-hidden bg-bg-surface ${gold ? "rounded-[8px]" : "rounded-[14px]"}`}>
+        {fullArt && (
+          <div className="absolute inset-0">
+            {photo}
+            {/* a foil sheen across the full-art photo */}
+            <div aria-hidden className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,transparent_30%,rgba(255,255,255,0.14)_45%,transparent_58%)]" />
+          </div>
+        )}
+        <div className={`relative flex-1 overflow-hidden ${fullArt ? "" : "bg-black/20"}`}>
+          {!fullArt && photo}
           {finish === "autograph" && (
             <span
               aria-label={FINISH_LABELS.autograph}
@@ -245,7 +261,11 @@ function PlayerCard({
             </div>
           )}
         </div>
-        <div className="border-t border-white/10 bg-black/30 px-1.5 py-1 text-center">
+        <div
+          className={`relative px-1.5 py-1 text-center ${
+            fullArt ? "bg-gradient-to-t from-black/90 via-black/65 to-transparent pt-3" : "border-t border-white/10 bg-black/30"
+          }`}
+        >
           <p className={`truncate font-display font-semibold leading-tight text-ink-chalk ${NAME_TEXT[size]}`}>{player.display_name}</p>
           {player.edition_size != null ? (
             <p className="truncate font-mono text-micro font-bold leading-tight text-amber-300">
