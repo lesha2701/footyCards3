@@ -24,6 +24,7 @@ export const BOX = {
   carpet: [17, 214, 813, 615],
   frame: [86, 17, 296, 365],
   cabinet: [62, 17, 485, 530],
+  niche: [96, 28, 609, 677],
   pedestal: [17, 30, 197, 183],
   plant: [59, 17, 283, 326],
   rope: [17, 22, 243, 238],
@@ -95,35 +96,37 @@ export const FRAMES = FRAME_XS.map((x) => {
   };
 });
 
-/* Cabinet against the right wall, standing on the floor: its front-left
- * bottom corner (64, 345) placed 1 depth in front of the wall base. */
-export const CABINET = place(BOX.cabinet, 0.4, [64, 345], [192, 212]);
-/** Cell centres along the front: partitions at x 186 and 289 split 83…396. */
-const CAB_COLS_PX = [134, 237, 340];
-/** Where a cabinet cell's item stands: three per shelf, two shelves. */
+/* The trophy niche, built flush into the right wall (nothing sticks out
+ * over the frames or the floor): its top-left corner (96, 29) on the wall.
+ * Inside the glass: columns 125–275–426–576, rows from y 93 / 243 / 397 at
+ * x 125, each line falling 1:2 to the right. */
+const KN = 0.28;
+export const NICHE = place(BOX.niche, KN, [96, 29], [210, 40 + 10 / 2 + 16]);
+const NICHE_COLS_PX = [200, 350, 501];
+/** Where a niche cell's item stands: three per shelf, two shelves. */
 export function cabinetSlot(i: number): Pt {
-  const x = CAB_COLS_PX[i % 3];
-  const y = (i < 3 ? 203 : 314) + (x - 80) / 2;
-  return pt(CABINET, [x, y]);
+  const x = NICHE_COLS_PX[i % 3];
+  const y = (i < 3 ? 236 : 389) + (x - 125) / 2;
+  return pt(NICHE, [x, y]);
 }
-/** The glass doors (for a faint reflection over the exhibits). */
-export const CAB_GLASS: Pt[] = ([[78, 90], [395, 248], [395, 490], [78, 332]] as Pt[]).map((p) => pt(CABINET, p));
-export const CAB_ITEM_W = 34;
-export const CAB_ITEM_H = 40;
+export const CAB_ITEM_W = 30;
+export const CAB_ITEM_H = 34;
 
 /* Pedestals (the whole gift shelf, 6): a row behind the carpet along the
  * left wall, a row in front of it. Their base bottom (107, 180) on a floor point; the gift stands
  * on the top's centre (103, 62). Back to front = paint order. */
 const KP = 0.23;
 export const PEDESTAL_SPOTS: Pt[] = [
-  // Two rows mirrored across the carpet's axis (y + x/2 = 380): the same
-  // step (44, -22) along it, each row 47.5 off the axis along (2, 1).
+  // Two rows across the carpet (axis y + x/2 = 380), the same step (44, -22)
+  // along it, facing each other along (2, 1). A pedestal rises ~28 above its
+  // base, so the front row (its top towards the carpet) stands 16 further
+  // off for the same visible gap.
   [173, 248],
   [129, 270],
   [85, 292],
-  [268, 296],
-  [224, 318],
-  [180, 340],
+  [300, 312],
+  [256, 334],
+  [212, 356],
 ];
 export const PEDESTALS = PEDESTAL_SPOTS.map((at) => {
   const sprite = place(BOX.pedestal, KP, [107, 180], at);

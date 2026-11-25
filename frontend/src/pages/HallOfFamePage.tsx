@@ -8,7 +8,7 @@ import { IconChevronLeft } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
 import { asFinish, FINISH_ICONS, FINISH_LABELS } from "@/lib/finish";
 import {
-  BANNER, CABINET, CAB_GLASS, CAB_ITEM_H, CAB_ITEM_W, CARPET, FLOOR, FRAMES, FRAME_IN_H, FRAME_IN_W, HALL_TOP, HALL_VIEW, PEDESTALS, PLANT, ROPES,
+  BANNER, CAB_ITEM_H, CAB_ITEM_W, CARPET, FLOOR, FRAMES, FRAME_IN_H, FRAME_IN_W, HALL_TOP, HALL_VIEW, NICHE, PEDESTALS, PLANT, ROPES,
   WALL_LEFT, WALL_RIGHT, cabinetSlot, rect, type Placed,
 } from "@/lib/hall";
 import { RARITY_LABELS } from "@/lib/rarity";
@@ -17,7 +17,7 @@ import { useAuthStore } from "@/store/authStore";
 import type { Rarity } from "@/types";
 
 import bannerArt from "@/assets/hall/banner.webp";
-import cabinetArt from "@/assets/hall/cabinet.webp";
+import nicheArt from "@/assets/hall/cabinet_niche.webp";
 import carpetArt from "@/assets/hall/carpet.webp";
 import floorArt from "@/assets/hall/floor.webp";
 import frameArt from "@/assets/hall/frame.webp";
@@ -42,7 +42,6 @@ const FRAME_COLORS: Record<Rarity, string> = {
 
 type Plaque = { title: string; lines: string[]; image?: string | null };
 
-const pts = (list: [number, number][]) => list.map((p) => p.join(",")).join(" ");
 const date = (at: string) => new Date(at).toLocaleDateString("ru-RU");
 
 /** «Зал славы»: an isometric room — «Витрина» cards in the frames on the
@@ -223,11 +222,9 @@ function Room({ hall, isMe, onPick }: { hall: Hall; isMe: boolean; onPick: (p: P
         );
       })}
 
-      {/* Decor behind the cabinet's right end */}
-      <Sprite p={PLANT} src={plantArt} />
 
-      {/* Cabinet on the right wall: trophies, then collections */}
-      <Sprite p={CABINET} src={cabinetArt} />
+      {/* The niche in the right wall: trophies, then collections */}
+      <Sprite p={NICHE} src={nicheArt} />
       {Array.from({ length: 6 }, (_, i) => {
         const item = hall.cabinet[i];
         if (!item) return null;
@@ -255,7 +252,9 @@ function Room({ hall, isMe, onPick }: { hall: Hall; isMe: boolean; onPick: (p: P
           </g>
         );
       })}
-      <polygon points={pts(CAB_GLASS)} fill="#e6f6ff" fillOpacity="0.07" pointerEvents="none" />
+
+      {/* Decor in the right corner */}
+      <Sprite p={PLANT} src={plantArt} />
 
       {/* Pedestals on the floor: the gift shelf */}
       {PEDESTALS.map(({ sprite, top }, i) => {
