@@ -225,3 +225,30 @@ export async function claimCardStar(cardId: number, idempotencyKey: string): Pro
   const { data } = await api.post<CardStarOperation>(`/collection/cards/${cardId}/stars/claim`, { idempotency_key: idempotencyKey });
   return data;
 }
+
+export interface CardPassportOwner {
+  name: string;
+  is_you: boolean;
+  via: "trade" | "market" | null;
+  at: string | null;
+}
+
+export interface CardPassport {
+  card_id: number;
+  serial_number: number;
+  printed: number;
+  edition_size: number | null;
+  acquired_at: string;
+  source: string;
+  owners: CardPassportOwner[];
+  arena_goals: number;
+  arena_assists: number;
+  arena_mvps: number;
+  number_one_owner: string | null;
+  number_one_is_you: boolean;
+}
+
+export async function fetchCardPassport(cardId: number): Promise<CardPassport> {
+  const { data } = await api.get<CardPassport>(`/collection/cards/${cardId}/passport`);
+  return data;
+}

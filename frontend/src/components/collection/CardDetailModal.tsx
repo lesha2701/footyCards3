@@ -9,6 +9,8 @@ import HoloTilt from "@/components/cards/HoloTilt";
 import { IconCoin, IconLock, IconLockOpen, IconPlay, IconStar, IconTag, IconUpgrade } from "@/components/icons";
 import CardSkillPanel from "@/components/collection/CardSkillPanel";
 import CardStarPanel from "@/components/collection/CardStarPanel";
+import CardPassport, { CardBack } from "@/components/collection/CardPassport";
+import { motion } from "framer-motion";
 import CardEquipmentPanel from "@/components/equipment/CardEquipmentPanel";
 import ShareButton from "@/components/common/ShareButton";
 import PathPanel from "@/components/path/PathPanel";
@@ -56,6 +58,8 @@ export default function CardDetailModal({
   const [inArena, setInArena] = useState(card.is_in_lineup);
   const [notice, setNotice] = useState<string | null>(null);
   const [feeding, setFeeding] = useState(false);
+  // Tap the picture: the card turns over to its back (number in the ring).
+  const [flipped, setFlipped] = useState(false);
   const frozen = card.is_locked_by_admin || card.is_locked_in_trade;
   const squad = squadLabel({ ...card, is_in_lineup: inArena });
   // Selling needs a free copy: not frozen, not in a squad, not under the lock.
@@ -147,17 +151,31 @@ export default function CardDetailModal({
             <div {...swipeDown}>
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/15 sm:hidden" aria-hidden />
             <div className="flex gap-3">
-              <HoloTilt rarity={player.rarity} rounded="rounded-2xl" className="relative w-28 shrink-0">
-                <img loading="lazy"
-                  src={staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
-                  alt={player.display_name}
-                  className="aspect-[3/4] w-full rounded-2xl object-cover"
-                  decoding="async"
-                />
-                <span className="absolute left-1.5 top-1.5 rounded-md bg-black/70 px-1.5 py-0.5 font-display text-base font-bold leading-none text-white">
-                  {rating}
-                </span>
-              </HoloTilt>
+              <button
+                type="button"
+                onClick={() => { haptic("light"); setFlipped((f) => !f); }}
+                aria-label={flipped ? "Показать лицевую сторону" : "Перевернуть карту"}
+                className="relative w-28 shrink-0"
+              >
+                <motion.div key={flipped ? "back" : "front"} initial={{ rotateY: 90 }} animate={{ rotateY: 0 }} transition={{ duration: 0.25 }}>
+                  {flipped ? (
+                    <CardBack serial={card.serial_number} total={player.edition_size} width={112} className="rounded-2xl" />
+                  ) : (
+                    <HoloTilt rarity={player.rarity} rounded="rounded-2xl" className="relative w-28">
+                      <img loading="lazy"
+                        src={staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp")}
+                        alt={player.display_name}
+                        className="aspect-[3/4] w-full rounded-2xl object-cover"
+                        decoding="async"
+                      />
+                      <span className="absolute left-1.5 top-1.5 rounded-md bg-black/70 px-1.5 py-0.5 font-display text-base font-bold leading-none text-white">
+                        {rating}
+                      </span>
+                    </HoloTilt>
+                  )}
+                </motion.div>
+                <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 rounded-full bg-black/80 px-1.5 text-[9px] font-bold text-ink-mist">↻</span>
+              </button>
               <div className="min-w-0 flex-1">
                 <p className="font-display text-lg font-bold leading-tight text-ink-chalk">{player.display_name}</p>
                 <p className="mt-0.5 text-sm text-ink-mist">{POSITION_LABELS[player.position]} · {player.club}</p>
@@ -237,13 +255,7 @@ export default function CardDetailModal({
                     </p>
                   )}
 
-                  {!!((card.arena_goals ?? 0) + (card.arena_assists ?? 0) + (card.arena_mvps ?? 0)) && (
-                    <p className="rounded-xl bg-white/5 px-3 py-2 text-caption text-ink-mist">
-                      Card Arena: голы <span className="font-mono font-bold text-ink-chalk">{card.arena_goals ?? 0}</span>
-                      {" · "}передачи <span className="font-mono font-bold text-ink-chalk">{card.arena_assists ?? 0}</span>
-                      {" · "}игрок матча <span className="font-mono font-bold text-ink-chalk">{card.arena_mvps ?? 0}</span>
-                    </p>
-                  )}
+                  <CardPassport cardId={card.id} />
                   <section className="flex flex-col gap-2 rounded-2xl bg-black/20 p-2.5" aria-label="Прокачка">
                     <p className="px-0.5 text-micro font-semibold uppercase tracking-wider text-ink-mist-dim">Прокачка</p>
                     {!inArena && !frozen && (

@@ -288,3 +288,31 @@ class AlbumStaffOut(BaseModel):
 
 
 AlbumCollectionDetailOut.model_rebuild()
+
+
+class CardPassportOwnerOut(BaseModel):
+    name: str
+    is_you: bool
+    # How this owner got the card from the one before («обмен» / «рынок»);
+    # None for the first owner.
+    via: Optional[Literal["trade", "market"]] = None
+    at: Optional[datetime] = None
+
+
+class CardPassportOut(BaseModel):
+    """«Паспорт карты»: the story of one copy — its number in the print run,
+    who held it before (trades and market sales), what it did in Card
+    Arena, and who holds the player's №1."""
+
+    card_id: int
+    serial_number: int
+    printed: int
+    edition_size: Optional[int] = None
+    acquired_at: datetime
+    source: CardSource
+    owners: List[CardPassportOwnerOut]
+    arena_goals: int
+    arena_assists: int
+    arena_mvps: int
+    number_one_owner: Optional[str] = None
+    number_one_is_you: bool = False

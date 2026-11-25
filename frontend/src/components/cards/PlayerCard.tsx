@@ -10,6 +10,7 @@ import { cardHalloweenSkin, halloweenArt, useZombiePlayerId } from "@/lib/hallow
 import { pathFrameClass } from "@/lib/pathCards";
 import { prestigeMarks, prestigeStyle } from "@/lib/prestige";
 import { RARITY_GLOW_STATIC, RARITY_GRADIENTS, RARITY_LABELS } from "@/lib/rarity";
+import { specialSerial } from "@/lib/serials";
 import type { Player } from "@/types";
 
 interface Props {
@@ -112,6 +113,12 @@ function PlayerCard({
   const fanSkin = !isPath && !hwSkin && player.collection_skin === "fans";
   // «Клуб Центурионов» of «💯 Нам 100 дней!»: the gold anniversary frame.
   const goldSkin = !isPath && !hwSkin && player.collection_skin === "gold100";
+  // «Редкий номер» (№1, last of an edition, famous shirt numbers) and a
+  // starred-up copy both show on the card itself, not only in its sheet.
+  const special = specialSerial(serial, player.edition_size);
+  const starGlow = stars >= 5
+    ? " ring-2 ring-amber-300/80 shadow-[0_0_18px_rgba(252,211,77,0.55)]"
+    : stars >= 3 ? " ring-1 ring-amber-300/50 shadow-[0_0_10px_rgba(252,211,77,0.3)]" : "";
   const imageUrl = staticUrl(player.image_path ?? undefined) ?? staticUrl("players/placeholder/player_placeholder.webp");
 
   return (
@@ -125,7 +132,7 @@ function PlayerCard({
       }${inSquad ? ", в составе" : ""}${mainCopy ? ", основная копия" : userLocked ? ", под замком" : ""}`}
       className={`group relative flex select-none [-webkit-touch-callout:none] aspect-[3/4] w-full flex-col overflow-hidden rounded-2xl bg-gradient-to-b ${frame} ${
         isPath ? "p-[3px]" : "p-[2px]"
-      }${hwSkin ? ` hw-frame-${hwSkin}` : ""}${fanSkin ? " fans-frame" : ""}${goldSkin ? " gold100-frame" : ""} transition-transform active:scale-[0.97] ${
+      }${!selected ? starGlow : ""}${hwSkin ? ` hw-frame-${hwSkin}` : ""}${fanSkin ? " fans-frame" : ""}${goldSkin ? " gold100-frame" : ""} transition-transform active:scale-[0.97] ${
         selected ? (player.rarity === "diamond" ? "ring-4 ring-rarity-diamond" : "ring-4 ring-accent-lime") : ""
       } ${dimmed ? "opacity-40 grayscale" : ""} ${onClick ? "cursor-pointer" : "cursor-default"}${
         skin && !selected ? ` ${skin}` : ""
@@ -202,11 +209,15 @@ function PlayerCard({
         </div>
         <div className="border-t border-white/10 bg-black/30 px-1.5 py-1 text-center">
           <p className={`truncate font-display font-semibold leading-tight text-ink-chalk ${NAME_TEXT[size]}`}>{player.display_name}</p>
-          {player.edition_size != null && (
+          {player.edition_size != null ? (
             <p className="truncate font-mono text-micro font-bold leading-tight text-amber-300">
-              {serial != null ? `№${serial}/${player.edition_size}` : `Тираж ${player.edition_size}`}
+              {special && "✦ "}{serial != null ? `№${serial}/${player.edition_size}` : `Тираж ${player.edition_size}`}
             </p>
-          )}
+          ) : special && serial != null ? (
+            <p className="truncate font-mono text-micro font-bold leading-tight text-amber-300" title={special}>
+              ✦ №{serial}
+            </p>
+          ) : null}
           {size !== "sm" && (
             <p className="mt-0.5 truncate text-micro leading-tight text-ink-mist">
               {player.club} · <span className="font-mono text-accent-cyan">{player.attack_rating}/{player.defense_rating}</span>

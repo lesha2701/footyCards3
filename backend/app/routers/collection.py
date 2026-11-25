@@ -20,6 +20,7 @@ from app.schemas.collection import (
     SetCardsLockedRequest,
     AlbumCollectionDetailOut,
     AlbumOverviewOut,
+    CardPassportOut,
     BulkSellRequest,
     CollectionFilterParams,
     SellCardRequest,
@@ -36,7 +37,7 @@ from app.schemas.diamond_upgrade import (
     FeedCardsRequest,
     FeedCardsResult,
 )
-from app.services import anniversary_service, card_star_service
+from app.services import anniversary_service, card_passport_service, card_star_service
 from app.services.card_upgrade_service import UPGRADE_CARDS_MAX_PAGE, list_rules, list_upgradeable_cards, upgrade_card
 from app.services.collection_service import (
     collection_stats,
@@ -50,6 +51,11 @@ from app.services.collection_service import (
 from app.services.diamond_upgrade_service import feed_cards, get_effective_rating_cap, get_material_cards, list_tiers
 
 router = APIRouter(prefix="/collection", tags=["collection"])
+
+
+@router.get("/cards/{card_id}/passport", response_model=CardPassportOut)
+async def get_card_passport(card_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await card_passport_service.card_passport(db, user, card_id)
 
 
 @router.get("/cards/{card_id}/stars", response_model=CardStarStateOut)
