@@ -11,6 +11,7 @@ import { EnergyBar } from "@/components/career/EnergyBar";
 import { IconCoin, IconShirt } from "@/components/icons";
 import { TIRED_AT } from "@/lib/careerSubs";
 import { CareerCrest } from "@/components/career/CareerCrest";
+import VictoryChoir from "@/components/common/VictoryChoir";
 
 const FORM: Record<string, { label: string; tone: string }> = {
   W: { label: "В", tone: "bg-accent-lime" },
@@ -212,6 +213,7 @@ export function PostMatchCard({ season }: { season: CareerSeason }) {
 
   return (
     <section className={`flex flex-col gap-3 rounded-3xl bg-bg-surface p-4 ring-1 ${result.ring}`} aria-label="Итог тура">
+      {own > opp && <VictoryChoir />}
       <div className="flex items-center justify-between gap-2">
         <p className="text-micro uppercase tracking-wider text-ink-mist">Итог тура {round + 1}</p>
         <button type="button" onClick={close} className="px-1 text-ink-mist" aria-label="Закрыть итог тура">✕</button>

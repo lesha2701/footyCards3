@@ -37,6 +37,7 @@ import { haptic, hapticNotify, showConfirm } from "@/lib/telegram";
 import { prospectPrint, useProspectPick } from "@/lib/useProspectPick";
 import { useAuthStore } from "@/store/authStore";
 import type { Penalty3DKick, Penalty3DResult, Penalty3DStartResult, UserCard } from "@/types";
+import VictoryChoir from "@/components/common/VictoryChoir";
 
 // card null = the «Воспитанник Академии» shoots (`print` on his back).
 type Series = Penalty3DStartResult & { card: UserCard | null; print: { name: string; number: number } };
@@ -144,6 +145,7 @@ export default function Penalty3DPage() {
     const won = last.result === "win";
     return (
       <div className="flex flex-col items-center gap-5 py-10 text-center">
+        {won && <VictoryChoir />}
         <p className={`font-display text-3xl font-bold ${won ? "text-accent-lime" : "text-ink-chalk"}`}>
           {won ? "Победа!" : "Поражение"}
         </p>

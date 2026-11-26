@@ -16,6 +16,7 @@ import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import { useMatchGuardStore } from "@/store/matchGuardStore";
 import type { PenaltyDirection, PenaltyKickResult } from "@/types";
+import VictoryChoir from "@/components/common/VictoryChoir";
 
 type Phase = "pick_card" | "playing" | "finished";
 
@@ -252,6 +253,7 @@ export default function PenaltyGamePage() {
   if (phase === "finished") {
     return (
       <div className="flex flex-col items-center gap-5 py-10 text-center">
+        {lastKick?.result === "win" && <VictoryChoir />}
         {lastKick?.result === "win" ? (
           <IconTrophy size={40} className="text-accent-lime" />
         ) : (

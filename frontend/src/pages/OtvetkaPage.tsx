@@ -17,6 +17,7 @@ import type { EpisodeTimeline } from "@/lib/oneOnOne/engine";
 import { hapticNotify, showConfirm } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import type { OneOnOneOutcome, OtvetkaEpisode, OtvetkaEpisodeKind, OtvetkaResult, OtvetkaStartResult, UserCard } from "@/types";
+import VictoryChoir from "@/components/common/VictoryChoir";
 
 const TITLE: Record<OtvetkaEpisodeKind, string> = {
   penalty: "Пенальти",
@@ -169,6 +170,7 @@ export default function OtvetkaPage() {
     const won = last.result === "win";
     return (
       <div className="flex flex-col items-center gap-4 py-8 text-center">
+        {won && <VictoryChoir />}
         <p className={`font-display text-2xl font-bold ${won ? "text-accent-lime" : "text-ink-chalk"}`}>{won ? "Победа!" : "Поражение"}</p>
         <p className="font-mono text-3xl font-bold text-ink-chalk">
           {mine} : {theirs}

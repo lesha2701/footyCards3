@@ -32,6 +32,7 @@ import { BRUTALITY_EMOJI } from "@/lib/cosmetics";
 import { haptic, hapticNotify, openTelegramLink } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import type { MordoboiAction, MordoboiExchange, MordoboiMatch } from "@/types";
+import VictoryChoir from "@/components/common/VictoryChoir";
 
 const RESULT_TITLES: Record<string, string> = { win: "Победа!", draw: "Ничья", loss: "Поражение" };
 const OPPONENT_LABELS: Record<string, string> = { bot: "Бот", friend: "Друг", online: "Онлайн", chat: "Вызов из чата" };
@@ -452,6 +453,7 @@ export default function MordoboiMatchPage() {
               transition={{ type: "spring", stiffness: 260, damping: 18 }}
               onClick={(e) => e.stopPropagation()}
             >
+              {match.result === "win" && <VictoryChoir />}
               <p className="text-5xl">{match.result === "win" ? "🏆" : match.result === "loss" ? "🤕" : "🤝"}</p>
               <p className="mt-2 font-display text-2xl font-black text-ink-chalk">{RESULT_TITLES[match.result ?? "draw"]}</p>
               <p className="text-sm text-yellow-400">{WIN_REASON_LABELS[match.win_reason ?? ""] ?? ""}</p>

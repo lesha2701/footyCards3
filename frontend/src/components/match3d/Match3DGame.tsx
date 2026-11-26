@@ -11,6 +11,7 @@ import { loadMatchAssets } from "./assets";
 import Controls from "./Controls";
 import { MatchGame, type GameEnd, type Hud } from "./game";
 import SetPieceScene, { loadScene } from "./SetPieceScene";
+import VictoryChoir from "@/components/common/VictoryChoir";
 
 const SETUP = { home: "Твой клуб", away: "Гранит", homeRating: 0.78, awayRating: 0.76 };
 
@@ -77,6 +78,7 @@ function Final({ end, reward, onAgain, onExit }: { end: GameEnd; reward?: string
   return (
     <div style={{ position: "absolute", inset: 0, background: "rgba(5,14,26,.72)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}>
       <div style={{ width: 340, maxWidth: "90%", padding: 16, borderRadius: 16, background: "rgba(12,26,44,.92)", textAlign: "center" }}>
+        {won && <VictoryChoir />}
         <div style={{ fontSize: 15, fontWeight: 800, color: won ? "#d6ff3f" : draw ? "#fff" : "#ff8a8a" }}>{won ? "Победа!" : draw ? "Ничья: гола не хватило" : "Поражение"}</div>
         <div style={{ fontSize: 30, fontWeight: 900, margin: "4px 0 8px" }}>{end.g0} : {end.g1}</div>
         {row("Удары", t[0].shots, t[1].shots)}

@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/sound", () => ({ playSound: vi.fn() }));
+vi.mock("@/lib/music", () => ({ playChoir: vi.fn() }));
 vi.mock("@/lib/pathCards", () => ({ pathFrameClass: () => "", talentByCode: () => null, usePathCatalog: () => ({ data: null }) }));
 
 import { RevealStage } from "@/components/cards/CardRevealStage";

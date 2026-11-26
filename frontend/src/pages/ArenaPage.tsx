@@ -57,6 +57,7 @@ import { useMatchGuardStore } from "@/store/matchGuardStore";
 import ArenaNewbieGuide from "@/components/newbie/ArenaNewbieGuide";
 import type { ArenaActionKind, ArenaDivision, LineupTactic, Match, MatchEvent, UserCard } from "@/types";
 import { personKey } from "@/lib/person";
+import VictoryChoir from "@/components/common/VictoryChoir";
 
 /** The match breathes: a held breath before a shot's outcome, a quick filler. */
 /** The hourly limit stays out of sight until it is about to matter. */
@@ -1162,6 +1163,7 @@ function MatchSimulation({
       {/* The win/draw/loss verdict and reward stay hidden until the
           simulation actually finishes playing out, even though the live
           score above already tracks along with it. */}
+      {showFinal && match.result === "win" && <VictoryChoir />}
       {showFinal && (
         <p
           className={`mt-1 flex shrink-0 items-center justify-center gap-1 text-center font-display text-sm font-bold ${

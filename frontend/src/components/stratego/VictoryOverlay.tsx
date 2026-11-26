@@ -5,6 +5,7 @@ import { IconCoin, IconTrophy } from "@/components/icons";
 import type { StrategoMatch } from "@/types";
 
 import { WIN_REASON_LABELS } from "./strategoMeta";
+import VictoryChoir from "@/components/common/VictoryChoir";
 
 const CONFETTI_COLORS = ["#22d3c4", "#3ed17e", "#c6e63a", "#8fe3b8", "#ffffff"];
 const TITLES: Record<string, string> = { win: "Победа!", draw: "Ничья", loss: "Поражение" };
@@ -44,6 +45,7 @@ export default function VictoryOverlay({ match, onClose, onRematch, onShare, rem
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
+          {win && <VictoryChoir />}
           {win && pieces.map((p, i) => (
             <motion.span
               key={i}

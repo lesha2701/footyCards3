@@ -8,6 +8,7 @@ import { IconGlobe, IconStadium, IconTag } from "@/components/icons";
 import { staticUrl } from "@/lib/api";
 import { pathFrameClass, talentByCode, usePathCatalog } from "@/lib/pathCards";
 import { RARITY_GRADIENTS, RARITY_GLOW, RARITY_LABELS } from "@/lib/rarity";
+import { playChoir } from "@/lib/music";
 import { playSound } from "@/lib/sound";
 import { asFinish, FINISH_ICONS, FINISH_LABELS } from "@/lib/finish";
 import { hapticNotify } from "@/lib/telegram";
@@ -47,7 +48,10 @@ export function RevealStage({
   const isAcademy = !!player.path_talent_code;
   // A short chime as the card turns over; a longer one for the big pulls.
   useEffect(() => {
-    if (revealed) playSound(player.rarity === "legendary" || player.rarity === "diamond" ? "rare" : "reveal");
+    if (!revealed) return;
+    const big = player.rarity === "legendary" || player.rarity === "diamond";
+    playSound(big ? "rare" : "reveal");
+    if (big) playChoir(); // «Campeones!»
   }, [revealed, player.rarity]);
   // «Редкая версия»: announced as the card turns over.
   const finish = asFinish(opened.card.finish);

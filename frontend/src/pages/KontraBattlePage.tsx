@@ -19,6 +19,7 @@ import { formatGameError } from "@/lib/errors";
 import { haptic, hapticNotify } from "@/lib/telegram";
 import { useAuthStore } from "@/store/authStore";
 import type { KontraAbility, KontraBattle, KontraUnit } from "@/types";
+import VictoryChoir from "@/components/common/VictoryChoir";
 
 const ALLY_TARGET = new Set(["save", "through_ball"]);
 const NO_TARGET = new Set(["hat_trick", "penalty", "conductor", "wall", "offside", "save", "medics", "ult_midfielder", "ult_defender", "ult_goalkeeper"]);
@@ -309,6 +310,7 @@ function ResultOverlay({ battle, isBoss }: { battle: KontraBattle; isBoss: boole
   return (
     <motion.div className="absolute inset-0 z-[300] flex flex-col items-center justify-center bg-black/55 px-4 text-center backdrop-blur-[2px]"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+      {win && !isBoss && <VictoryChoir />}
       {(win || isBoss) && CONFETTI.map((p, i) => (
         <motion.span key={i} className="absolute top-0 h-2.5 w-1.5 rounded-[1px]" style={{ left: `${p.x}%`, background: p.c }}
           initial={{ y: -20, rotate: p.r, opacity: 1 }} animate={{ y: 520, rotate: p.r + 540, opacity: [1, 1, 0] }}
