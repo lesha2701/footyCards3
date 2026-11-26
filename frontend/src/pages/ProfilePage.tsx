@@ -1,4 +1,5 @@
 import { RewardBundleChips } from "@/components/rewards/RewardBundleView";
+import MusicSetting from "@/components/profile/MusicSetting";
 import SoundSetting from "@/components/profile/SoundSetting";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
@@ -338,6 +339,7 @@ export default function ProfilePage() {
               </p>
             </section>
             <ThemeSetting />
+            <MusicSetting />
             <SoundSetting />
             <section>
               <button onClick={() => setShowTx((v) => !v)} className="w-full rounded-2xl bg-white/5 py-3 text-sm font-semibold text-ink-mist">

@@ -25,6 +25,7 @@ import { prefetchHome } from "@/lib/homeBundle";
 import { hasSeenOnboarding, markOnboardingSeen } from "@/lib/onboarding";
 import { startSession } from "@/lib/startSession";
 import { useTelegramBackButton } from "@/lib/useTelegramBackButton";
+import MenuMusic from "@/components/common/MenuMusic";
 import SectionTimeTracker from "@/components/SectionTimeTracker";
 
 // Every screen except the landing page is split into its own chunk and
@@ -294,6 +295,7 @@ export default function App() {
   return (
     <Suspense fallback={<LoadingScreen />}>
     <TelegramBackButton />
+    <MenuMusic />
     <SectionTimeTracker />
     <NewbieTaskWatcher />
     <AdminPaySheet />
